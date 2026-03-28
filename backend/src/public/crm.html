@@ -1997,36 +1997,34 @@ async function renderQR(qrData) {
   const container = document.getElementById('wpp-qr-container');
   container.style.display = 'block';
 
-  // Si es base64 de imagen usá el img tag
-  if (qrData.startsWith('data:image')) {
-    document.getElementById('wpp-qr-img').src = qrData;
-    document.getElementById('wpp-qr-img').style.display = 'block';
-    document.getElementById('wpp-qr-canvas').style.display = 'none';
-    return;
-  }
-
-  // Si es QR raw, renderizá en canvas con qrcode library
-  document.getElementById('wpp-qr-canvas').style.display = 'block';
-  document.getElementById('wpp-qr-img').style.display = 'none';
-
-  // Limpiar canvas previo
+  const img = document.getElementById('wpp-qr-img');
   const canvas = document.getElementById('wpp-qr-canvas');
-  canvas.innerHTML = '';
-  try {
-    new QRCode(canvas, {
-      text: qrData,
-      width: 200,
-      height: 200,
-      colorDark: '#000000',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  } catch(e) {
-    console.error('QRCode error:', e);
-    // fallback: img tag
-    document.getElementById('wpp-qr-img').src = qrData;
-    document.getElementById('wpp-qr-img').style.display = 'block';
-    canvas.style.display = 'none';
+
+  // Siempre usar img tag — más confiable
+  canvas.style.display = 'none';
+  img.style.display = 'block';
+  img.style.width = '220px';
+  img.style.borderRadius = '8px';
+  img.style.background = '#fff';
+  img.style.padding = '8px';
+
+  if (qrData.startsWith('data:image')) {
+    img.src = qrData;
+  } else {
+    // QR raw string — convertir con QRCode lib
+    try {
+      const div = document.createElement('div');
+      div.style.display = 'none';
+      document.body.appendChild(div);
+      new QRCode(div, { text: qrData, width: 220, height: 220, colorDark: '#000', colorLight: '#fff' });
+      setTimeout(() => {
+        const qrImg = div.querySelector('img');
+        if (qrImg) img.src = qrImg.src;
+        document.body.removeChild(div);
+      }, 200);
+    } catch(e) {
+      console.error('QRCode error:', e);
+    }
   }
 }
 
