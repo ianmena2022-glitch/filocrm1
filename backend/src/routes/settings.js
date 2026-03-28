@@ -36,15 +36,18 @@ router.put('/', auth, async (req, res) => {
       await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
     }
 
+    // Asegurar slug actualizado en el mismo UPDATE
     const result = await pool.query(
       `UPDATE shops SET
          name=$1, phone=$2, city=$3, address=$4,
-         service_radius_km=$5, churn_days=$6, msg_templates=$7
-       WHERE id=$8
+         service_radius_km=$5, churn_days=$6, msg_templates=$7,
+         booking_slug=COALESCE(booking_slug, $8)
+       WHERE id=$9
        RETURNING id, name, email, phone, city, address,
                  service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug`,
       [name, phone||null, city||null, address||null,
-       service_radius_km||3, churn_days||20, msg_templates||null, req.shopId]
+       service_radius_km||3, churn_days||20, msg_templates||null,
+       slug, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {
@@ -134,6 +137,27 @@ router.post('/whatsapp/connect', auth, async (req, res) => {
   } catch (e) {
     console.error('WPP connect error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/settings/generate-slug — forzar generación de slug si no existe
+router.post('/generate-slug', auth, async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT booking_slug, name FROM shops WHERE id=$1', [req.shopId]);
+    const shop = existing.rows[0];
+    if (shop.booking_slug) return res.json({ slug: shop.booking_slug });
+    
+    const slug = (shop.name || 'barberia')
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) + '-' + req.shopId;
+
+    await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
+    res.json({ slug });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

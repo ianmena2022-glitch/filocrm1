@@ -2376,7 +2376,15 @@ async function loadSettings() {
       txt.textContent = 'WhatsApp no conectado';
     }
 
-    showBookingLink(settings.booking_slug);
+    // Si no hay slug, generarlo automáticamente
+    if (!settings.booking_slug) {
+      try {
+        const slugRes = await api('POST', '/settings/generate-slug');
+        if (slugRes.slug) showBookingLink(slugRes.slug);
+      } catch(e) { console.error('generate-slug error:', e); }
+    } else {
+      showBookingLink(settings.booking_slug);
+    }
     loadServices();
   } catch (e) {
     console.error(e);
