@@ -33,14 +33,12 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'landing.html'));
 });
 
-// CRM en /app
 app.get('/app', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
+  res.sendFile(path.join(publicDir, 'app.html'));
 });
 
-// Cualquier otra ruta → CRM
 app.get('*', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
+  res.sendFile(path.join(publicDir, 'app.html'));
 });
 
 // ── Init DB + arrancar servidor ────────────────────────
