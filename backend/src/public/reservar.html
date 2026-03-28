@@ -179,12 +179,12 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
       <div class="card">
         <div class="card-title">👤 Tus datos</div>
         <div class="form-field">
-          <label>Nombre completo</label>
-          <input type="text" id="client-name" placeholder="Juan García" autocomplete="name">
+          <label>Tu WhatsApp</label>
+          <input type="tel" id="client-phone" placeholder="5491112345678" autocomplete="tel" inputmode="numeric">
         </div>
         <div class="form-field">
-          <label>WhatsApp (opcional)</label>
-          <input type="tel" id="client-phone" placeholder="5491112345678" autocomplete="tel">
+          <label>Nombre completo</label>
+          <input type="text" id="client-name" placeholder="Juan García" autocomplete="name">
         </div>
         <!-- Puntos FILO -->
         <div class="points-section" id="points-section">
@@ -419,6 +419,7 @@ async function checkPhonePoints(phone) {
 async function confirmReservation() {
   const name = document.getElementById('client-name').value.trim();
   const phone = document.getElementById('client-phone').value.trim();
+  if (!phone) { showError('El número de WhatsApp es obligatorio'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
 
   const btn = document.querySelector('#screen-form .btn-primary');
@@ -431,7 +432,7 @@ async function confirmReservation() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_name: name,
-        client_phone: phone || null,
+        client_phone: phone,
         service_id: selectedService?.id || null,
         date: selectedDate,
         time_start: selectedTime,
