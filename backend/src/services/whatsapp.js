@@ -237,4 +237,68 @@ async function reconnectAllShops() {
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, reconnectAllShops, qrCodes };
+// Iniciar sesión con pairing code (sin QR)
+async function requestPairingCode(shopId, phoneNumber) {
+  return new Promise(async (resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout esperando pairing code'));
+    }, 30000);
+
+    try {
+      // Limpiar sesión previa si existe
+      const dir = authDir(shopId);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+
+      const { state, saveCreds } = await useMultiFileAuthState(authDir(shopId));
+      const { version } = await fetchLatestBaileysVersion();
+
+      const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        browser: ['FILO CRM', 'Chrome', '1.0'],
+        connectTimeoutMs: 60000,
+        logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: console.error, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
+      });
+
+      sockets[shopId] = sock;
+      statuses[shopId] = 'connecting';
+
+      sock.ev.on('creds.update', async () => {
+        await saveCreds();
+        await saveSessionToDB(shopId);
+      });
+
+      sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'open') {
+          clearTimeout(timeout);
+          statuses[shopId] = 'connected';
+          await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
+          await saveSessionToDB(shopId);
+          console.log(`Baileys pairing conectado para shop ${shopId}`);
+        }
+        if (connection === 'close') {
+          const code = lastDisconnect?.error?.output?.statusCode;
+          statuses[shopId] = 'disconnected';
+          if (code !== DisconnectReason.loggedOut) {
+            setTimeout(() => connect(shopId, null, null, null), 5000);
+          }
+        }
+      });
+
+      // Esperar a que el socket esté listo para solicitar pairing code
+      await new Promise(r => setTimeout(r, 2000));
+
+      const phone = phoneNumber.replace(/\D/g, '');
+      const code = await sock.requestPairingCode(phone);
+      clearTimeout(timeout);
+      resolve({ code: code?.match(/.{1,4}/g)?.join('-') || code });
+    } catch (e) {
+      clearTimeout(timeout);
+      reject(e);
+    }
+  });
+}
+
+module.exports = { startSession, requestPairingCode, getStatus, sendText, closeSession, reconnectAllShops, qrCodes };
