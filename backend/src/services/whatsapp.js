@@ -14,13 +14,27 @@ function headers() {
   };
 }
 
-// Crear instancia si no existe
-async function createInstance(shopId) {
+// Crear instancia si no existe, o reconectar si ya existe
+async function startSession(shopId) {
   const instance = instanceName(shopId);
-  const url = `${BASE_URL}/instance/create`;
-  console.log(`Evolution API createInstance → ${url}`);
 
-  const res = await fetch(url, {
+  // 1. Intentar eliminar instancia previa para empezar limpio
+  try {
+    await fetch(`${BASE_URL}/instance/delete/${instance}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    console.log(`Evolution: instancia previa eliminada`);
+    await new Promise(r => setTimeout(r, 1000));
+  } catch (e) {
+    console.log('No había instancia previa o error al eliminar:', e.message);
+  }
+
+  // 2. Crear nueva instancia con QR
+  const createUrl = `${BASE_URL}/instance/create`;
+  console.log(`Evolution API createInstance → ${createUrl}`);
+
+  const createRes = await fetch(createUrl, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
@@ -30,52 +44,43 @@ async function createInstance(shopId) {
     }),
   });
 
-  const text = await res.text();
-  console.log(`Evolution createInstance response → ${res.status}: ${text.slice(0, 300)}`);
+  const createText = await createRes.text();
+  console.log(`Evolution createInstance response → ${createRes.status}: ${createText.slice(0, 500)}`);
 
-  if (!res.ok && res.status !== 409) {
-    throw new Error(`Evolution create instance error: ${res.status} — ${text}`);
-  }
-  return JSON.parse(text);
-}
-
-// Obtener QR para conectar WhatsApp
-async function startSession(shopId) {
-  const instance = instanceName(shopId);
-
-  // Intentar crear la instancia (si ya existe devuelve 409, lo ignoramos)
-  try {
-    await createInstance(shopId);
-  } catch (e) {
-    console.log('createInstance error (puede ser que ya existe):', e.message);
+  if (!createRes.ok) {
+    throw new Error(`Evolution create instance error: ${createRes.status} — ${createText}`);
   }
 
-  // Obtener QR
-  const url = `${BASE_URL}/instance/connect/${instance}`;
-  console.log(`Evolution API connect → ${url}`);
+  const createData = JSON.parse(createText);
 
-  const res = await fetch(url, {
+  // El QR puede venir directo en la respuesta de create
+  if (createData.qrcode?.base64) {
+    return { qrcode: createData.qrcode.base64 };
+  }
+
+  // 3. Si no vino en create, esperar un poco y pedir el QR
+  await new Promise(r => setTimeout(r, 2000));
+
+  const qrUrl = `${BASE_URL}/instance/connect/${instance}`;
+  console.log(`Evolution API getQR → ${qrUrl}`);
+
+  const qrRes = await fetch(qrUrl, {
     method: 'GET',
     headers: headers(),
   });
 
-  const text = await res.text();
-  console.log(`Evolution connect response → ${res.status}: ${text.slice(0, 300)}`);
+  const qrText = await qrRes.text();
+  console.log(`Evolution getQR response → ${qrRes.status}: ${qrText.slice(0, 500)}`);
 
-  if (!res.ok) throw new Error(`Evolution connect error: ${res.status} — ${text}`);
+  if (!qrRes.ok) throw new Error(`Evolution connect error: ${qrRes.status} — ${qrText}`);
 
-  const data = JSON.parse(text);
+  const qrData = JSON.parse(qrText);
 
-  // Evolution devuelve el QR como base64 en data.base64
-  if (data.base64) {
-    return { qrcode: data.base64 };
-  }
+  if (qrData.base64) return { qrcode: qrData.base64 };
+  if (qrData.code)   return { qrcode: qrData.code }; // a veces viene como string raw
+  if (qrData.instance?.state === 'open') return { status: 'CONNECTED' };
 
-  if (data.instance?.state === 'open') {
-    return { status: 'CONNECTED' };
-  }
-
-  return data;
+  throw new Error('No se pudo obtener el QR de Evolution API');
 }
 
 // Verificar estado de la conexión
@@ -94,7 +99,6 @@ async function getStatus(shopId) {
     const data = await res.json();
     console.log(`Evolution getStatus → ${JSON.stringify(data)}`);
 
-    // state puede ser: 'open', 'connecting', 'close'
     const connected = data?.instance?.state === 'open';
     return { connected, status: data?.instance?.state };
   } catch (e) {
@@ -105,7 +109,7 @@ async function getStatus(shopId) {
 
 // Enviar mensaje de texto
 async function sendText(shopId, phone, message) {
-  const instance = instanceName(shopId);
+  const instance  = instanceName(shopId);
   const phoneClean = phone.replace(/\D/g, '');
 
   console.log(`Evolution sendText → instance: ${instance}, phone: ${phoneClean}`);
@@ -124,9 +128,7 @@ async function sendText(shopId, phone, message) {
   const text = await res.text();
   console.log(`Evolution sendText response → ${res.status}: ${text.slice(0, 300)}`);
 
-  if (!res.ok) {
-    throw new Error(`Evolution send-message error: ${res.status} — ${text}`);
-  }
+  if (!res.ok) throw new Error(`Evolution send-message error: ${res.status} — ${text}`);
   return JSON.parse(text);
 }
 
@@ -134,8 +136,7 @@ async function sendText(shopId, phone, message) {
 async function closeSession(shopId) {
   try {
     const instance = instanceName(shopId);
-    const url = `${BASE_URL}/instance/delete/${instance}`;
-    const res = await fetch(url, {
+    const res = await fetch(`${BASE_URL}/instance/delete/${instance}`, {
       method: 'DELETE',
       headers: headers(),
     });
