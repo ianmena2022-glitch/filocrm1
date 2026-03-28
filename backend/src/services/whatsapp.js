@@ -14,27 +14,47 @@ function headers() {
   };
 }
 
-// Crear instancia si no existe, o reconectar si ya existe
+// Esperar y reintentar hasta obtener el QR
+async function waitForQR(instance, maxAttempts = 10, delayMs = 3000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    console.log(`Evolution waitForQR → intento ${i}/${maxAttempts}`);
+    await new Promise(r => setTimeout(r, delayMs));
+
+    const res = await fetch(`${BASE_URL}/instance/connect/${instance}`, {
+      method: 'GET',
+      headers: headers(),
+    });
+
+    if (!res.ok) continue;
+
+    const data = await res.json();
+    console.log(`Evolution QR response → ${JSON.stringify(data).slice(0, 200)}`);
+
+    if (data.base64) return { qrcode: data.base64 };
+    if (data.code)   return { qrcode: data.code };
+    if (data.instance?.state === 'open') return { status: 'CONNECTED' };
+    if (data.count && data.count > 0 && data.base64) return { qrcode: data.base64 };
+  }
+  throw new Error('Timeout esperando QR de Evolution API');
+}
+
 async function startSession(shopId) {
   const instance = instanceName(shopId);
 
-  // 1. Intentar eliminar instancia previa para empezar limpio
+  // 1. Eliminar instancia previa
   try {
     await fetch(`${BASE_URL}/instance/delete/${instance}`, {
       method: 'DELETE',
       headers: headers(),
     });
     console.log(`Evolution: instancia previa eliminada`);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1500));
   } catch (e) {
-    console.log('No había instancia previa o error al eliminar:', e.message);
+    console.log('No había instancia previa:', e.message);
   }
 
-  // 2. Crear nueva instancia con QR
-  const createUrl = `${BASE_URL}/instance/create`;
-  console.log(`Evolution API createInstance → ${createUrl}`);
-
-  const createRes = await fetch(createUrl, {
+  // 2. Crear nueva instancia
+  const createRes = await fetch(`${BASE_URL}/instance/create`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
@@ -45,51 +65,20 @@ async function startSession(shopId) {
   });
 
   const createText = await createRes.text();
-  console.log(`Evolution createInstance response → ${createRes.status}: ${createText.slice(0, 500)}`);
+  console.log(`Evolution createInstance → ${createRes.status}: ${createText.slice(0, 300)}`);
 
   if (!createRes.ok) {
     throw new Error(`Evolution create instance error: ${createRes.status} — ${createText}`);
   }
 
-  const createData = JSON.parse(createText);
-
-  // El QR puede venir directo en la respuesta de create
-  if (createData.qrcode?.base64) {
-    return { qrcode: createData.qrcode.base64 };
-  }
-
-  // 3. Si no vino en create, esperar un poco y pedir el QR
-  await new Promise(r => setTimeout(r, 2000));
-
-  const qrUrl = `${BASE_URL}/instance/connect/${instance}`;
-  console.log(`Evolution API getQR → ${qrUrl}`);
-
-  const qrRes = await fetch(qrUrl, {
-    method: 'GET',
-    headers: headers(),
-  });
-
-  const qrText = await qrRes.text();
-  console.log(`Evolution getQR response → ${qrRes.status}: ${qrText.slice(0, 500)}`);
-
-  if (!qrRes.ok) throw new Error(`Evolution connect error: ${qrRes.status} — ${qrText}`);
-
-  const qrData = JSON.parse(qrText);
-
-  if (qrData.base64) return { qrcode: qrData.base64 };
-  if (qrData.code)   return { qrcode: qrData.code }; // a veces viene como string raw
-  if (qrData.instance?.state === 'open') return { status: 'CONNECTED' };
-
-  throw new Error('No se pudo obtener el QR de Evolution API');
+  // 3. Esperar y reintentar hasta conseguir el QR
+  return await waitForQR(instance);
 }
 
-// Verificar estado de la conexión
 async function getStatus(shopId) {
   try {
     const instance = instanceName(shopId);
-    const url = `${BASE_URL}/instance/connectionState/${instance}`;
-
-    const res = await fetch(url, {
+    const res = await fetch(`${BASE_URL}/instance/connectionState/${instance}`, {
       method: 'GET',
       headers: headers(),
     });
@@ -107,15 +96,13 @@ async function getStatus(shopId) {
   }
 }
 
-// Enviar mensaje de texto
 async function sendText(shopId, phone, message) {
-  const instance  = instanceName(shopId);
+  const instance   = instanceName(shopId);
   const phoneClean = phone.replace(/\D/g, '');
 
   console.log(`Evolution sendText → instance: ${instance}, phone: ${phoneClean}`);
 
-  const url = `${BASE_URL}/message/sendText/${instance}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE_URL}/message/sendText/${instance}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
@@ -132,7 +119,6 @@ async function sendText(shopId, phone, message) {
   return JSON.parse(text);
 }
 
-// Cerrar/eliminar instancia
 async function closeSession(shopId) {
   try {
     const instance = instanceName(shopId);
