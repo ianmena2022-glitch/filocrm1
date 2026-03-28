@@ -1024,30 +1024,49 @@ body {
           </div>
           <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
           <div id="wpp-qr-container" style="margin-top:16px;display:none">
-            <div style="font-size:13px;color:var(--gray);margin-bottom:8px">Escaneá este código QR con tu WhatsApp:</div>
-            <img id="wpp-qr-img" style="width:200px;border-radius:8px" alt="QR WhatsApp">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
+            <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
+            <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
           </div>
 
-          <!-- Templates de mensajes -->
+          <!-- Templates de mensajes desplegables -->
           <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
             <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">✏️ Mensajes personalizados</div>
 
-            <div class="form-field" style="margin-bottom:16px">
-              <label>💈 Sillón Libre</label>
-              <textarea id="tpl-sillon" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Tenemos un sillón libre hoy a las {hora}..."></textarea>
-              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {hora} {barberia} {incentivo}</div>
+            <!-- Sillón Libre -->
+            <div class="tpl-accordion" style="margin-bottom:8px">
+              <div class="tpl-header" onclick="toggleTpl('tpl-sillon-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
+                <span style="font-size:13px;font-weight:700">💈 Sillón Libre</span>
+                <span class="tpl-arrow" id="arrow-tpl-sillon-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+              </div>
+              <div id="tpl-sillon-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                <textarea id="tpl-sillon" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Tenemos un sillón libre hoy a las {hora}..."></textarea>
+                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code> <code style="color:var(--yellow)">{incentivo}</code></div>
+              </div>
             </div>
 
-            <div class="form-field" style="margin-bottom:16px">
-              <label>🔥 Rescate de clientes</label>
-              <textarea id="tpl-rescate" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Hace un tiempo que no te vemos por {barberia}..."></textarea>
-              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {barberia}</div>
+            <!-- Rescate -->
+            <div class="tpl-accordion" style="margin-bottom:8px">
+              <div class="tpl-header" onclick="toggleTpl('tpl-rescate-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
+                <span style="font-size:13px;font-weight:700">🔥 Rescate de clientes</span>
+                <span class="tpl-arrow" id="arrow-tpl-rescate-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+              </div>
+              <div id="tpl-rescate-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                <textarea id="tpl-rescate" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Hace un tiempo que no te vemos por {barberia}..."></textarea>
+                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+              </div>
             </div>
 
-            <div class="form-field" style="margin-bottom:0">
-              <label>📅 Recordatorio de turno</label>
-              <textarea id="tpl-recordatorio" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Te recordamos tu turno mañana a las {hora}..."></textarea>
-              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {hora} {barberia}</div>
+            <!-- Recordatorio -->
+            <div class="tpl-accordion" style="margin-bottom:0">
+              <div class="tpl-header" onclick="toggleTpl('tpl-recordatorio-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
+                <span style="font-size:13px;font-weight:700">📅 Recordatorio de turno</span>
+                <span class="tpl-arrow" id="arrow-tpl-recordatorio-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+              </div>
+              <div id="tpl-recordatorio-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                <textarea id="tpl-recordatorio" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Te recordamos tu turno mañana a las {hora}..."></textarea>
+                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1988,16 +2007,59 @@ async function saveSettings() {
   }
 }
 
+function toggleTpl(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById('arrow-' + id);
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+async function renderQR(qrData) {
+  const container = document.getElementById('wpp-qr-container');
+  container.style.display = 'block';
+
+  // Si es base64 de imagen usá el img tag
+  if (qrData.startsWith('data:image')) {
+    document.getElementById('wpp-qr-img').src = qrData;
+    document.getElementById('wpp-qr-img').style.display = 'block';
+    document.getElementById('wpp-qr-canvas').style.display = 'none';
+    return;
+  }
+
+  // Si es QR raw, renderizá en canvas con qrcode library
+  document.getElementById('wpp-qr-canvas').style.display = 'block';
+  document.getElementById('wpp-qr-img').style.display = 'none';
+
+  if (typeof QRCode !== 'undefined') {
+    QRCode.toCanvas(document.getElementById('wpp-qr-canvas'), qrData, { width: 200, margin: 1 }, function(err) {
+      if (err) {
+        // fallback: mostrar como texto
+        document.getElementById('wpp-qr-canvas').style.display = 'none';
+        document.getElementById('wpp-qr-img').style.display = 'block';
+      }
+    });
+  } else {
+    // QRCode lib no cargada, cargarla dinámicamente
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    script.onload = () => {
+      new QRCode(document.getElementById('wpp-qr-canvas'), {
+        text: qrData, width: 200, height: 200, colorDark: '#000', colorLight: '#fff'
+      });
+    };
+    document.head.appendChild(script);
+  }
+}
+
 async function connectWhatsapp() {
   const btn = document.getElementById('wpp-connect-btn');
   btn.disabled = true; btn.textContent = 'Conectando...';
   try {
     const res = await api('POST', '/settings/whatsapp/connect');
     if (res.qr) {
-      document.getElementById('wpp-qr-container').style.display = 'block';
-      document.getElementById('wpp-qr-img').src = res.qr;
+      await renderQR(res.qr);
       showToast('📱', 'Escaneá el QR', 'Abrí WhatsApp → Dispositivos vinculados');
-      // Verificar estado cada 5 segundos
       const check = setInterval(async () => {
         try {
           const status = await api('GET', '/settings/whatsapp/status');
@@ -2010,6 +2072,10 @@ async function connectWhatsapp() {
           }
         } catch { clearInterval(check); }
       }, 5000);
+    } else if (res.connected) {
+      document.getElementById('wpp-dot').className = 'wpp-dot connected';
+      document.getElementById('wpp-status-text').textContent = 'WhatsApp conectado ✅';
+      showToast('✅', 'WhatsApp conectado', '');
     } else if (!res.ok) {
       showToast('❌', 'Error', res.error || 'No se pudo conectar');
     }
