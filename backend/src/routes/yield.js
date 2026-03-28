@@ -4,13 +4,9 @@ const auth   = require('../middleware/auth');
 const wpp    = require('../services/whatsapp');
 
 // GET /api/yield/vacant-slots
-// Detecta huecos en la agenda de hoy
 router.get('/vacant-slots', auth, async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
   try {
-    const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [req.shopId]);
-    const shopData = shop.rows[0];
-
     const appts = await pool.query(
       `SELECT time_start, time_end FROM appointments
        WHERE shop_id=$1 AND date=$2 AND status NOT IN ('cancelled','noshow')
@@ -18,10 +14,9 @@ router.get('/vacant-slots', auth, async (req, res) => {
       [req.shopId, today]
     );
 
-    // Horario de la barbería: 9:00 a 20:00 por defecto
     const workStart = 9 * 60;
     const workEnd   = 20 * 60;
-    const slotLen   = 30; // minutos
+    const slotLen   = 30;
 
     const occupied = appts.rows.map(a => {
       const [sh, sm] = String(a.time_start).split(':').map(Number);
@@ -43,12 +38,12 @@ router.get('/vacant-slots', auth, async (req, res) => {
 
     res.json({ vacant_slots: vacant, date: today });
   } catch (e) {
+    console.error('vacant-slots error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // GET /api/yield/target-clients
-// Clientes que no vinieron en los últimos N días (para Sillón Libre)
 router.get('/target-clients', auth, async (req, res) => {
   try {
     const shop = await pool.query('SELECT churn_days FROM shops WHERE id=$1', [req.shopId]);
@@ -67,18 +62,17 @@ router.get('/target-clients', auth, async (req, res) => {
     );
     res.json({ clients: result.rows });
   } catch (e) {
+    console.error('target-clients error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // POST /api/yield/send-flash-offer
-// Envía WhatsApp masivo de Sillón Libre
 router.post('/send-flash-offer', auth, async (req, res) => {
   const { slot, client_ids, incentivo } = req.body;
   if (!slot || !client_ids?.length) return res.status(400).json({ error: 'Slot y lista de clientes requeridos' });
 
   try {
-    // Verificar que WPP esté conectado
     const shop = await pool.query('SELECT name, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
     const shopData = shop.rows[0];
     if (!shopData.wpp_connected) return res.status(400).json({ error: 'WhatsApp no está conectado. Conectalo en Configuración.' });
@@ -103,7 +97,6 @@ router.post('/send-flash-offer', auth, async (req, res) => {
           [req.shopId, c.id, c.phone, msg]
         );
         sent++;
-        // Pequeño delay para no spamear
         await new Promise(r => setTimeout(r, 800));
       } catch (sendErr) {
         console.error(`Error enviando a ${c.name}:`, sendErr.message);
@@ -112,12 +105,12 @@ router.post('/send-flash-offer', auth, async (req, res) => {
 
     res.json({ ok: true, sent });
   } catch (e) {
+    console.error('send-flash-offer error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // GET /api/yield/churn/at-risk
-// Clientes en fuga (sin visitar hace más de churn_days)
 router.get('/churn/at-risk', auth, async (req, res) => {
   try {
     const shop = await pool.query('SELECT churn_days FROM shops WHERE id=$1', [req.shopId]);
@@ -140,18 +133,23 @@ router.get('/churn/at-risk', auth, async (req, res) => {
 
     res.json({ clients: result.rows, total: result.rows.length });
   } catch (e) {
+    console.error('churn at-risk error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // POST /api/yield/churn/rescue/:clientId
-// Enviar mensaje de rescate a un cliente específico
 router.post('/churn/rescue/:clientId', auth, async (req, res) => {
   const { clientId } = req.params;
   try {
     const shopQ = await pool.query('SELECT name, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
     const shopData = shopQ.rows[0];
-    if (!shopData.wpp_connected) return res.status(400).json({ error: 'WhatsApp no conectado' });
+
+    console.log(`Rescue → shopId: ${req.shopId}, wpp_connected: ${shopData.wpp_connected}`);
+
+    if (!shopData.wpp_connected) {
+      return res.status(400).json({ error: 'WhatsApp no conectado' });
+    }
 
     const clientQ = await pool.query(
       'SELECT * FROM clients WHERE id=$1 AND shop_id=$2',
@@ -159,11 +157,15 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
     );
     if (!clientQ.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
     const client = clientQ.rows[0];
+
+    console.log(`Rescue → cliente: ${client.name}, phone: ${client.phone}`);
+
     if (!client.phone) return res.status(400).json({ error: 'El cliente no tiene teléfono registrado' });
 
     const msg = `¡Hola ${client.name}! 👋\n\nHace un tiempo que no te vemos por ${shopData.name} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.`;
 
     await wpp.sendText(req.shopId, client.phone, msg);
+
     await pool.query(
       `INSERT INTO whatsapp_logs (shop_id, client_id, phone, message, type)
        VALUES ($1,$2,$3,$4,'churn_rescue')`,
@@ -172,6 +174,7 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
 
     res.json({ ok: true, message: `Mensaje enviado a ${client.name}` });
   } catch (e) {
+    console.error('WPP rescue error completo:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

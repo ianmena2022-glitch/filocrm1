@@ -1,7 +1,7 @@
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
 const BASE_URL = process.env.WPPCONNECT_URL || 'http://localhost:21465';
-const SECRET   = process.env.WPPCONNECT_SECRET_KEY || 'filoCRM_secret';
+const SECRET   = process.env.WPPCONNECT_SECRET_KEY || 'THISISMYSECURETOKEN';
 
 function sessionName(shopId) {
   return `filo_shop_${shopId}`;
@@ -10,6 +10,7 @@ function sessionName(shopId) {
 async function generateToken(shopId) {
   const session = sessionName(shopId);
   const url = `${BASE_URL}/api/${session}/${SECRET}/generate-token`;
+  console.log(`WPP generateToken → ${url}`);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -26,6 +27,7 @@ async function startSession(shopId) {
   const token   = await generateToken(shopId);
 
   const url = `${BASE_URL}/api/${session}/start-session`;
+  console.log(`WPP startSession → ${url}`);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -46,35 +48,40 @@ async function getStatus(shopId) {
     });
     if (!res.ok) return { connected: false };
     const data = await res.json();
+    console.log(`WPP getStatus → ${data.status}`);
     return { connected: data.status === 'CONNECTED', status: data.status };
-  } catch {
+  } catch (e) {
+    console.error('WPP getStatus error:', e.message);
     return { connected: false };
   }
 }
 
 async function sendText(shopId, phone, message) {
-  const session = sessionName(shopId);
-  const token   = await generateToken(shopId);
-  
-  // WPPConnect v2.9 — el número va sin @c.us en send-message
+  const session    = sessionName(shopId);
+  const token      = await generateToken(shopId);
   const phoneClean = phone.replace(/\D/g, '');
+
+  console.log(`WPP sendText → session: ${session}, phone: ${phoneClean}`);
 
   const url = `${BASE_URL}/api/${session}/send-message`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ 
+    body: JSON.stringify({
       phone: phoneClean,
       message,
       isGroup: false
     }),
-    signal: AbortSignal.timeout(30000) // timeout 30 segundos
+    signal: AbortSignal.timeout(30000)
   });
+
+  const text = await res.text();
+  console.log(`WPP sendText response → ${res.status}: ${text.slice(0, 200)}`);
+
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`WPPConnect send-message error: ${res.status} — ${err}`);
+    throw new Error(`WPPConnect send-message error: ${res.status} — ${text}`);
   }
-  return res.json();
+  return JSON.parse(text);
 }
 
 module.exports = { startSession, getStatus, sendText, sessionName };
