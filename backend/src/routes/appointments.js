@@ -25,7 +25,8 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   const {
     client_id, client_name, service_id, service_name,
-    price, cost, date, time_start, barber_name, commission_pct, notes
+    price, cost, date, time_start, barber_name, commission_pct, notes,
+    redeem_item_id, redeem_item_name, redeem_points_cost
   } = req.body;
 
   if (!time_start || !date) return res.status(400).json({ error: 'Fecha y hora son requeridas' });
@@ -59,17 +60,45 @@ router.post('/', auth, async (req, res) => {
       if (cl.rows.length) cName = cl.rows[0].name;
     }
 
+    // Validar puntos si hay canje
+    const pointsCost = parseInt(redeem_points_cost) || 0;
+    let redeemInfo = null;
+    if (client_id && redeem_item_id && pointsCost > 0) {
+      const cl = await pool.query('SELECT points FROM clients WHERE id=$1 AND shop_id=$2', [client_id, req.shopId]);
+      if (!cl.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+      if (cl.rows[0].points < pointsCost) {
+        return res.status(400).json({ error: `Puntos insuficientes. El cliente tiene ${cl.rows[0].points} pts y el premio cuesta ${pointsCost} pts.` });
+      }
+      redeemInfo = redeem_item_name || 'Premio canjeado';
+    }
+
     const result = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
-          time_start, time_end, barber_name, commission_pct, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          time_start, time_end, barber_name, commission_pct, notes, redeem_info)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
       [req.shopId, client_id || null, cName, service_id || null, svcName,
        parseFloat(price)||0, parseFloat(svcCost)||0, date, time_start, time_end,
-       barber_name || null, parseInt(commission_pct)||50, notes || null]
+       barber_name || null, parseInt(commission_pct)||50, notes || null, redeemInfo]
     );
-    res.status(201).json(result.rows[0]);
+
+    const appt = result.rows[0];
+
+    // Restar puntos y registrar canje si corresponde
+    if (client_id && redeem_item_id && pointsCost > 0) {
+      await pool.query(
+        'UPDATE clients SET points = points - $1 WHERE id = $2 AND shop_id = $3',
+        [pointsCost, client_id, req.shopId]
+      );
+      await pool.query(
+        `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending')`,
+        [req.shopId, client_id, redeem_item_id, redeemInfo, pointsCost]
+      );
+    }
+
+    res.status(201).json(appt);
   } catch (e) {
     console.error('Create appt error:', e.message);
     res.status(500).json({ error: e.message });

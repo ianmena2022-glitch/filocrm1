@@ -1312,6 +1312,21 @@ body {
         <input type="number" id="t-commission" placeholder="50" value="50" min="0" max="100">
       </div>
     </div>
+
+    <!-- Sección de canje de puntos -->
+    <div id="t-redeem-section" style="display:none;margin-top:16px;padding:14px;background:rgba(255,209,0,0.07);border:1px solid rgba(255,209,0,0.2);border-radius:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:700;color:var(--yellow)">⭐ Puntos disponibles: <span id="t-client-points">0</span></span>
+      </div>
+      <div class="form-field" style="margin:0">
+        <label style="color:var(--yellow)">🎁 Canjear premio (opcional)</label>
+        <select id="t-redeem-item" onchange="onRedeemChange()">
+          <option value="">-- Sin canje --</option>
+        </select>
+        <div id="t-redeem-warning" style="display:none;font-size:11px;color:#ff6b6b;margin-top:4px">⚠️ El cliente no tiene suficientes puntos para este premio</div>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="createAppointment()">✅ Guardar turno</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-turno')">Cancelar</button>
@@ -1783,10 +1798,45 @@ function searchClients(query) {
 }
 
 function fillClientSelects() {
-  const opts = '<option value="">-- Sin asignar --</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const opts = '<option value="">-- Sin asignar --</option>' + clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${c.name}${c.points > 0 ? ` (${c.points} pts)` : ''}</option>`).join('');
   document.getElementById('t-client').innerHTML = opts;
+  document.getElementById('t-client').onchange = onClientSelectChange;
   const mOpts = '<option value="">-- Elegí un cliente --</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('m-client').innerHTML = mOpts;
+}
+
+function onClientSelectChange() {
+  const sel = document.getElementById('t-client');
+  const clientId = sel.value;
+  const section = document.getElementById('t-redeem-section');
+
+  if (!clientId) {
+    section.style.display = 'none';
+    document.getElementById('t-redeem-item').value = '';
+    return;
+  }
+
+  const points = parseInt(sel.selectedOptions[0]?.dataset.points || 0);
+  document.getElementById('t-client-points').textContent = points;
+
+  // Poblar premios disponibles
+  const redeemSel = document.getElementById('t-redeem-item');
+  redeemSel.innerHTML = '<option value="">-- Sin canje --</option>' +
+    storeItems.filter(i => i.active).map(i =>
+      `<option value="${i.id}" data-cost="${i.points_cost}" data-name="${i.name}">${i.name} (${i.points_cost} pts)</option>`
+    ).join('');
+
+  section.style.display = storeItems.filter(i => i.active).length > 0 ? 'block' : 'none';
+  document.getElementById('t-redeem-warning').style.display = 'none';
+}
+
+function onRedeemChange() {
+  const sel = document.getElementById('t-redeem-item');
+  const clientPoints = parseInt(document.getElementById('t-client-points').textContent || 0);
+  const warning = document.getElementById('t-redeem-warning');
+  if (!sel.value) { warning.style.display = 'none'; return; }
+  const cost = parseInt(sel.selectedOptions[0]?.dataset.cost || 0);
+  warning.style.display = cost > clientPoints ? 'block' : 'none';
 }
 
 async function createClient() {
@@ -1891,6 +1941,17 @@ async function createAppointment() {
   const barber = document.getElementById('t-barber').value.trim();
   const commission = document.getElementById('t-commission').value || 50;
 
+  // Premio a canjear
+  const redeemSel = document.getElementById('t-redeem-item');
+  const redeemId = redeemSel?.value || null;
+  const redeemName = redeemId ? redeemSel.selectedOptions[0]?.dataset.name : null;
+  const redeemCost = redeemId ? parseInt(redeemSel.selectedOptions[0]?.dataset.cost || 0) : 0;
+  const clientPoints = parseInt(document.getElementById('t-client-points')?.textContent || 0);
+
+  if (redeemId && redeemCost > clientPoints) {
+    return showToast('⚠️', 'Puntos insuficientes', 'El cliente no tiene puntos suficientes para este premio');
+  }
+
   if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
 
   try {
@@ -1901,10 +1962,13 @@ async function createAppointment() {
       price: parseFloat(price) || 0,
       date, time_start: time,
       barber_name: barber || null,
-      commission_pct: parseInt(commission)
+      commission_pct: parseInt(commission),
+      redeem_item_id: redeemId ? parseInt(redeemId) : null,
+      redeem_item_name: redeemName || null,
+      redeem_points_cost: redeemCost || 0
     });
     closeModal('modal-turno');
-    showToast('✅', 'Turno creado', '');
+    showToast('✅', 'Turno creado', redeemName ? `Premio "${redeemName}" registrado 🎁` : '');
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   } catch (e) {
@@ -2302,6 +2366,12 @@ function openModal(id) {
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  if (id === 'modal-turno') {
+    document.getElementById('t-redeem-section').style.display = 'none';
+    document.getElementById('t-redeem-item').value = '';
+    document.getElementById('t-redeem-warning').style.display = 'none';
+    document.getElementById('t-client').value = '';
+  }
 }
 
 // Cerrar modales al hacer click fuera
