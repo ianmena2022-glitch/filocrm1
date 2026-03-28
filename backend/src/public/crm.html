@@ -2353,7 +2353,6 @@ async function loadSettings() {
     document.getElementById('cfg-name').value = settings.name || '';
     document.getElementById('cfg-city').value = settings.city || '';
     document.getElementById('cfg-address').value = settings.address || '';
-    document.getElementById('cfg-phone').value = settings.phone || '';
     document.getElementById('cfg-radius').value = settings.service_radius_km || 3;
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
 
@@ -2394,7 +2393,6 @@ async function loadSettings() {
 async function saveSettings() {
   const body = {
     name: document.getElementById('cfg-name').value.trim(),
-    phone: document.getElementById('cfg-phone').value.trim(),
     city: document.getElementById('cfg-city').value.trim(),
     address: document.getElementById('cfg-address').value.trim(),
     service_radius_km: parseInt(document.getElementById('cfg-radius').value) || 3,
