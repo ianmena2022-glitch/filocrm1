@@ -94,3 +94,30 @@ CREATE INDEX IF NOT EXISTS idx_memberships_shop         ON memberships(shop_id, 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS msg_templates TEXT;
 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS booking_slug VARCHAR(100) UNIQUE;
+
+-- Sistema de Puntos FILO
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS points_store (
+  id          SERIAL PRIMARY KEY,
+  shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  name        VARCHAR(255) NOT NULL,
+  description TEXT,
+  points_cost INT NOT NULL DEFAULT 100,
+  active      BOOLEAN DEFAULT TRUE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS points_redemptions (
+  id          SERIAL PRIMARY KEY,
+  shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  client_id   INT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  item_id     INT REFERENCES points_store(id) ON DELETE SET NULL,
+  item_name   VARCHAR(255),
+  points_used INT NOT NULL,
+  status      VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','used','cancelled')),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS points_per_peso NUMERIC(6,4) DEFAULT 0.01;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS store_name VARCHAR(255) DEFAULT 'Tienda FILO';

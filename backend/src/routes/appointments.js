@@ -93,14 +93,55 @@ router.put('/:id/status', auth, async (req, res) => {
 
     // Actualizar stats del cliente al completar
     if (status === 'completed' && appt.client_id) {
-      await pool.query(
+      // Calcular puntos: 10 puntos por cada $1000 gastados
+      const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [req.shopId]);
+      const shopData = shop.rows[0];
+      const pointsPerPeso = parseFloat(shopData.points_per_peso || 0.01);
+      const pointsEarned = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
+
+      const updatedClient = await pool.query(
         `UPDATE clients SET
            total_visits = total_visits + 1,
            total_spent  = total_spent + $1,
-           last_visit   = $2
-         WHERE id = $3`,
-        [appt.price, appt.date, appt.client_id]
+           last_visit   = $2,
+           points       = points + $3
+         WHERE id = $4
+         RETURNING id, name, phone, points`,
+        [appt.price, appt.date, pointsEarned, appt.client_id]
       );
+
+      const client = updatedClient.rows[0];
+
+      // Mandar WhatsApp si tiene teléfono y WPP conectado
+      if (client.phone && shopData.wpp_connected) {
+        try {
+          const wpp = require('../services/whatsapp');
+          const slug = shopData.booking_slug;
+          const tiendaLink = slug
+            ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
+            : null;
+
+          const newPoints = client.points;
+          const msg = [
+            `✂️ *¡Servicio completado!* Gracias ${client.name}.`,
+            ``,
+            `⭐ *Puntos FILO acumulados:* ${pointsEarned > 0 ? `+${pointsEarned} puntos (total: ${newPoints})` : `${newPoints} puntos`}`,
+            ``,
+            pointsEarned > 0
+              ? `💡 Cada $1.000 que gastás = 10 puntos. Canjeá tus puntos por premios exclusivos.`
+              : ``,
+            tiendaLink
+              ? `🎁 *Ver tu saldo y premios:*\n${tiendaLink}`
+              : ``,
+            ``,
+            `¡Hasta la próxima! 💈`
+          ].filter(Boolean).join('\n');
+
+          await wpp.sendText(req.shopId, client.phone, msg);
+        } catch(wppErr) {
+          console.error('Error enviando WPP puntos:', wppErr.message);
+        }
+      }
     }
 
     res.json(appt);

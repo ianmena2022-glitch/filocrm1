@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tienda de Puntos FILO</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--y:#FFD100;--n:#000d1f;--nm:#001428;--nk:#002043;--w:#fff;--g:#8a9ab5;--gl:#1a2540;--gr:#00E676;--r:#FF4343;--or:#FF9100}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh}
+
+.header{background:linear-gradient(135deg,var(--nk),var(--nm));border-bottom:1px solid rgba(255,209,0,.12);padding:28px 20px;text-align:center;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,rgba(255,209,0,.08) 0%,transparent 70%);pointer-events:none}
+.header-logo{width:56px;height:56px;background:var(--y);border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--nk);margin:0 auto 14px;position:relative}
+.header-shop{font-size:13px;color:var(--y);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;opacity:.8}
+.header-title{font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;letter-spacing:1px;margin-bottom:6px}
+.header-sub{font-size:14px;color:var(--g)}
+
+.points-hero{background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.2);border-radius:16px;margin:20px 16px;padding:20px;text-align:center}
+.points-label{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y);margin-bottom:8px;opacity:.8}
+.points-value{font-family:'Oswald',sans-serif;font-size:56px;font-weight:700;color:var(--y);line-height:1;margin-bottom:4px}
+.points-sub{font-size:13px;color:var(--g)}
+.points-input-wrap{display:flex;gap:10px;margin-top:16px}
+.points-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px 14px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none}
+.points-input:focus{border-color:var(--y)}
+.btn-check{background:var(--y);color:var(--nk);border:none;padding:12px 20px;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-check:hover{box-shadow:0 4px 16px rgba(255,209,0,.4)}
+
+.section-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--g);padding:20px 16px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
+
+.store-grid{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.store-item{background:linear-gradient(135deg,var(--gl),rgba(0,10,25,.9));border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;transition:all .2s}
+.store-item:hover{border-color:rgba(255,209,0,.2)}
+.store-item.affordable{border-color:rgba(255,209,0,.3);background:linear-gradient(135deg,rgba(255,209,0,.08),rgba(0,10,25,.9))}
+.store-item.affordable:hover{border-color:rgba(255,209,0,.5)}
+.item-icon{width:48px;height:48px;border-radius:12px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.store-item.affordable .item-icon{background:rgba(255,209,0,.2)}
+.item-info{flex:1}
+.item-name{font-weight:700;font-size:15px;margin-bottom:4px}
+.item-desc{font-size:12px;color:var(--g);line-height:1.4}
+.item-cost{text-align:right;flex-shrink:0}
+.item-pts{font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--y);line-height:1}
+.item-pts-lbl{font-size:10px;color:var(--g);margin-top:2px}
+.item-badge{background:var(--gr);color:var(--nk);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;margin-top:4px;display:inline-block}
+.item-missing{font-size:11px;color:var(--g);margin-top:4px}
+
+.how-it-works{margin:24px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px}
+.hiw-title{font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.hiw-step{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.hiw-step:last-child{margin-bottom:0}
+.hiw-num{width:28px;height:28px;border-radius:50%;background:var(--y);color:var(--nk);font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.hiw-text{font-size:13px;color:rgba(255,255,255,.8);line-height:1.5}
+.hiw-text strong{color:var(--w)}
+
+.cta-reserve{margin:16px;background:var(--y);color:var(--nk);border:none;width:calc(100% - 32px);padding:16px;border-radius:12px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;text-decoration:none;display:block;text-align:center;transition:all .2s;box-shadow:0 4px 20px rgba(255,209,0,.3)}
+.cta-reserve:hover{box-shadow:0 6px 28px rgba(255,209,0,.5)}
+
+.empty{text-align:center;padding:40px 20px;color:var(--g)}
+.spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--y);border-radius:50%;animation:spin .7s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+footer{text-align:center;padding:24px;font-size:12px;color:var(--g);border-top:1px solid rgba(255,255,255,.05);margin-top:20px}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div></div>
+<div id="app" style="display:none">
+
+  <div class="header">
+    <div class="header-logo" id="shop-logo">⭐</div>
+    <div class="header-shop" id="shop-name-label"></div>
+    <div class="header-title" id="store-name">Tienda de Puntos</div>
+    <div class="header-sub">Canjeá tus puntos por premios exclusivos</div>
+  </div>
+
+  <div class="points-hero">
+    <div class="points-label">⭐ Tus puntos FILO</div>
+    <div class="points-value" id="client-points">—</div>
+    <div class="points-sub" id="client-name-display">Ingresá tu teléfono para ver tu saldo</div>
+    <div class="points-input-wrap">
+      <input type="tel" class="points-input" id="phone-input" placeholder="Tu número de WhatsApp (ej: 5491112345678)">
+      <button class="btn-check" onclick="checkPoints()">Ver puntos</button>
+    </div>
+  </div>
+
+  <div class="section-title">🎁 Premios disponibles</div>
+  <div class="store-grid" id="store-grid">
+    <div class="empty">Cargando premios...</div>
+  </div>
+
+  <div class="how-it-works">
+    <div class="hiw-title">⭐ ¿Cómo funciona?</div>
+    <div class="hiw-step">
+      <div class="hiw-num">1</div>
+      <div class="hiw-text"><strong>Visitá la barbería</strong> y pagá tus servicios normalmente.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-num">2</div>
+      <div class="hiw-text"><strong>Acumulás puntos</strong> automáticamente. Cada $1.000 gastados = 10 puntos FILO.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-num">3</div>
+      <div class="hiw-text"><strong>Cuando tengas suficientes</strong>, avisale a tu barbero y elegí tu premio. Él lo aplica al momento.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-num">4</div>
+      <div class="hiw-text"><strong>¡Disfrutá tu premio!</strong> Los puntos se descuentan automáticamente del saldo.</div>
+    </div>
+  </div>
+
+  <a href="#" id="reserve-link" class="cta-reserve">✂ Reservar mi próximo turno</a>
+
+</div>
+
+<footer>FILO CRM — El sistema del barbero inteligente ✂</footer>
+
+<script>
+const pathParts = window.location.pathname.split('/');
+const slug = pathParts[pathParts.indexOf('tienda') + 1] || pathParts[2];
+const API = window.location.origin + '/api';
+
+let shopData = null;
+let storeItems = [];
+let clientPoints = null;
+
+async function init() {
+  try {
+    const res = await fetch(`${API}/points/store/public/${slug}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    shopData = data.shop;
+    storeItems = data.items;
+
+    document.getElementById('shop-name-label').textContent = shopData.name;
+    document.getElementById('store-name').textContent = shopData.store_name || 'Tienda de Puntos';
+    document.title = `${shopData.store_name || 'Tienda'} — ${shopData.name}`;
+    document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+
+    // Link de reserva
+    const reserveLink = document.getElementById('reserve-link');
+    reserveLink.href = `${window.location.origin}/reservar/${slug}`;
+
+    renderStore();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `<div class="empty">No se encontró la tienda.<br><small>${e.message}</small></div>`;
+  }
+}
+
+async function checkPoints() {
+  const phone = document.getElementById('phone-input').value.trim().replace(/\D/g, '');
+  if (!phone) return;
+
+  const btn = document.querySelector('.btn-check');
+  btn.textContent = '...'; btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/points/client/phone/${slug}/${phone}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.client) {
+      document.getElementById('client-name-display').textContent = 'No encontramos tu número. ¿Ya visitaste la barbería?';
+      document.getElementById('client-points').textContent = '—';
+      clientPoints = null;
+    } else {
+      clientPoints = data.client.points;
+      document.getElementById('client-points').textContent = clientPoints.toLocaleString('es-AR');
+      document.getElementById('client-name-display').textContent = `¡Hola ${data.client.name}! Este es tu saldo actual.`;
+    }
+    renderStore();
+  } catch(e) {
+    document.getElementById('client-name-display').textContent = 'Error al buscar tu número';
+  } finally {
+    btn.textContent = 'Ver puntos'; btn.disabled = false;
+  }
+}
+
+function getItemIcon(name) {
+  const n = name.toLowerCase();
+  if (n.includes('lavado')) return '🚿';
+  if (n.includes('corte')) return '✂️';
+  if (n.includes('descuento') || n.includes('$')) return '💰';
+  if (n.includes('café') || n.includes('cafe') || n.includes('bebida')) return '☕';
+  if (n.includes('barba')) return '🪒';
+  if (n.includes('producto') || n.includes('gel') || n.includes('pomada')) return '🧴';
+  return '🎁';
+}
+
+function renderStore() {
+  const grid = document.getElementById('store-grid');
+  if (!storeItems.length) {
+    grid.innerHTML = '<div class="empty">Sin premios disponibles por ahora.</div>';
+    return;
+  }
+
+  grid.innerHTML = storeItems.map(item => {
+    const canAfford = clientPoints !== null && clientPoints >= item.points_cost;
+    const missing = clientPoints !== null ? item.points_cost - clientPoints : null;
+
+    return `<div class="store-item ${canAfford ? 'affordable' : ''}">
+      <div class="item-icon">${getItemIcon(item.name)}</div>
+      <div class="item-info">
+        <div class="item-name">${item.name}</div>
+        <div class="item-desc">${item.description || ''}</div>
+        ${canAfford ? '<div class="item-badge">✓ Podés canjear</div>' : ''}
+        ${!canAfford && missing !== null ? `<div class="item-missing">Te faltan ${missing.toLocaleString('es-AR')} puntos</div>` : ''}
+      </div>
+      <div class="item-cost">
+        <div class="item-pts">${item.points_cost.toLocaleString('es-AR')}</div>
+        <div class="item-pts-lbl">puntos</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Permitir buscar con Enter
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('phone-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkPoints();
+  });
+});
+
+init();
+</script>
+</body>
+</html>

@@ -21,6 +21,7 @@ app.use('/api/settings',     require('./routes/settings'));
 app.use('/api/yield',        require('./routes/yield'));
 app.use('/api/memberships',  require('./routes/memberships'));
 app.use('/api/booking',      require('./routes/booking'));
+app.use('/api/points',       require('./routes/points'));
 
 // ── Health check ───────────────────────────────────────
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV }));
@@ -28,6 +29,11 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 // ── Frontend estático ──────────────────────────────────
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
+
+// Tienda pública de puntos
+app.get('/tienda/:slug', (req, res) => {
+  res.sendFile(path.join(publicDir, 'tienda.html'));
+});
 
 // Reservas públicas
 app.get('/reservar/:slug', (req, res) => {
@@ -39,12 +45,14 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'landing.html'));
 });
 
+// CRM en /app
 app.get('/app', (req, res) => {
-  res.sendFile(path.join(publicDir, 'crm.html'));  // ← crm.html
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
+// Cualquier otra ruta → CRM
 app.get('*', (req, res) => {
-  res.sendFile(path.join(publicDir, 'crm.html'));  // ← crm.html
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // ── Init DB + arrancar servidor ────────────────────────

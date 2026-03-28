@@ -946,7 +946,7 @@ body {
       <div class="nav-item" onclick="showSection('clientes')" title="Clientes">👥</div>
       <div class="nav-item" onclick="showSection('motores')" title="Motores">⚡</div>
       <div class="nav-item" onclick="showSection('membresias')" title="Membresías">👑</div>
-      <div class="nav-item" id="churn-nav" style="display:none" onclick="showSection('motores')" title="Clientes en fuga"></div>
+      <div class="nav-item" id="churn-nav" onclick="showSection('motores')" title="Clientes en fuga"></div>
     </div>
     <div class="sidebar-bottom">
       <div class="nav-item" onclick="showSection('configuracion')" title="Configuración">⚙️</div>
@@ -1229,6 +1229,32 @@ body {
           </div>
         </div>
 
+        <!-- Tienda de Puntos -->
+        <div class="settings-section" style="grid-column:1/-1">
+          <div class="settings-section-title">⭐ Tienda de Puntos FILO</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+            Tus clientes acumulan puntos con cada visita. 10 puntos = $1.000 gastados. Configurá los premios que pueden canjear.
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div class="form-field" style="margin-bottom:0">
+              <label>Nombre de la tienda</label>
+              <input type="text" id="cfg-store-name" placeholder="Tienda FILO">
+            </div>
+            <div class="form-field" style="margin-bottom:0">
+              <label>Link de la tienda</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="store-link-text" style="font-size:12px;color:var(--yellow);word-break:break-all;flex:1"></span>
+                <button onclick="copyStoreLink()" style="background:var(--yellow);color:var(--navy);border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Copiar</button>
+              </div>
+            </div>
+          </div>
+          <button class="btn-motor" onclick="saveStoreConfig()" style="margin-bottom:20px">💾 Guardar nombre de tienda</button>
+
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Premios disponibles</div>
+          <div id="store-items-list" style="margin-bottom:14px"></div>
+          <button class="btn-motor secondary" onclick="openModal('modal-store-item')">+ Agregar premio</button>
+        </div>
+
         <!-- Servicios -->
         <div class="settings-section">
           <div class="settings-section-title">✂️ Servicios y precios</div>
@@ -1403,6 +1429,32 @@ body {
   </div>
 </div>
 
+<!-- Modal: Nuevo premio tienda -->
+<div class="modal-overlay" id="modal-store-item">
+  <div class="modal">
+    <div class="modal-title">⭐ Nuevo premio</div>
+    <div class="modal-sub">Los clientes podrán canjear sus puntos por este premio</div>
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre del premio</label>
+        <input type="text" id="si-name" placeholder="Lavado gratis, Descuento $1000...">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Descripción (opcional)</label>
+        <input type="text" id="si-desc" placeholder="Un lavado de cabello sin costo en tu próxima visita">
+      </div>
+      <div class="form-field">
+        <label>Costo en puntos</label>
+        <input type="number" id="si-points" placeholder="300" min="1">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="createStoreItem()">✅ Guardar premio</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-store-item')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast">
   <div class="toast-icon" id="toast-icon">✅</div>
@@ -1535,7 +1587,7 @@ function showSection(name) {
   if (name === 'clientes') renderClients();
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
-  if (name === 'configuracion') loadSettings();
+  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); }
 }
 
 // ─── DASHBOARD ───
@@ -1709,6 +1761,7 @@ function renderClients(filtered) {
           <span>Última visita: ${lastVisit}</span>
           <span>Visitas: ${c.total_visits}</span>
           <span>Total: $${parseFloat(c.total_spent||0).toLocaleString('es-AR')}</span>
+          <span style="color:var(--yellow);font-weight:700">⭐ ${c.points || 0} pts</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -2268,6 +2321,85 @@ function showToast(icon, title, msg) {
 
 function hideToast() {
   document.getElementById('toast').classList.remove('show');
+}
+
+// ─── PUNTOS / TIENDA ───
+
+let storeItems = [];
+
+async function loadStoreConfig() {
+  try {
+    const config = await api('GET', '/points/config');
+    document.getElementById('cfg-store-name').value = config.store_name || '';
+    if (config.booking_slug) {
+      const url = window.location.origin + '/tienda/' + config.booking_slug;
+      document.getElementById('store-link-text').textContent = url;
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadStoreItems() {
+  try {
+    storeItems = await api('GET', '/points/store');
+    renderStoreItems();
+  } catch(e) { console.error(e); }
+}
+
+function renderStoreItems() {
+  const el = document.getElementById('store-items-list');
+  if (!el) return;
+  if (!storeItems.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--gray)">Sin premios todavía. Agregá el primero.</p>';
+    return;
+  }
+  el.innerHTML = storeItems.map(item => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+      <div>
+        <div style="font-size:14px;font-weight:600">${item.name}</div>
+        <div style="font-size:12px;color:var(--gray)">${item.description || ''} · <span style="color:var(--yellow)">${item.points_cost} puntos</span></div>
+      </div>
+      <button class="appt-btn" onclick="deleteStoreItem(${item.id})" title="Eliminar">🗑</button>
+    </div>
+  `).join('');
+}
+
+async function createStoreItem() {
+  const name = document.getElementById('si-name').value.trim();
+  const desc = document.getElementById('si-desc').value.trim();
+  const pts  = document.getElementById('si-points').value;
+  if (!name || !pts) return showToast('⚠️', 'Nombre y puntos son obligatorios', '');
+  try {
+    await api('POST', '/points/store', { name, description: desc, points_cost: parseInt(pts) });
+    closeModal('modal-store-item');
+    document.getElementById('si-name').value = '';
+    document.getElementById('si-desc').value = '';
+    document.getElementById('si-points').value = '';
+    showToast('✅', 'Premio agregado', name);
+    loadStoreItems();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function deleteStoreItem(id) {
+  if (!confirm('¿Eliminar este premio?')) return;
+  try {
+    await api('DELETE', '/points/store/' + id);
+    showToast('🗑', 'Premio eliminado', '');
+    loadStoreItems();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function saveStoreConfig() {
+  const name = document.getElementById('cfg-store-name').value.trim();
+  try {
+    await api('PUT', '/points/config', { store_name: name, points_per_peso: 0.01 });
+    showToast('✅', 'Tienda guardada', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+function copyStoreLink() {
+  const text = document.getElementById('store-link-text').textContent;
+  if (!text) return showToast('⚠️', 'Guardá la configuración primero', '');
+  navigator.clipboard.writeText(text).then(() => showToast('✅', 'Link copiado', 'Compartilo con tus clientes'));
 }
 
 // ─── KEYBOARD ───
