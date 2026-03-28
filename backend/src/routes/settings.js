@@ -21,8 +21,9 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, calendly_url, service_radius_km, churn_days, msg_templates } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates } = req.body;
 
+  try {
     // Auto-generar booking_slug si no existe
     const existingSlug = await pool.query('SELECT booking_slug FROM shops WHERE id=$1', [req.shopId]);
     let slug = existingSlug.rows[0]?.booking_slug;
@@ -34,16 +35,16 @@ router.put('/', auth, async (req, res) => {
         .slice(0, 40) + '-' + req.shopId;
       await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
     }
-  try {
+
     const result = await pool.query(
       `UPDATE shops SET
          name=$1, phone=$2, city=$3, address=$4,
-         calendly_url=$5, service_radius_km=$6, churn_days=$7, msg_templates=$8
-       WHERE id=$9
-       RETURNING id, name, email, phone, city, address, calendly_url,
-                 service_radius_km, churn_days, wpp_connected, msg_templates`,
+         service_radius_km=$5, churn_days=$6, msg_templates=$7
+       WHERE id=$8
+       RETURNING id, name, email, phone, city, address,
+                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug`,
       [name, phone||null, city||null, address||null,
-       calendly_url||null, service_radius_km||3, churn_days||20, msg_templates||null, req.shopId]
+       service_radius_km||3, churn_days||20, msg_templates||null, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {
@@ -53,7 +54,6 @@ router.put('/', auth, async (req, res) => {
 
 // ── SERVICIOS ─────────────────────────────────────────
 
-// GET /api/settings/services
 router.get('/services', auth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -66,7 +66,6 @@ router.get('/services', auth, async (req, res) => {
   }
 });
 
-// POST /api/settings/services
 router.post('/services', auth, async (req, res) => {
   const { name, price, cost, duration_minutes } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
@@ -82,7 +81,6 @@ router.post('/services', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/settings/services/:id
 router.delete('/services/:id', auth, async (req, res) => {
   try {
     await pool.query(
@@ -97,33 +95,48 @@ router.delete('/services/:id', auth, async (req, res) => {
 
 // ── WHATSAPP ──────────────────────────────────────────
 
-// POST /api/settings/whatsapp/connect
 router.post('/whatsapp/connect', auth, async (req, res) => {
   try {
     const data = await wpp.startSession(req.shopId);
-
-    // WPPConnect devuelve el QR como base64 o como URL
-    if (data.qrcode) {
-      // Puede venir como "data:image/png;base64,..." o solo el base64
-      const qr = data.qrcode.startsWith('data:')
-        ? data.qrcode
-        : `data:image/png;base64,${data.qrcode}`;
-      return res.json({ ok: true, qr });
-    }
 
     if (data.status === 'CONNECTED') {
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [req.shopId]);
       return res.json({ ok: true, connected: true });
     }
 
-    res.json({ ok: false, error: 'No se pudo iniciar sesión de WhatsApp', raw: data });
+    if (data.qrcode) {
+      const qrRaw = data.qrcode;
+      let qrImage;
+
+      // Si ya es base64 de imagen, usarlo directo
+      if (qrRaw.startsWith('data:image')) {
+        qrImage = qrRaw;
+      } else {
+        // Convertir QR raw a PNG base64 usando librería qrcode
+        try {
+          const QRCode = require('qrcode');
+          qrImage = await QRCode.toDataURL(qrRaw, {
+            width: 256,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
+        } catch (qrErr) {
+          console.error('QR conversion error:', qrErr.message);
+          // Devolver el raw y que el frontend lo maneje
+          qrImage = qrRaw;
+        }
+      }
+
+      return res.json({ ok: true, qr: qrImage });
+    }
+
+    res.json({ ok: false, error: 'No se pudo obtener el QR de WhatsApp' });
   } catch (e) {
     console.error('WPP connect error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// GET /api/settings/whatsapp/status
 router.get('/whatsapp/status', auth, async (req, res) => {
   try {
     const status = await wpp.getStatus(req.shopId);
