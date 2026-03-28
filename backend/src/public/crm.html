@@ -1482,8 +1482,6 @@ function setAgendaDate(val) {
   loadAgenda();
 }
 
-}
-
 async function updateApptStatus(id, status) {
   try {
     await api('PUT', `/appointments/${id}/status`, { status });
