@@ -399,7 +399,7 @@ function goToForm() {
   // Si ya tiene teléfono cargado (autocomplete), chequear puntos automáticamente
   setTimeout(async () => {
     const phone = document.getElementById('client-phone').value.trim().replace(/\D/g, '');
-    if (phone.length >= 8 && shopData?.booking_slug && !clientPointsData) {
+    if (phone.length >= 8 && slug && !clientPointsData) {
       await checkPhonePoints(phone);
     }
   }, 500);
@@ -407,7 +407,7 @@ function goToForm() {
 
 async function checkPhonePoints(phone) {
   try {
-    const res = await fetch(`${window.location.origin}/api/points/client/phone/${shopData.booking_slug}/${phone}`);
+    const res = await fetch(`${window.location.origin}/api/points/client/phone/${slug}/${phone}`);
     const data = await res.json();
     if (data.client && data.client.points > 0) {
       clientPointsData = data.client;
@@ -494,8 +494,8 @@ function hideError() {
 // Check points when phone is entered
 document.getElementById('client-phone')?.addEventListener('blur', async function() {
   const phone = this.value.trim().replace(/\D/g, '');
-  if (phone.length < 8 || !shopData?.booking_slug) return;
-  clientPointsData = null; // reset
+  if (phone.length < 8 || !slug) return;
+  clientPointsData = null;
   await checkPhonePoints(phone);
 });
 
@@ -509,9 +509,9 @@ document.getElementById('client-phone')?.addEventListener('input', function() {
 });
 
 async function loadStoreForClient() {
-  if (!shopData?.booking_slug) return;
+  if (!slug) return;
   try {
-    const res = await fetch(`${window.location.origin}/api/points/store/public/${shopData.booking_slug}`);
+    const res = await fetch(`${window.location.origin}/api/points/store/public/${slug}`);
     const data = await res.json();
     storeItems = (data.items || []).filter(i => clientPointsData.points >= i.points_cost);
 
