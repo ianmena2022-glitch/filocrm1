@@ -8,7 +8,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, phone, city, address, calendly_url,
-              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates
+              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -22,6 +22,18 @@ router.get('/', auth, async (req, res) => {
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
   const { name, phone, city, address, calendly_url, service_radius_km, churn_days, msg_templates } = req.body;
+
+    // Auto-generar booking_slug si no existe
+    const existingSlug = await pool.query('SELECT booking_slug FROM shops WHERE id=$1', [req.shopId]);
+    let slug = existingSlug.rows[0]?.booking_slug;
+    if (!slug && name) {
+      slug = name.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40) + '-' + req.shopId;
+      await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
+    }
   try {
     const result = await pool.query(
       `UPDATE shops SET

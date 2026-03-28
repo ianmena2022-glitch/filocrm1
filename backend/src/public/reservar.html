@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservar turno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--y:#FFD100;--n:#000d1f;--nm:#001428;--nk:#002043;--w:#fff;--g:#8a9ab5;--gl:#1a2540;--gr:#00E676;--r:#FF4343}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,var(--nk),var(--nm));border-bottom:1px solid rgba(255,209,0,.12);padding:24px 20px;text-align:center}
+.header-logo{width:52px;height:52px;background:var(--y);border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--nk);margin:0 auto 14px}
+.header-name{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;letter-spacing:1px;margin-bottom:4px}
+.header-meta{font-size:13px;color:var(--g)}
+
+/* CONTAINER */
+.container{max-width:480px;margin:0 auto;padding:24px 16px 60px}
+
+/* STEPS */
+.steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px}
+.step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:14px;left:55%;width:90%;height:2px;background:rgba(255,255,255,.1)}
+.step.done:not(:last-child)::after{background:var(--y)}
+.step-dot{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--g);position:relative;z-index:1;transition:all .3s}
+.step.active .step-dot{background:var(--y);border-color:var(--y);color:var(--nk)}
+.step.done .step-dot{background:var(--gr);border-color:var(--gr);color:var(--nk)}
+.step-lbl{font-size:10px;color:var(--g);font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.step.active .step-lbl{color:var(--w)}
+
+/* CARD */
+.card{background:linear-gradient(135deg,var(--gl),rgba(0,10,25,.9));border:1px solid rgba(255,209,0,.1);border-radius:16px;padding:24px;margin-bottom:20px}
+.card-title{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:.5px;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+
+/* SERVICE GRID */
+.service-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.service-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 12px;cursor:pointer;transition:all .2s;text-align:left}
+.service-btn:hover{border-color:rgba(255,209,0,.3);background:rgba(255,209,0,.05)}
+.service-btn.selected{border-color:var(--y);background:rgba(255,209,0,.1)}
+.svc-name{font-size:14px;font-weight:700;margin-bottom:6px}
+.svc-meta{display:flex;gap:8px;flex-wrap:wrap}
+.svc-price{font-family:'Oswald',sans-serif;font-size:16px;color:var(--y)}
+.svc-duration{font-size:11px;color:var(--g);padding:2px 8px;background:rgba(255,255,255,.06);border-radius:20px}
+
+/* DATE PICKER */
+.date-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.date-nav-btn{width:36px;height:36px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--w);cursor:pointer;font-size:16px;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.date-nav-btn:hover{border-color:var(--y);color:var(--y)}
+.date-nav-btn:disabled{opacity:.3;cursor:not-allowed}
+.month-label{font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day-header{text-align:center;font-size:10px;font-weight:700;color:var(--g);letter-spacing:.5px;padding:4px 0;text-transform:uppercase}
+.cal-day{height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;border:1px solid transparent}
+.cal-day:hover:not(.disabled):not(.empty){background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3)}
+.cal-day.today{border-color:rgba(255,209,0,.4);color:var(--y)}
+.cal-day.selected{background:var(--y);color:var(--nk);border-color:var(--y)}
+.cal-day.disabled{opacity:.25;cursor:not-allowed}
+.cal-day.empty{cursor:default}
+
+/* TIME SLOTS */
+.slots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.slot-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 8px;cursor:pointer;transition:all .2s;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;color:var(--w)}
+.slot-btn:hover{border-color:rgba(255,209,0,.3);background:rgba(255,209,0,.05);color:var(--y)}
+.slot-btn.selected{background:var(--y);border-color:var(--y);color:var(--nk)}
+.no-slots{text-align:center;padding:32px;color:var(--g);font-size:14px}
+
+/* FORM */
+.form-field{margin-bottom:16px}
+.form-field label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
+.form-field input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;transition:border-color .2s;outline:none}
+.form-field input:focus{border-color:var(--y);background:rgba(255,209,0,.05)}
+.form-field input::placeholder{color:#4a5a75}
+
+/* RESUMEN */
+.summary{background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.2);border-radius:12px;padding:18px}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px}
+.summary-row:last-child{border-bottom:none}
+.summary-label{color:var(--g)}
+.summary-value{font-weight:700}
+
+/* BUTTONS */
+.btn-primary{width:100%;background:var(--y);color:var(--nk);border:none;padding:16px;border-radius:12px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(255,209,0,.3);margin-top:8px}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(255,209,0,.5)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.15);color:var(--g);padding:12px;border-radius:10px;font-family:'Barlow',sans-serif;font-size:14px;cursor:pointer;width:100%;margin-top:8px;transition:all .2s}
+.btn-back:hover{border-color:rgba(255,255,255,.3);color:var(--w)}
+
+/* SUCCESS */
+.success{text-align:center;padding:40px 20px}
+.success-icon{font-size:72px;margin-bottom:20px;display:block}
+.success-title{font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;margin-bottom:12px;color:var(--gr)}
+.success-msg{font-size:16px;color:var(--g);line-height:1.7;margin-bottom:28px}
+.success-detail{background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:18px;font-size:14px;line-height:1.8}
+
+/* LOADING */
+.loading{text-align:center;padding:40px;color:var(--g)}
+.spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--y);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-banner{background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px 16px;color:#ff8080;font-size:13px;margin-bottom:16px;display:none}
+</style>
+</head>
+<body>
+
+<div id="loading" class="container" style="padding-top:80px">
+  <div class="loading">
+    <div class="spinner"></div>
+    Cargando...
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="header">
+    <div class="header-logo" id="shop-logo">✂</div>
+    <div class="header-name" id="shop-name">Barbería</div>
+    <div class="header-meta" id="shop-meta"></div>
+  </div>
+
+  <div class="container">
+    <!-- Steps -->
+    <div class="steps" id="steps">
+      <div class="step active" id="step-1"><div class="step-dot">1</div><div class="step-lbl">Servicio</div></div>
+      <div class="step" id="step-2"><div class="step-dot">2</div><div class="step-lbl">Fecha</div></div>
+      <div class="step" id="step-3"><div class="step-dot">3</div><div class="step-lbl">Hora</div></div>
+      <div class="step" id="step-4"><div class="step-dot">4</div><div class="step-lbl">Datos</div></div>
+    </div>
+
+    <div id="error-banner" class="error-banner"></div>
+
+    <!-- Step 1: Servicio -->
+    <div id="screen-service">
+      <div class="card">
+        <div class="card-title">✂️ ¿Qué servicio querés?</div>
+        <div class="service-grid" id="service-grid"></div>
+      </div>
+      <button class="btn-primary" id="btn-next-service" onclick="goToDate()" disabled>Elegir fecha →</button>
+    </div>
+
+    <!-- Step 2: Fecha -->
+    <div id="screen-date" style="display:none">
+      <div class="card">
+        <div class="card-title">📅 ¿Qué día?</div>
+        <div class="date-nav">
+          <button class="date-nav-btn" id="btn-prev-month" onclick="changeMonth(-1)">←</button>
+          <div class="month-label" id="month-label"></div>
+          <button class="date-nav-btn" onclick="changeMonth(1)">→</button>
+        </div>
+        <div class="calendar-grid" id="calendar"></div>
+      </div>
+      <button class="btn-back" onclick="goBack(1)">← Volver</button>
+    </div>
+
+    <!-- Step 3: Hora -->
+    <div id="screen-time" style="display:none">
+      <div class="card">
+        <div class="card-title">🕐 ¿A qué hora?</div>
+        <div id="slots-container"></div>
+      </div>
+      <button class="btn-back" onclick="goBack(2)">← Volver</button>
+    </div>
+
+    <!-- Step 4: Datos del cliente -->
+    <div id="screen-form" style="display:none">
+      <div class="card">
+        <div class="card-title">👤 Tus datos</div>
+        <div class="form-field">
+          <label>Nombre completo</label>
+          <input type="text" id="client-name" placeholder="Juan García" autocomplete="name">
+        </div>
+        <div class="form-field">
+          <label>WhatsApp (opcional)</label>
+          <input type="tel" id="client-phone" placeholder="5491112345678" autocomplete="tel">
+        </div>
+        <div style="margin-top:20px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:12px">Resumen de tu reserva</div>
+          <div class="summary" id="summary"></div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="confirmReservation()">✅ Confirmar turno</button>
+      <button class="btn-back" onclick="goBack(3)">← Volver</button>
+    </div>
+
+    <!-- Success -->
+    <div id="screen-success" style="display:none">
+      <div class="success">
+        <span class="success-icon">✂️</span>
+        <div class="success-title">¡Turno confirmado!</div>
+        <div class="success-msg" id="success-msg"></div>
+        <div class="success-detail" id="success-detail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const slug = window.location.pathname.split('/reservar/')[1]?.split('/')[0];
+const API = window.location.origin + '/api/booking/' + slug;
+
+let shopData = null;
+let services = [];
+let selectedService = null;
+let selectedDate = null;
+let selectedTime = null;
+let currentMonth = new Date();
+
+// ── INIT ──
+async function init() {
+  if (!slug) {
+    document.getElementById('loading').innerHTML = '<div class="loading">Link inválido</div>';
+    return;
+  }
+  try {
+    const res = await fetch(API);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    shopData = data.shop;
+    services = data.services;
+
+    document.getElementById('shop-name').textContent = shopData.name;
+    document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+    document.title = `Reservar turno — ${shopData.name}`;
+    if (shopData.city || shopData.address) {
+      document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
+    }
+
+    renderServices();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').innerHTML = `<div class="loading">No se encontró la barbería.<br><small>${e.message}</small></div>`;
+  }
+}
+
+// ── SERVICES ──
+function renderServices() {
+  const grid = document.getElementById('service-grid');
+  if (!services.length) {
+    grid.innerHTML = '<div style="color:var(--g);font-size:13px;grid-column:1/-1;padding:16px 0">Sin servicios configurados todavía.</div>';
+    return;
+  }
+  grid.innerHTML = services.map(s => `
+    <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}">
+      <div class="svc-name">${s.name}</div>
+      <div class="svc-meta">
+        <span class="svc-price">$${parseFloat(s.price).toLocaleString('es-AR')}</span>
+        <span class="svc-duration">${s.duration_minutes} min</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectService(id) {
+  selectedService = services.find(s => s.id === id);
+  document.querySelectorAll('.service-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('svc-' + id).classList.add('selected');
+  document.getElementById('btn-next-service').disabled = false;
+}
+
+// ── DATE ──
+function goToDate() {
+  showScreen('date');
+  setStep(2);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  document.getElementById('month-label').textContent =
+    currentMonth.toLocaleDateString('es-AR', { month:'long', year:'numeric' }).toUpperCase();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const days = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+  let html = days.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    const dateStr = date.toISOString().split('T')[0];
+    const isPast = date < today;
+    const isSunday = date.getDay() === 0;
+    const isToday = date.toDateString() === today.toDateString();
+    const isSelected = dateStr === selectedDate;
+    const disabled = isPast || isSunday;
+
+    let cls = 'cal-day';
+    if (disabled) cls += ' disabled';
+    if (isToday) cls += ' today';
+    if (isSelected) cls += ' selected';
+
+    html += `<div class="${cls}" ${!disabled ? `onclick="selectDate('${dateStr}')"` : ''}>${d}</div>`;
+  }
+
+  document.getElementById('calendar').innerHTML = html;
+  document.getElementById('btn-prev-month').disabled =
+    currentMonth.getMonth() === new Date().getMonth() &&
+    currentMonth.getFullYear() === new Date().getFullYear();
+}
+
+function changeMonth(delta) {
+  currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
+  renderCalendar();
+}
+
+async function selectDate(dateStr) {
+  selectedDate = dateStr;
+  renderCalendar();
+  await loadSlots();
+}
+
+// ── TIME ──
+async function loadSlots() {
+  showScreen('time');
+  setStep(3);
+  document.getElementById('slots-container').innerHTML = '<div class="loading"><div class="spinner"></div>Cargando horarios...</div>';
+
+  try {
+    const params = new URLSearchParams({ date: selectedDate });
+    if (selectedService) params.set('service_id', selectedService.id);
+    const res = await fetch(`${API}/available?${params}`);
+    const data = await res.json();
+
+    if (!data.slots.length) {
+      document.getElementById('slots-container').innerHTML =
+        '<div class="no-slots">😔 No hay horarios disponibles este día.<br>Probá con otra fecha.</div>';
+      return;
+    }
+
+    document.getElementById('slots-container').innerHTML = `
+      <div class="slots-grid">
+        ${data.slots.map(s => `
+          <button class="slot-btn ${s === selectedTime ? 'selected' : ''}" onclick="selectTime('${s}')">${s}</button>
+        `).join('')}
+      </div>`;
+  } catch (e) {
+    document.getElementById('slots-container').innerHTML =
+      `<div class="no-slots" style="color:var(--r)">Error al cargar horarios</div>`;
+  }
+}
+
+function selectTime(time) {
+  selectedTime = time;
+  document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+  event.target.classList.add('selected');
+  setTimeout(() => goToForm(), 300);
+}
+
+// ── FORM ──
+function goToForm() {
+  showScreen('form');
+  setStep(4);
+
+  const dateFormatted = new Date(selectedDate + 'T12:00:00')
+    .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-row"><span class="summary-label">Servicio</span><span class="summary-value">${selectedService?.name || 'Sin servicio'}</span></div>
+    <div class="summary-row"><span class="summary-label">Fecha</span><span class="summary-value">${dateFormatted}</span></div>
+    <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
+    <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">$${parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
+  `;
+}
+
+async function confirmReservation() {
+  const name = document.getElementById('client-name').value.trim();
+  const phone = document.getElementById('client-phone').value.trim();
+  if (!name) { showError('Por favor ingresá tu nombre'); return; }
+
+  const btn = document.querySelector('#screen-form .btn-primary');
+  btn.disabled = true; btn.textContent = 'Confirmando...';
+  hideError();
+
+  try {
+    const res = await fetch(`${API}/reserve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: name,
+        client_phone: phone || null,
+        service_id: selectedService?.id || null,
+        date: selectedDate,
+        time_start: selectedTime
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const dateFormatted = new Date(selectedDate + 'T12:00:00')
+      .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+
+    document.getElementById('success-msg').textContent = data.message;
+    document.getElementById('success-detail').innerHTML = `
+      <strong>${selectedService?.name || 'Turno'}</strong><br>
+      📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
+      📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
+    `;
+
+    showScreen('success');
+    document.getElementById('steps').style.display = 'none';
+  } catch (e) {
+    showError(e.message);
+    btn.disabled = false; btn.textContent = '✅ Confirmar turno';
+  }
+}
+
+// ── HELPERS ──
+function showScreen(name) {
+  ['service','date','time','form','success'].forEach(s => {
+    document.getElementById('screen-' + s).style.display = s === name ? 'block' : 'none';
+  });
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('step-' + i);
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    if (i === n) el.classList.add('active');
+  }
+}
+
+function goBack(toStep) {
+  const screens = ['service','date','time','form'];
+  showScreen(screens[toStep - 1]);
+  setStep(toStep);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error-banner').style.display = 'none';
+}
+
+init();
+</script>
+</body>
+</html>

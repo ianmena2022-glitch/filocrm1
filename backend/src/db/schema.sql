@@ -92,3 +92,5 @@ CREATE INDEX IF NOT EXISTS idx_clients_shop             ON clients(shop_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_shop         ON memberships(shop_id, active);
 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS msg_templates TEXT;
+
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS booking_slug VARCHAR(100) UNIQUE;
