@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FILO CRM — El sistema del barbero inteligente</title>
+<meta name="description" content="FILO CRM llena tu sillón, recupera clientes y genera ingresos fijos. Automático. Para barberías argentinas.">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--y:#FFD100;--n:#000d1f;--nm:#001020;--nk:#002043;--w:#fff;--g:#7a8ba8;--gl:#0d1e35;--gll:#162840;--gr:#00E676;--or:#FF9100;--r:#FF4343;--border:rgba(255,255,255,0.07);--border-y:rgba(255,209,0,0.15)}
+html{scroll-behavior:smooth}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;overflow-x:hidden}
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 6%;background:rgba(0,10,20,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-mark{width:36px;height:36px;background:var(--y);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--nk);flex-shrink:0}
+.logo-text{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;letter-spacing:3px;color:var(--w)}
+.nav-r{display:flex;align-items:center;gap:28px}
+.nav-r a.link{color:var(--g);font-size:13px;font-weight:500;text-decoration:none;letter-spacing:.5px;transition:color .2s}
+.nav-r a.link:hover{color:var(--w)}
+.nav-btn{background:var(--y);color:var(--nk);padding:9px 22px;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-decoration:none;letter-spacing:.5px;text-transform:uppercase;transition:all .2s;white-space:nowrap}
+.nav-btn:hover{box-shadow:0 0 24px rgba(255,209,0,.5);transform:translateY(-1px)}
+.hero{min-height:100vh;display:flex;align-items:center;padding:100px 6% 80px;position:relative;overflow:hidden}
+.hero-glow-1{position:absolute;top:-20%;right:-10%;width:70%;height:80%;background:radial-gradient(ellipse,rgba(255,209,0,.05) 0%,transparent 65%);pointer-events:none}
+.hero-glow-2{position:absolute;bottom:-20%;left:-5%;width:50%;height:60%;background:radial-gradient(ellipse,rgba(0,32,67,.6) 0%,transparent 70%);pointer-events:none}
+.hero-grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(255,209,0,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,209,0,.025) 1px,transparent 1px);background-size:80px 80px;pointer-events:none}
+.hero-line{position:absolute;top:0;right:32%;width:1px;height:100%;background:linear-gradient(180deg,transparent 0%,rgba(255,209,0,.15) 30%,rgba(255,209,0,.08) 70%,transparent 100%);pointer-events:none}
+.hero-inner{position:relative;z-index:1;max-width:1200px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+@media(max-width:1000px){.hero-inner{grid-template-columns:1fr}.hero-right{display:none}}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:10px;background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.2);border-radius:4px;padding:6px 14px;margin-bottom:24px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y)}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--gr);animation:pulseAnim 2s ease-in-out infinite}
+@keyframes pulseAnim{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.4)}70%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
+.hero h1{font-family:'Oswald',sans-serif;font-size:clamp(48px,6vw,88px);font-weight:700;line-height:.9;letter-spacing:-1px}
+.hero h1 em{color:var(--y);font-style:normal;display:block}
+.hero h1 .sm{font-size:clamp(28px,3.5vw,48px);color:var(--g);font-weight:400;display:block;margin-top:8px;letter-spacing:0}
+.hero-desc{font-size:17px;color:var(--g);line-height:1.7;margin:28px 0 36px;max-width:480px;font-weight:300}
+.hero-desc strong{color:rgba(255,255,255,.9);font-weight:600}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:48px}
+.cta-primary{background:var(--y);color:var(--nk);padding:15px 32px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;text-decoration:none;letter-spacing:.5px;text-transform:uppercase;transition:all .25s;box-shadow:0 4px 30px rgba(255,209,0,.25);display:inline-block}
+.cta-primary:hover{transform:translateY(-2px);box-shadow:0 8px 40px rgba(255,209,0,.45)}
+.cta-ghost{background:transparent;color:var(--w);padding:15px 32px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;text-decoration:none;letter-spacing:.5px;text-transform:uppercase;border:1px solid rgba(255,255,255,.15);transition:all .25s;display:inline-block}
+.cta-ghost:hover{border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.04)}
+.hero-proof{display:flex;gap:32px}
+.proof-item{display:flex;flex-direction:column}
+.proof-val{font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--y);line-height:1}
+.proof-lbl{font-size:11px;color:var(--g);margin-top:4px;font-weight:500;letter-spacing:.5px}
+.hero-right{position:relative}
+.dash-mock{background:linear-gradient(145deg,#0d1e35,#060e1a);border:1px solid var(--border-y);border-radius:16px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.7)}
+.dash-topbar{height:40px;background:rgba(0,20,40,.6);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:6px}
+.dash-dot{width:9px;height:9px;border-radius:50%}
+.dash-title{font-size:10px;color:var(--g);margin-left:10px;letter-spacing:.5px}
+.dash-body{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.d-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:12px}
+.d-lbl{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--g);margin-bottom:5px}
+.d-val{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:var(--y);line-height:1}
+.d-sub{font-size:9px;color:var(--g);margin-top:3px}
+.d-chart{grid-column:1/-1;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:12px}
+.d-bars{display:flex;align-items:flex-end;gap:5px;height:52px;margin-top:6px}
+.d-bar-w{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;gap:3px}
+.d-bar-track{flex:1;width:100%;background:rgba(255,255,255,.04);border-radius:2px;display:flex;align-items:flex-end}
+.d-day{font-size:7px;color:var(--g);font-weight:700}
+.d-appt{display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;margin-bottom:5px}
+.d-time{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--y);min-width:34px}
+.d-dot{width:5px;height:5px;border-radius:50%}
+.d-name{font-size:10px;font-weight:600;flex:1}
+.d-price{font-family:'Oswald',sans-serif;font-size:12px}
+.d-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:8px}
+.mock-badge{position:absolute;background:linear-gradient(135deg,var(--gl),#060e1a);border:1px solid var(--border-y);border-radius:10px;padding:10px 14px;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:floatBadge 3s ease-in-out infinite}
+.mock-badge-1{top:-16px;right:-20px;animation-delay:0s}
+.mock-badge-2{bottom:20px;left:-24px;animation-delay:1.5s}
+@keyframes floatBadge{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.mb-icon{font-size:20px;margin-bottom:4px}
+.mb-val{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--y);line-height:1}
+.mb-lbl{font-size:9px;color:var(--g);margin-top:2px}
+.section{padding:100px 6%;position:relative}
+.section-inner{max-width:1200px;margin:0 auto}
+.s-eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y);margin-bottom:14px;opacity:.9}
+.s-title{font-family:'Oswald',sans-serif;font-size:clamp(36px,5vw,58px);font-weight:700;letter-spacing:-.5px;line-height:1;margin-bottom:18px}
+.s-sub{font-size:17px;color:var(--g);font-weight:300;line-height:1.65;max-width:560px}
+.pains-bg{background:linear-gradient(180deg,var(--n) 0%,var(--nm) 100%)}
+.pains-header{text-align:center;margin-bottom:72px}
+.pains-header .s-sub{margin:0 auto}
+.pains-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2px;background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.pain-card{background:var(--n);padding:36px;transition:background .3s;position:relative;overflow:hidden}
+.pain-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--y),transparent);opacity:0;transition:opacity .3s}
+.pain-card:hover{background:var(--gl)}
+.pain-card:hover::after{opacity:1}
+.pain-num{font-family:'Oswald',sans-serif;font-size:64px;font-weight:700;color:rgba(255,209,0,.06);line-height:1;position:absolute;top:20px;right:20px}
+.pain-icon{font-size:32px;margin-bottom:16px}
+.pain-tag{display:inline-block;padding:3px 10px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px}
+.pain-tag.dolor{background:rgba(255,67,67,.15);color:#ff8080}
+.pain-title{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;letter-spacing:.3px}
+.pain-desc{font-size:14px;color:var(--g);line-height:1.65}
+.pain-buys{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+.pain-buys-lbl{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:6px}
+.pain-buys-val{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--y);letter-spacing:.5px}
+.results-strip{background:var(--y);padding:60px 6%}
+.results-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;align-items:center}
+@media(max-width:768px){.results-inner{grid-template-columns:1fr;gap:20px}}
+.result-item{text-align:center}
+.result-val{font-family:'Oswald',sans-serif;font-size:52px;font-weight:700;color:var(--nk);line-height:1}
+.result-lbl{font-size:13px;font-weight:700;color:rgba(0,32,67,.7);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+.result-divider{width:1px;height:80px;background:rgba(0,32,67,.2);margin:0 auto}
+.how-bg{background:var(--nm)}
+.how-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:60px;position:relative}
+.how-steps::before{content:'';position:absolute;top:28px;left:16.67%;right:16.67%;height:1px;background:linear-gradient(90deg,transparent,var(--border-y),transparent);pointer-events:none}
+@media(max-width:700px){.how-steps{grid-template-columns:1fr}.how-steps::before{display:none}}
+.how-step{padding:0 32px;text-align:center}
+.how-step-num{width:56px;height:56px;border-radius:50%;background:var(--y);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--nk);margin:0 auto 20px;position:relative;z-index:1}
+.how-step-title{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;margin-bottom:10px}
+.how-step-desc{font-size:14px;color:var(--g);line-height:1.65}
+.how-time{display:inline-block;margin-top:12px;padding:4px 12px;background:rgba(0,230,118,.1);border-radius:20px;font-size:11px;font-weight:700;color:var(--gr)}
+.features-bg{background:var(--n)}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-top:60px}
+.feat-card{background:var(--gl);border:1px solid var(--border);border-radius:14px;padding:28px;transition:all .3s;position:relative;overflow:hidden}
+.feat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,209,0,.4),transparent);opacity:0;transition:opacity .3s}
+.feat-card:hover{border-color:var(--border-y);transform:translateY(-3px)}
+.feat-card:hover::before{opacity:1}
+.feat-icon{font-size:32px;margin-bottom:16px}
+.feat-name{font-family:'Oswald',sans-serif;font-size:19px;font-weight:700;margin-bottom:8px;letter-spacing:.3px}
+.feat-desc{font-size:14px;color:var(--g);line-height:1.65}
+.feat-pill{display:inline-block;margin-top:14px;padding:3px 10px;background:rgba(255,209,0,.08);border-radius:3px;font-size:10px;font-weight:700;color:var(--y);letter-spacing:.5px;text-transform:uppercase}
+.proof-bg{background:linear-gradient(180deg,var(--n),var(--nm))}
+.proof-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:60px}
+.proof-card{background:var(--gl);border:1px solid var(--border);border-radius:14px;padding:28px;position:relative}
+.proof-card::before{content:'"';position:absolute;top:16px;right:20px;font-size:60px;color:rgba(255,209,0,.08);font-family:serif;line-height:1}
+.proof-stars{color:var(--y);font-size:13px;margin-bottom:14px;letter-spacing:2px}
+.proof-text{font-size:15px;color:rgba(255,255,255,.82);line-height:1.7;margin-bottom:20px;font-style:italic}
+.proof-author{display:flex;align-items:center;gap:12px}
+.proof-av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--y),var(--or));display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--nk);flex-shrink:0}
+.proof-name{font-weight:700;font-size:14px}
+.proof-role{font-size:12px;color:var(--g);margin-top:2px}
+.proof-metric{margin-top:16px;padding:12px 14px;background:rgba(0,0,0,.3);border-radius:8px;border-left:3px solid var(--y);font-size:13px;color:rgba(255,255,255,.8)}
+.proof-metric strong{color:var(--y)}
+.pricing-bg{background:var(--n)}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:60px;max-width:960px;margin-left:auto;margin-right:auto}
+@media(max-width:800px){.pricing-grid{grid-template-columns:1fr;max-width:400px}}
+.plan-card{background:var(--gl);border:1px solid var(--border);border-radius:16px;padding:36px;position:relative;transition:all .3s}
+.plan-card:hover{transform:translateY(-4px)}
+.plan-card.featured{background:linear-gradient(145deg,rgba(255,209,0,.1),rgba(255,209,0,.03));border:1px solid rgba(255,209,0,.4);transform:scale(1.03)}
+.plan-card.featured:hover{transform:scale(1.03) translateY(-4px)}
+.plan-popular{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--y);color:var(--nk);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 16px;border-radius:3px;white-space:nowrap}
+.plan-name{font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
+.plan-tagline{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:20px;line-height:1.4}
+.plan-price{font-family:'Oswald',sans-serif;font-size:44px;font-weight:700;line-height:1;margin-bottom:4px}
+.plan-price span{font-size:20px;vertical-align:top;margin-top:8px;display:inline-block;font-weight:500}
+.plan-period{font-size:13px;color:var(--g);margin-bottom:28px}
+.plan-feats{list-style:none;margin-bottom:30px;display:flex;flex-direction:column;gap:10px}
+.plan-feats li{font-size:13px;color:rgba(255,255,255,.78);display:flex;align-items:flex-start;gap:10px;line-height:1.4}
+.plan-feats li::before{content:"✓";color:var(--gr);font-weight:700;font-size:12px;flex-shrink:0;margin-top:1px}
+.plan-feats li.x::before{content:"✗";color:rgba(255,255,255,.2)}
+.plan-feats li.x{color:rgba(255,255,255,.3)}
+.plan-cta{display:block;text-align:center;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;text-decoration:none;transition:all .2s}
+.plan-cta-main{background:var(--y);color:var(--nk)}
+.plan-cta-main:hover{box-shadow:0 4px 24px rgba(255,209,0,.4)}
+.plan-cta-out{border:1px solid rgba(255,255,255,.15);color:var(--w)}
+.plan-cta-out:hover{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.04)}
+.plan-trial{text-align:center;font-size:11px;color:var(--gr);margin-top:10px;font-weight:600;letter-spacing:.5px}
+.faq-bg{background:var(--nm)}
+.faq-list{max-width:720px;margin:48px auto 0;display:flex;flex-direction:column;gap:2px}
+.faq-item{background:var(--gl);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color .2s}
+.faq-item.open{border-color:var(--border-y)}
+.faq-q{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:15px;font-weight:600;gap:16px;user-select:none}
+.faq-q:hover{background:rgba(255,255,255,.02)}
+.faq-arrow{font-size:12px;color:var(--y);transition:transform .25s;flex-shrink:0}
+.faq-item.open .faq-arrow{transform:rotate(180deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s}
+.faq-item.open .faq-a{max-height:200px;padding:0 24px 20px}
+.faq-a-text{font-size:14px;color:var(--g);line-height:1.7}
+.cta-bg{background:linear-gradient(135deg,#001833 0%,#000d1f 100%);padding:120px 6%;text-align:center;position:relative;overflow:hidden}
+.cta-bg::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:700px;height:700px;background:radial-gradient(circle,rgba(255,209,0,.07) 0%,transparent 65%);pointer-events:none}
+.cta-inner{position:relative;z-index:1}
+.cta-title{font-family:'Oswald',sans-serif;font-size:clamp(44px,7vw,80px);font-weight:700;letter-spacing:-1px;line-height:.95;margin-bottom:20px}
+.cta-title em{color:var(--y);font-style:normal}
+.cta-sub{font-size:18px;color:var(--g);margin:0 auto 40px;max-width:480px;font-weight:300;line-height:1.6}
+.cta-badges{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:36px}
+.cta-badge{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--g)}
+.cta-badge::before{content:"✓";color:var(--gr);font-weight:700}
+footer{background:rgba(0,8,16,.8);border-top:1px solid var(--border);padding:32px 6%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-copy{font-size:12px;color:var(--g)}
+.footer-links{display:flex;gap:20px}
+.footer-links a{font-size:12px;color:var(--g);text-decoration:none;transition:color .2s}
+.footer-links a:hover{color:var(--w)}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.reveal.up{opacity:1;transform:translateY(0)}
+.delay-1{transition-delay:.1s}.delay-2{transition-delay:.2s}.delay-3{transition-delay:.3s}
+@media(max-width:768px){.nav-r .link{display:none}.hero-proof{gap:20px}}
+</style>
+</head>
+<body>
+<nav>
+  <a href="#" class="logo"><div class="logo-mark">✂</div><span class="logo-text">FILO</span></a>
+  <div class="nav-r">
+    <a href="#dolores" class="link">Por qué FILO</a>
+    <a href="#planes" class="link">Planes</a>
+    <a href="#faq" class="link">FAQ</a>
+    <a href="#cta" class="nav-btn">Empezar gratis</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-glow-1"></div><div class="hero-glow-2"></div><div class="hero-grid-bg"></div><div class="hero-line"></div>
+  <div class="hero-inner">
+    <div class="hero-left">
+      <div class="hero-eyebrow"><div class="pulse-dot"></div>CRM para barberías — Argentina</div>
+      <h1>TU BARBERÍA<em>LLENA.</em><span class="sm">Tu cabeza, tranquila.</span></h1>
+      <p class="hero-desc">Dejá de mirar el techo en las horas bache. FILO <strong>recupera clientes, llena huecos y genera ingresos fijos</strong> — automático, sin que muevas un dedo.</p>
+      <div class="hero-ctas">
+        <a href="#cta" class="cta-primary">✂ Probar 14 días gratis</a>
+        <a href="#dolores" class="cta-ghost">Ver cómo funciona</a>
+      </div>
+      <div class="hero-proof">
+        <div class="proof-item"><div class="proof-val">+40%</div><div class="proof-lbl">Más ingresos primer mes</div></div>
+        <div class="proof-item"><div class="proof-val">0 hs</div><div class="proof-lbl">De configuración</div></div>
+        <div class="proof-item"><div class="proof-val">100%</div><div class="proof-lbl">Automático</div></div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div style="position:relative">
+        <div class="mock-badge mock-badge-1"><div class="mb-icon">💬</div><div class="mb-val">+12</div><div class="mb-lbl">Mensajes enviados</div></div>
+        <div class="mock-badge mock-badge-2"><div class="mb-icon">👑</div><div class="mb-val">$64K</div><div class="mb-lbl">MRR este mes</div></div>
+        <div class="dash-mock">
+          <div class="dash-topbar"><div class="dash-dot" style="background:#ff5f57"></div><div class="dash-dot" style="background:#ffbd2e"></div><div class="dash-dot" style="background:#28c840"></div><span class="dash-title">FILO CRM — Dashboard</span></div>
+          <div class="dash-body">
+            <div class="d-card"><div class="d-lbl">Ganancia neta hoy</div><div class="d-val">$31.200</div><div class="d-sub">↑ 22% vs ayer</div></div>
+            <div class="d-card"><div class="d-lbl">Completados</div><div class="d-val">9</div><div class="d-sub">1 pendiente</div></div>
+            <div class="d-chart"><div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g)">Últimos 7 días</div><div class="d-bars" id="dbars"></div></div>
+            <div style="grid-column:1/-1">
+              <div class="d-appt"><div class="d-time">09:00</div><div class="d-dot" style="background:var(--gr)"></div><div class="d-name">Rodrigo M.</div><div class="d-price">$5.500</div><div class="d-badge" style="background:rgba(0,230,118,.15);color:var(--gr)">✓</div></div>
+              <div class="d-appt"><div class="d-time">11:30</div><div class="d-dot" style="background:var(--or)"></div><div class="d-name">Lucas P. 👑</div><div class="d-price">$0</div><div class="d-badge" style="background:rgba(255,209,0,.15);color:var(--y)">Mbr</div></div>
+              <div class="d-appt"><div class="d-time">14:00</div><div class="d-dot" style="background:#6ab8ff"></div><div class="d-name">Matías G.</div><div class="d-price">$6.000</div><div class="d-badge" style="background:rgba(100,180,255,.15);color:#6ab8ff">OK</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="results-strip">
+  <div class="results-inner">
+    <div class="result-item"><div class="result-val">PAZ MENTAL</div><div class="result-lbl">Sabés que el negocio trabaja solo</div></div>
+    <div class="result-divider"></div>
+    <div class="result-item"><div class="result-val">ORDEN</div><div class="result-lbl">Clientes, turnos y plata — todo claro</div></div>
+    <div class="result-divider"></div>
+    <div class="result-item"><div class="result-val">CRECIMIENTO</div><div class="result-lbl">Más clientes, sin más trabajo</div></div>
+  </div>
+</div>
+
+<section class="section pains-bg" id="dolores">
+  <div class="section-inner">
+    <div class="pains-header reveal">
+      <div class="s-eyebrow">Los 5 dolores del barbero</div>
+      <h2 class="s-title">SABEMOS LO QUE TE PASA</h2>
+      <p class="s-sub">Cada dolor tiene una solución concreta. No teoría — algoritmos que actúan.</p>
+    </div>
+    <div class="pains-grid reveal">
+      <div class="pain-card"><div class="pain-num">01</div><div class="pain-icon">📉</div><div><span class="pain-tag dolor">Dolor</span></div><div class="pain-title">Si no corta, no cobra</div><div class="pain-desc">El día libre, el feriado, la hora bache — son billetes que se evaporan. Sin ingreso fijo, vivís del día a día.</div><div class="pain-buys"><div class="pain-buys-lbl">✅ FILO lo resuelve con</div><div class="pain-buys-val">MEMBRESÍAS — Ingreso Recurrente</div></div></div>
+      <div class="pain-card"><div class="pain-num">02</div><div class="pain-icon">👻</div><div><span class="pain-tag dolor">Dolor</span></div><div class="pain-title">El cliente que se fue y no avisó</div><div class="pain-desc">Hace 3 semanas que no viene. Perdiste un cliente sin darte cuenta. Para cuando lo notás, ya tiene otro barbero.</div><div class="pain-buys"><div class="pain-buys-lbl">✅ FILO lo resuelve con</div><div class="pain-buys-val">MOTOR RESCATE — Algoritmo de Churn</div></div></div>
+      <div class="pain-card"><div class="pain-num">03</div><div class="pain-icon">🕳️</div><div><span class="pain-tag dolor">Dolor</span></div><div class="pain-title">Horas bache mirando el techo</div><div class="pain-desc">Las 15:30 libre. Las 16:00 libre. Cada minuto vacío es plata que no entra. Y ya es muy tarde para llamar a alguien.</div><div class="pain-buys"><div class="pain-buys-lbl">✅ FILO lo resuelve con</div><div class="pain-buys-val">SILLÓN LIBRE — Yield Management</div></div></div>
+      <div class="pain-card"><div class="pain-num">04</div><div class="pain-icon">🔇</div><div><span class="pain-tag dolor">Dolor</span></div><div class="pain-title">Soy bueno pero invisible</div><div class="pain-desc">Tu trabajo habla solo, pero nadie lo ve. Subir Reels todo el día no es tu trabajo — y tampoco te da clientes fijos.</div><div class="pain-buys"><div class="pain-buys-lbl">✅ FILO lo resuelve con</div><div class="pain-buys-val">SISTEMA DE REFERIDOS — Efecto Red</div></div></div>
+      <div class="pain-card"><div class="pain-num">05</div><div class="pain-icon">💸</div><div><span class="pain-tag dolor">Dolor</span></div><div class="pain-title">Competir por precio con el de la vuelta</div><div class="pain-desc">Si tu único diferencial es el precio, siempre vas a perder. El cliente barato no fideliza — el bueno busca experiencias.</div><div class="pain-buys"><div class="pain-buys-lbl">✅ FILO lo resuelve con</div><div class="pain-buys-val">EXPERIENCIA TECNOLÓGICA — Autoridad</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section how-bg">
+  <div class="section-inner">
+    <div class="reveal" style="text-align:center">
+      <div class="s-eyebrow" style="text-align:center">Cómo funciona</div>
+      <h2 class="s-title" style="text-align:center">EMPEZÁS HOY. FUNCIONA HOY.</h2>
+      <p class="s-sub" style="margin:0 auto;text-align:center">Cero configuración técnica. Cero curva de aprendizaje.</p>
+    </div>
+    <div class="how-steps reveal">
+      <div class="how-step"><div class="how-step-num">1</div><div class="how-step-title">CREÁS TU CUENTA</div><div class="how-step-desc">Registrás tu barbería, cargás tus servicios y precios. El sistema crea tu base de datos en el momento.</div><div class="how-time">⏱ 3 minutos</div></div>
+      <div class="how-step"><div class="how-step-num">2</div><div class="how-step-title">CONECTÁS WHATSAPP</div><div class="how-step-desc">Escaneás un QR desde tu celular y FILO queda conectado a tu número. Sin apps extra, sin contratos raros.</div><div class="how-time">⏱ 1 minuto</div></div>
+      <div class="how-step"><div class="how-step-num">3</div><div class="how-step-title">LOS MOTORES ARRANCAN</div><div class="how-step-desc">FILO empieza a detectar oportunidades, recuperar clientes y llenar tu agenda. Solo tenés que cobrar.</div><div class="how-time">⏱ Automático</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section features-bg">
+  <div class="section-inner">
+    <div class="reveal"><div class="s-eyebrow">El sistema completo</div><h2 class="s-title">TODO EN UN SOLO LUGAR</h2><p class="s-sub">Cada función diseñada para que trabajes menos y ganes más.</p></div>
+    <div class="features-grid">
+      <div class="feat-card reveal delay-1"><div class="feat-icon">💈</div><div class="feat-name">SILLÓN LIBRE</div><div class="feat-desc">Detecta huecos en tu agenda y manda WhatsApp masivo a clientes que no vienen hace rato. Llenás el sillón en 15 minutos.</div><div class="feat-pill">Motor automático</div></div>
+      <div class="feat-card reveal delay-2"><div class="feat-icon">🔥</div><div class="feat-name">MOTOR RESCATE</div><div class="feat-desc">Vigila quién no viene. Cuando detecta un cliente "en fuga", activa un mensaje de recuperación personalizado. Vos no hacés nada.</div><div class="feat-pill">Algoritmo churn</div></div>
+      <div class="feat-card reveal delay-3"><div class="feat-icon">👑</div><div class="feat-name">MEMBRESÍAS & MRR</div><div class="feat-desc">Plan básico (2 cortes/mes) y premium (ilimitado). Ingreso fijo garantizado. El día 1 del mes ya sabés cuánto entra.</div><div class="feat-pill">Ingreso recurrente</div></div>
+      <div class="feat-card reveal delay-1"><div class="feat-icon">📊</div><div class="feat-name">DASHBOARD EN VIVO</div><div class="feat-desc">Ganancia neta del día, facturación, gráfico semanal y turnos en tiempo real. Un vistazo y sabés cómo va el negocio.</div><div class="feat-pill">Métricas reales</div></div>
+      <div class="feat-card reveal delay-2"><div class="feat-icon">💰</div><div class="feat-name">SPLIT AUTOMÁTICO</div><div class="feat-desc">Comisiones de cada barbero calculadas al cerrar el día. Sin cuentas manuales, sin discusiones. Solo números claros.</div><div class="feat-pill">Solo en Staff</div></div>
+      <div class="feat-card reveal delay-3"><div class="feat-icon">🏆</div><div class="feat-name">PUNTOS & REFERIDOS</div><div class="feat-desc">Tus clientes acumulan puntos y recomiendan a otros. El efecto red hace crecer tu agenda sin que gastes en publicidad.</div><div class="feat-pill">Próximamente</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section proof-bg">
+  <div class="section-inner">
+    <div class="reveal" style="text-align:center"><div class="s-eyebrow" style="text-align:center">Resultados reales</div><h2 class="s-title" style="text-align:center">LO QUE DICEN LOS QUE YA USAN FILO</h2></div>
+    <div class="proof-grid">
+      <div class="proof-card reveal delay-1"><div class="proof-stars">★★★★★</div><div class="proof-text">"El primer mes recuperé 8 clientes que no habían venido en más de un mes. Nunca pensé que con un botón podía traerlos de vuelta."</div><div class="proof-author"><div class="proof-av">MR</div><div><div class="proof-name">Marcos R.</div><div class="proof-role">Barbería MR — CABA</div></div></div><div class="proof-metric">Resultado: <strong>+$48.000 en el primer mes</strong> por clientes recuperados</div></div>
+      <div class="proof-card reveal delay-2"><div class="proof-stars">★★★★★</div><div class="proof-text">"Las membresías me cambiaron la cabeza. Sé que el día 1 del mes ya tengo $90.000 fijos. El resto es ganancia. Eso no tiene precio."</div><div class="proof-author"><div class="proof-av">JL</div><div><div class="proof-name">Juan L.</div><div class="proof-role">El Corte Fino — Córdoba</div></div></div><div class="proof-metric">Resultado: <strong>15 membresías activas = $90K MRR</strong> garantizado</div></div>
+      <div class="proof-card reveal delay-3"><div class="proof-stars">★★★★★</div><div class="proof-text">"El sillón libre es magia. Apretás un botón a las 3 de la tarde y a las 4 ya tenés al cliente sentado. Me pagó el plan en la primera semana."</div><div class="proof-author"><div class="proof-av">FP</div><div><div class="proof-name">Franco P.</div><div class="proof-role">Barbería Premier — Rosario</div></div></div><div class="proof-metric">Resultado: <strong>3-5 huecos llenados por semana</strong> con el motor</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section pricing-bg" id="planes">
+  <div class="section-inner">
+    <div class="reveal" style="text-align:center"><div class="s-eyebrow" style="text-align:center">Planes</div><h2 class="s-title" style="text-align:center">ELEGÍ TU PLAN. EMPEZÁ HOY.</h2><p class="s-sub" style="margin:0 auto;text-align:center">14 días gratis en el plan Starter. Sin tarjeta de crédito. Sin letra chica.</p></div>
+    <div class="pricing-grid">
+      <div class="plan-card reveal delay-1">
+        <div class="plan-name">Free Trial</div><div class="plan-tagline">Probá FILO Starter sin riesgo</div>
+        <div class="plan-price"><span>$</span>0</div><div class="plan-period">14 días · sin tarjeta</div>
+        <ul class="plan-feats"><li>Acceso completo a FILO Starter</li><li>Hasta 50 clientes</li><li>Motor Sillón Libre</li><li>Motor Rescate</li><li>WhatsApp integrado</li><li class="x">Membresías</li><li class="x">Split de comisiones</li><li class="x">Multi-barbero</li></ul>
+        <a href="https://filocrm-production.up.railway.app" class="plan-cta plan-cta-out">Empezar gratis</a>
+        <div class="plan-trial">✓ Se convierte en Starter al vencer</div>
+      </div>
+      <div class="plan-card featured reveal delay-2">
+        <div class="plan-popular">⭐ Barbero independiente</div>
+        <div class="plan-name">FILO Starter</div><div class="plan-tagline">Para el barbero que trabaja solo</div>
+        <div class="plan-price"><span>$</span>30.000</div><div class="plan-period">por mes · en ARS</div>
+        <ul class="plan-feats"><li>Clientes ilimitados</li><li>Motor Sillón Libre</li><li>Motor Rescate (churn)</li><li>WhatsApp integrado</li><li>Membresías & MRR</li><li>Dashboard en tiempo real</li><li>Agenda + Calendly embed</li><li class="x">Multi-barbero</li><li class="x">Split de comisiones</li></ul>
+        <a href="https://filocrm-production.up.railway.app" class="plan-cta plan-cta-main">Empezar con Starter</a>
+      </div>
+      <div class="plan-card reveal delay-3">
+        <div class="plan-name">FILO Staff</div><div class="plan-tagline">Para el dueño con equipo (hasta 10)</div>
+        <div class="plan-price"><span>$</span>70.000</div><div class="plan-period">por mes · en ARS</div>
+        <ul class="plan-feats"><li>Todo lo de Starter</li><li>Hasta 10 barberos</li><li>Split automático de comisiones</li><li>Dashboard por barbero</li><li>Métricas de rendimiento</li><li>Historial por empleado</li><li>Soporte prioritario</li><li>Onboarding dedicado</li></ul>
+        <a href="https://filocrm-production.up.railway.app" class="plan-cta plan-cta-out">Empezar con Staff</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section faq-bg" id="faq">
+  <div class="section-inner">
+    <div class="reveal" style="text-align:center"><div class="s-eyebrow" style="text-align:center">Preguntas frecuentes</div><h2 class="s-title" style="text-align:center">TODO LO QUE QUERÉS SABER</h2></div>
+    <div class="faq-list reveal">
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">¿Necesito saber de tecnología para usar FILO? <span class="faq-arrow">▼</span></div><div class="faq-a"><div class="faq-a-text">Para nada. FILO está diseñado para que un barbero lo configure en minutos, sin conocimientos técnicos. Si podés usar WhatsApp, podés usar FILO.</div></div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">¿Cómo funciona el free trial? <span class="faq-arrow">▼</span></div><div class="faq-a"><div class="faq-a-text">Creás tu cuenta y tenés 14 días con acceso completo al plan Starter — sin poner tarjeta de crédito. Al vencer, podés elegir Starter ($30.000/mes), Staff ($70.000/mes) o cancelar sin cargo.</div></div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">¿Qué pasa con mis clientes si cancelo? <span class="faq-arrow">▼</span></div><div class="faq-a"><div class="faq-a-text">Podés exportar toda tu base de clientes en cualquier momento. Tus datos son tuyos. No te retenemos nada.</div></div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">¿Funciona con mi número de WhatsApp personal? <span class="faq-arrow">▼</span></div><div class="faq-a"><div class="faq-a-text">Sí. FILO se conecta a tu número de WhatsApp existente. Los mensajes salen desde tu número, con tu nombre — como si los mandaras vos mismo.</div></div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">¿El plan Staff soporta exactamente 10 barberos? <span class="faq-arrow">▼</span></div><div class="faq-a"><div class="faq-a-text">Staff soporta hasta 10 barberos en tu equipo. Si tenés una operación más grande, contactanos para un plan enterprise a medida.</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-bg" id="cta">
+  <div class="cta-inner">
+    <div class="s-eyebrow" style="text-align:center;margin-bottom:20px">El momento es ahora</div>
+    <h2 class="cta-title reveal">CADA DÍA QUE ESPERÁS,<em>PERDÉS PLATA.</em></h2>
+    <p class="cta-sub reveal">14 días gratis. Sin tarjeta. Configuración en 3 minutos. Los motores arrancan solos.</p>
+    <a href="https://filocrm-production.up.railway.app" class="cta-primary reveal" style="font-size:20px;padding:18px 48px">✂ Crear mi cuenta gratis</a>
+    <div class="cta-badges">
+      <span class="cta-badge">Sin tarjeta de crédito</span>
+      <span class="cta-badge">Cancela cuando quieras</span>
+      <span class="cta-badge">Soporte en español</span>
+      <span class="cta-badge">Datos en Argentina</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="logo-mark" style="width:28px;height:28px;font-size:11px">✂</div>
+    <span class="footer-copy">© 2026 FILO CRM — El sistema del barbero inteligente</span>
+  </div>
+  <div class="footer-links"><a href="#">Privacidad</a><a href="#">Términos</a><a href="#">Contacto</a></div>
+</footer>
+
+<script>
+const bdata=[38,55,42,70,85,62,93];const bdays=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];const bc=document.getElementById('dbars');const td=new Date().getDay();bdata.forEach((h,i)=>{const w=document.createElement('div');w.className='d-bar-w';const t=document.createElement('div');t.className='d-bar-track';const b=document.createElement('div');const isT=i===(td===0?6:td-1);b.style.cssText='width:100%;height:'+h+'%;border-radius:2px;background:'+(isT?'linear-gradient(180deg,#ffd100,#ff9100)':'rgba(255,209,0,0.45)');t.appendChild(b);const l=document.createElement('div');l.className='d-day';l.textContent=bdays[i];w.appendChild(t);w.appendChild(l);bc.appendChild(w);});
+function toggleFaq(el){const item=el.parentElement;const wasOpen=item.classList.contains('open');document.querySelectorAll('.faq-item').forEach(i=>i.classList.remove('open'));if(!wasOpen)item.classList.add('open');}
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('up')});},{threshold:0.08});document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+window.addEventListener('scroll',()=>{document.querySelector('nav').style.background=window.scrollY>60?'rgba(0,5,15,0.98)':'rgba(0,10,20,0.85)';});
+</script>
+</body>
+</html>
