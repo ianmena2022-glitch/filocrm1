@@ -1,136 +1,240 @@
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const pool = require('../db/pool');
+const fs   = require('fs');
+const path = require('path');
 
-const BASE_URL = process.env.WPPCONNECT_URL || 'http://localhost:8080';
-const API_KEY  = process.env.WPPCONNECT_SECRET_KEY || 'filoCRM_secret';
+// Mapa de sockets activos por shopId
+const sockets  = {};
+const qrCodes  = {};
+const statuses = {};
 
-function instanceName(shopId) {
-  return `filo_shop_${shopId}`;
+// Directorio para guardar credenciales de sesión
+function authDir(shopId) {
+  const dir = path.join('/tmp', `baileys_${shopId}`);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
-function headers() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': API_KEY,
-  };
-}
-
-// Esperar y reintentar hasta obtener el QR
-async function waitForQR(instance, maxAttempts = 10, delayMs = 3000) {
-  for (let i = 1; i <= maxAttempts; i++) {
-    console.log(`Evolution waitForQR → intento ${i}/${maxAttempts}`);
-    await new Promise(r => setTimeout(r, delayMs));
-
-    const res = await fetch(`${BASE_URL}/instance/connect/${instance}`, {
-      method: 'GET',
-      headers: headers(),
-    });
-
-    if (!res.ok) continue;
-
-    const data = await res.json();
-    console.log(`Evolution QR response → ${JSON.stringify(data).slice(0, 200)}`);
-
-    if (data.base64) return { qrcode: data.base64 };
-    if (data.code)   return { qrcode: data.code };
-    if (data.instance?.state === 'open') return { status: 'CONNECTED' };
-    if (data.count && data.count > 0 && data.base64) return { qrcode: data.base64 };
-  }
-  throw new Error('Timeout esperando QR de Evolution API');
-}
-
-async function startSession(shopId) {
-  const instance = instanceName(shopId);
-
-  // 1. Eliminar instancia previa
+// Restaurar sesión desde PostgreSQL
+async function restoreSessionFromDB(shopId) {
   try {
-    await fetch(`${BASE_URL}/instance/delete/${instance}`, {
-      method: 'DELETE',
-      headers: headers(),
-    });
-    console.log(`Evolution: instancia previa eliminada`);
-    await new Promise(r => setTimeout(r, 1500));
+    const result = await pool.query(
+      'SELECT wpp_session FROM shops WHERE id=$1',
+      [shopId]
+    );
+    const sessionData = result.rows[0]?.wpp_session;
+    if (!sessionData) return false;
+
+    const dir = authDir(shopId);
+    const parsed = JSON.parse(sessionData);
+
+    // Escribir archivos de credenciales
+    for (const [filename, content] of Object.entries(parsed)) {
+      fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
+    }
+    console.log(`Baileys: sesión restaurada para shop ${shopId}`);
+    return true;
   } catch (e) {
-    console.log('No había instancia previa:', e.message);
-  }
-
-  // 2. Crear nueva instancia
-  const createRes = await fetch(`${BASE_URL}/instance/create`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({
-      instanceName: instance,
-      qrcode: true,
-      integration: 'WHATSAPP-BAILEYS',
-    }),
-  });
-
-  const createText = await createRes.text();
-  console.log(`Evolution createInstance → ${createRes.status}: ${createText.slice(0, 300)}`);
-
-  if (!createRes.ok) {
-    throw new Error(`Evolution create instance error: ${createRes.status} — ${createText}`);
-  }
-
-  // 3. Esperar y reintentar hasta conseguir el QR
-  return await waitForQR(instance);
-}
-
-async function getStatus(shopId) {
-  try {
-    const instance = instanceName(shopId);
-    const res = await fetch(`${BASE_URL}/instance/connectionState/${instance}`, {
-      method: 'GET',
-      headers: headers(),
-    });
-
-    if (!res.ok) return { connected: false };
-
-    const data = await res.json();
-    console.log(`Evolution getStatus → ${JSON.stringify(data)}`);
-
-    const connected = data?.instance?.state === 'open';
-    return { connected, status: data?.instance?.state };
-  } catch (e) {
-    console.error('Evolution getStatus error:', e.message);
-    return { connected: false };
-  }
-}
-
-async function sendText(shopId, phone, message) {
-  const instance   = instanceName(shopId);
-  const phoneClean = phone.replace(/\D/g, '');
-
-  console.log(`Evolution sendText → instance: ${instance}, phone: ${phoneClean}`);
-
-  const res = await fetch(`${BASE_URL}/message/sendText/${instance}`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({
-      number: phoneClean,
-      text: message,
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-
-  const text = await res.text();
-  console.log(`Evolution sendText response → ${res.status}: ${text.slice(0, 300)}`);
-
-  if (!res.ok) throw new Error(`Evolution send-message error: ${res.status} — ${text}`);
-  return JSON.parse(text);
-}
-
-async function closeSession(shopId) {
-  try {
-    const instance = instanceName(shopId);
-    const res = await fetch(`${BASE_URL}/instance/delete/${instance}`, {
-      method: 'DELETE',
-      headers: headers(),
-    });
-    return res.ok;
-  } catch (e) {
-    console.error('Evolution closeSession error:', e.message);
+    console.error('Error restaurando sesión:', e.message);
     return false;
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, instanceName };
+// Guardar sesión en PostgreSQL
+async function saveSessionToDB(shopId) {
+  try {
+    const dir = authDir(shopId);
+    if (!fs.existsSync(dir)) return;
+
+    const files = fs.readdirSync(dir);
+    const sessionData = {};
+    for (const file of files) {
+      try {
+        sessionData[file] = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      } catch { }
+    }
+
+    await pool.query(
+      'UPDATE shops SET wpp_session=$1 WHERE id=$2',
+      [JSON.stringify(sessionData), shopId]
+    );
+    console.log(`Baileys: sesión guardada en DB para shop ${shopId}`);
+  } catch (e) {
+    console.error('Error guardando sesión:', e.message);
+  }
+}
+
+// Conectar o reconectar WhatsApp
+async function connect(shopId, onQR, onConnected, onDisconnected) {
+  // Restaurar sesión previa si existe
+  await restoreSessionFromDB(shopId);
+
+  const dir = authDir(shopId);
+  const { state, saveCreds } = await useMultiFileAuthState(dir);
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: false,
+    browser: ['FILO CRM', 'Chrome', '1.0'],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 30000,
+    keepAliveIntervalMs: 15000,
+    logger: { level: 'silent', log: () => {}, info: () => {}, warn: console.warn, error: console.error, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
+  });
+
+  sockets[shopId]  = sock;
+  statuses[shopId] = 'connecting';
+
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    await saveSessionToDB(shopId);
+  });
+
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      console.log(`Baileys QR generado para shop ${shopId}`);
+      qrCodes[shopId]  = qr;
+      statuses[shopId] = 'qr';
+      if (onQR) onQR(qr);
+    }
+
+    if (connection === 'open') {
+      console.log(`Baileys conectado para shop ${shopId}`);
+      statuses[shopId] = 'connected';
+      qrCodes[shopId]  = null;
+      await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
+      await saveSessionToDB(shopId);
+      if (onConnected) onConnected();
+    }
+
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = code !== DisconnectReason.loggedOut;
+      console.log(`Baileys desconectado para shop ${shopId}, código: ${code}, reconectar: ${shouldReconnect}`);
+      statuses[shopId] = 'disconnected';
+
+      if (code === DisconnectReason.loggedOut) {
+        // Sesión cerrada — limpiar
+        await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
+        delete sockets[shopId];
+        if (onDisconnected) onDisconnected();
+      } else if (shouldReconnect) {
+        // Reconectar automáticamente
+        setTimeout(() => connect(shopId, null, null, null), 5000);
+      }
+    }
+  });
+
+  return sock;
+}
+
+// Iniciar sesión (devuelve QR como base64 o status connected)
+async function startSession(shopId) {
+  return new Promise(async (resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout esperando QR de WhatsApp'));
+    }, 60000);
+
+    try {
+      await connect(
+        shopId,
+        (qr) => {
+          // QR generado — convertir a base64 image para el frontend
+          clearTimeout(timeout);
+          // qr es el string raw del QR — el frontend lo mostrará con qrcode lib
+          resolve({ qrcode: qr, type: 'raw' });
+        },
+        () => {
+          clearTimeout(timeout);
+          resolve({ status: 'CONNECTED' });
+        },
+        null
+      );
+    } catch (e) {
+      clearTimeout(timeout);
+      reject(e);
+    }
+  });
+}
+
+// Verificar estado
+async function getStatus(shopId) {
+  const status = statuses[shopId];
+  const connected = status === 'connected';
+  return { connected, status: status || 'disconnected' };
+}
+
+// Enviar mensaje de texto
+async function sendText(shopId, phone, message) {
+  let sock = sockets[shopId];
+
+  // Si no hay socket activo, intentar reconectar con sesión guardada
+  if (!sock || statuses[shopId] !== 'connected') {
+    console.log(`Baileys: no hay socket activo para shop ${shopId}, intentando restaurar...`);
+    const restored = await restoreSessionFromDB(shopId);
+    if (!restored) throw new Error('WhatsApp no está conectado. Conectalo desde Configuración.');
+
+    // Reconectar con sesión restaurada
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timeout reconectando WhatsApp')), 30000);
+      connect(
+        shopId,
+        null,
+        () => { clearTimeout(timeout); resolve(); },
+        null
+      ).catch(e => { clearTimeout(timeout); reject(e); });
+    });
+
+    sock = sockets[shopId];
+    if (!sock) throw new Error('No se pudo reconectar WhatsApp');
+  }
+
+  const phoneClean = phone.replace(/\D/g, '');
+  const jid = `${phoneClean}@s.whatsapp.net`;
+
+  console.log(`Baileys sendText → ${jid}`);
+
+  const result = await sock.sendMessage(jid, { text: message });
+  console.log(`Baileys sendText OK → ${result?.key?.id}`);
+  return result;
+}
+
+// Cerrar sesión
+async function closeSession(shopId) {
+  try {
+    const sock = sockets[shopId];
+    if (sock) {
+      await sock.logout();
+      delete sockets[shopId];
+    }
+    await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
+    return true;
+  } catch (e) {
+    console.error('closeSession error:', e.message);
+    return false;
+  }
+}
+
+// Al iniciar el servidor, reconectar shops que tenían WhatsApp conectado
+async function reconnectAllShops() {
+  try {
+    const result = await pool.query(
+      'SELECT id FROM shops WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL'
+    );
+    for (const shop of result.rows) {
+      console.log(`Baileys: reconectando shop ${shop.id}...`);
+      connect(shop.id, null, null, null).catch(e =>
+        console.error(`Error reconectando shop ${shop.id}:`, e.message)
+      );
+    }
+  } catch (e) {
+    console.error('reconnectAllShops error:', e.message);
+  }
+}
+
+module.exports = { startSession, getStatus, sendText, closeSession, reconnectAllShops, qrCodes };

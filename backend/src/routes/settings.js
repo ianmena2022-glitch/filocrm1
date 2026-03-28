@@ -41,7 +41,6 @@ router.put('/', auth, async (req, res) => {
 
 // ── SERVICIOS ─────────────────────────────────────────
 
-// GET /api/settings/services
 router.get('/services', auth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -54,7 +53,6 @@ router.get('/services', auth, async (req, res) => {
   }
 });
 
-// POST /api/settings/services
 router.post('/services', auth, async (req, res) => {
   const { name, price, cost, duration_minutes } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
@@ -70,7 +68,6 @@ router.post('/services', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/settings/services/:id
 router.delete('/services/:id', auth, async (req, res) => {
   try {
     await pool.query(
@@ -90,21 +87,31 @@ router.post('/whatsapp/connect', auth, async (req, res) => {
   try {
     const data = await wpp.startSession(req.shopId);
 
-    // WPPConnect devuelve el QR como base64 o como URL
-    if (data.qrcode) {
-      // Puede venir como "data:image/png;base64,..." o solo el base64
-      const qr = data.qrcode.startsWith('data:')
-        ? data.qrcode
-        : `data:image/png;base64,${data.qrcode}`;
-      return res.json({ ok: true, qr });
-    }
-
     if (data.status === 'CONNECTED') {
-      await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [req.shopId]);
       return res.json({ ok: true, connected: true });
     }
 
-    res.json({ ok: false, error: 'No se pudo iniciar sesión de WhatsApp', raw: data });
+    if (data.qrcode) {
+      // Baileys devuelve el QR como string raw — hay que convertirlo a imagen en el frontend
+      // o usar qrcode lib en el servidor
+      let qrImage = data.qrcode;
+
+      // Si es raw (no base64 de imagen), convertir con qrcode
+      if (data.type === 'raw') {
+        try {
+          const QRCode = require('qrcode');
+          qrImage = await QRCode.toDataURL(data.qrcode);
+        } catch (e) {
+          console.error('QRCode conversion error:', e.message);
+          // Devolver el raw igual, el frontend puede manejarlo
+          qrImage = data.qrcode;
+        }
+      }
+
+      return res.json({ ok: true, qr: qrImage });
+    }
+
+    res.json({ ok: false, error: 'No se pudo iniciar sesión de WhatsApp' });
   } catch (e) {
     console.error('WPP connect error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
