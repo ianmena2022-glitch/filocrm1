@@ -161,11 +161,11 @@ router.post('/:slug/reserve', async (req, res) => {
     // Crear turno
     const appt = await pool.query(
       `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending')
+         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11)
        RETURNING *`,
       [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
-       svcPrice, svcCost, date, time_start, time_end]
+       svcPrice, svcCost, date, time_start, time_end, null]
     );
 
     // Notificar al barbero por WhatsApp si está conectado
@@ -199,6 +199,11 @@ router.post('/:slug/reserve', async (req, res) => {
               [shopData.id, clientId, item.rows[0].id, item.rows[0].name, cost]
             );
             redeemInfo = item.rows[0].name;
+            // Guardar en el turno
+            await pool.query(
+              'UPDATE appointments SET redeem_info=$1 WHERE id=$2',
+              [item.rows[0].name, appt.rows[0].id]
+            );
           }
         }
       } catch(e) { console.error('Redeem error:', e.message); }

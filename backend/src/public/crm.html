@@ -1645,6 +1645,9 @@ function renderDashAppointments(appts) {
 function renderApptCard(a) {
   const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado' };
   const time = String(a.time_start || '').slice(0,5);
+  const redeemBadge = a.redeem_info
+    ? `<div style="font-size:11px;color:var(--green);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🎁</span><span>${a.redeem_info}</span></div>`
+    : '';
   return `<div class="appointment-card">
     <div>
       <div class="appt-time">${time}</div>
@@ -1653,6 +1656,7 @@ function renderApptCard(a) {
     <div class="appt-info">
       <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
       <div class="appt-service">${a.service_name || 'Sin servicio'}${a.barber_name ? ' · '+a.barber_name : ''}</div>
+      ${redeemBadge}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
