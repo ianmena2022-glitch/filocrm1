@@ -94,7 +94,7 @@ router.get('/:slug/available', async (req, res) => {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
-  const { client_name, client_phone, service_id, date, time_start } = req.body;
+  const { client_name, client_phone, service_id, date, time_start, redeem_item_id } = req.body;
 
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
