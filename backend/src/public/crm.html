@@ -2365,11 +2365,9 @@ async function loadSettings() {
     // WhatsApp status
     const dot = document.getElementById('wpp-dot');
     const txt = document.getElementById('wpp-status-text');
-    const phDisp = document.getElementById('wpp-phone-display');
     if (settings.wpp_connected) {
       dot.className = 'wpp-dot connected';
       txt.textContent = 'WhatsApp conectado ✅';
-      phDisp.textContent = settings.phone || '';
     } else {
       dot.className = 'wpp-dot disconnected';
       txt.textContent = 'WhatsApp no conectado';
