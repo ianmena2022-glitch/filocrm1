@@ -86,15 +86,19 @@ router.post('/', auth, async (req, res) => {
     const appt = result.rows[0];
 
     // Restar puntos y registrar canje si corresponde
-    if (client_id && redeem_item_id && pointsCost > 0) {
-      await pool.query(
-        'UPDATE clients SET points = points - $1 WHERE id = $2 AND shop_id = $3',
-        [pointsCost, client_id, req.shopId]
+    const clientIdInt = parseInt(client_id) || null;
+    const redeemItemIdInt = parseInt(redeem_item_id) || null;
+    console.log(`[CANJE] client_id=${clientIdInt} item_id=${redeemItemIdInt} points=${pointsCost} redeemInfo=${redeemInfo}`);
+    if (clientIdInt && redeemItemIdInt && pointsCost > 0 && redeemInfo) {
+      const updateResult = await pool.query(
+        'UPDATE clients SET points = points - $1 WHERE id = $2 AND shop_id = $3 RETURNING id, points',
+        [pointsCost, clientIdInt, req.shopId]
       );
+      console.log(`[CANJE] puntos restados:`, updateResult.rows[0]);
       await pool.query(
         `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
          VALUES ($1, $2, $3, $4, $5, 'pending')`,
-        [req.shopId, client_id, redeem_item_id, redeemInfo, pointsCost]
+        [req.shopId, clientIdInt, redeemItemIdInt, redeemInfo, pointsCost]
       );
     }
 
