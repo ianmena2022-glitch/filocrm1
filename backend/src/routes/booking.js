@@ -179,8 +179,34 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     }
 
+    // Procesar canje de puntos si viene con la reserva
+    let redeemInfo = null;
+    if (redeem_item_id && clientId) {
+      try {
+        const item = await pool.query(
+          'SELECT * FROM points_store WHERE id=$1 AND shop_id=$2 AND active=TRUE',
+          [redeem_item_id, shopData.id]
+        );
+        const clientPts = await pool.query('SELECT points FROM clients WHERE id=$1', [clientId]);
+        if (item.rows.length && clientPts.rows.length) {
+          const pts = clientPts.rows[0].points;
+          const cost = item.rows[0].points_cost;
+          if (pts >= cost) {
+            await pool.query('UPDATE clients SET points = points - $1 WHERE id=$2', [cost, clientId]);
+            await pool.query(
+              `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
+               VALUES ($1,$2,$3,$4,$5,'pending')`,
+              [shopData.id, clientId, item.rows[0].id, item.rows[0].name, cost]
+            );
+            redeemInfo = item.rows[0].name;
+          }
+        }
+      } catch(e) { console.error('Redeem error:', e.message); }
+    }
+
     res.status(201).json({
       ok: true,
+      redeem: redeemInfo,
       message: `¡Turno confirmado! Te esperamos el ${new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' })} a las ${time_start} en ${shopData.name}.`,
       appointment: appt.rows[0]
     });

@@ -101,6 +101,18 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 @keyframes spin{to{transform:rotate(360deg)}}
 
 .error-banner{background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px 16px;color:#ff8080;font-size:13px;margin-bottom:16px;display:none}
+.points-section{background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:16px;margin:16px 0;display:none}
+.points-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.points-badge{background:rgba(255,209,0,.15);border:1px solid rgba(255,209,0,.3);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:700;color:var(--y)}
+.points-title{font-size:14px;font-weight:700;color:var(--gr)}
+.prize-list{display:flex;flex-direction:column;gap:8px}
+.prize-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .2s;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.prize-btn:hover{border-color:rgba(0,230,118,.4);background:rgba(0,230,118,.05)}
+.prize-btn.selected{border-color:var(--gr);background:rgba(0,230,118,.1)}
+.prize-name{font-size:14px;font-weight:700;color:var(--w)}
+.prize-desc{font-size:11px;color:var(--g);margin-top:2px}
+.prize-cost{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--y);white-space:nowrap}
+.no-prizes{font-size:13px;color:var(--g);padding:8px 0}
 </style>
 </head>
 <body>
@@ -174,6 +186,17 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
           <label>WhatsApp (opcional)</label>
           <input type="tel" id="client-phone" placeholder="5491112345678" autocomplete="tel">
         </div>
+        <!-- Puntos FILO -->
+        <div class="points-section" id="points-section">
+          <div class="points-header">
+            <div class="points-title">⭐ Tus puntos FILO</div>
+            <div class="points-badge" id="points-balance">0 pts</div>
+          </div>
+          <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:12px">¡Tenés puntos acumulados! Podés canjear un premio en este turno:</div>
+          <div class="prize-list" id="prize-list"></div>
+          <div id="selected-prize-info" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(0,230,118,.1);border-radius:8px;font-size:13px;color:var(--gr)"></div>
+        </div>
+
         <div style="margin-top:20px">
           <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:12px">Resumen de tu reserva</div>
           <div class="summary" id="summary"></div>
@@ -205,6 +228,9 @@ let selectedService = null;
 let selectedDate = null;
 let selectedTime = null;
 let currentMonth = new Date();
+let clientPointsData = null;
+let selectedPrize = null;
+let storeItems = [];
 
 // ── INIT ──
 async function init() {
@@ -389,7 +415,8 @@ async function confirmReservation() {
         client_phone: phone || null,
         service_id: selectedService?.id || null,
         date: selectedDate,
-        time_start: selectedTime
+        time_start: selectedTime,
+        redeem_item_id: selectedPrize?.id || null
       })
     });
     const data = await res.json();
@@ -398,7 +425,9 @@ async function confirmReservation() {
     const dateFormatted = new Date(selectedDate + 'T12:00:00')
       .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
-    document.getElementById('success-msg').textContent = data.message;
+    let successMsg = data.message;
+    if (data.redeem) successMsg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
+    document.getElementById('success-msg').textContent = successMsg;
     document.getElementById('success-detail').innerHTML = `
       <strong>${selectedService?.name || 'Turno'}</strong><br>
       📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
@@ -441,6 +470,65 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('error-banner').style.display = 'none';
+}
+
+// Check points when phone is entered
+document.getElementById('client-phone')?.addEventListener('blur', async function() {
+  const phone = this.value.trim().replace(/\D/g, '');
+  if (phone.length < 8 || !shopData?.booking_slug) return;
+  try {
+    const res = await fetch(`${window.location.origin}/api/points/client/phone/${shopData.booking_slug}/${phone}`);
+    const data = await res.json();
+    if (data.client && data.client.points > 0) {
+      clientPointsData = data.client;
+      await loadStoreForClient();
+    }
+  } catch(e) { /* silent */ }
+});
+
+async function loadStoreForClient() {
+  if (!shopData?.booking_slug) return;
+  try {
+    const res = await fetch(`${window.location.origin}/api/points/store/public/${shopData.booking_slug}`);
+    const data = await res.json();
+    storeItems = (data.items || []).filter(i => clientPointsData.points >= i.points_cost);
+
+    const section = document.getElementById('points-section');
+    const balanceEl = document.getElementById('points-balance');
+    const prizeList = document.getElementById('prize-list');
+
+    balanceEl.textContent = clientPointsData.points.toLocaleString('es-AR') + ' pts';
+
+    if (storeItems.length === 0) {
+      prizeList.innerHTML = '<div class="no-prizes">Todavía no tenés suficientes puntos para ningún premio. ¡Seguí acumulando!</div>';
+    } else {
+      prizeList.innerHTML = storeItems.map(item => `
+        <button class="prize-btn" onclick="selectPrize(${item.id}, '${item.name.replace(/'/g,"\'")}', ${item.points_cost})" id="prize-btn-${item.id}">
+          <div>
+            <div class="prize-name">🎁 ${item.name}</div>
+            ${item.description ? `<div class="prize-desc">${item.description}</div>` : ''}
+          </div>
+          <div class="prize-cost">${item.points_cost} pts</div>
+        </button>
+      `).join('');
+    }
+    section.style.display = 'block';
+  } catch(e) { /* silent */ }
+}
+
+function selectPrize(id, name, cost) {
+  document.querySelectorAll('.prize-btn').forEach(b => b.classList.remove('selected'));
+  if (selectedPrize?.id === id) {
+    selectedPrize = null;
+    document.getElementById('selected-prize-info').style.display = 'none';
+    return;
+  }
+  document.getElementById('prize-btn-' + id)?.classList.add('selected');
+  selectedPrize = { id, name, cost };
+  const remaining = clientPointsData.points - cost;
+  document.getElementById('selected-prize-info').style.display = 'block';
+  document.getElementById('selected-prize-info').innerHTML =
+    `✓ <strong>${name}</strong> seleccionado (-${cost.toLocaleString('es-AR')} pts). Te quedarán ${remaining.toLocaleString('es-AR')} puntos.`;
 }
 
 init();
