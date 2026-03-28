@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FILO CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --yellow: #FFD100;
+  --navy: #002043;
+  --navy-mid: #003066;
+  --navy-light: #0a2d5a;
+  --white: #FFFFFF;
+  --gray: #8a9ab5;
+  --gray-light: #e8edf5;
+  --red: #FF4343;
+  --green: #00E676;
+  --orange: #FF9100;
+  --radius: 12px;
+  --radius-lg: 20px;
+  --sidebar-w: 72px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #000d1f;
+  color: var(--white);
+  font-family: 'Barlow', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── AUTH SCREEN ─── */
+#auth-screen {
+  position: fixed; inset: 0;
+  background: #000d1f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.auth-box {
+  width: 100%;
+  max-width: 400px;
+  padding: 0 24px;
+}
+
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.auth-logo-mark {
+  width: 52px; height: 52px;
+  background: var(--yellow);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Oswald', sans-serif;
+  font-size: 22px;
+  color: var(--navy);
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.auth-logo-text h1 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: var(--white);
+  line-height: 1;
+}
+
+.auth-logo-text p {
+  font-size: 13px;
+  color: var(--gray);
+  margin-top: 3px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 28px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray);
+  transition: all 0.2s;
+}
+
+.auth-tab.active {
+  background: var(--yellow);
+  color: var(--navy);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+
+.form-group input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  color: var(--white);
+  font-size: 15px;
+  font-family: 'Barlow', sans-serif;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.form-group input:focus {
+  border-color: var(--yellow);
+  background: rgba(255,209,0,0.05);
+}
+
+.form-group input::placeholder { color: #4a5a75; }
+
+.btn-primary {
+  width: 100%;
+  background: var(--yellow);
+  color: var(--navy);
+  border: none;
+  padding: 16px;
+  border-radius: var(--radius);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(255,209,0,0.3);
+}
+
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(255,209,0,0.5); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.auth-error {
+  background: rgba(255,67,67,0.15);
+  border: 1px solid rgba(255,67,67,0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #ff8080;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+/* ─── APP LAYOUT ─── */
+#app { display: none; }
+
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: var(--navy);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  z-index: 100;
+  border-right: 1px solid rgba(255,209,0,0.08);
+}
+
+.sidebar-logo {
+  width: 44px; height: 44px;
+  background: var(--yellow);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 36px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 15px; font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.5px;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+
+.nav-items { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+.nav-item {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  color: var(--gray);
+  font-size: 20px;
+  title: '';
+}
+
+.nav-item:hover { background: rgba(255,209,0,0.1); color: var(--yellow); }
+.nav-item.active { background: var(--yellow); color: var(--navy); }
+
+.nav-item .badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 8px; height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  border: 2px solid var(--navy);
+}
+
+.sidebar-bottom { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+.avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--yellow), #ff9100);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px;
+  color: var(--navy);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+.avatar:hover { border-color: var(--yellow); }
+
+.main { margin-left: var(--sidebar-w); padding: 28px 28px 28px 32px; min-height: 100vh; }
+
+.section { display: none; }
+.section.active { display: block; }
+
+/* ─── TOPBAR ─── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.topbar-left h1 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.topbar-left p { color: var(--gray); font-size: 13px; margin-top: 4px; font-weight: 500; }
+
+/* ─── CARDS ─── */
+.card {
+  background: linear-gradient(135deg, var(--navy-light) 0%, #001833 100%);
+  border: 1px solid rgba(255,209,0,0.1);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+.stat-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.stat-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); margin-bottom: 10px; }
+.stat-value { font-family: 'Oswald', sans-serif; font-size: 32px; font-weight: 700; line-height: 1; }
+.stat-sub { font-size: 12px; color: var(--gray); margin-top: 6px; }
+
+/* ─── HERO GANANCIA ─── */
+.ganancia-hero {
+  background: linear-gradient(135deg, var(--navy-light) 0%, #001833 100%);
+  border: 1px solid rgba(255,209,0,0.15);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ganancia-hero::before {
+  content: '';
+  position: absolute; top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,209,0,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.ganancia-label { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--yellow); margin-bottom: 8px; opacity: 0.9; }
+.ganancia-value { font-family: 'Oswald', sans-serif; font-size: 52px; font-weight: 700; color: var(--yellow); line-height: 1; }
+.ganancia-sub { font-size: 13px; color: var(--gray); margin-top: 8px; }
+
+.ganancia-badges { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.badge-item {
+  background: rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px 18px;
+  text-align: center;
+}
+
+.badge-num { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700; line-height: 1; }
+.badge-lbl { font-size: 11px; color: var(--gray); margin-top: 4px; }
+
+/* ─── AGENDA ─── */
+.agenda-grid { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+
+@media (max-width: 900px) { .agenda-grid { grid-template-columns: 1fr; } }
+
+.appointment-list { display: flex; flex-direction: column; gap: 10px; }
+
+.appointment-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: border-color 0.2s;
+}
+
+.appointment-card:hover { border-color: rgba(255,209,0,0.2); }
+
+.appt-time {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; font-weight: 700;
+  color: var(--yellow);
+  min-width: 52px;
+  line-height: 1;
+}
+
+.appt-time-end { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+.appt-info { flex: 1; }
+.appt-client { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.appt-service { font-size: 13px; color: var(--gray); }
+
+.appt-price { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--white); min-width: 80px; text-align: right; }
+
+.status-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  min-width: 90px;
+  text-align: center;
+}
+
+.status-pending { background: rgba(255,145,0,0.2); color: var(--orange); }
+.status-confirmed { background: rgba(0,112,255,0.2); color: #6ab8ff; }
+.status-completed { background: rgba(0,230,118,0.2); color: var(--green); }
+.status-noshow { background: rgba(255,67,67,0.15); color: #ff8080; }
+.status-cancelled { background: rgba(255,255,255,0.05); color: var(--gray); }
+
+.appt-actions { display: flex; gap: 6px; }
+.appt-btn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255,255,255,0.07);
+  color: var(--gray);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.appt-btn:hover { background: rgba(255,209,0,0.15); color: var(--yellow); }
+.appt-btn.complete:hover { background: rgba(0,230,118,0.2); color: var(--green); }
+.appt-btn.noshow:hover { background: rgba(255,67,67,0.2); color: var(--red); }
+
+/* ─── CLIENTES ─── */
+.client-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+.client-card:hover { border-color: rgba(255,209,0,0.2); }
+
+.client-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--navy-mid), var(--navy-light));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Oswald', sans-serif;
+  font-size: 16px; font-weight: 700;
+  color: var(--yellow);
+  flex-shrink: 0;
+  border: 1px solid rgba(255,209,0,0.2);
+}
+
+.client-info { flex: 1; }
+.client-name { font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+.client-meta { font-size: 12px; color: var(--gray); display: flex; gap: 14px; flex-wrap: wrap; }
+
+.member-badge {
+  background: rgba(255,209,0,0.15);
+  color: var(--yellow);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.risk-badge {
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.risk-critico { background: rgba(255,67,67,0.2); color: #ff8080; }
+.risk-en_fuga { background: rgba(255,145,0,0.2); color: var(--orange); }
+
+/* ─── MOTORES ─── */
+.motores-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+
+.motor-card {
+  background: linear-gradient(135deg, var(--navy-light) 0%, #001833 100%);
+  border: 1px solid rgba(255,209,0,0.1);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.motor-icon { font-size: 32px; margin-bottom: 12px; }
+.motor-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+.motor-desc { font-size: 13px; color: var(--gray); line-height: 1.5; margin-bottom: 20px; }
+
+.motor-stat { font-family: 'Oswald', sans-serif; font-size: 36px; font-weight: 700; color: var(--yellow); margin-bottom: 4px; }
+.motor-stat-label { font-size: 12px; color: var(--gray); margin-bottom: 20px; }
+
+.btn-motor {
+  width: 100%;
+  background: var(--yellow);
+  color: var(--navy);
+  border: none;
+  padding: 13px;
+  border-radius: 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px; font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-motor:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,209,0,0.4); }
+.btn-motor.secondary {
+  background: transparent;
+  border: 1px solid rgba(255,209,0,0.4);
+  color: var(--yellow);
+}
+
+/* ─── FORMULARIOS ─── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+
+.form-field label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--gray); margin-bottom: 8px; }
+
+.form-field input, .form-field select, .form-field textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--white);
+  font-size: 14px;
+  font-family: 'Barlow', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--yellow); }
+.form-field select option { background: var(--navy); }
+.form-field input::placeholder, .form-field textarea::placeholder { color: #4a5a75; }
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,5,15,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: #001428;
+  border: 1px solid rgba(255,209,0,0.15);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-title { font-family: 'Oswald', sans-serif; font-size: 22px; letter-spacing: 1px; margin-bottom: 6px; }
+.modal-sub { font-size: 13px; color: var(--gray); margin-bottom: 24px; }
+
+.modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+.btn-modal-primary { flex: 1; background: var(--yellow); color: var(--navy); border: none; padding: 14px; border-radius: 10px; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+.btn-modal-secondary { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--gray); padding: 14px 20px; border-radius: 10px; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+.btn-modal-secondary:hover { border-color: rgba(255,255,255,0.2); color: var(--white); }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--navy-light);
+  border: 1px solid rgba(255,209,0,0.2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  z-index: 600;
+  max-width: 360px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.toast.show { display: flex; }
+.toast-icon { font-size: 22px; }
+.toast-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.toast-text p { font-size: 12px; color: var(--gray); }
+.toast-close { background: none; border: none; color: var(--gray); cursor: pointer; font-size: 16px; margin-left: auto; padding: 4px; }
+
+/* ─── CONFIGURACIÓN ─── */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
+
+.settings-section {
+  background: linear-gradient(135deg, var(--navy-light) 0%, #001833 100%);
+  border: 1px solid rgba(255,209,0,0.1);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.settings-section-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--yellow);
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.wpp-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.wpp-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--gray);
+  flex-shrink: 0;
+}
+.wpp-dot.connected { background: var(--green); box-shadow: 0 0 8px rgba(0,230,118,0.5); }
+.wpp-dot.disconnected { background: var(--red); }
+
+/* ─── CALENDLY EMBED ─── */
+.calendly-wrapper {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  height: 650px;
+}
+
+.calendly-placeholder {
+  height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; color: var(--gray); text-align: center; padding: 40px;
+}
+
+.calendly-placeholder .icon { font-size: 48px; }
+.calendly-placeholder h3 { font-family: 'Oswald', sans-serif; font-size: 22px; color: var(--white); }
+.calendly-placeholder p { font-size: 14px; line-height: 1.6; }
+
+/* ─── TOOLBAR ─── */
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 200px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 11px 16px;
+  color: var(--white);
+  font-size: 14px;
+  font-family: 'Barlow', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--yellow); }
+.search-input::placeholder { color: #4a5a75; }
+
+.btn-add {
+  background: var(--yellow);
+  color: var(--navy);
+  border: none;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-add:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,209,0,0.35); }
+
+.date-nav { display: flex; align-items: center; gap: 8px; }
+.date-nav button {
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: var(--white);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.15s;
+}
+.date-nav button:hover { border-color: var(--yellow); color: var(--yellow); }
+.date-nav .date-label { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; min-width: 160px; text-align: center; }
+
+/* ─── EMPTY STATE ─── */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--gray); }
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { font-family: 'Oswald', sans-serif; font-size: 22px; color: var(--white); margin-bottom: 8px; }
+.empty-state p { font-size: 14px; line-height: 1.6; }
+
+/* ─── LOADING ─── */
+.loading-spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: var(--yellow);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── MEMBRESÍAS ─── */
+.memb-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 10px;
+}
+.memb-plan { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.memb-plan.basic { background: rgba(138,154,181,0.2); color: var(--gray); }
+.memb-plan.premium { background: rgba(255,209,0,0.2); color: var(--yellow); }
+.memb-credits { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700; }
+
+/* ─── WHATSAPP PREVIEW ─── */
+.wpp-preview {
+  background: #1a2a1a;
+  border: 1px solid rgba(0,230,118,0.15);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cce8cc;
+}
+.wpp-preview-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--green); font-size: 12px; font-weight: 700; }
+
+/* ─── SEMANA CHART ─── */
+.week-chart { display: flex; align-items: flex-end; gap: 8px; height: 80px; margin-top: 16px; }
+.week-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.week-bar-track { flex: 1; width: 100%; background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; align-items: flex-end; }
+.week-bar { width: 100%; background: var(--yellow); border-radius: 4px; transition: height 0.6s ease; min-height: 4px; }
+.week-bar.today { background: linear-gradient(180deg, #ffd100, #ff9100); }
+.week-day { font-size: 10px; color: var(--gray); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ═══ PANTALLA DE LOGIN ═══ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">✂</div>
+      <div class="auth-logo-text">
+        <h1>FILO CRM</h1>
+        <p>El sistema del barbero inteligente</p>
+      </div>
+    </div>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Entrar</div>
+      <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Crear cuenta</div>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <!-- Login -->
+    <div id="form-login">
+      <div class="form-group">
+        <label>Tu email</label>
+        <input type="email" id="login-email" placeholder="hola@mibarber.ia" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" onclick="login()">✂️ Entrar a FILO</button>
+    </div>
+
+    <!-- Registro -->
+    <div id="form-register" style="display:none">
+      <div class="form-group">
+        <label>Nombre de tu barbería</label>
+        <input type="text" id="reg-name" placeholder="Barbería El Corte Fino">
+      </div>
+      <div class="form-group">
+        <label>Tu email</label>
+        <input type="email" id="reg-email" placeholder="hola@mibarber.ia">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Tu número de WhatsApp (con código de país)</label>
+        <input type="tel" id="reg-phone" placeholder="5491112345678">
+      </div>
+      <button class="btn-primary" onclick="register()">🚀 Crear mi cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ APP PRINCIPAL ═══ -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo" onclick="showSection('dashboard')" title="Dashboard">✂</div>
+    <div class="nav-items">
+      <div class="nav-item active" onclick="showSection('dashboard')" title="Dashboard">📊</div>
+      <div class="nav-item" onclick="showSection('agenda')" title="Agenda">📅</div>
+      <div class="nav-item" onclick="showSection('clientes')" title="Clientes">👥</div>
+      <div class="nav-item" onclick="showSection('motores')" title="Motores">⚡</div>
+      <div class="nav-item" onclick="showSection('membresias')" title="Membresías">👑</div>
+      <div class="nav-item" id="churn-nav" onclick="showSection('motores')" title="Clientes en fuga"></div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="nav-item" onclick="showSection('configuracion')" title="Configuración">⚙️</div>
+      <div class="avatar" id="user-avatar" onclick="logout()" title="Cerrar sesión">?</div>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ─── DASHBOARD ─── -->
+    <section id="sec-dashboard" class="section active">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1 id="dash-title">Buen día ✂️</h1>
+          <p id="dash-date">Cargando...</p>
+        </div>
+        <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
+      </div>
+
+      <div class="ganancia-hero" id="ganancia-hero">
+        <div>
+          <div class="ganancia-label">💰 GANANCIA NETA HOY</div>
+          <div class="ganancia-value" id="dash-profit">$0</div>
+          <div class="ganancia-sub" id="dash-revenue">Facturación: $0</div>
+        </div>
+        <div class="ganancia-badges">
+          <div class="badge-item">
+            <div class="badge-num" id="dash-completed">0</div>
+            <div class="badge-lbl">Completados</div>
+          </div>
+          <div class="badge-item">
+            <div class="badge-num" id="dash-pending">0</div>
+            <div class="badge-lbl">Pendientes</div>
+          </div>
+          <div class="badge-item">
+            <div class="badge-num" id="dash-noshows" style="color:var(--red)">0</div>
+            <div class="badge-lbl">No vinieron</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);margin-bottom:4px">Últimos 7 días</div>
+        <div class="week-chart" id="week-chart"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Turnos de hoy</div>
+          <button class="btn-add" style="font-size:12px;padding:8px 14px" onclick="showSection('agenda')">Ver todos →</button>
+        </div>
+        <div id="dash-appointments"></div>
+      </div>
+    </section>
+
+    <!-- ─── AGENDA ─── -->
+    <section id="sec-agenda" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>📅 AGENDA</h1>
+          <p id="agenda-date-label">Hoy</p>
+        </div>
+        <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:20px">
+        <div class="date-nav">
+          <button onclick="changeAgendaDate(-1)">←</button>
+          <div class="date-label" id="agenda-date-display">Hoy</div>
+          <button onclick="changeAgendaDate(1)">→</button>
+        </div>
+        <input type="date" id="agenda-date-picker" class="search-input" style="max-width:180px" onchange="setAgendaDate(this.value)">
+        <div style="margin-left:auto;font-size:13px;color:var(--gray)" id="agenda-summary"></div>
+      </div>
+
+      <div id="agenda-list"></div>
+
+      <!-- Calendly embed -->
+      <div style="margin-top:28px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">📲 Reservas online (Calendly)</div>
+        <div class="calendly-wrapper" id="calendly-wrapper">
+          <div class="calendly-placeholder" id="calendly-placeholder">
+            <div class="icon">📅</div>
+            <h3>Conectá tu Calendly</h3>
+            <p>Los clientes van a poder reservar desde este panel. Pegá tu link de Calendly en <strong>Configuración</strong> y aparece acá.</p>
+            <button class="btn-motor" style="max-width:200px" onclick="showSection('configuracion')">Ir a Configuración</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── CLIENTES ─── -->
+    <section id="sec-clientes" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>👥 CLIENTES</h1>
+          <p id="clients-count">Cargando...</p>
+        </div>
+        <button class="btn-add" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
+      </div>
+      <div class="toolbar">
+        <input type="text" class="search-input" placeholder="🔍 Buscar por nombre o teléfono..." id="client-search" oninput="searchClients(this.value)">
+      </div>
+      <div id="clients-list"></div>
+    </section>
+
+    <!-- ─── MOTORES ─── -->
+    <section id="sec-motores" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>⚡ MOTORES</h1>
+          <p>Los 4 sistemas automáticos de FILO</p>
+        </div>
+      </div>
+
+      <div class="motores-grid">
+        <!-- Sillón Libre -->
+        <div class="motor-card">
+          <div class="motor-icon">💈</div>
+          <div class="motor-title">SILLÓN LIBRE</div>
+          <div class="motor-desc">Detecta huecos en tu agenda y manda WhatsApp a clientes cercanos que no vienen hace rato.</div>
+          <div class="motor-stat" id="vacant-slots-count">—</div>
+          <div class="motor-stat-label">huecos detectados hoy</div>
+          <button class="btn-motor" onclick="runSillonLibre()">💬 Llenar sillón ahora</button>
+        </div>
+
+        <!-- Churn / Rescate -->
+        <div class="motor-card">
+          <div class="motor-icon">🔥</div>
+          <div class="motor-title">RESCATE</div>
+          <div class="motor-desc">Detecta clientes que no vienen hace más de lo normal y les manda un mensaje para recuperarlos.</div>
+          <div class="motor-stat" id="churn-count">—</div>
+          <div class="motor-stat-label">clientes en fuga detectados</div>
+          <button class="btn-motor" onclick="showChurnList()">🆘 Ver clientes en fuga</button>
+        </div>
+
+        <!-- MRR Membresías -->
+        <div class="motor-card">
+          <div class="motor-icon">👑</div>
+          <div class="motor-title">MEMBRESÍAS</div>
+          <div class="motor-desc">Ingresos fijos cada mes. Plan básico (2 cortes/mes) y premium (ilimitado).</div>
+          <div class="motor-stat" id="mrr-value">—</div>
+          <div class="motor-stat-label">MRR este mes</div>
+          <button class="btn-motor" onclick="showSection('membresias')">👑 Gestionar membresías</button>
+        </div>
+
+        <!-- Split Comisiones -->
+        <div class="motor-card">
+          <div class="motor-icon">💰</div>
+          <div class="motor-title">SPLIT AUTOMÁTICO</div>
+          <div class="motor-desc">Al cerrar el día, FILO calcula automáticamente las comisiones de cada barbero.</div>
+          <div id="split-summary" class="motor-stat-label" style="margin-bottom:20px">Cargando comisiones del día...</div>
+          <button class="btn-motor secondary" onclick="showSection('dashboard')">📊 Ver dashboard</button>
+        </div>
+      </div>
+
+      <!-- Lista de clientes en fuga -->
+      <div id="churn-list-container" style="display:none;margin-top:28px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">🔥 Clientes en fuga</div>
+        <div id="churn-list"></div>
+      </div>
+    </section>
+
+    <!-- ─── MEMBRESÍAS ─── -->
+    <section id="sec-membresias" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>👑 MEMBRESÍAS</h1>
+          <p id="memb-stats">Cargando...</p>
+        </div>
+        <button class="btn-add" onclick="openModal('modal-membresia')">+ Nueva membresía</button>
+      </div>
+      <div id="memb-list"></div>
+    </section>
+
+    <!-- ─── CONFIGURACIÓN ─── -->
+    <section id="sec-configuracion" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>⚙️ CONFIGURACIÓN</h1>
+          <p>Conectá tus herramientas y personalizá FILO</p>
+        </div>
+        <button class="btn-add" onclick="saveSettings()">💾 Guardar cambios</button>
+      </div>
+
+      <div class="settings-grid">
+        <!-- Barbería -->
+        <div class="settings-section">
+          <div class="settings-section-title">✂️ Mi barbería</div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Nombre de la barbería</label>
+            <input type="text" id="cfg-name" placeholder="Mi Barbería">
+          </div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Ciudad</label>
+            <input type="text" id="cfg-city" placeholder="Buenos Aires">
+          </div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Dirección</label>
+            <input type="text" id="cfg-address" placeholder="Av. Corrientes 1234">
+          </div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Radio para Sillón Libre (km)</label>
+            <input type="number" id="cfg-radius" placeholder="3" min="1" max="20">
+          </div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Días sin visita = cliente en fuga</label>
+            <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
+          </div>
+        </div>
+
+        <!-- WhatsApp -->
+        <div class="settings-section">
+          <div class="settings-section-title">💬 WhatsApp</div>
+          <div class="wpp-status">
+            <div class="wpp-dot" id="wpp-dot"></div>
+            <div>
+              <div style="font-size:14px;font-weight:600" id="wpp-status-text">Verificando...</div>
+              <div style="font-size:12px;color:var(--gray)" id="wpp-phone-display"></div>
+            </div>
+          </div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Tu número de WhatsApp</label>
+            <input type="tel" id="cfg-phone" placeholder="5491112345678">
+          </div>
+          <div style="font-size:12px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+            FILO va a enviar los mensajes desde tu número. Necesitás tener <strong>WPPConnect</strong> corriendo. <a href="https://github.com/wppconnect-team/wppconnect" target="_blank" style="color:var(--yellow)">Ver guía →</a>
+          </div>
+          <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
+          <div id="wpp-qr-container" style="margin-top:16px;display:none">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:8px">Escaneá este código QR con tu WhatsApp:</div>
+            <img id="wpp-qr-img" style="width:200px;border-radius:8px" alt="QR WhatsApp">
+          </div>
+        </div>
+
+        <!-- Calendly -->
+        <div class="settings-section">
+          <div class="settings-section-title">📅 Calendly</div>
+          <div class="form-field" style="margin-bottom:14px">
+            <label>Tu link de Calendly</label>
+            <input type="url" id="cfg-calendly" placeholder="https://calendly.com/tu-nombre/30min">
+          </div>
+          <div style="font-size:12px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+            Pegá el link de tu calendario de Calendly. Tus clientes van a poder reservar turnos directamente desde FILO.
+          </div>
+          <button class="btn-motor secondary" onclick="testCalendly()">👁️ Ver preview</button>
+        </div>
+
+        <!-- Servicios -->
+        <div class="settings-section">
+          <div class="settings-section-title">✂️ Servicios y precios</div>
+          <div id="services-list" style="margin-bottom:16px"></div>
+          <button class="btn-motor secondary" onclick="openModal('modal-servicio')">+ Agregar servicio</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══ MODALES ═══ -->
+
+<!-- Modal: Nuevo turno -->
+<div class="modal-overlay" id="modal-turno">
+  <div class="modal">
+    <div class="modal-title">📅 Nuevo turno</div>
+    <div class="modal-sub">Completá los datos del turno</div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Cliente</label>
+        <select id="t-client">
+          <option value="">-- Sin asignar --</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Nombre (si es nuevo)</label>
+        <input type="text" id="t-client-name" placeholder="Nombre del cliente">
+      </div>
+      <div class="form-field">
+        <label>Servicio</label>
+        <select id="t-service" onchange="fillServicePrice()">
+          <option value="">-- Elegí un servicio --</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Precio ($)</label>
+        <input type="number" id="t-price" placeholder="3500">
+      </div>
+      <div class="form-field">
+        <label>Fecha</label>
+        <input type="date" id="t-date">
+      </div>
+      <div class="form-field">
+        <label>Hora</label>
+        <input type="time" id="t-time">
+      </div>
+      <div class="form-field">
+        <label>Barbero (opcional)</label>
+        <input type="text" id="t-barber" placeholder="Nombre del barbero">
+      </div>
+      <div class="form-field">
+        <label>Comisión del barbero (%)</label>
+        <input type="number" id="t-commission" placeholder="50" value="50" min="0" max="100">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="createAppointment()">✅ Guardar turno</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-turno')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nuevo cliente -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal">
+    <div class="modal-title">👤 Nuevo cliente</div>
+    <div class="modal-sub">Agregá un cliente a tu base</div>
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre completo</label>
+        <input type="text" id="c-name" placeholder="Juan García">
+      </div>
+      <div class="form-field">
+        <label>Teléfono / WhatsApp</label>
+        <input type="tel" id="c-phone" placeholder="5491112345678">
+      </div>
+      <div class="form-field">
+        <label>Notas (opcional)</label>
+        <input type="text" id="c-notes" placeholder="Corte fade, alérgico a...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="createClient()">✅ Guardar cliente</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Sillón Libre -->
+<div class="modal-overlay" id="modal-sillon">
+  <div class="modal">
+    <div class="modal-title">💈 Sillón Libre</div>
+    <div class="modal-sub" id="sillon-sub">Huecos detectados en tu agenda de hoy</div>
+    <div id="sillon-slots" style="margin-bottom:16px"></div>
+    <div id="sillon-clients" style="margin-bottom:16px"></div>
+    <div id="sillon-offer-section" style="display:none">
+      <div class="wpp-preview">
+        <div class="wpp-preview-header">💬 Preview del mensaje</div>
+        <div id="sillon-preview-msg"></div>
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Incentivo (opcional)</label>
+        <input type="text" id="sillon-incentivo" placeholder="El lavado va de regalo 🎁" value="El lavado va de regalo por ser cliente de la casa.">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" id="sillon-send-btn" onclick="sendFlashOffer()" style="display:none">💬 Enviar WhatsApp</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-sillon')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nueva membresía -->
+<div class="modal-overlay" id="modal-membresia">
+  <div class="modal">
+    <div class="modal-title">👑 Nueva membresía</div>
+    <div class="modal-sub">Asignale un plan a un cliente</div>
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Cliente</label>
+        <select id="m-client">
+          <option value="">-- Elegí un cliente --</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Plan</label>
+        <select id="m-plan">
+          <option value="basic">Básico — 2 cortes por mes</option>
+          <option value="premium">Premium — Ilimitado</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Precio mensual ($)</label>
+        <input type="number" id="m-price" placeholder="8000">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="createMembership()">✅ Crear membresía</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-membresia')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nuevo servicio -->
+<div class="modal-overlay" id="modal-servicio">
+  <div class="modal">
+    <div class="modal-title">✂️ Nuevo servicio</div>
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre del servicio</label>
+        <input type="text" id="svc-name" placeholder="Corte + barba">
+      </div>
+      <div class="form-field">
+        <label>Precio ($)</label>
+        <input type="number" id="svc-price" placeholder="5500">
+      </div>
+      <div class="form-field">
+        <label>Costo de insumos ($)</label>
+        <input type="number" id="svc-cost" placeholder="300">
+      </div>
+      <div class="form-field">
+        <label>Duración (minutos)</label>
+        <input type="number" id="svc-duration" placeholder="45" value="30">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="createService()">✅ Guardar servicio</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-servicio')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toast-icon">✅</div>
+  <div class="toast-text">
+    <strong id="toast-title">Listo</strong>
+    <p id="toast-msg"></p>
+  </div>
+  <button class="toast-close" onclick="hideToast()">✕</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+//  FILO CRM — Frontend Logic
+// ════════════════════════════════════════════
+
+const API = window.location.origin + '/api';
+let token = localStorage.getItem('filo_token');
+let currentShop = JSON.parse(localStorage.getItem('filo_shop') || 'null');
+let agendaDate = new Date().toISOString().split('T')[0];
+let services = [];
+let clients = [];
+let sillonTargetClients = [];
+let sillonSelectedSlot = '';
+
+// ─── HTTP helper ───
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error del servidor');
+  return data;
+}
+
+// ─── AUTH ───
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!email || !pass) return showAuthError('Completá email y contraseña');
+  document.getElementById('auth-error').style.display = 'none';
+  const btn = document.querySelector('#form-login .btn-primary');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const data = await api('POST', '/auth/login', { email, password: pass });
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    startApp();
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✂️ Entrar a FILO';
+  }
+}
+
+async function register() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const phone = document.getElementById('reg-phone').value.trim();
+  if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
+  const btn = document.querySelector('#form-register .btn-primary');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const data = await api('POST', '/auth/register', { name, email, password: pass, phone });
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    startApp();
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🚀 Crear mi cuenta';
+  }
+}
+
+function logout() {
+  if (!confirm('¿Cerrás sesión?')) return;
+  localStorage.removeItem('filo_token');
+  localStorage.removeItem('filo_shop');
+  token = null; currentShop = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ─── APP INIT ───
+function startApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  // Avatar
+  const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
+  document.getElementById('user-avatar').textContent = initials;
+
+  loadDashboard();
+  loadServices();
+  loadClients();
+}
+
+// ─── NAVIGATION ───
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+
+  const navMap = { dashboard: 0, agenda: 1, clientes: 2, motores: 3, membresias: 4 };
+  const navItems = document.querySelectorAll('.nav-item');
+  if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
+
+  if (name === 'agenda') loadAgenda();
+  if (name === 'clientes') renderClients();
+  if (name === 'motores') loadMotores();
+  if (name === 'membresias') loadMemberships();
+  if (name === 'configuracion') loadSettings();
+}
+
+// ─── DASHBOARD ───
+async function loadDashboard() {
+  try {
+    const data = await api('GET', '/dashboard/today');
+    const m = data.metrics;
+    const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const today = new Date();
+    document.getElementById('dash-title').textContent = `Buen día, ${currentShop?.name || ''}! ✂️`;
+    document.getElementById('dash-date').textContent = `${days[today.getDay()]} ${today.toLocaleDateString('es-AR', { day:'numeric', month:'long' })}`;
+    document.getElementById('dash-profit').textContent = '$' + m.net_profit.toLocaleString('es-AR');
+    document.getElementById('dash-revenue').textContent = 'Facturación: $' + m.revenue.toLocaleString('es-AR');
+    document.getElementById('dash-completed').textContent = m.completed;
+    document.getElementById('dash-pending').textContent = m.pending;
+    document.getElementById('dash-noshows').textContent = m.noshows;
+
+    renderWeekChart(data.week);
+    renderDashAppointments(data.appointments.slice(0, 5));
+  } catch (e) {
+    console.error('Error dashboard:', e.message);
+  }
+}
+
+function renderWeekChart(week) {
+  const days = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+  const today = new Date().toISOString().split('T')[0];
+  if (!week?.length) { document.getElementById('week-chart').innerHTML = ''; return; }
+
+  const max = Math.max(...week.map(d => parseFloat(d.net_profit)), 1);
+  const chart = document.getElementById('week-chart');
+  chart.innerHTML = week.map(d => {
+    const pct = Math.max(5, (parseFloat(d.net_profit) / max) * 100);
+    const date = new Date(d.date + 'T12:00:00');
+    const dayName = days[date.getDay()];
+    const isToday = d.date === today;
+    return `<div class="week-bar-wrap">
+      <div class="week-bar-track">
+        <div class="week-bar${isToday?' today':''}" style="height:${pct}%" title="$${parseFloat(d.net_profit).toLocaleString('es-AR')}"></div>
+      </div>
+      <div class="week-day">${dayName}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderDashAppointments(appts) {
+  const el = document.getElementById('dash-appointments');
+  if (!appts?.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>Sin turnos hoy</p></div>`;
+    return;
+  }
+  el.innerHTML = appts.map(a => renderApptCard(a)).join('');
+}
+
+function renderApptCard(a) {
+  const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado' };
+  const time = String(a.time_start || '').slice(0,5);
+  return `<div class="appointment-card">
+    <div>
+      <div class="appt-time">${time}</div>
+      <div class="appt-time-end">${String(a.time_end||'').slice(0,5)}</div>
+    </div>
+    <div class="appt-info">
+      <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
+      <div class="appt-service">${a.service_name || 'Sin servicio'}${a.barber_name ? ' · '+a.barber_name : ''}</div>
+    </div>
+    <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+    <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
+    <div class="appt-actions">
+      ${a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : ''}
+      ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
+      <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>
+    </div>
+  </div>`;
+}
+
+// ─── AGENDA ───
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const today = new Date().toISOString().split('T')[0];
+  if (dateStr === today) return 'Hoy';
+  return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+async function loadAgenda() {
+  document.getElementById('agenda-date-display').textContent = formatDateLabel(agendaDate);
+  document.getElementById('agenda-date-label').textContent = formatDateLabel(agendaDate);
+  document.getElementById('agenda-date-picker').value = agendaDate;
+
+  try {
+    const appts = await api('GET', `/appointments?date=${agendaDate}`);
+    const el = document.getElementById('agenda-list');
+    if (!appts.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>Sin turnos</h3><p>No hay turnos para este día.<br>Usá el botón + para agregar uno.</p></div>`;
+    } else {
+      el.innerHTML = appts.map(a => renderApptCard(a)).join('');
+    }
+    const total = appts.reduce((s, a) => s + (a.status === 'completed' ? parseFloat(a.price||0) : 0), 0);
+    document.getElementById('agenda-summary').textContent = `${appts.length} turnos · $${total.toLocaleString('es-AR')} facturado`;
+
+    // Calendly embed
+    loadCalendlyEmbed();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function changeAgendaDate(delta) {
+  const d = new Date(agendaDate + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  agendaDate = d.toISOString().split('T')[0];
+  loadAgenda();
+}
+
+function setAgendaDate(val) {
+  agendaDate = val;
+  loadAgenda();
+}
+
+function loadCalendlyEmbed() {
+  const shop = JSON.parse(localStorage.getItem('filo_shop') || '{}');
+  const url = shop.calendly_url || currentShop?.calendly_url;
+  const wrapper = document.getElementById('calendly-wrapper');
+  const placeholder = document.getElementById('calendly-placeholder');
+  if (url) {
+    wrapper.innerHTML = `<iframe src="${url}" width="100%" height="650" frameborder="0" style="border:none;border-radius:20px"></iframe>`;
+  } else {
+    wrapper.innerHTML = '';
+    wrapper.appendChild(placeholder);
+    placeholder.style.display = 'flex';
+  }
+}
+
+async function updateApptStatus(id, status) {
+  try {
+    await api('PUT', `/appointments/${id}/status`, { status });
+    showToast('✅', 'Turno actualizado', status === 'completed' ? '¡Corte completado!' : '');
+    loadDashboard();
+    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function deleteAppt(id) {
+  if (!confirm('¿Eliminar este turno?')) return;
+  try {
+    await api('DELETE', `/appointments/${id}`);
+    showToast('🗑', 'Turno eliminado', '');
+    loadDashboard();
+    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── CLIENTES ───
+async function loadClients() {
+  try {
+    clients = await api('GET', '/clients');
+    renderClients();
+    // Rellenar selects de clientes
+    fillClientSelects();
+  } catch (e) { console.error(e); }
+}
+
+function renderClients(filtered) {
+  const list = filtered || clients;
+  const el = document.getElementById('clients-list');
+  document.getElementById('clients-count').textContent = `${clients.length} clientes registrados`;
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">👥</div><h3>Sin clientes todavía</h3><p>Agregá tu primer cliente con el botón +</p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const initials = c.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+    const lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('es-AR') : 'Nunca';
+    return `<div class="client-card">
+      <div class="client-avatar">${initials}</div>
+      <div class="client-info">
+        <div class="client-name">
+          ${c.name}
+          ${c.membership_active ? `<span class="member-badge" style="margin-left:8px">👑 ${c.membership_plan === 'premium' ? 'Premium' : 'Básico'}</span>` : ''}
+        </div>
+        <div class="client-meta">
+          <span>${c.phone || 'Sin teléfono'}</span>
+          <span>Última visita: ${lastVisit}</span>
+          <span>Visitas: ${c.total_visits}</span>
+          <span>Total: $${parseFloat(c.total_spent||0).toLocaleString('es-AR')}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="appt-btn" onclick="quickRescue(${c.id},'${c.name}')" title="Enviar WhatsApp de rescate">💬</button>
+        <button class="appt-btn" onclick="deleteClient(${c.id})" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchClients(query) {
+  if (!query) return renderClients();
+  const q = query.toLowerCase();
+  renderClients(clients.filter(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)));
+}
+
+function fillClientSelects() {
+  const opts = '<option value="">-- Sin asignar --</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('t-client').innerHTML = opts;
+  const mOpts = '<option value="">-- Elegí un cliente --</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('m-client').innerHTML = mOpts;
+}
+
+async function createClient() {
+  const name = document.getElementById('c-name').value.trim();
+  const phone = document.getElementById('c-phone').value.trim();
+  const notes = document.getElementById('c-notes').value.trim();
+  if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
+  try {
+    await api('POST', '/clients', { name, phone, notes });
+    closeModal('modal-cliente');
+    document.getElementById('c-name').value = '';
+    document.getElementById('c-phone').value = '';
+    document.getElementById('c-notes').value = '';
+    showToast('✅', 'Cliente agregado', name + ' ya está en tu base');
+    loadClients();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function deleteClient(id) {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  try {
+    await api('DELETE', `/clients/${id}`);
+    showToast('🗑', 'Cliente eliminado', '');
+    loadClients();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── SERVICIOS ───
+async function loadServices() {
+  try {
+    services = await api('GET', '/settings/services');
+    fillServiceSelect();
+    renderServicesList();
+  } catch (e) { console.error(e); }
+}
+
+function fillServiceSelect() {
+  const opts = '<option value="">-- Elegí un servicio --</option>' + services.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost}">${s.name} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('');
+  document.getElementById('t-service').innerHTML = opts;
+}
+
+function fillServicePrice() {
+  const sel = document.getElementById('t-service');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt.dataset.price) document.getElementById('t-price').value = opt.dataset.price;
+}
+
+function renderServicesList() {
+  const el = document.getElementById('services-list');
+  if (!el) return;
+  if (!services.length) { el.innerHTML = '<p style="color:var(--gray);font-size:13px">Sin servicios cargados aún</p>'; return; }
+  el.innerHTML = services.map(s => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+      <div>
+        <div style="font-size:14px;font-weight:600">${s.name}</div>
+        <div style="font-size:12px;color:var(--gray)">$${parseFloat(s.price).toLocaleString('es-AR')} · ${s.duration_minutes} min</div>
+      </div>
+      <button class="appt-btn" onclick="deleteService(${s.id})" title="Eliminar">🗑</button>
+    </div>
+  `).join('');
+}
+
+async function createService() {
+  const name = document.getElementById('svc-name').value.trim();
+  const price = document.getElementById('svc-price').value;
+  const cost = document.getElementById('svc-cost').value;
+  const duration = document.getElementById('svc-duration').value;
+  if (!name || !price) return showToast('⚠️', 'Nombre y precio son obligatorios', '');
+  try {
+    await api('POST', '/settings/services', { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30) });
+    closeModal('modal-servicio');
+    showToast('✅', 'Servicio guardado', name);
+    loadServices();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function deleteService(id) {
+  if (!confirm('¿Eliminar este servicio?')) return;
+  try {
+    await api('DELETE', `/settings/services/${id}`);
+    showToast('🗑', 'Servicio eliminado', '');
+    loadServices();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── TURNO ───
+async function createAppointment() {
+  const clientId = document.getElementById('t-client').value;
+  const clientName = document.getElementById('t-client-name').value.trim();
+  const serviceId = document.getElementById('t-service').value;
+  const price = document.getElementById('t-price').value;
+  const date = document.getElementById('t-date').value || agendaDate;
+  const time = document.getElementById('t-time').value;
+  const barber = document.getElementById('t-barber').value.trim();
+  const commission = document.getElementById('t-commission').value || 50;
+
+  if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
+
+  try {
+    await api('POST', '/appointments', {
+      client_id: clientId || null,
+      client_name: clientName || null,
+      service_id: serviceId || null,
+      price: parseFloat(price) || 0,
+      date, time_start: time,
+      barber_name: barber || null,
+      commission_pct: parseInt(commission)
+    });
+    closeModal('modal-turno');
+    showToast('✅', 'Turno creado', '');
+    loadDashboard();
+    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── MOTORES ───
+async function loadMotores() {
+  // Sillón Libre
+  try {
+    const data = await api('GET', '/yield/vacant-slots');
+    document.getElementById('vacant-slots-count').textContent = data.vacant_slots.length;
+  } catch { }
+
+  // Churn
+  try {
+    const data = await api('GET', '/yield/churn/at-risk');
+    const count = data.total;
+    document.getElementById('churn-count').textContent = count;
+    if (count > 0) {
+      const badge = document.getElementById('churn-nav');
+      badge.innerHTML = `<span class="badge"></span>`;
+    }
+  } catch { }
+
+  // MRR
+  try {
+    const data = await api('GET', '/memberships/stats');
+    document.getElementById('mrr-value').textContent = '$' + parseFloat(data.mrr).toLocaleString('es-AR');
+  } catch { }
+
+  // Split
+  try {
+    const data = await api('GET', '/dashboard/today');
+    if (data.splits?.length) {
+      const splitText = data.splits.map(s => `${s.barber_name}: $${parseFloat(s.commission).toLocaleString('es-AR')}`).join(' · ');
+      document.getElementById('split-summary').textContent = splitText;
+    } else {
+      document.getElementById('split-summary').textContent = 'Sin cortes completados hoy todavía';
+    }
+  } catch { }
+}
+
+async function runSillonLibre() {
+  openModal('modal-sillon');
+  document.getElementById('sillon-slots').innerHTML = '<div class="loading-spinner"></div>';
+  document.getElementById('sillon-clients').innerHTML = '';
+  document.getElementById('sillon-offer-section').style.display = 'none';
+  document.getElementById('sillon-send-btn').style.display = 'none';
+
+  try {
+    const [slotsData, clientsData] = await Promise.all([
+      api('GET', '/yield/vacant-slots'),
+      api('GET', '/yield/target-clients')
+    ]);
+
+    const slots = slotsData.vacant_slots;
+    sillonTargetClients = clientsData.clients;
+
+    if (!slots.length) {
+      document.getElementById('sillon-slots').innerHTML = `<div style="color:var(--green);font-size:14px">✅ Tu agenda está completa hoy. ¡Bien hecho!</div>`;
+      return;
+    }
+
+    document.getElementById('sillon-slots').innerHTML = `
+      <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:8px">Huecos detectados</div>
+      ${slots.map(s => `<button class="btn-motor secondary" style="margin-bottom:8px;padding:10px" onclick="selectSlot('${s.from}')">
+        🕐 ${s.from} — ${s.to}
+      </button>`).join('')}
+    `;
+
+    if (sillonTargetClients.length) {
+      document.getElementById('sillon-clients').innerHTML = `
+        <div style="font-size:13px;color:var(--gray);margin:12px 0 6px">
+          ${sillonTargetClients.length} clientes cercanos sin visitar hace +20 días
+        </div>`;
+    } else {
+      document.getElementById('sillon-clients').innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin clientes en el radio configurado.</div>`;
+    }
+  } catch (e) {
+    document.getElementById('sillon-slots').innerHTML = `<div style="color:var(--red)">${e.message}</div>`;
+  }
+}
+
+function selectSlot(slot) {
+  sillonSelectedSlot = slot;
+  document.getElementById('sillon-sub').textContent = `Hueco seleccionado: hoy a las ${slot}`;
+  document.getElementById('sillon-offer-section').style.display = 'block';
+  document.getElementById('sillon-send-btn').style.display = 'block';
+  document.getElementById('sillon-send-btn').textContent = `💬 Enviar WhatsApp a ${sillonTargetClients.length} clientes`;
+  document.getElementById('sillon-preview-msg').innerHTML = `¡Hola [Nombre]! 👋<br><br>Tenemos un sillón libre hoy a las <strong>${slot}</strong>.<br><br><span id="preview-incentivo">El lavado va de regalo por ser cliente de la casa.</span> ¿Te anotamos? ✂️`;
+}
+
+async function sendFlashOffer() {
+  if (!sillonSelectedSlot || !sillonTargetClients.length) return;
+  const incentivo = document.getElementById('sillon-incentivo').value;
+  const ids = sillonTargetClients.map(c => c.id);
+  const btn = document.getElementById('sillon-send-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    const res = await api('POST', '/yield/send-flash-offer', { slot: sillonSelectedSlot, client_ids: ids, incentivo });
+    closeModal('modal-sillon');
+    showToast('💬', `WhatsApp enviado a ${res.sent} clientes`, 'Motor Sillón Libre activado');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+    btn.disabled = false; btn.textContent = `💬 Enviar WhatsApp`;
+  }
+}
+
+async function showChurnList() {
+  const container = document.getElementById('churn-list-container');
+  container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  if (container.style.display === 'none') return;
+  document.getElementById('churn-list').innerHTML = '<div class="loading-spinner"></div>';
+  try {
+    const data = await api('GET', '/yield/churn/at-risk');
+    if (!data.clients.length) {
+      document.getElementById('churn-list').innerHTML = `<div class="empty-state"><div class="icon">🎉</div><h3>Sin clientes en fuga</h3><p>¡Todos tus clientes están al día!</p></div>`;
+      return;
+    }
+    document.getElementById('churn-list').innerHTML = data.clients.map(c => `
+      <div class="client-card">
+        <div class="client-avatar">${c.name.charAt(0).toUpperCase()}</div>
+        <div class="client-info">
+          <div class="client-name">${c.name} <span class="risk-badge risk-${c.risk_level}" style="margin-left:8px">${c.risk_level === 'critico' ? '🔴 Crítico' : '🟠 En fuga'}</span></div>
+          <div class="client-meta">
+            <span>${c.phone || 'Sin teléfono'}</span>
+            <span>Hace ${c.days_since_last} días sin visitar</span>
+          </div>
+        </div>
+        <button class="btn-motor" style="width:auto;padding:10px 16px" onclick="rescueClient(${c.id},'${c.name}')">💬 Rescatar</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('churn-list').innerHTML = `<div style="color:var(--red)">${e.message}</div>`;
+  }
+}
+
+async function rescueClient(clientId, name) {
+  try {
+    await api('POST', `/yield/churn/rescue/${clientId}`, {});
+    showToast('💬', `Mensaje enviado a ${name}`, 'Motor Rescate activado');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function quickRescue(clientId, name) {
+  if (!confirm(`¿Enviar mensaje de rescate a ${name}?`)) return;
+  await rescueClient(clientId, name);
+}
+
+// ─── MEMBRESÍAS ───
+async function loadMemberships() {
+  try {
+    const [membs, stats] = await Promise.all([
+      api('GET', '/memberships'),
+      api('GET', '/memberships/stats')
+    ]);
+    document.getElementById('memb-stats').textContent = `${stats.active_total} activas · MRR: $${parseFloat(stats.mrr).toLocaleString('es-AR')}`;
+    const el = document.getElementById('memb-list');
+    if (!membs.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">👑</div><h3>Sin membresías todavía</h3><p>Creá la primera con el botón +</p></div>`;
+      return;
+    }
+    el.innerHTML = membs.map(m => `
+      <div class="memb-card">
+        <div class="client-avatar">${m.client_name.charAt(0).toUpperCase()}</div>
+        <div class="client-info">
+          <div class="client-name">${m.client_name} <span class="memb-plan ${m.plan}">${m.plan === 'premium' ? 'Premium' : 'Básico'}</span></div>
+          <div class="client-meta">
+            <span>${m.client_phone || ''}</span>
+            <span>Renueva: ${m.renews_at ? new Date(m.renews_at).toLocaleDateString('es-AR') : '—'}</span>
+            <span>$${parseFloat(m.price_monthly||0).toLocaleString('es-AR')}/mes</span>
+          </div>
+        </div>
+        ${m.plan === 'basic' ? `<div class="memb-credits" style="color:${m.credits_remaining > 0 ? 'var(--green)' : 'var(--red)'}">${m.credits_remaining}<div style="font-size:11px;color:var(--gray);font-family:'Barlow',sans-serif;font-weight:400">créditos</div></div>` : '<div style="color:var(--yellow);font-size:20px">∞</div>'}
+        <div style="display:flex;gap:8px">
+          ${m.active ? `<button class="appt-btn complete" onclick="checkin(${m.id})" title="Usar crédito / Check-in">✓</button>` : ''}
+          ${m.active ? `<button class="appt-btn noshow" onclick="cancelMembership(${m.id})" title="Cancelar membresía">✗</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function createMembership() {
+  const clientId = document.getElementById('m-client').value;
+  const plan = document.getElementById('m-plan').value;
+  const price = document.getElementById('m-price').value;
+  if (!clientId) return showToast('⚠️', 'Elegí un cliente', '');
+  try {
+    await api('POST', '/memberships', { client_id: parseInt(clientId), plan, price_monthly: parseFloat(price||0) });
+    closeModal('modal-membresia');
+    showToast('✅', 'Membresía creada', '');
+    loadMemberships();
+    loadClients();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function checkin(id) {
+  try {
+    const res = await api('POST', `/memberships/${id}/checkin`);
+    showToast('✅', 'Check-in', res.message);
+    loadMemberships();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function cancelMembership(id) {
+  if (!confirm('¿Cancelar esta membresía?')) return;
+  try {
+    await api('PUT', `/memberships/${id}/cancel`);
+    showToast('🗑', 'Membresía cancelada', '');
+    loadMemberships();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── CONFIGURACIÓN ───
+async function loadSettings() {
+  try {
+    const settings = await api('GET', '/settings');
+    document.getElementById('cfg-name').value = settings.name || '';
+    document.getElementById('cfg-city').value = settings.city || '';
+    document.getElementById('cfg-address').value = settings.address || '';
+    document.getElementById('cfg-phone').value = settings.phone || '';
+    document.getElementById('cfg-calendly').value = settings.calendly_url || '';
+    document.getElementById('cfg-radius').value = settings.service_radius_km || 3;
+    document.getElementById('cfg-churn').value = settings.churn_days || 20;
+
+    // WhatsApp status
+    const dot = document.getElementById('wpp-dot');
+    const txt = document.getElementById('wpp-status-text');
+    const phDisp = document.getElementById('wpp-phone-display');
+    if (settings.wpp_connected) {
+      dot.className = 'wpp-dot connected';
+      txt.textContent = 'WhatsApp conectado ✅';
+      phDisp.textContent = settings.phone || '';
+    } else {
+      dot.className = 'wpp-dot disconnected';
+      txt.textContent = 'WhatsApp no conectado';
+    }
+
+    loadServices();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function saveSettings() {
+  const body = {
+    name: document.getElementById('cfg-name').value.trim(),
+    phone: document.getElementById('cfg-phone').value.trim(),
+    city: document.getElementById('cfg-city').value.trim(),
+    address: document.getElementById('cfg-address').value.trim(),
+    calendly_url: document.getElementById('cfg-calendly').value.trim() || null,
+    service_radius_km: parseInt(document.getElementById('cfg-radius').value) || 3,
+    churn_days: parseInt(document.getElementById('cfg-churn').value) || 20
+  };
+  try {
+    const res = await api('PUT', '/settings', body);
+    currentShop = { ...currentShop, ...res.shop };
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    showToast('✅', 'Configuración guardada', '');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function connectWhatsapp() {
+  const btn = document.getElementById('wpp-connect-btn');
+  btn.disabled = true; btn.textContent = 'Conectando...';
+  try {
+    const res = await api('POST', '/settings/whatsapp/connect');
+    if (res.qr) {
+      document.getElementById('wpp-qr-container').style.display = 'block';
+      document.getElementById('wpp-qr-img').src = res.qr;
+      showToast('📱', 'Escaneá el QR', 'Abrí WhatsApp → Dispositivos vinculados');
+      // Verificar estado cada 5 segundos
+      const check = setInterval(async () => {
+        try {
+          const status = await api('GET', '/settings/whatsapp/status');
+          if (status.connected) {
+            clearInterval(check);
+            document.getElementById('wpp-dot').className = 'wpp-dot connected';
+            document.getElementById('wpp-status-text').textContent = 'WhatsApp conectado ✅';
+            document.getElementById('wpp-qr-container').style.display = 'none';
+            showToast('✅', 'WhatsApp conectado', 'Ya podés enviar mensajes desde FILO');
+          }
+        } catch { clearInterval(check); }
+      }, 5000);
+    } else if (!res.ok) {
+      showToast('❌', 'Error', res.error || 'No se pudo conectar');
+    }
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp';
+  }
+}
+
+function testCalendly() {
+  const url = document.getElementById('cfg-calendly').value.trim();
+  if (!url) return showToast('⚠️', 'Pegá tu link de Calendly primero', '');
+  showSection('agenda');
+}
+
+// ─── MODALES ───
+function openModal(id) {
+  // Set defaults for turno modal
+  if (id === 'modal-turno') {
+    document.getElementById('t-date').value = agendaDate;
+  }
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// Cerrar modales al hacer click fuera
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+
+// ─── TOAST ───
+let toastTimer;
+function showToast(icon, title, msg) {
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-msg').textContent = msg;
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 3500);
+}
+
+function hideToast() {
+  document.getElementById('toast').classList.remove('show');
+}
+
+// ─── KEYBOARD ───
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+// ─── ENTER en login ───
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
+// ─── INIT ───
+if (token && currentShop) {
+  startApp();
+}
+</script>
+</body>
+</html>
