@@ -395,6 +395,25 @@ function goToForm() {
     <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
     <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">$${parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
   `;
+
+  // Si ya tiene teléfono cargado (autocomplete), chequear puntos automáticamente
+  setTimeout(async () => {
+    const phone = document.getElementById('client-phone').value.trim().replace(/\D/g, '');
+    if (phone.length >= 8 && shopData?.booking_slug && !clientPointsData) {
+      await checkPhonePoints(phone);
+    }
+  }, 500);
+}
+
+async function checkPhonePoints(phone) {
+  try {
+    const res = await fetch(`${window.location.origin}/api/points/client/phone/${shopData.booking_slug}/${phone}`);
+    const data = await res.json();
+    if (data.client && data.client.points > 0) {
+      clientPointsData = data.client;
+      await loadStoreForClient();
+    }
+  } catch(e) { /* silent */ }
 }
 
 async function confirmReservation() {
@@ -476,14 +495,17 @@ function hideError() {
 document.getElementById('client-phone')?.addEventListener('blur', async function() {
   const phone = this.value.trim().replace(/\D/g, '');
   if (phone.length < 8 || !shopData?.booking_slug) return;
-  try {
-    const res = await fetch(`${window.location.origin}/api/points/client/phone/${shopData.booking_slug}/${phone}`);
-    const data = await res.json();
-    if (data.client && data.client.points > 0) {
-      clientPointsData = data.client;
-      await loadStoreForClient();
-    }
-  } catch(e) { /* silent */ }
+  clientPointsData = null; // reset
+  await checkPhonePoints(phone);
+});
+
+document.getElementById('client-phone')?.addEventListener('input', function() {
+  // Reset prizes if phone changes
+  if (clientPointsData) {
+    clientPointsData = null;
+    selectedPrize = null;
+    document.getElementById('points-section').style.display = 'none';
+  }
 });
 
 async function loadStoreForClient() {
