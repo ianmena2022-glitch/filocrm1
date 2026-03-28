@@ -47,12 +47,12 @@ app.get('/', (req, res) => {
 
 // CRM en /app
 app.get('/app', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
+  res.sendFile(path.join(publicDir, 'crm.html'));
 });
 
 // Cualquier otra ruta → CRM
 app.get('*', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
+  res.sendFile(path.join(publicDir, 'crm.html'));
 });
 
 // ── Init DB + arrancar servidor ────────────────────────
