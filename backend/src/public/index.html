@@ -1027,6 +1027,29 @@ body {
             <div style="font-size:13px;color:var(--gray);margin-bottom:8px">Escaneá este código QR con tu WhatsApp:</div>
             <img id="wpp-qr-img" style="width:200px;border-radius:8px" alt="QR WhatsApp">
           </div>
+
+          <!-- Templates de mensajes -->
+          <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">✏️ Mensajes personalizados</div>
+
+            <div class="form-field" style="margin-bottom:16px">
+              <label>💈 Sillón Libre</label>
+              <textarea id="tpl-sillon" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Tenemos un sillón libre hoy a las {hora}..."></textarea>
+              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {hora} {barberia} {incentivo}</div>
+            </div>
+
+            <div class="form-field" style="margin-bottom:16px">
+              <label>🔥 Rescate de clientes</label>
+              <textarea id="tpl-rescate" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Hace un tiempo que no te vemos por {barberia}..."></textarea>
+              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {barberia}</div>
+            </div>
+
+            <div class="form-field" style="margin-bottom:0">
+              <label>📅 Recordatorio de turno</label>
+              <textarea id="tpl-recordatorio" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Te recordamos tu turno mañana a las {hora}..."></textarea>
+              <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: {nombre} {hora} {barberia}</div>
+            </div>
+          </div>
         </div>
 
         <!-- Calendly -->
@@ -1915,6 +1938,12 @@ async function loadSettings() {
     document.getElementById('cfg-radius').value = settings.service_radius_km || 3;
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
 
+    // Templates de mensajes
+    const tpls = settings.msg_templates ? JSON.parse(settings.msg_templates) : {};
+    document.getElementById('tpl-sillon').value = tpls.sillon || '¡Hola {nombre}! 👋\n\nTenemos un sillón libre hoy a las *{hora}* en {barberia}.\n\n{incentivo}\n\n¿Te anotamos? ✂️';
+    document.getElementById('tpl-rescate').value = tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.';
+    document.getElementById('tpl-recordatorio').value = tpls.recordatorio || '¡Hola {nombre}! 👋\n\nTe recordamos tu turno mañana a las *{hora}* en {barberia}. ¡Te esperamos! ✂️';
+
     // WhatsApp status
     const dot = document.getElementById('wpp-dot');
     const txt = document.getElementById('wpp-status-text');
@@ -1942,7 +1971,12 @@ async function saveSettings() {
     address: document.getElementById('cfg-address').value.trim(),
     calendly_url: document.getElementById('cfg-calendly').value.trim() || null,
     service_radius_km: parseInt(document.getElementById('cfg-radius').value) || 3,
-    churn_days: parseInt(document.getElementById('cfg-churn').value) || 20
+    churn_days: parseInt(document.getElementById('cfg-churn').value) || 20,
+    msg_templates: JSON.stringify({
+      sillon:       document.getElementById('tpl-sillon').value.trim(),
+      rescate:      document.getElementById('tpl-rescate').value.trim(),
+      recordatorio: document.getElementById('tpl-recordatorio').value.trim()
+    })
   };
   try {
     const res = await api('PUT', '/settings', body);

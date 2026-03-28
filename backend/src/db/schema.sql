@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS shops (
   wpp_session       VARCHAR(100),
   wpp_connected     BOOLEAN DEFAULT FALSE,
   logo_url          TEXT,
+  msg_templates     TEXT,
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -89,3 +90,5 @@ CREATE TABLE IF NOT EXISTS whatsapp_logs (
 CREATE INDEX IF NOT EXISTS idx_appointments_shop_date ON appointments(shop_id, date);
 CREATE INDEX IF NOT EXISTS idx_clients_shop             ON clients(shop_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_shop         ON memberships(shop_id, active);
+
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS msg_templates TEXT;

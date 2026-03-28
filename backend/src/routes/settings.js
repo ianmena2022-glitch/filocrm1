@@ -8,7 +8,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, phone, city, address, calendly_url,
-              service_radius_km, churn_days, wpp_connected, logo_url
+              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -21,17 +21,17 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, calendly_url, service_radius_km, churn_days } = req.body;
+  const { name, phone, city, address, calendly_url, service_radius_km, churn_days, msg_templates } = req.body;
   try {
     const result = await pool.query(
       `UPDATE shops SET
          name=$1, phone=$2, city=$3, address=$4,
-         calendly_url=$5, service_radius_km=$6, churn_days=$7
-       WHERE id=$8
+         calendly_url=$5, service_radius_km=$6, churn_days=$7, msg_templates=$8
+       WHERE id=$9
        RETURNING id, name, email, phone, city, address, calendly_url,
-                 service_radius_km, churn_days, wpp_connected`,
+                 service_radius_km, churn_days, wpp_connected, msg_templates`,
       [name, phone||null, city||null, address||null,
-       calendly_url||null, service_radius_km||3, churn_days||20, req.shopId]
+       calendly_url||null, service_radius_km||3, churn_days||20, msg_templates||null, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {
@@ -41,6 +41,7 @@ router.put('/', auth, async (req, res) => {
 
 // ── SERVICIOS ─────────────────────────────────────────
 
+// GET /api/settings/services
 router.get('/services', auth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -53,6 +54,7 @@ router.get('/services', auth, async (req, res) => {
   }
 });
 
+// POST /api/settings/services
 router.post('/services', auth, async (req, res) => {
   const { name, price, cost, duration_minutes } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
@@ -68,6 +70,7 @@ router.post('/services', auth, async (req, res) => {
   }
 });
 
+// DELETE /api/settings/services/:id
 router.delete('/services/:id', auth, async (req, res) => {
   try {
     await pool.query(
@@ -87,31 +90,21 @@ router.post('/whatsapp/connect', auth, async (req, res) => {
   try {
     const data = await wpp.startSession(req.shopId);
 
+    // WPPConnect devuelve el QR como base64 o como URL
+    if (data.qrcode) {
+      // Puede venir como "data:image/png;base64,..." o solo el base64
+      const qr = data.qrcode.startsWith('data:')
+        ? data.qrcode
+        : `data:image/png;base64,${data.qrcode}`;
+      return res.json({ ok: true, qr });
+    }
+
     if (data.status === 'CONNECTED') {
+      await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [req.shopId]);
       return res.json({ ok: true, connected: true });
     }
 
-    if (data.qrcode) {
-      // Baileys devuelve el QR como string raw — hay que convertirlo a imagen en el frontend
-      // o usar qrcode lib en el servidor
-      let qrImage = data.qrcode;
-
-      // Si es raw (no base64 de imagen), convertir con qrcode
-      if (data.type === 'raw') {
-        try {
-          const QRCode = require('qrcode');
-          qrImage = await QRCode.toDataURL(data.qrcode);
-        } catch (e) {
-          console.error('QRCode conversion error:', e.message);
-          // Devolver el raw igual, el frontend puede manejarlo
-          qrImage = data.qrcode;
-        }
-      }
-
-      return res.json({ ok: true, qr: qrImage });
-    }
-
-    res.json({ ok: false, error: 'No se pudo iniciar sesión de WhatsApp' });
+    res.json({ ok: false, error: 'No se pudo iniciar sesión de WhatsApp', raw: data });
   } catch (e) {
     console.error('WPP connect error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
