@@ -55,13 +55,20 @@ async function getStatus(shopId) {
 async function sendText(shopId, phone, message) {
   const session = sessionName(shopId);
   const token   = await generateToken(shopId);
-  const chatId  = phone.replace(/\D/g, '') + '@c.us';
+  
+  // WPPConnect v2.9 — el número va sin @c.us en send-message
+  const phoneClean = phone.replace(/\D/g, '');
 
   const url = `${BASE_URL}/api/${session}/send-message`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ phone: chatId, message }),
+    body: JSON.stringify({ 
+      phone: phoneClean,
+      message,
+      isGroup: false
+    }),
+    signal: AbortSignal.timeout(30000) // timeout 30 segundos
   });
   if (!res.ok) {
     const err = await res.text();
