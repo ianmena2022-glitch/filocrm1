@@ -1684,6 +1684,23 @@ function renderApptCard(a) {
   </div>`;
 }
 
+// ─── HELPERS TIEMPO REAL ───
+function updateAgendaSummary() {
+  const allCards = document.querySelectorAll('#agenda-list .appointment-card');
+  const summary = document.getElementById('agenda-summary');
+  if (!summary) return;
+  let total = 0;
+  allCards.forEach(card => {
+    const badge = card.querySelector('.status-badge');
+    const priceEl = card.querySelector('.appt-price');
+    if (badge?.classList.contains('status-completed') && priceEl) {
+      const raw = priceEl.textContent.replace(/\$/g, '').replace(/\./g, '').replace(',', '.').trim();
+      total += parseFloat(raw) || 0;
+    }
+  });
+  summary.textContent = `${allCards.length} turnos · $${total.toLocaleString('es-AR')} facturado`;
+}
+
 // ─── AGENDA ───
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -1726,6 +1743,50 @@ function setAgendaDate(val) {
 }
 
 async function updateApptStatus(id, status) {
+  // Actualizar DOM al instante sin esperar el servidor
+  const card = document.querySelector(`.appointment-card [onclick*="updateApptStatus(${id},"]`)?.closest('.appointment-card');
+  if (card) {
+    const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado' };
+    const badge = card.querySelector('.status-badge');
+    if (badge) {
+      badge.className = `status-badge status-${status}`;
+      badge.textContent = statusLabel[status] || status;
+    }
+    const actions = card.querySelector('.appt-actions');
+    if (actions) {
+      if (status === 'completed') {
+        const completeBtn = actions.querySelector('.appt-btn.complete');
+        const noshowBtn = actions.querySelector('.appt-btn.noshow');
+        if (completeBtn) completeBtn.remove();
+        if (noshowBtn) noshowBtn.remove();
+      } else if (status === 'noshow') {
+        const completeBtn = actions.querySelector('.appt-btn.complete');
+        const noshowBtn = actions.querySelector('.appt-btn.noshow');
+        if (completeBtn) completeBtn.remove();
+        if (noshowBtn) noshowBtn.remove();
+      }
+    }
+    // Actualizar resumen de facturado al instante
+    const allCards = document.querySelectorAll('#agenda-list .appointment-card');
+    let total = 0;
+    allCards.forEach(c => {
+      const badgeEl = c.querySelector('.status-badge');
+      const priceEl = c.querySelector('.appt-price');
+      const cardStatus = badgeEl?.className.match(/status-(\w+)/)?.[1];
+      const cardId = c.querySelector('[onclick*="updateApptStatus"]')?.getAttribute('onclick')?.match(/\d+/)?.[0];
+      const isThisCard = cardId == id;
+      const finalStatus = isThisCard ? status : cardStatus;
+      if (finalStatus === 'completed' && priceEl) {
+        total += parseFloat(priceEl.textContent.replace(/[$.,]/g, '').replace(',', '.')) || 0;
+      }
+    });
+    const summary = document.getElementById('agenda-summary');
+    if (summary) {
+      const count = summary.textContent.split(' ')[0];
+      summary.textContent = `${count} turnos · $${total.toLocaleString('es-AR')} facturado`;
+    }
+  }
+
   try {
     await api('PUT', `/appointments/${id}/status`, { status });
     showToast('✅', 'Turno actualizado', status === 'completed' ? '¡Corte completado!' : '');
@@ -1733,18 +1794,24 @@ async function updateApptStatus(id, status) {
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    // Si falla, recargar para revertir el cambio visual
+    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   }
 }
 
 async function deleteAppt(id) {
   if (!confirm('¿Eliminar este turno?')) return;
+  // Remover card al instante
+  const card = document.querySelector(`[onclick*="deleteAppt(${id})"]`)?.closest('.appointment-card');
+  if (card) card.remove();
+  updateAgendaSummary();
   try {
     await api('DELETE', `/appointments/${id}`);
     showToast('🗑', 'Turno eliminado', '');
     loadDashboard();
-    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadAgenda();
   }
 }
 
@@ -1845,27 +1912,37 @@ async function createClient() {
   const phone = document.getElementById('c-phone').value.trim();
   const notes = document.getElementById('c-notes').value.trim();
   if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
+  closeModal('modal-cliente');
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-phone').value = '';
+  document.getElementById('c-notes').value = '';
+  showToast('✅', 'Cliente agregado', name + ' ya está en tu base');
   try {
     await api('POST', '/clients', { name, phone, notes });
-    closeModal('modal-cliente');
-    document.getElementById('c-name').value = '';
-    document.getElementById('c-phone').value = '';
-    document.getElementById('c-notes').value = '';
-    showToast('✅', 'Cliente agregado', name + ' ya está en tu base');
-    loadClients();
+    loadClients(); // refresca para obtener id real y datos completos
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadClients();
   }
 }
 
 async function deleteClient(id) {
   if (!confirm('¿Eliminar este cliente?')) return;
+  // Remover card al instante
+  const card = document.querySelector(`[onclick*="deleteClient(${id})"]`)?.closest('.client-card');
+  if (card) card.remove();
+  const countEl = document.getElementById('clients-count');
+  if (countEl) {
+    const n = parseInt(countEl.textContent) - 1;
+    countEl.textContent = `${n} clientes registrados`;
+  }
   try {
     await api('DELETE', `/clients/${id}`);
     showToast('🗑', 'Cliente eliminado', '');
     loadClients();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadClients();
   }
 }
 
@@ -1910,24 +1987,41 @@ async function createService() {
   const cost = document.getElementById('svc-cost').value;
   const duration = document.getElementById('svc-duration').value;
   if (!name || !price) return showToast('⚠️', 'Nombre y precio son obligatorios', '');
+  closeModal('modal-servicio');
+  showToast('✅', 'Servicio guardado', name);
+  // Agregar al DOM al instante con datos temporales
+  const el = document.getElementById('services-list');
+  if (el) {
+    const tempId = 'temp-' + Date.now();
+    el.insertAdjacentHTML('afterbegin', `
+      <div id="${tempId}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <div>
+          <div style="font-size:14px;font-weight:600">${name}</div>
+          <div style="font-size:12px;color:var(--gray)">$${parseFloat(price).toLocaleString('es-AR')} · ${duration||30} min</div>
+        </div>
+        <span style="font-size:11px;color:var(--gray)">guardando...</span>
+      </div>`);
+  }
   try {
     await api('POST', '/settings/services', { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30) });
-    closeModal('modal-servicio');
-    showToast('✅', 'Servicio guardado', name);
     loadServices();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadServices();
   }
 }
 
 async function deleteService(id) {
   if (!confirm('¿Eliminar este servicio?')) return;
+  const row = document.querySelector(`[onclick*="deleteService(${id})"]`)?.closest('div[style*="border-bottom"]');
+  if (row) row.remove();
   try {
     await api('DELETE', `/settings/services/${id}`);
     showToast('🗑', 'Servicio eliminado', '');
     loadServices();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadServices();
   }
 }
 
@@ -2164,35 +2258,54 @@ async function createMembership() {
   const plan = document.getElementById('m-plan').value;
   const price = document.getElementById('m-price').value;
   if (!clientId) return showToast('⚠️', 'Elegí un cliente', '');
+  closeModal('modal-membresia');
+  showToast('✅', 'Membresía creada', '');
   try {
     await api('POST', '/memberships', { client_id: parseInt(clientId), plan, price_monthly: parseFloat(price||0) });
-    closeModal('modal-membresia');
-    showToast('✅', 'Membresía creada', '');
     loadMemberships();
     loadClients();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadMemberships();
   }
 }
 
 async function checkin(id) {
+  // Actualizar crédito al instante
+  const btn = document.querySelector(`[onclick*="checkin(${id})"]`);
+  const card = btn?.closest('.memb-card');
+  if (card) {
+    const credEl = card.querySelector('.memb-credits');
+    if (credEl) {
+      const cur = parseInt(credEl.textContent) || 0;
+      const newVal = cur - 1;
+      credEl.innerHTML = `${newVal}<div style="font-size:11px;color:var(--gray);font-family:'Barlow',sans-serif;font-weight:400">créditos</div>`;
+      credEl.style.color = newVal > 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
   try {
     const res = await api('POST', `/memberships/${id}/checkin`);
     showToast('✅', 'Check-in', res.message);
     loadMemberships();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    loadMemberships();
   }
 }
 
 async function cancelMembership(id) {
   if (!confirm('¿Cancelar esta membresía?')) return;
+  const card = document.querySelector(`[onclick*="cancelMembership(${id})"]`)?.closest('.memb-card');
+  if (card) card.style.opacity = '0.4';
   try {
     await api('PUT', `/memberships/${id}/cancel`);
     showToast('🗑', 'Membresía cancelada', '');
+    if (card) card.remove();
     loadMemberships();
   } catch (e) {
     showToast('❌', 'Error', e.message);
+    if (card) card.style.opacity = '1';
+    loadMemberships();
   }
 }
 
@@ -2443,9 +2556,9 @@ async function createStoreItem() {
   const desc = document.getElementById('si-desc').value.trim();
   const pts  = document.getElementById('si-points').value;
   if (!name || !pts) return showToast('⚠️', 'Nombre y puntos son obligatorios', '');
+  closeModal('modal-store-item');
   try {
     await api('POST', '/points/store', { name, description: desc, points_cost: parseInt(pts) });
-    closeModal('modal-store-item');
     document.getElementById('si-name').value = '';
     document.getElementById('si-desc').value = '';
     document.getElementById('si-points').value = '';
