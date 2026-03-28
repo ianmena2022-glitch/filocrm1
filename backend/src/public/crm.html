@@ -705,6 +705,177 @@ body {
 .week-bar { width: 100%; background: var(--yellow); border-radius: 4px; transition: height 0.6s ease; min-height: 4px; }
 .week-bar.today { background: linear-gradient(180deg, #ffd100, #ff9100); }
 .week-day { font-size: 10px; color: var(--gray); font-weight: 700; }
+
+/* ─── MOBILE RESPONSIVE ─── */
+@media (max-width: 768px) {
+
+  /* Sidebar → bottom nav bar on mobile */
+  :root { --sidebar-w: 0px; }
+
+  .sidebar {
+    position: fixed;
+    left: 0; right: 0;
+    top: auto; bottom: 0;
+    width: 100%;
+    height: 64px;
+    flex-direction: row;
+    padding: 0 8px;
+    border-right: none;
+    border-top: 1px solid rgba(255,209,0,0.12);
+    z-index: 200;
+  }
+
+  .sidebar-logo { display: none; }
+
+  .nav-items {
+    flex-direction: row;
+    gap: 0;
+    flex: 1;
+    justify-content: space-around;
+  }
+
+  .nav-item {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
+  .sidebar-bottom {
+    flex-direction: row;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .avatar { width: 34px; height: 34px; font-size: 12px; }
+
+  /* Main content */
+  .main {
+    margin-left: 0;
+    padding: 16px 14px 80px 14px;
+  }
+
+  /* Topbar */
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .topbar-left h1 { font-size: 22px; }
+
+  .btn-add {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Dashboard hero */
+  .ganancia-hero {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .ganancia-value { font-size: 36px; }
+
+  .ganancia-badges {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .badge-item { flex: 1; text-align: center; padding: 10px 8px; }
+  .badge-num { font-size: 20px; }
+
+  /* Appointment cards */
+  .appointment-card {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .appt-price { min-width: auto; }
+  .appt-actions { margin-left: auto; }
+
+  /* Client cards */
+  .client-card {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .client-meta { gap: 6px; }
+
+  /* Agenda toolbar */
+  .toolbar { gap: 8px; }
+  .date-nav .date-label { min-width: 120px; font-size: 14px; }
+  .search-input { min-width: 100%; }
+
+  /* Motores grid */
+  .motores-grid { grid-template-columns: 1fr; gap: 14px; }
+
+  /* Membresías */
+  .memb-card { flex-wrap: wrap; gap: 10px; }
+
+  /* Settings */
+  .settings-grid { grid-template-columns: 1fr; gap: 16px; }
+
+  /* Modal */
+  .modal {
+    padding: 20px 16px;
+    max-height: 85vh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .form-grid { grid-template-columns: 1fr; }
+
+  /* Toast */
+  .toast {
+    bottom: 72px;
+    right: 12px;
+    left: 12px;
+    max-width: 100%;
+  }
+
+  /* Week chart */
+  .week-chart { height: 60px; }
+
+  /* Status badge text smaller */
+  .status-badge { font-size: 10px; padding: 4px 8px; min-width: 70px; }
+
+  /* Card padding */
+  .card { padding: 16px; }
+
+  /* Motor cards */
+  .motor-card { padding: 20px; }
+  .motor-stat { font-size: 28px; }
+
+  /* Membership credits */
+  .memb-credits { font-size: 20px; }
+
+  /* Settings section */
+  .settings-section { padding: 18px; }
+
+  /* WPP preview */
+  .wpp-preview { font-size: 13px; }
+
+  /* Tpl accordion headers */
+  .tpl-header span:first-child { font-size: 12px; }
+}
+
+/* Extra small phones */
+@media (max-width: 380px) {
+  .main { padding: 12px 10px 76px 10px; }
+  .ganancia-value { font-size: 30px; }
+  .nav-item { width: 38px; height: 38px; font-size: 16px; }
+}
 </style>
 </head>
 <body>
