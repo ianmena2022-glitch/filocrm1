@@ -946,7 +946,6 @@ body {
       <div class="nav-item" onclick="showSection('clientes')" title="Clientes">👥</div>
       <div class="nav-item" onclick="showSection('motores')" title="Motores">⚡</div>
       <div class="nav-item" onclick="showSection('membresias')" title="Membresías">👑</div>
-      <div class="nav-item" id="churn-nav" onclick="showSection('motores')" title="Clientes en fuga"></div>
     </div>
     <div class="sidebar-bottom">
       <div class="nav-item" onclick="showSection('configuracion')" title="Configuración">⚙️</div>
@@ -2101,10 +2100,7 @@ async function loadMotores() {
     const data = await api('GET', '/yield/churn/at-risk');
     const count = data.total;
     document.getElementById('churn-count').textContent = count;
-    if (count > 0) {
-      const badge = document.getElementById('churn-nav');
-      badge.innerHTML = `<span class="badge"></span>`;
-    }
+
   } catch { }
 
   // MRR
