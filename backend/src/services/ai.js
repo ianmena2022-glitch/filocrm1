@@ -15,6 +15,9 @@ const KEYWORDS = [
   'dirección', 'direccion', 'donde están', 'dónde están', 'ubicación', 'ubicacion',
 ];
 
+// Historial de conversaciones en memoria
+const conversations = {};
+
 function isBarberiaRelated(text) {
   const lower = text.toLowerCase();
   return KEYWORDS.some(kw => lower.includes(kw));
@@ -35,100 +38,89 @@ async function getShopContext(shopId) {
       'SELECT name, price, duration_minutes FROM services WHERE shop_id=$1 AND active=TRUE ORDER BY price',
       [shopId]
     );
-
     const shopData = shop.rows[0];
     const servicesList = services.rows
       .map(s => `- ${s.name}: $${parseFloat(s.price).toLocaleString('es-AR')} (${s.duration_minutes} min)`)
       .join('\n');
-
     const baseUrl = process.env.APP_URL || 'https://filocrm1-production.up.railway.app';
-    const reservasLink = shopData.booking_slug
-      ? `${baseUrl}/reservar/${shopData.booking_slug}`
-      : null;
-
-    return `
-Sos el asistente virtual de ${shopData.name}, una barbería${shopData.city ? ` en ${shopData.city}` : ''}.
-${shopData.address ? `Dirección: ${shopData.address}` : ''}
-${shopData.phone ? `Teléfono: ${shopData.phone}` : ''}
-${reservasLink ? `Link para reservar turno online: ${reservasLink}` : ''}
-
-Servicios y precios:
-${servicesList || '- Consultá con nosotros'}
-
-Sos el asistente de la barbería, con onda, copado y cercano. Usás emojis con criterio (no en exceso).
-Respondé en español rioplatense, corto y directo (máximo 3 líneas). Sin formalismos.
-Si el cliente quiere turno, mandále el link de reservas al toque ✂️
-Si pregunta precio o servicio, respondé con los datos reales y algún emoji que pegue 💈
-Si no sabés algo (horarios exactos, disponibilidad), decile que consulte directo con la barbería 📲
-No inventes info. No hables de nada ajeno a la barbería.
-`.trim();
+    const reservasLink = shopData.booking_slug ? `${baseUrl}/reservar/${shopData.booking_slug}` : null;
+    const tiendaLink = shopData.booking_slug ? `${baseUrl}/tienda/${shopData.booking_slug}` : null;
+    return { shopData, servicesList, reservasLink, tiendaLink };
   } catch (e) {
     console.error('getShopContext error:', e.message);
     return null;
   }
 }
 
-// Historial de conversaciones en memoria (últimos 10 mensajes por número)
-const conversations = {};
+async function getClientContext(shopId, phone) {
+  try {
+    const phoneClean = phone.replace(/[^0-9]/g, '').slice(-10);
+    const result = await pool.query(
+      "SELECT name, points FROM clients WHERE shop_id=$1 AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE $2",
+      [shopId, '%' + phoneClean]
+    );
+    return result.rows.length ? result.rows[0] : null;
+  } catch (e) {
+    console.error('getClientContext error:', e.message);
+    return null;
+  }
+}
+
+function buildSystemPrompt(shopCtx, client) {
+  const { shopData, servicesList, reservasLink, tiendaLink } = shopCtx;
+  const clientSection = client
+    ? `\nCliente identificado: ${client.name} — tiene ${client.points} puntos ⭐${tiendaLink ? `\nLink tienda de premios: ${tiendaLink}` : ''}`
+    : tiendaLink ? `\nSi pregunta por puntos: ${tiendaLink}` : '';
+
+  return `Sos el asistente de ${shopData.name}, una barbería${shopData.city ? ` en ${shopData.city}` : ''}.
+${shopData.address ? `📍 ${shopData.address}` : ''}${shopData.phone ? `\n📞 ${shopData.phone}` : ''}
+${reservasLink ? `🔗 Reservas: ${reservasLink}` : ''}
+
+✂️ Servicios:
+${servicesList || '- Consultá con nosotros'}
+${clientSection}
+
+Sos amigable, cercano y usás emojis con criterio. Respondé en español, máximo 3 líneas, sin formalismos.
+Si quiere turno → mandá el link. Si pregunta puntos → informá saldo y mandá link tienda.
+Si no sabés algo → decí que consulte directo 📲. No inventes. Solo temas de la barbería.`.trim();
+}
 
 async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.error('GROQ_API_KEY no configurada');
-    return null;
-  }
+  if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
-  // Verificar que el mensaje sea relevante o que ya haya conversación activa
   if (!isBarberiaRelated(userMessage) && !hasActiveConversation(shopId, phone)) {
-    console.log(`[AI] Mensaje ignorado (no relacionado a barbería): "${userMessage}"`);
+    console.log(`[AI] Ignorado: "${userMessage}"`);
     return null;
   }
 
-  const context = await getShopContext(shopId);
-  if (!context) return null;
+  const [shopCtx, client] = await Promise.all([getShopContext(shopId), getClientContext(shopId, phone)]);
+  if (!shopCtx) return null;
 
-  // Mantener historial por número de teléfono
+  const context = buildSystemPrompt(shopCtx, client);
   const key = `${shopId}:${phone}`;
   if (!conversations[key]) conversations[key] = [];
-
   conversations[key].push({ role: 'user', content: userMessage });
-
-  // Mantener solo los últimos 10 mensajes
-  if (conversations[key].length > 10) {
-    conversations[key] = conversations[key].slice(-10);
-  }
+  if (conversations[key].length > 10) conversations[key] = conversations[key].slice(-10);
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: context },
-          ...conversations[key]
-        ],
+        messages: [{ role: 'system', content: context }, ...conversations[key]],
         max_tokens: 200,
         temperature: 0.7,
       })
     });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Groq error:', err);
-      return null;
-    }
+    if (!response.ok) { console.error('Groq error:', await response.text()); return null; }
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content?.trim();
-
-    if (reply) {
-      conversations[key].push({ role: 'assistant', content: reply });
-    }
-
+    if (reply) conversations[key].push({ role: 'assistant', content: reply });
+    console.log(`[AI] ${client ? client.name : phone} → "${reply}"`);
     return reply || null;
   } catch (e) {
     console.error('AI request error:', e.message);
