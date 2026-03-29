@@ -22,7 +22,7 @@ function isBarberiaRelated(text) {
 async function getShopContext(shopId) {
   try {
     const shop = await pool.query(
-      'SELECT name, city, address, phone FROM shops WHERE id=$1',
+      'SELECT name, city, address, phone, booking_slug FROM shops WHERE id=$1',
       [shopId]
     );
     const services = await pool.query(
@@ -35,16 +35,23 @@ async function getShopContext(shopId) {
       .map(s => `- ${s.name}: $${parseFloat(s.price).toLocaleString('es-AR')} (${s.duration_minutes} min)`)
       .join('\n');
 
+    const baseUrl = process.env.APP_URL || 'https://filocrm1-production.up.railway.app';
+    const reservasLink = shopData.booking_slug
+      ? `${baseUrl}/reservar/${shopData.booking_slug}`
+      : null;
+
     return `
 Sos el asistente virtual de ${shopData.name}, una barbería${shopData.city ? ` en ${shopData.city}` : ''}.
 ${shopData.address ? `Dirección: ${shopData.address}` : ''}
+${shopData.phone ? `Teléfono: ${shopData.phone}` : ''}
+${reservasLink ? `Link para reservar turno online: ${reservasLink}` : ''}
 
 Servicios y precios:
 ${servicesList || '- Consultá con nosotros'}
 
 Tu trabajo es responder consultas de clientes sobre servicios, precios, turnos y horarios.
 Respondé en español rioplatense, de forma amigable, breve y directa (máximo 3 líneas).
-Si el cliente quiere reservar un turno, decile que puede hacerlo desde el link de reservas o llamando directamente.
+Si el cliente quiere reservar un turno, mandále el link de reservas directamente.
 Si no sabés algo (como horarios exactos), decí que consulten directamente con la barbería.
 No inventes información. No hables de nada que no sea la barbería.
 `.trim();
