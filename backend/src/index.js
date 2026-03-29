@@ -66,10 +66,17 @@ async function initDB() {
 async function start() {
   try {
     await initDB();
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '0.0.0.0', async () => {
       console.log(`🚀 FILO CRM corriendo en puerto ${PORT}`);
       console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
-      console.log(`   WPPCONNECT_URL: ${process.env.WPPCONNECT_URL || '(no configurado)'}`);
+      // Reconectar WhatsApp de todos los shops que estaban conectados
+      try {
+        const wpp = require('./services/whatsapp');
+        await wpp.reconnectAllShops();
+        console.log('📱 WhatsApp: reconexión iniciada');
+      } catch(e) {
+        console.error('WhatsApp reconnect error:', e.message);
+      }
     });
   } catch (e) {
     console.error('❌ Error al iniciar:', e.message);
