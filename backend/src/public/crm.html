@@ -57,15 +57,7 @@ body {
 }
 
 .auth-logo-mark {
-  width: 52px; height: 52px;
-  background: var(--yellow);
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Oswald', sans-serif;
-  font-size: 22px;
-  color: var(--navy);
-  font-weight: 700;
-  letter-spacing: -1px;
+  display: none;
 }
 
 .auth-logo-text h1 {
@@ -883,12 +875,8 @@ body {
 <!-- ═══ PANTALLA DE LOGIN ═══ -->
 <div id="auth-screen">
   <div class="auth-box">
-    <div class="auth-logo">
-      <div class="auth-logo-mark">✂</div>
-      <div class="auth-logo-text">
-        <h1>FILO CRM</h1>
-        <p>El sistema del barbero inteligente</p>
-      </div>
+    <div class="auth-logo" style="justify-content:center">
+      <img src="/logo_filo.png" alt="FILO CRM" style="height:64px;object-fit:contain">
     </div>
 
     <div class="auth-tabs">
@@ -939,13 +927,14 @@ body {
 
   <!-- SIDEBAR -->
   <nav class="sidebar">
-    <div class="sidebar-logo" onclick="showSection('dashboard')" title="Dashboard">✂</div>
+    <div class="sidebar-logo" onclick="showSection('dashboard')" title="Dashboard"><img src="/logo_f.png" alt="F" style="width:100%;height:100%;object-fit:contain;padding:4px"></div>
     <div class="nav-items">
       <div class="nav-item active" onclick="showSection('dashboard')" title="Dashboard">📊</div>
       <div class="nav-item" onclick="showSection('agenda')" title="Agenda">📅</div>
       <div class="nav-item" onclick="showSection('clientes')" title="Clientes">👥</div>
       <div class="nav-item" onclick="showSection('motores')" title="Motores">⚡</div>
       <div class="nav-item" onclick="showSection('membresias')" title="Membresías">👑</div>
+      <div class="nav-item" id="churn-nav" onclick="showSection('motores')" title="Clientes en fuga"></div>
     </div>
     <div class="sidebar-bottom">
       <div class="nav-item" onclick="showSection('configuracion')" title="Configuración">⚙️</div>
@@ -2100,7 +2089,10 @@ async function loadMotores() {
     const data = await api('GET', '/yield/churn/at-risk');
     const count = data.total;
     document.getElementById('churn-count').textContent = count;
-
+    if (count > 0) {
+      const badge = document.getElementById('churn-nav');
+      badge.innerHTML = `<span class="badge"></span>`;
+    }
   } catch { }
 
   // MRR
