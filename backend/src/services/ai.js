@@ -92,7 +92,7 @@ async function getAIResponse(shopId, phone, userMessage) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: context },
           ...conversations[key]
