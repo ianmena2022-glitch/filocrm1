@@ -130,6 +130,41 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
+  // Escuchar mensajes entrantes
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const msg of messages) {
+      try {
+        // Ignorar mensajes propios o de grupos
+        if (msg.key.fromMe) continue;
+        if (msg.key.remoteJid?.endsWith('@g.us')) continue;
+
+        const text =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          msg.message?.imageMessage?.caption ||
+          null;
+
+        if (!text) continue;
+
+        const phone = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
+
+        // Obtener respuesta del AI
+        const { getAIResponse } = require('./ai');
+        const reply = await getAIResponse(shopId, phone, text);
+
+        if (reply) {
+          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
+          await sock.sendMessage(msg.key.remoteJid, { text: reply });
+        }
+      } catch (e) {
+        console.error('[WPP] Error procesando mensaje entrante:', e.message);
+      }
+    }
+  });
+
   return sock;
 }
 
