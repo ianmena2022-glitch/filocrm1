@@ -39,8 +39,29 @@ async function getShopContext(shopId) {
     const reservasLink = shopData.booking_slug
       ? `${baseUrl}/reservar/${shopData.booking_slug}`
       : null;
+    const tiendaLink = shopData.booking_slug
+      ? `${baseUrl}/tienda/${shopData.booking_slug}`
+      : null;
 
-    return `
+    return { reservasLink, tiendaLink, shopData, servicesList };
+  } catch (e) {
+    console.error('getShopContext error:', e.message);
+    return null;
+  }
+}
+
+function buildSystemPrompt(shopCtx, client) {
+  const { reservasLink, tiendaLink, shopData, servicesList } = shopCtx;
+  const clientSection = client
+    ? `\nDatos del cliente que escribe:
+- Nombre: ${client.name}
+- Puntos acumulados: ${client.points} pts
+${tiendaLink ? `- Link para ver sus puntos y canjear premios: ${tiendaLink}` : ''}`
+    : tiendaLink
+      ? `\nSi el cliente pregunta por sus puntos, mandále este link para consultarlos: ${tiendaLink}`
+      : '';
+
+  return `
 Sos el asistente virtual de ${shopData.name}, una barbería${shopData.city ? ` en ${shopData.city}` : ''}.
 ${shopData.address ? `Dirección: ${shopData.address}` : ''}
 ${shopData.phone ? `Teléfono: ${shopData.phone}` : ''}
@@ -48,21 +69,36 @@ ${reservasLink ? `Link para reservar turno online: ${reservasLink}` : ''}
 
 Servicios y precios:
 ${servicesList || '- Consultá con nosotros'}
+${clientSection}
 
-Tu trabajo es responder consultas de clientes sobre servicios, precios, turnos y horarios.
+Tu trabajo es responder consultas de clientes sobre servicios, precios, turnos, horarios y puntos.
 Respondé en español rioplatense, de forma amigable, breve y directa (máximo 3 líneas).
 Si el cliente quiere reservar un turno, mandále el link de reservas directamente.
+Si el cliente pregunta por sus puntos o premios, informale su saldo y mandále el link de la tienda.
 Si no sabés algo (como horarios exactos), decí que consulten directamente con la barbería.
 No inventes información. No hables de nada que no sea la barbería.
 `.trim();
-  } catch (e) {
-    console.error('getShopContext error:', e.message);
-    return null;
-  }
 }
 
 // Historial de conversaciones en memoria (últimos 10 mensajes por número)
 const conversations = {};
+
+async function getClientContext(shopId, phone) {
+  try {
+    // Buscar cliente por número (últimos 8 dígitos para mayor compatibilidad)
+    const phoneClean = phone.replace(/\D/g, '').slice(-10);
+    const result = await pool.query(
+      `SELECT name, points FROM clients
+       WHERE shop_id=$1 AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE $2`,
+      [shopId, '%' + phoneClean]
+    );
+    if (!result.rows.length) return null;
+    return result.rows[0];
+  } catch (e) {
+    console.error('getClientContext error:', e.message);
+    return null;
+  }
+}
 
 async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -77,8 +113,12 @@ async function getAIResponse(shopId, phone, userMessage) {
     return null;
   }
 
-  const context = await getShopContext(shopId);
-  if (!context) return null;
+  const [shopCtx, client] = await Promise.all([
+    getShopContext(shopId),
+    getClientContext(shopId, phone)
+  ]);
+  if (!shopCtx) return null;
+  const context = buildSystemPrompt(shopCtx, client);
 
   // Mantener historial por número de teléfono
   const key = `${shopId}:${phone}`;
