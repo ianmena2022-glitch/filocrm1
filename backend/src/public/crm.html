@@ -911,7 +911,7 @@ body {
       <button class="btn-primary" onclick="login()">✂️ Entrar a FILO</button>
     </div>
 
-    <!-- Registro -->
+    <!-- Registro - Paso 1 -->
     <div id="form-register" style="display:none">
       <div class="form-group">
         <label>Nombre de tu barbería</label>
@@ -926,10 +926,43 @@ body {
         <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres">
       </div>
       <div class="form-group">
-        <label>Tu número de WhatsApp (con código de país)</label>
-        <input type="tel" id="reg-phone" placeholder="5491112345678">
+        <label>Tu WhatsApp</label>
+        <div style="display:flex;gap:8px">
+          <select id="reg-country" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:var(--white);padding:12px 10px;font-size:14px;width:130px;outline:none;cursor:pointer">
+            <option value="54">🇦🇷 +54</option>
+            <option value="55">🇧🇷 +55</option>
+            <option value="56">🇨🇱 +56</option>
+            <option value="57">🇨🇴 +57</option>
+            <option value="51">🇵🇪 +51</option>
+            <option value="598">🇺🇾 +598</option>
+            <option value="595">🇵🇾 +595</option>
+            <option value="591">🇧🇴 +591</option>
+            <option value="593">🇪🇨 +593</option>
+            <option value="58">🇻🇪 +58</option>
+            <option value="52">🇲🇽 +52</option>
+            <option value="1">🇺🇸 +1</option>
+            <option value="34">🇪🇸 +34</option>
+          </select>
+          <input type="tel" id="reg-phone" placeholder="1112345678" style="flex:1" autocomplete="tel">
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:4px">Te vamos a mandar un código de verificación por WhatsApp</div>
       </div>
       <button class="btn-primary" onclick="register()">🚀 Crear mi cuenta</button>
+    </div>
+
+    <!-- Verificación WhatsApp -->
+    <div id="form-verify" style="display:none">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:36px;margin-bottom:8px">📱</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Verificá tu WhatsApp</div>
+        <div id="verify-subtitle" style="font-size:13px;color:var(--gray);line-height:1.5">Te mandamos un código de 6 dígitos a tu WhatsApp</div>
+      </div>
+      <div class="form-group">
+        <label>Código de verificación</label>
+        <input type="number" id="verify-code" placeholder="123456" style="font-size:24px;text-align:center;letter-spacing:8px" maxlength="6">
+      </div>
+      <button class="btn-primary" onclick="verifyCode()">✅ Verificar</button>
+      <button onclick="resendCode()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--gray);font-size:13px;cursor:pointer;padding:8px">Reenviar código</button>
     </div>
   </div>
 </div>
@@ -1564,21 +1597,79 @@ async function register() {
   const name = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const pass = document.getElementById('reg-pass').value;
-  const phone = document.getElementById('reg-phone').value.trim();
+  const country = document.getElementById('reg-country').value;
+  const phoneRaw = document.getElementById('reg-phone').value.trim().replace(/\D/g, '');
+  const phone = country + phoneRaw;
+
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
+  if (!phoneRaw) return showAuthError('Ingresá tu número de WhatsApp');
+
   const btn = document.querySelector('#form-register .btn-primary');
-  btn.disabled = true; btn.textContent = '...';
+  btn.disabled = true; btn.textContent = 'Creando cuenta...';
   try {
     const data = await api('POST', '/auth/register', { name, email, password: pass, phone });
-    token = data.token;
-    currentShop = data.shop;
+    // Cuenta creada — ahora enviar código de verificación
+    document.getElementById('verify-subtitle').textContent =
+      `Te mandamos un código de 6 dígitos al +${phone}. Puede tardar unos segundos.`;
+    // Guardar datos temporalmente para usar después de verificar
+    window._pendingAuth = { token: data.token, shop: data.shop };
+    // Si ya tiene WhatsApp conectado el sistema, mandar código
+    if (data.verification_sent) {
+      showVerifyForm();
+    } else {
+      // Sin WPP conectado — entrar directo
+      token = data.token;
+      currentShop = data.shop;
+      localStorage.setItem('filo_token', token);
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      startApp();
+    }
+  } catch (e) {
+    showAuthError(e.message);
+    btn.disabled = false; btn.textContent = '🚀 Crear mi cuenta';
+  }
+}
+
+function showVerifyForm() {
+  document.getElementById('form-register').style.display = 'none';
+  document.getElementById('form-verify').style.display = 'block';
+  document.getElementById('tab-login').style.display = 'none';
+  document.getElementById('tab-register').style.display = 'none';
+  setTimeout(() => document.getElementById('verify-code').focus(), 100);
+}
+
+async function verifyCode() {
+  const code = document.getElementById('verify-code').value.trim();
+  if (!code || code.length !== 6) return showAuthError('Ingresá el código de 6 dígitos');
+  const btn = document.querySelector('#form-verify .btn-primary');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  try {
+    const country = document.getElementById('reg-country').value;
+    const phoneRaw = document.getElementById('reg-phone').value.trim().replace(/\D/g, '');
+    const phone = country + phoneRaw;
+    await api('POST', '/auth/verify-code', { phone, code });
+    // Verificado OK — entrar al CRM
+    const { token: t, shop } = window._pendingAuth;
+    token = t;
+    currentShop = shop;
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     startApp();
   } catch (e) {
     showAuthError(e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '🚀 Crear mi cuenta';
+    btn.disabled = false; btn.textContent = '✅ Verificar';
+  }
+}
+
+async function resendCode() {
+  const country = document.getElementById('reg-country').value;
+  const phoneRaw = document.getElementById('reg-phone').value.trim().replace(/\D/g, '');
+  const phone = country + phoneRaw;
+  try {
+    await api('POST', '/auth/resend-code', { phone });
+    showAuthError('Código reenviado ✅');
+  } catch(e) {
+    showAuthError(e.message);
   }
 }
 
