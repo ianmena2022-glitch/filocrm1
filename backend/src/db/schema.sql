@@ -171,3 +171,6 @@ VALUES
   ('FILO Test Ian', 'ian@filocrm.com', '$2a$12$placeholder_hash_ian', 'test'),
   ('FILO Test Socio', 'socio@filocrm.com', '$2a$12$placeholder_hash_socio', 'test')
 ON CONFLICT (email) DO NOTHING;
+
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
+UPDATE shops SET is_test=TRUE WHERE email IN ('ian@filocrm.com','socio@filocrm.com');

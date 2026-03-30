@@ -21,6 +21,7 @@ function shopPayload(shop) {
     address:          shop.address,
     wpp_connected:    shop.wpp_connected,
     plan:             shop.plan || 'starter',
+    is_test:          shop.is_test || shop.plan === 'test',
     is_barber:        shop.is_barber || false,
     parent_shop_id:   shop.parent_shop_id || null,
     commission_enabled: shop.commission_enabled || false,
@@ -130,7 +131,7 @@ router.post('/setup-test', async (req, res) => {
   try {
     const hash = await bcrypt.hash(password || 'filo2026test', 12);
     await pool.query(
-      `UPDATE shops SET password=$1, plan='test' WHERE email IN ('ian@filocrm.com','socio@filocrm.com')`,
+      `UPDATE shops SET password=$1, plan='test', is_test=TRUE WHERE email IN ('ian@filocrm.com','socio@filocrm.com')`,
       [hash]
     );
     res.json({ ok: true, message: 'Cuentas test actualizadas' });
