@@ -1022,7 +1022,7 @@ async function renderCalendar() {
         const statusClass = a.status === "completed" ? " completed" : a.status === "cancelled" || a.status === "noshow" ? " cancelled" : "";
         const time = String(a.time_start||'').slice(0,5);
         const client = a.client_name || "Sin nombre";
-        bodyHTML += "<div class='cal-event" + statusClass + "' title='" + client + " - " + (a.service_name||'') + "'>";
+        bodyHTML += "<div class='cal-event" + statusClass + "' title='" + client + " - " + (a.service_name||'') + "' onclick='goToAgendaDate(\"" + ds + "\")' style='cursor:pointer'>";
         bodyHTML += "<div class='cal-event-time'>" + time + "</div>";
         bodyHTML += "<div class='cal-event-client'>" + client + "</div>";
         bodyHTML += "</div>";
@@ -1033,6 +1033,12 @@ async function renderCalendar() {
   bodyHTML += "</div>";
 
   el.innerHTML = "<div class='cal-wrapper'>" + headerHTML + bodyHTML + "</div>";
+}
+
+function goToAgendaDate(dateStr) {
+  currentDate = dateStr;
+  showTab("agenda");
+  loadAgenda();
 }
 
 // ── INIT ──────────────────────────────────────────────────
