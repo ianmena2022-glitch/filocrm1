@@ -3345,12 +3345,12 @@ Se actualiza en tiempo real cada vez que completás un turno.`
 ];
 
 function cpMatch(query) {
-  const q = query.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const q = query.toLowerCase();
   let best = null;
   let bestScore = 0;
   for (const entry of COPILOT_KB) {
     for (const key of entry.keys) {
-      const k = key.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const k = key.toLowerCase();
       if (q.includes(k) || k.includes(q)) {
         const score = k.length;
         if (score > bestScore) { bestScore = score; best = entry; }
