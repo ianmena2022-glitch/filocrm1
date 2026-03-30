@@ -60,9 +60,11 @@ router.get('/', auth, async (req, res) => {
     if (req.isBarber) {
       // Barbero solo ve SUS turnos
       result = await pool.query(
-        `SELECT a.*, c.name AS client_name, c.phone AS client_phone
+        `SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+                b.name AS assigned_barber_name
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
+         LEFT JOIN shops b ON b.id = a.barber_id
          WHERE a.shop_id = $1 AND a.date = $2 AND a.barber_id = $3
          ORDER BY a.time_start`,
         [shopId, d, req.shopId]
@@ -70,9 +72,11 @@ router.get('/', auth, async (req, res) => {
     } else {
       // Dueño ve todos los turnos
       result = await pool.query(
-        `SELECT a.*, c.name AS client_name, c.phone AS client_phone
+        `SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+                b.name AS assigned_barber_name
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
+         LEFT JOIN shops b ON b.id = a.barber_id
          WHERE a.shop_id = $1 AND a.date = $2
          ORDER BY a.time_start`,
         [shopId, d]
