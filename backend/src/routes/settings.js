@@ -169,9 +169,9 @@ router.put('/plan', auth, async (req, res) => {
   if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
 
   try {
-    // Solo cuentas test pueden cambiar de plan
-    const shop = await pool.query('SELECT plan FROM shops WHERE id=$1', [req.shopId]);
-    if (shop.rows[0]?.plan !== 'test') {
+    // Solo cuentas test pueden cambiar de plan (verificar is_test, no el plan actual)
+    const shop = await pool.query('SELECT is_test FROM shops WHERE id=$1', [req.shopId]);
+    if (!shop.rows[0]?.is_test) {
       return res.status(403).json({ error: 'Solo las cuentas de testing pueden cambiar de plan' });
     }
     await pool.query('UPDATE shops SET plan=$1 WHERE id=$2', [plan, req.shopId]);
