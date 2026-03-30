@@ -52,6 +52,8 @@ router.get('/', auth, async (req, res) => {
   const d = date || new Date().toISOString().split('T')[0];
   const shopId = realShopId(req);
 
+  console.log(`[GET appts] isBarber=${req.isBarber} shopId=${req.shopId} parentShopId=${req.parentShopId} realShopId=${shopId} date=${d}`);
+
   try {
     let result;
 
