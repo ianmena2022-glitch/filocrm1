@@ -492,16 +492,7 @@
           </svg>
           Agenda
         </div>
-        <div class="nav-item" onclick="showTab('clientes')" id="nav-clientes">
-          <!-- Users icon -->
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
-          </svg>
-          Clientes
-        </div>
+
       </nav>
 
       <div class="sidebar-footer">
@@ -583,11 +574,7 @@
         <div id="agenda-list-mobile"></div>
       </div>
 
-      <!-- ── CLIENTES ── -->
-      <div id="tab-clientes" class="tab-section">
-        <input type="text" class="search-input" id="client-search" placeholder="Buscar cliente..." oninput="searchClients(this.value)">
-        <div class="clients-grid" id="clients-list"></div>
-      </div>
+
 
     </div><!-- /main-content -->
   </div><!-- /app-layout -->
@@ -612,15 +599,7 @@
       </svg>
       <span>Agenda</span>
     </div>
-    <div class="bottom-nav-item" onclick="showTab('clientes')" id="mob-nav-clientes">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
-      </svg>
-      <span>Clientes</span>
-    </div>
+
   </div>
 </div>
 
@@ -631,7 +610,6 @@ const API = window.location.origin + '/api';
 let token = localStorage.getItem('barber_token');
 let me = JSON.parse(localStorage.getItem('barber_me') || 'null');
 let currentDate = new Date().toISOString().split('T')[0];
-let allClients = [];
 let allAppts = [];
 
 async function api(method, path, body) {
@@ -704,11 +682,10 @@ function startApp() {
   document.getElementById('topbar-date').textContent = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   loadDashboard();
-  loadClients();
 }
 
 // ── NAVIGATION ───────────────────────────────────────────
-const TABS = ['dashboard', 'agenda', 'clientes'];
+const TABS = ['dashboard', 'agenda'];
 
 function showTab(tab) {
   TABS.forEach(t => {
@@ -879,42 +856,6 @@ async function completeAppt(id) {
   } catch(e) {
     showToast('❌ ' + e.message);
   }
-}
-
-// ── CLIENTS ───────────────────────────────────────────────
-async function loadClients() {
-  try {
-    allClients = await api('GET', '/clients');
-    renderClients(allClients);
-  } catch(e) { console.error(e); }
-}
-
-function renderClients(list) {
-  const el = document.getElementById('clients-list');
-  if (!list.length) {
-    el.innerHTML = `<div class="empty-state">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
-      <p>Sin clientes</p>
-    </div>`;
-    return;
-  }
-  el.innerHTML = list.map(c => {
-    const initials = c.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
-    const lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('es-AR') : 'Nunca';
-    return `<div class="client-card">
-      <div class="client-avatar">${initials}</div>
-      <div>
-        <div class="client-name">${c.name}</div>
-        <div class="client-meta">${c.phone || 'Sin teléfono'} · Última visita: ${lastVisit} · ⭐ ${c.points||0} pts</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function searchClients(q) {
-  if (!q) return renderClients(allClients);
-  const lower = q.toLowerCase();
-  renderClients(allClients.filter(c => c.name.toLowerCase().includes(lower) || (c.phone||'').includes(q)));
 }
 
 // ── INIT ──────────────────────────────────────────────────
