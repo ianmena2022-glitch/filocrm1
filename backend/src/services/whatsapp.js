@@ -280,9 +280,15 @@ async function requestPairingCode(shopId, phoneNumber) {
     }, 30000);
 
     try {
-      // Limpiar sesión previa si existe
+      // Limpiar sesión previa — tanto en disco como en DB y cerrar socket activo
+      if (sockets[shopId]) {
+        try { sockets[shopId].end(); } catch(e) {}
+        delete sockets[shopId];
+      }
+      await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
       const dir = authDir(shopId);
       if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+      statuses[shopId] = 'disconnected';
 
       const { state, saveCreds } = await useMultiFileAuthState(authDir(shopId));
       const { version } = await fetchLatestBaileysVersion();

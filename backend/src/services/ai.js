@@ -18,7 +18,7 @@ const KEYWORDS = [
 // Historial de conversaciones en memoria
 const conversations = {};
 const lastActivity = {};
-const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+const CONVERSATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
 
 function isBarberiaRelated(text) {
   const lower = text.toLowerCase();
