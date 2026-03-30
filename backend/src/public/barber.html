@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FILO — Mi Dashboard</title>
+  <link rel="icon" href="/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --yellow: #FFD100;
+      --navy: #002043;
+      --white: #FFFFFF;
+      --gray: #8a9ab5;
+      --red: #FF4343;
+      --green: #00E676;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000d1f; color: var(--white); font-family: 'Barlow', sans-serif; min-height: 100vh; }
+
+    /* AUTH */
+    #auth-screen { position: fixed; inset: 0; background: #000d1f; display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .auth-box { width: 100%; max-width: 380px; padding: 0 24px; }
+    .auth-logo { display: flex; justify-content: center; margin-bottom: 32px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); margin-bottom: 8px; }
+    .form-group input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px 16px; color: var(--white); font-size: 15px; outline: none; transition: border-color .2s; }
+    .form-group input:focus { border-color: var(--yellow); }
+    .btn-primary { width: 100%; background: var(--yellow); color: var(--navy); border: none; padding: 16px; border-radius: 12px; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-top: 8px; }
+    .auth-error { background: rgba(255,67,67,0.1); border: 1px solid rgba(255,67,67,0.3); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--red); margin-bottom: 16px; display: none; }
+
+    /* APP */
+    #app { display: none; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .topbar-title { font-family: 'Oswald', sans-serif; font-size: 20px; letter-spacing: 1px; }
+    .topbar-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
+    .btn-logout { background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--gray); padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px 20px; }
+    .stat-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius); padding: 16px; }
+    .stat-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); margin-bottom: 6px; }
+    .stat-value { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700; color: var(--yellow); }
+
+    /* AGENDA */
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); padding: 0 20px; margin: 16px 0 10px; }
+    .appt-card { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .appt-time { font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700; color: var(--yellow); min-width: 50px; }
+    .appt-info { flex: 1; }
+    .appt-client { font-weight: 700; font-size: 15px; }
+    .appt-service { font-size: 12px; color: var(--gray); margin-top: 2px; }
+    .appt-price { font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 700; }
+    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .status-pending { background: rgba(255,145,0,0.2); color: #FF9100; }
+    .status-completed { background: rgba(0,230,118,0.2); color: var(--green); }
+    .status-noshow { background: rgba(255,67,67,0.2); color: var(--red); }
+    .status-cancelled { background: rgba(255,255,255,0.1); color: var(--gray); }
+    .btn-complete { background: rgba(0,230,118,0.15); border: 1px solid rgba(0,230,118,0.3); color: var(--green); padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: 8px; }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray); }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* BOTTOM NAV */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #000d1f; border-top: 1px solid rgba(255,255,255,0.07); display: flex; }
+    .bottom-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 0; font-size: 10px; color: var(--gray); cursor: pointer; gap: 4px; }
+    .bottom-nav-item.active { color: var(--yellow); }
+    .bottom-nav-icon { font-size: 22px; }
+    .content { padding-bottom: 70px; }
+
+    /* DATE NAV */
+    .date-nav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; }
+    .date-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--white); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    .date-label { font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 600; flex: 1; }
+    .date-summary { font-size: 12px; color: var(--gray); margin-left: auto; }
+
+    /* SECTIONS */
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+
+    /* TOAST */
+    #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,20,40,0.95); border: 1px solid rgba(255,209,0,0.3); border-radius: 12px; padding: 12px 20px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+
+    /* CLIENTS */
+    .client-card { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .client-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--yellow); color: #000d1f; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .client-name { font-weight: 700; font-size: 14px; }
+    .client-meta { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <img src="/logo_filo.png" alt="FILO CRM" style="height:52px;object-fit:contain">
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" onclick="login()">✂️ Entrar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="barber-greeting">Buenos días ✂️</div>
+      <div class="topbar-sub" id="shop-name-label"></div>
+    </div>
+    <button class="btn-logout" onclick="logout()">Salir</button>
+  </div>
+
+  <div class="content">
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard" class="tab-section active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Turnos hoy</div>
+          <div class="stat-value" id="stat-turnos">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Completados</div>
+          <div class="stat-value" id="stat-completados">0</div>
+        </div>
+        <div class="stat-card" id="commission-card" style="display:none">
+          <div class="stat-label">Mi comisión</div>
+          <div class="stat-value" id="stat-comision" style="font-size:18px">$0</div>
+        </div>
+      </div>
+
+      <div class="section-title">Turnos de hoy</div>
+      <div class="date-nav">
+        <button class="date-btn" onclick="changeDate(-1)">←</button>
+        <div class="date-label" id="date-label">Hoy</div>
+        <div class="date-summary" id="date-summary"></div>
+        <button class="date-btn" onclick="changeDate(1)">→</button>
+      </div>
+      <div id="agenda-list"></div>
+    </div>
+
+    <!-- CLIENTES -->
+    <div id="tab-clientes" class="tab-section">
+      <div style="padding:16px 20px">
+        <input type="text" id="client-search" placeholder="🔍 Buscar cliente..." oninput="searchClients(this.value)"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--white);font-size:14px;outline:none">
+      </div>
+      <div id="clients-list"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-item active" onclick="showTab('dashboard')">
+      <div class="bottom-nav-icon">📊</div>
+      <div>Agenda</div>
+    </div>
+    <div class="bottom-nav-item" onclick="showTab('clientes')">
+      <div class="bottom-nav-icon">👥</div>
+      <div>Clientes</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = window.location.origin + '/api';
+let token = localStorage.getItem('barber_token');
+let me = JSON.parse(localStorage.getItem('barber_me') || 'null');
+let currentDate = new Date().toISOString().split('T')[0];
+let allClients = [];
+
+async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// AUTH
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.style.display = 'none';
+
+  try {
+    const data = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    }).then(r => r.json());
+
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    if (!data.shop?.is_barber && data.shop?.plan !== 'test') {
+      errEl.textContent = 'Esta pantalla es solo para barberos. Entrá desde /app';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    token = data.token;
+    me = data.shop;
+    localStorage.setItem('barber_token', token);
+    localStorage.setItem('barber_me', JSON.stringify(me));
+    // Obtener configuración de la cuenta principal
+    if (me.parent_shop_id) {
+      try {
+        const parentRes = await fetch(API + '/barbers/parent-config', {
+          headers: { 'Authorization': `Bearer ${data.token}` }
+        });
+        const parentData = await parentRes.json();
+        me.commission_enabled = parentData.commission_enabled;
+        localStorage.setItem('barber_me', JSON.stringify(me));
+      } catch(e) { me.commission_enabled = false; }
+    }
+    startApp();
+  } catch(e) {
+    errEl.textContent = 'Error al conectar';
+    errEl.style.display = 'block';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('barber_token');
+  localStorage.removeItem('barber_me');
+  location.reload();
+}
+
+function startApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+  document.getElementById('barber-greeting').textContent = `${greeting}, ${me.name} ✂️`;
+
+  // Mostrar comisión solo si está activada en la cuenta principal
+  const commCard = document.getElementById('commission-card');
+  if (commCard) {
+    commCard.style.display = me.commission_enabled ? 'block' : 'none';
+  }
+
+  loadDashboard();
+  loadClients();
+}
+
+// NAVIGATION
+function showTab(tab) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.bottom-nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelectorAll('.bottom-nav-item')[tab === 'dashboard' ? 0 : 1].classList.add('active');
+}
+
+// DATE
+function changeDate(delta) {
+  const d = new Date(currentDate + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  currentDate = d.toISOString().split('T')[0];
+  loadAgenda();
+}
+
+function formatDateLabel(dateStr) {
+  const today = new Date().toISOString().split('T')[0];
+  if (dateStr === today) return 'Hoy';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+// DASHBOARD
+async function loadDashboard() {
+  await loadAgenda();
+}
+
+async function loadAgenda() {
+  document.getElementById('date-label').textContent = formatDateLabel(currentDate);
+  try {
+    const appts = await api('GET', `/appointments?date=${currentDate}`);
+    const myAppts = appts.filter(a => !a.barber_id || a.barber_id === me.id);
+
+    const completados = myAppts.filter(a => a.status === 'completed').length;
+    const facturado = myAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
+    const comision = me.commission_enabled ? facturado * (me.barber_commission_pct || 50) / 100 : 0;
+
+    document.getElementById('stat-turnos').textContent = myAppts.length;
+    document.getElementById('stat-completados').textContent = completados;
+    document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
+    document.getElementById('date-summary').textContent = `${myAppts.length} turnos · $${facturado.toLocaleString('es-AR')}`;
+
+    const el = document.getElementById('agenda-list');
+    if (!myAppts.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>Sin turnos para este día</p></div>`;
+      return;
+    }
+
+    const statusLabel = { pending:'Pendiente', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', confirmed:'Confirmado' };
+    el.innerHTML = myAppts.map(a => `
+      <div class="appt-card">
+        <div class="appt-time">${String(a.time_start||'').slice(0,5)}</div>
+        <div class="appt-info">
+          <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
+          <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+          <div class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</div>
+          ${a.status === 'pending' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function completeAppt(id) {
+  try {
+    await api('PUT', `/appointments/${id}/status`, { status: 'completed' });
+    showToast('✅ Turno completado');
+    loadAgenda();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+// CLIENTS
+async function loadClients() {
+  try {
+    allClients = await api('GET', '/clients');
+    renderClients(allClients);
+  } catch(e) { console.error(e); }
+}
+
+function renderClients(list) {
+  const el = document.getElementById('clients-list');
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">👥</div><p>Sin clientes</p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const initials = c.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+    const lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('es-AR') : 'Nunca';
+    return `<div class="client-card">
+      <div class="client-avatar">${initials}</div>
+      <div>
+        <div class="client-name">${c.name}</div>
+        <div class="client-meta">${c.phone || 'Sin teléfono'} · Última visita: ${lastVisit} · ⭐ ${c.points||0} pts</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchClients(q) {
+  if (!q) return renderClients(allClients);
+  const lower = q.toLowerCase();
+  renderClients(allClients.filter(c => c.name.toLowerCase().includes(lower) || (c.phone||'').includes(q)));
+}
+
+// INIT
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+if (token && me?.is_barber) {
+  startApp();
+} else if (token && me?.plan === 'test') {
+  startApp();
+}
+</script>
+</body>
+</html>

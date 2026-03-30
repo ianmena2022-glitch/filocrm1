@@ -140,4 +140,19 @@ router.post('/assign', auth, async (req, res) => {
   }
 });
 
+// GET /api/barbers/parent-config — config de la cuenta principal (para barberos)
+router.get('/parent-config', auth, async (req, res) => {
+  try {
+    const parentId = req.parentShopId || req.shopId;
+    const result = await pool.query(
+      'SELECT commission_enabled, name FROM shops WHERE id=$1',
+      [parentId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
