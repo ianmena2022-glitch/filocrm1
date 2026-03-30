@@ -1761,10 +1761,10 @@ function initStaffUI() {
   const isBarber = currentShop?.is_barber;
   const navEquipo = document.getElementById('nav-equipo');
 
-  // Mostrar sección equipo solo para dueños con plan staff o test
-  if ((plan === 'staff' || plan === 'test' || isTest) && !isBarber) {
-    if (navEquipo) navEquipo.style.display = 'flex';
-  }
+  // Mostrar sección equipo solo si el plan activo es staff (o test original)
+  // En cuentas test: mostrar solo si el plan activo es staff o test
+  const showEquipo = (plan === 'staff' || plan === 'test') && !isBarber;
+  if (navEquipo) navEquipo.style.display = showEquipo ? 'flex' : 'none';
 
   // Mostrar switcher de plan para cuentas test
   const switcher = document.getElementById('test-plan-switcher');
