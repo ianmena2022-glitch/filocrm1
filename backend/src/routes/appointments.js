@@ -2,19 +2,81 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 
+// Retorna el shopId real (dueño), sea barbero o dueño
+function realShopId(req) {
+  return req.isBarber && req.parentShopId ? req.parentShopId : req.shopId;
+}
+
+// Auto-asigna el barbero con menos turnos en esa fecha
+async function autoAssignBarber(shopId, date) {
+  try {
+    // Obtener todos los barberos activos del shop
+    const barbers = await pool.query(
+      `SELECT id FROM shops WHERE parent_shop_id = $1 AND is_barber = TRUE`,
+      [shopId]
+    );
+    if (!barbers.rows.length) return null;
+
+    // Contar turnos de cada barbero en esa fecha
+    const counts = await pool.query(
+      `SELECT barber_id, COUNT(*) as total
+       FROM appointments
+       WHERE shop_id = $1 AND date = $2 AND barber_id IS NOT NULL
+       GROUP BY barber_id`,
+      [shopId, date]
+    );
+
+    const countMap = {};
+    counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
+
+    // Asignar al que tenga menos turnos (0 si no tiene ninguno)
+    let minCount = Infinity;
+    let assignedId = null;
+    for (const b of barbers.rows) {
+      const c = countMap[b.id] || 0;
+      if (c < minCount) {
+        minCount = c;
+        assignedId = b.id;
+      }
+    }
+    return assignedId;
+  } catch (e) {
+    console.error('autoAssignBarber error:', e.message);
+    return null;
+  }
+}
+
 // GET /api/appointments?date=YYYY-MM-DD
 router.get('/', auth, async (req, res) => {
   const { date } = req.query;
   const d = date || new Date().toISOString().split('T')[0];
+  const shopId = realShopId(req);
+
   try {
-    const result = await pool.query(
-      `SELECT a.*, c.name AS client_name, c.phone AS client_phone
-       FROM appointments a
-       LEFT JOIN clients c ON c.id = a.client_id
-       WHERE a.shop_id = $1 AND a.date = $2
-       ORDER BY a.time_start`,
-      [req.shopId, d]
-    );
+    let result;
+
+    if (req.isBarber) {
+      // Barbero solo ve SUS turnos
+      result = await pool.query(
+        `SELECT a.*, c.name AS client_name, c.phone AS client_phone
+         FROM appointments a
+         LEFT JOIN clients c ON c.id = a.client_id
+         WHERE a.shop_id = $1 AND a.date = $2 AND a.barber_id = $3
+         ORDER BY a.time_start`,
+        [shopId, d, req.shopId]
+      );
+    } else {
+      // Dueño ve todos los turnos
+      result = await pool.query(
+        `SELECT a.*, c.name AS client_name, c.phone AS client_phone
+         FROM appointments a
+         LEFT JOIN clients c ON c.id = a.client_id
+         WHERE a.shop_id = $1 AND a.date = $2
+         ORDER BY a.time_start`,
+        [shopId, d]
+      );
+    }
+
     res.json(result.rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -25,38 +87,38 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   const {
     client_id, client_name, service_id, service_name,
-    price, cost, date, time_start, barber_name, commission_pct, notes,
+    price, cost, date, time_start, barber_id, barber_name,
+    commission_pct, notes,
     redeem_item_id, redeem_item_name, redeem_points_cost
   } = req.body;
 
   if (!time_start || !date) return res.status(400).json({ error: 'Fecha y hora son requeridas' });
 
+  const shopId = realShopId(req);
+
   try {
-    // Resolver nombre e info del servicio si viene service_id
+    // Resolver servicio
     let svcName = service_name || null;
     let svcCost = cost || 0;
+    let duration = 30;
     if (service_id) {
-      const svc = await pool.query('SELECT * FROM services WHERE id=$1 AND shop_id=$2', [service_id, req.shopId]);
+      const svc = await pool.query('SELECT * FROM services WHERE id=$1 AND shop_id=$2', [service_id, shopId]);
       if (svc.rows.length) {
         svcName = svc.rows[0].name;
         svcCost = svc.rows[0].cost;
+        duration = svc.rows[0].duration_minutes || 30;
       }
     }
 
-    // Calcular time_end según duración del servicio (o +30 min por defecto)
-    let duration = 30;
-    if (service_id) {
-      const svc = await pool.query('SELECT duration_minutes FROM services WHERE id=$1', [service_id]);
-      if (svc.rows.length) duration = svc.rows[0].duration_minutes;
-    }
+    // Calcular time_end
     const [h, m] = time_start.split(':').map(Number);
     const end = new Date(2000, 0, 1, h, m + duration);
     const time_end = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
 
-    // Si viene client_id, resolver nombre
+    // Resolver nombre del cliente
     let cName = client_name || null;
     if (client_id) {
-      const cl = await pool.query('SELECT name FROM clients WHERE id=$1 AND shop_id=$2', [client_id, req.shopId]);
+      const cl = await pool.query('SELECT name FROM clients WHERE id=$1 AND shop_id=$2', [client_id, shopId]);
       if (cl.rows.length) cName = cl.rows[0].name;
     }
 
@@ -64,7 +126,7 @@ router.post('/', auth, async (req, res) => {
     const pointsCost = parseInt(redeem_points_cost) || 0;
     let redeemInfo = null;
     if (client_id && redeem_item_id && pointsCost > 0) {
-      const cl = await pool.query('SELECT points FROM clients WHERE id=$1 AND shop_id=$2', [client_id, req.shopId]);
+      const cl = await pool.query('SELECT points FROM clients WHERE id=$1 AND shop_id=$2', [client_id, shopId]);
       if (!cl.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
       if (cl.rows[0].points < pointsCost) {
         return res.status(400).json({ error: `Puntos insuficientes. El cliente tiene ${cl.rows[0].points} pts y el premio cuesta ${pointsCost} pts.` });
@@ -72,33 +134,57 @@ router.post('/', auth, async (req, res) => {
       redeemInfo = redeem_item_name || 'Premio canjeado';
     }
 
+    // Resolver barber_id:
+    // 1) Si lo manda el frontend explícitamente, usarlo
+    // 2) Si el que crea el turno ES un barbero, asignárselo a sí mismo
+    // 3) Si es el dueño y no especificó, auto-asignar al barbero con menos turnos
+    let assignedBarberId = barber_id ? parseInt(barber_id) : null;
+
+    if (!assignedBarberId && req.isBarber) {
+      assignedBarberId = req.shopId;
+    }
+
+    if (!assignedBarberId) {
+      assignedBarberId = await autoAssignBarber(shopId, date);
+    }
+
+    console.log(`[APPT] Auto-asignando barber_id=${assignedBarberId} para shop=${shopId} fecha=${date}`);
+
     const result = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
-          time_start, time_end, barber_name, commission_pct, notes, redeem_info)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
-      [req.shopId, client_id || null, cName, service_id || null, svcName,
-       parseFloat(price)||0, parseFloat(svcCost)||0, date, time_start, time_end,
-       barber_name || null, parseInt(commission_pct)||50, notes || null, redeemInfo]
+      [
+        shopId,
+        client_id || null, cName,
+        service_id || null, svcName,
+        parseFloat(price)||0, parseFloat(svcCost)||0,
+        date, time_start, time_end,
+        assignedBarberId,
+        barber_name || null,
+        parseInt(commission_pct)||50,
+        notes || null,
+        redeemInfo
+      ]
     );
 
     const appt = result.rows[0];
 
-    // Restar puntos y registrar canje si corresponde
+    // Restar puntos si hay canje
     const clientIdInt = parseInt(client_id) || null;
     const redeemItemIdInt = parseInt(redeem_item_id) || null;
-    console.log(`[CANJE] client_id=${clientIdInt} item_id=${redeemItemIdInt} points=${pointsCost} redeemInfo=${redeemInfo}`);
     if (clientIdInt && redeemItemIdInt && pointsCost > 0 && redeemInfo) {
       const updateResult = await pool.query(
         'UPDATE clients SET points = points - $1 WHERE id = $2 AND shop_id = $3 RETURNING id, points',
-        [pointsCost, clientIdInt, req.shopId]
+        [pointsCost, clientIdInt, shopId]
       );
       console.log(`[CANJE] puntos restados:`, updateResult.rows[0]);
       await pool.query(
         `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
          VALUES ($1, $2, $3, $4, $5, 'pending')`,
-        [req.shopId, clientIdInt, redeemItemIdInt, redeemInfo, pointsCost]
+        [shopId, clientIdInt, redeemItemIdInt, redeemInfo, pointsCost]
       );
     }
 
@@ -112,13 +198,14 @@ router.post('/', auth, async (req, res) => {
 // PUT /api/appointments/:id/status
 router.put('/:id/status', auth, async (req, res) => {
   const { status } = req.body;
+  const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
     const result = await pool.query(
       `UPDATE appointments SET status=$1 WHERE id=$2 AND shop_id=$3 RETURNING *`,
-      [status, req.params.id, req.shopId]
+      [status, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 
@@ -126,8 +213,7 @@ router.put('/:id/status', auth, async (req, res) => {
 
     // Actualizar stats del cliente al completar
     if (status === 'completed' && appt.client_id) {
-      // Calcular puntos: 10 puntos por cada $1000 gastados
-      const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [req.shopId]);
+      const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);
       const shopData = shop.rows[0];
       const pointsPerPeso = parseFloat(shopData.points_per_peso || 0.01);
       const pointsEarned = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
@@ -145,7 +231,6 @@ router.put('/:id/status', auth, async (req, res) => {
 
       const client = updatedClient.rows[0];
 
-      // Mandar WhatsApp si tiene teléfono y WPP conectado
       if (client.phone && shopData.wpp_connected) {
         try {
           const wpp = require('../services/whatsapp');
@@ -155,7 +240,7 @@ router.put('/:id/status', auth, async (req, res) => {
             ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
             : null;
 
-          let msg = await generateMessage(req.shopId, 'turno_completado', {
+          let msg = await generateMessage(shopId, 'turno_completado', {
             clientName: client.name,
             pointsEarned,
             totalPoints: client.points,
@@ -172,7 +257,7 @@ router.put('/:id/status', auth, async (req, res) => {
               .replace('{link}', tiendaLink || '');
           }
 
-          await wpp.sendText(req.shopId, client.phone, msg);
+          await wpp.sendText(shopId, client.phone, msg);
         } catch(wppErr) {
           console.error('Error enviando WPP puntos:', wppErr.message);
         }
@@ -187,10 +272,11 @@ router.put('/:id/status', auth, async (req, res) => {
 
 // DELETE /api/appointments/:id
 router.delete('/:id', auth, async (req, res) => {
+  const shopId = realShopId(req);
   try {
     const result = await pool.query(
       'DELETE FROM appointments WHERE id=$1 AND shop_id=$2 RETURNING id',
-      [req.params.id, req.shopId]
+      [req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
     res.json({ ok: true });
