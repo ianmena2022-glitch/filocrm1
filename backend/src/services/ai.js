@@ -17,6 +17,8 @@ const KEYWORDS = [
 
 // Historial de conversaciones en memoria
 const conversations = {};
+const lastActivity = {};
+const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
 
 function isBarberiaRelated(text) {
   const lower = text.toLowerCase();
@@ -25,7 +27,14 @@ function isBarberiaRelated(text) {
 
 function hasActiveConversation(shopId, phone) {
   const key = `${shopId}:${phone}`;
-  return conversations[key] && conversations[key].length > 0;
+  if (!conversations[key] || conversations[key].length === 0) return false;
+  // Limpiar si pasaron más de 30 minutos sin actividad
+  if (Date.now() - (lastActivity[key] || 0) > CONVERSATION_TIMEOUT_MS) {
+    delete conversations[key];
+    delete lastActivity[key];
+    return false;
+  }
+  return true;
 }
 
 async function getShopContext(shopId) {
@@ -101,6 +110,7 @@ async function getAIResponse(shopId, phone, userMessage) {
   const key = `${shopId}:${phone}`;
   if (!conversations[key]) conversations[key] = [];
   conversations[key].push({ role: 'user', content: userMessage });
+  lastActivity[key] = Date.now();
   if (conversations[key].length > 10) conversations[key] = conversations[key].slice(-10);
 
   try {
