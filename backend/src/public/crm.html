@@ -1171,7 +1171,7 @@ body {
 
           <!-- Templates de mensajes desplegables -->
           <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
-            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">✏️ Mensajes personalizados</div>
+            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">🤖 Mensajes de respaldo (si la IA falla)</div>
 
             <!-- Sillón Libre -->
             <div class="tpl-accordion" style="margin-bottom:8px">
@@ -1198,7 +1198,7 @@ body {
             </div>
 
             <!-- Recordatorio -->
-            <div class="tpl-accordion" style="margin-bottom:0">
+            <div class="tpl-accordion" style="margin-bottom:8px">
               <div class="tpl-header" onclick="toggleTpl('tpl-recordatorio-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
                 <span style="font-size:13px;font-weight:700">📅 Recordatorio de turno</span>
                 <span class="tpl-arrow" id="arrow-tpl-recordatorio-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
@@ -1206,6 +1206,17 @@ body {
               <div id="tpl-recordatorio-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
                 <textarea id="tpl-recordatorio" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Te recordamos tu turno mañana a las {hora}..."></textarea>
                 <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+              </div>
+            </div>
+
+            <div class="tpl-accordion" style="margin-bottom:0">
+              <div class="tpl-header" onclick="toggleTpl('tpl-completado-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
+                <span style="font-size:13px;font-weight:700">✅ Turno completado</span>
+                <span class="tpl-arrow" id="arrow-tpl-completado-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+              </div>
+              <div id="tpl-completado-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                <textarea id="tpl-completado" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="✂️ ¡Servicio completado! Gracias {nombre}..."></textarea>
+                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{puntos}</code> <code style="color:var(--yellow)">{total}</code> <code style="color:var(--yellow)">{link}</code></div>
               </div>
             </div>
           </div>
@@ -2344,6 +2355,7 @@ async function loadSettings() {
     document.getElementById('tpl-sillon').value = tpls.sillon || '¡Hola {nombre}! 👋\n\nTenemos un sillón libre hoy a las *{hora}* en {barberia}.\n\n{incentivo}\n\n¿Te anotamos? ✂️';
     document.getElementById('tpl-rescate').value = tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.';
     document.getElementById('tpl-recordatorio').value = tpls.recordatorio || '¡Hola {nombre}! 👋\n\nTe recordamos tu turno mañana a las *{hora}* en {barberia}. ¡Te esperamos! ✂️';
+    document.getElementById('tpl-completado').value = tpls.completado || '✂️ *¡Servicio completado!* Gracias {nombre}.\n⭐ Puntos acumulados: +{puntos} (total: {total})\n🎁 Ver premios: {link}\n¡Hasta la próxima! 💈';
 
     // WhatsApp status
     const dot = document.getElementById('wpp-dot');
@@ -2381,7 +2393,8 @@ async function saveSettings() {
     msg_templates: JSON.stringify({
       sillon:       document.getElementById('tpl-sillon').value.trim(),
       rescate:      document.getElementById('tpl-rescate').value.trim(),
-      recordatorio: document.getElementById('tpl-recordatorio').value.trim()
+      recordatorio: document.getElementById('tpl-recordatorio').value.trim(),
+      completado:   document.getElementById('tpl-completado').value.trim()
     })
   };
   try {

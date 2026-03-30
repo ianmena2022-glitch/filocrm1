@@ -163,12 +163,13 @@ router.put('/:id/status', auth, async (req, res) => {
           });
 
           if (!msg) {
-            msg = [
-              `✂️ *¡Servicio completado!* Gracias ${client.name}.`,
-              `⭐ *Puntos acumulados:* ${pointsEarned > 0 ? `+${pointsEarned} (total: ${client.points})` : client.points}`,
-              tiendaLink ? `🎁 Ver premios: ${tiendaLink}` : ``,
-              `¡Hasta la próxima! 💈`
-            ].filter(Boolean).join('\n');
+            const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
+            const tplBase = tpls.completado || '✂️ *¡Servicio completado!* Gracias {nombre}.\n⭐ Puntos acumulados: +{puntos} (total: {total})\n🎁 Ver premios: {link}\n¡Hasta la próxima! 💈';
+            msg = tplBase
+              .replace('{nombre}', client.name)
+              .replace('{puntos}', pointsEarned)
+              .replace('{total}', client.points)
+              .replace('{link}', tiendaLink || '');
           }
 
           await wpp.sendText(req.shopId, client.phone, msg);

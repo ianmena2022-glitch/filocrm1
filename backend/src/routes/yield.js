@@ -73,7 +73,7 @@ router.post('/send-flash-offer', auth, async (req, res) => {
   if (!slot || !client_ids?.length) return res.status(400).json({ error: 'Slot y lista de clientes requeridos' });
 
   try {
-    const shop = await pool.query('SELECT name, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+    const shop = await pool.query('SELECT name, wpp_connected, msg_templates FROM shops WHERE id=$1', [req.shopId]);
     const shopData = shop.rows[0];
     if (!shopData.wpp_connected) return res.status(400).json({ error: 'WhatsApp no está conectado. Conectalo en Configuración.' });
 
@@ -93,8 +93,15 @@ router.post('/send-flash-offer', auth, async (req, res) => {
         shopName: shopData.name,
         incentivo: incentivo || ''
       });
-      // Fallback si la IA falla
-      if (!msg) msg = `¡Hola ${c.name}! 👋\n\nTenemos un sillón libre hoy a las *${slot}* en ${shopData.name}.${incentivo ? '\n\n' + incentivo : ''}\n\n¿Te anotamos? ✂️`;
+      // Fallback: usar template de la DB si la IA falla
+      if (!msg) {
+        const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
+        msg = (tpls.sillon || '¡Hola {nombre}! 👋\n\nTenemos un sillón libre hoy a las *{hora}* en {barberia}.\n\n{incentivo}\n\n¿Te anotamos? ✂️')
+          .replace('{nombre}', c.name)
+          .replace('{hora}', slot)
+          .replace('{barberia}', shopData.name)
+          .replace('{incentivo}', incentivo || '');
+      }
 
       try {
         await wpp.sendText(req.shopId, c.phone, msg);
@@ -149,7 +156,7 @@ router.get('/churn/at-risk', auth, async (req, res) => {
 router.post('/churn/rescue/:clientId', auth, async (req, res) => {
   const { clientId } = req.params;
   try {
-    const shopQ = await pool.query('SELECT name, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+    const shopQ = await pool.query('SELECT name, wpp_connected, msg_templates FROM shops WHERE id=$1', [req.shopId]);
     const shopData = shopQ.rows[0];
 
     console.log(`Rescue → shopId: ${req.shopId}, wpp_connected: ${shopData.wpp_connected}`);
@@ -176,7 +183,12 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
       shopName: shopData.name,
       daysSince
     });
-    if (!msg) msg = `¡Hola ${client.name}! 👋\n\nHace un tiempo que no te vemos por ${shopData.name} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.`;
+    if (!msg) {
+      const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
+      msg = (tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.')
+        .replace('{nombre}', client.name)
+        .replace('{barberia}', shopData.name);
+    }
 
     await wpp.sendText(req.shopId, client.phone, msg);
 
