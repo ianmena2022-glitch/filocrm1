@@ -7,8 +7,10 @@ module.exports = function auth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.shopId = payload.shopId;
-    req.shopEmail = payload.email;
+    req.shopId       = payload.shopId;
+    req.shopEmail    = payload.email;
+    req.isBarber     = payload.isBarber || false;
+    req.parentShopId = payload.parentShopId || null;
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido o expirado' });
