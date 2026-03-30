@@ -181,6 +181,19 @@ router.put('/plan', auth, async (req, res) => {
   }
 });
 
+// POST /api/settings/whatsapp/pairing-code
+router.post('/whatsapp/pairing-code', auth, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Número requerido' });
+  try {
+    const result = await wpp.requestPairingCode(req.shopId, phone);
+    res.json(result);
+  } catch (e) {
+    console.error('Pairing code error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/whatsapp/status', auth, async (req, res) => {
   try {
     const status = await wpp.getStatus(req.shopId);
