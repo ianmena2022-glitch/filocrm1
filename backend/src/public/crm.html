@@ -3363,8 +3363,7 @@ function cpMatch(query) {
 function cpFormatText(text) {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/
-/g, '<br>');
+    .replace(/\n/g, '<br>');
 }
 
 function cpAddMsg(role, text) {
