@@ -297,6 +297,7 @@ async function requestPairingCode(shopId, phoneNumber) {
         version,
         auth: state,
         printQRInTerminal: false,
+        mobile: false,
         browser: ['FILO CRM', 'Chrome', '1.0'],
         connectTimeoutMs: 60000,
         logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: console.error, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
@@ -310,10 +311,29 @@ async function requestPairingCode(shopId, phoneNumber) {
         await saveSessionToDB(shopId);
       });
 
+      let codeRequested = false;
+
       sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        // Pedir pairing code cuando el socket está listo (antes de que genere QR)
+        if (!codeRequested && !state.creds?.registered) {
+          codeRequested = true;
+          try {
+            const phone = phoneNumber.replace(/[^0-9]/g, '');
+            console.log(`[Pairing] Solicitando código para +${phone}`);
+            const code = await sock.requestPairingCode(phone);
+            clearTimeout(timeout);
+            console.log(`[Pairing] Código generado: ${code}`);
+            resolve({ code: code?.match(/.{1,4}/g)?.join('-') || code });
+          } catch(pairErr) {
+            console.error('[Pairing] Error al solicitar código:', pairErr.message);
+            clearTimeout(timeout);
+            reject(pairErr);
+          }
+        }
+
         if (connection === 'open') {
-          clearTimeout(timeout);
           statuses[shopId] = 'connected';
           await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
           await saveSessionToDB(shopId);
@@ -327,14 +347,6 @@ async function requestPairingCode(shopId, phoneNumber) {
           }
         }
       });
-
-      // Esperar a que el socket esté listo para solicitar pairing code
-      await new Promise(r => setTimeout(r, 2000));
-
-      const phone = phoneNumber.replace(/\D/g, '');
-      const code = await sock.requestPairingCode(phone);
-      clearTimeout(timeout);
-      resolve({ code: code?.match(/.{1,4}/g)?.join('-') || code });
     } catch (e) {
       clearTimeout(timeout);
       reject(e);
