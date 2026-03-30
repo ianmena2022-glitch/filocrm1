@@ -39,15 +39,20 @@ router.put('/', auth, async (req, res) => {
     // Asegurar slug actualizado en el mismo UPDATE
     const result = await pool.query(
       `UPDATE shops SET
-         name=$1, phone=$2, city=$3, address=$4,
-         service_radius_km=$5, churn_days=$6, msg_templates=$7,
+         name=COALESCE($1, name),
+         phone=COALESCE($2, phone),
+         city=COALESCE($3, city),
+         address=COALESCE($4, address),
+         service_radius_km=COALESCE($5, service_radius_km),
+         churn_days=COALESCE($6, churn_days),
+         msg_templates=COALESCE($7, msg_templates),
          booking_slug=COALESCE(booking_slug, $8),
          commission_enabled=COALESCE($9, commission_enabled)
        WHERE id=$10
        RETURNING id, name, email, phone, city, address,
                  service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled`,
-      [name, phone||null, city||null, address||null,
-       service_radius_km||3, churn_days||20, msg_templates||null,
+      [name||null, phone||null, city||null, address||null,
+       service_radius_km||null, churn_days||null, msg_templates||null,
        slug, commission_enabled !== undefined ? commission_enabled : null, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });

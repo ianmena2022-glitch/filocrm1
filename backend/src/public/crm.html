@@ -1156,9 +1156,11 @@ body {
             <div style="font-size:14px;font-weight:700">💰 Split automático de comisiones</div>
             <div style="font-size:12px;color:var(--gray);margin-top:3px">Al completar un turno, se calcula automáticamente la comisión de cada barbero</div>
           </div>
-          <label style="position:relative;display:inline-block;width:48px;height:26px;cursor:pointer">
-            <input type="checkbox" id="toggle-commission" onchange="toggleCommission()" style="opacity:0;width:0;height:0">
-            <span id="commission-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:26px;transition:.3s"></span>
+          <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+            <input type="checkbox" id="toggle-commission" onchange="toggleCommission()" style="opacity:0;width:0;height:0;position:absolute">
+            <span id="commission-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:28px;transition:.3s;border:1px solid rgba(255,255,255,0.1)">
+              <span id="commission-thumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#8a9ab5;border-radius:50%;transition:.3s"></span>
+            </span>
           </label>
         </div>
         <div id="commission-status" style="font-size:12px;color:var(--gray)">Split desactivado</div>
@@ -2840,8 +2842,11 @@ async function loadEquipo() {
     const toggle = document.getElementById('toggle-commission');
     const slider = document.getElementById('commission-slider');
     const status = document.getElementById('commission-status');
+    const thumb = document.getElementById('commission-thumb');
     toggle.checked = commEnabled;
-    slider.style.background = commEnabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+    slider.style.background = commEnabled ? 'var(--yellow)' : 'rgba(255,255,255,0.12)';
+    slider.style.borderColor = commEnabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+    if (thumb) { thumb.style.background = commEnabled ? '#000d1f' : '#8a9ab5'; thumb.style.left = commEnabled ? '28px' : '3px'; }
     status.textContent = commEnabled ? '✅ Split activado — las comisiones se calculan automáticamente al completar turnos' : 'Split desactivado';
     status.style.color = commEnabled ? 'var(--green)' : 'var(--gray)';
 
@@ -2877,8 +2882,11 @@ function copyInviteLink() {
 async function toggleCommission() {
   const enabled = document.getElementById('toggle-commission').checked;
   const slider = document.getElementById('commission-slider');
+  const thumb = document.getElementById('commission-thumb');
   const status = document.getElementById('commission-status');
-  slider.style.background = enabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+  slider.style.background = enabled ? 'var(--yellow)' : 'rgba(255,255,255,0.12)';
+  slider.style.borderColor = enabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+  if (thumb) { thumb.style.background = enabled ? '#000d1f' : '#8a9ab5'; thumb.style.left = enabled ? '28px' : '3px'; }
   status.textContent = enabled ? '✅ Split activado — las comisiones se calculan automáticamente al completar turnos' : 'Split desactivado';
   status.style.color = enabled ? 'var(--green)' : 'var(--gray)';
   try {
