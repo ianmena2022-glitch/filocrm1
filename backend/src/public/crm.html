@@ -1732,6 +1732,8 @@ function startApp() {
   const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
   document.getElementById('user-avatar').textContent = initials;
 
+  // Preservar flag is_test si el plan original era test
+  if (currentShop?.plan === 'test') { currentShop.is_test = true; localStorage.setItem('filo_shop', JSON.stringify(currentShop)); }
   loadDashboard();
   loadServices();
   loadClients();
@@ -1744,6 +1746,7 @@ async function switchPlan(plan) {
   try {
     await api('PUT', '/settings/plan', { plan });
     currentShop.plan = plan;
+    currentShop.is_test = true; // preservar flag test
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     showToast('✅', `Plan cambiado a ${plan}`, 'Recargando...');
     setTimeout(() => location.reload(), 1000);
@@ -1754,17 +1757,18 @@ async function switchPlan(plan) {
 
 function initStaffUI() {
   const plan = currentShop?.plan;
+  const isTest = currentShop?.is_test || plan === 'test';
   const isBarber = currentShop?.is_barber;
   const navEquipo = document.getElementById('nav-equipo');
 
   // Mostrar sección equipo solo para dueños con plan staff o test
-  if ((plan === 'staff' || plan === 'test') && !isBarber) {
+  if ((plan === 'staff' || plan === 'test' || isTest) && !isBarber) {
     if (navEquipo) navEquipo.style.display = 'flex';
   }
 
   // Mostrar switcher de plan para cuentas test
   const switcher = document.getElementById('test-plan-switcher');
-  if (plan === 'test' && switcher) {
+  if (isTest && switcher) {
     switcher.style.display = 'block';
     const label = document.getElementById('current-plan-label');
     if (label) label.textContent = `Plan activo: ${currentShop?.plan || 'starter'}`;
