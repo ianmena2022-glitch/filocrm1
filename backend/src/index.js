@@ -22,6 +22,12 @@ app.use('/api/yield',        require('./routes/yield'));
 app.use('/api/memberships',  require('./routes/memberships'));
 app.use('/api/booking',      require('./routes/booking'));
 app.use('/api/points',       require('./routes/points'));
+app.use('/api/barbers',      require('./routes/barbers'));
+
+// Dashboard barbero
+app.get('/barber', (req, res) => {
+  res.sendFile(path.join(publicDir, 'barber.html'));
+});
 
 // ── Health check ───────────────────────────────────────
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV }));

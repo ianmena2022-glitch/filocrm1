@@ -123,3 +123,51 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS points_per_peso NUMERIC(6,4) DEFAULT 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS store_name VARCHAR(255) DEFAULT 'Tienda FILO';
 
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS redeem_info VARCHAR(255);
+
+-- ── FILO STAFF ────────────────────────────────────────────────────────────────
+
+-- Plan y configuración Staff en shops
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter' CHECK (plan IN ('starter','staff','test'));
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS parent_shop_id INT REFERENCES shops(id) ON DELETE CASCADE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_barber BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS barber_commission_pct INT DEFAULT 50;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS barber_color VARCHAR(7) DEFAULT '#FFD100';
+
+-- Invitaciones para barberos
+CREATE TABLE IF NOT EXISTS staff_invites (
+  id          SERIAL PRIMARY KEY,
+  shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  code        VARCHAR(20) UNIQUE NOT NULL,
+  barber_name VARCHAR(255),
+  used        BOOLEAN DEFAULT FALSE,
+  used_by     INT REFERENCES shops(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days'
+);
+
+-- Split de comisiones por turno completado
+CREATE TABLE IF NOT EXISTS commission_splits (
+  id           SERIAL PRIMARY KEY,
+  shop_id      INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  barber_id    INT REFERENCES shops(id) ON DELETE SET NULL,
+  appointment_id INT REFERENCES appointments(id) ON DELETE CASCADE,
+  total_price  NUMERIC(10,2),
+  barber_pct   INT,
+  barber_amount NUMERIC(10,2),
+  owner_amount  NUMERIC(10,2),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS barber_id INT REFERENCES shops(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_shops_parent ON shops(parent_shop_id);
+CREATE INDEX IF NOT EXISTS idx_commission_splits_shop ON commission_splits(shop_id);
+CREATE INDEX IF NOT EXISTS idx_staff_invites_code ON staff_invites(code);
+
+-- Cuentas de test (plan 'test' puede acceder a todo)
+INSERT INTO shops (name, email, password, plan)
+VALUES 
+  ('FILO Test Ian', 'ian@filocrm.com', '$2a$12$placeholder_hash_ian', 'test'),
+  ('FILO Test Socio', 'socio@filocrm.com', '$2a$12$placeholder_hash_socio', 'test')
+ON CONFLICT (email) DO NOTHING;
