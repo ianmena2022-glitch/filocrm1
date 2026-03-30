@@ -2939,5 +2939,541 @@ if (token && currentShop) {
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<!-- ── FILO COPILOT ──────────────────────────────────────── -->
+<style>
+  #copilot-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    font-family: 'Barlow', sans-serif;
+  }
+
+  /* Isla colapsada */
+  #copilot-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #001830 0%, #002a50 100%);
+    border: 1px solid rgba(255,209,0,0.35);
+    border-radius: 40px;
+    padding: 10px 18px 10px 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,209,0,0.1);
+    transition: all .2s;
+    user-select: none;
+  }
+  #copilot-pill:hover {
+    border-color: rgba(255,209,0,0.6);
+    box-shadow: 0 6px 32px rgba(0,0,0,0.5), 0 0 16px rgba(255,209,0,0.1);
+    transform: translateY(-1px);
+  }
+  .copilot-avatar {
+    width: 32px; height: 32px;
+    background: var(--yellow);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .copilot-avatar svg { width: 16px; height: 16px; }
+  .copilot-pill-text { line-height: 1.2; }
+  .copilot-pill-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.3px;
+  }
+  .copilot-pill-sub {
+    font-size: 10px;
+    color: rgba(255,209,0,0.7);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .copilot-dot {
+    width: 7px; height: 7px;
+    background: #00E676;
+    border-radius: 50%;
+    margin-left: 2px;
+    box-shadow: 0 0 6px #00E676;
+    flex-shrink: 0;
+  }
+
+  /* Panel de chat */
+  #copilot-panel {
+    display: none;
+    flex-direction: column;
+    width: 360px;
+    height: 500px;
+    background: #000d1f;
+    border: 1px solid rgba(255,209,0,0.2);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    margin-bottom: 12px;
+  }
+  #copilot-panel.open { display: flex; }
+
+  .cp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #001830 0%, #002a50 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .cp-header-left { display: flex; align-items: center; gap: 10px; }
+  .cp-header-title { font-size: 14px; font-weight: 700; color: #fff; }
+  .cp-header-sub { font-size: 11px; color: rgba(255,209,0,0.7); margin-top: 1px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .cp-close {
+    background: none; border: none; color: rgba(255,255,255,0.4);
+    cursor: pointer; font-size: 18px; padding: 4px; line-height: 1;
+    transition: color .15s;
+  }
+  .cp-close:hover { color: #fff; }
+
+  .cp-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+  .cp-msg {
+    display: flex;
+    gap: 8px;
+    max-width: 100%;
+  }
+  .cp-msg.user { flex-direction: row-reverse; }
+  .cp-bubble {
+    padding: 10px 13px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 82%;
+  }
+  .cp-msg.bot .cp-bubble {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.07);
+    color: #fff;
+    border-bottom-left-radius: 4px;
+  }
+  .cp-msg.user .cp-bubble {
+    background: rgba(255,209,0,0.15);
+    border: 1px solid rgba(255,209,0,0.25);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .cp-msg-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--yellow);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .cp-msg-avatar svg { width: 12px; height: 12px; }
+
+  /* Chips de sugerencias */
+  .cp-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 16px 12px;
+    flex-shrink: 0;
+  }
+  .cp-chip {
+    background: rgba(255,209,0,0.08);
+    border: 1px solid rgba(255,209,0,0.2);
+    color: rgba(255,209,0,0.9);
+    border-radius: 20px;
+    padding: 5px 11px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .cp-chip:hover { background: rgba(255,209,0,0.15); border-color: rgba(255,209,0,0.4); }
+
+  /* Input */
+  .cp-input-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+  }
+  #cp-input {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 9px 13px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+    font-family: 'Barlow', sans-serif;
+    transition: border-color .2s;
+  }
+  #cp-input:focus { border-color: rgba(255,209,0,0.4); }
+  #cp-input::placeholder { color: rgba(255,255,255,0.3); }
+  #cp-send {
+    background: var(--yellow);
+    border: none;
+    border-radius: 10px;
+    width: 36px; height: 36px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: opacity .15s;
+  }
+  #cp-send:hover { opacity: 0.85; }
+  #cp-send svg { width: 15px; height: 15px; }
+
+  /* Typing indicator */
+  .cp-typing {
+    display: flex; gap: 4px; align-items: center; padding: 8px 4px;
+  }
+  .cp-typing span {
+    width: 6px; height: 6px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    animation: cp-bounce 1.2s infinite;
+  }
+  .cp-typing span:nth-child(2) { animation-delay: .2s; }
+  .cp-typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes cp-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40% { transform: translateY(-5px); opacity: 1; }
+  }
+</style>
+
+<div id="copilot-widget">
+  <!-- Panel de chat -->
+  <div id="copilot-panel">
+    <div class="cp-header">
+      <div class="cp-header-left">
+        <div class="copilot-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+          </svg>
+        </div>
+        <div>
+          <div class="cp-header-title">FILO Copilot</div>
+          <div class="cp-header-sub">Asistente de ayuda</div>
+        </div>
+      </div>
+      <button class="cp-close" onclick="toggleCopilot()">✕</button>
+    </div>
+
+    <div class="cp-messages" id="cp-messages"></div>
+
+    <div class="cp-chips" id="cp-chips">
+      <div class="cp-chip" onclick="cpAsk('¿Cómo agrego un turno?')">¿Cómo agrego un turno?</div>
+      <div class="cp-chip" onclick="cpAsk('¿Cómo funciona el sistema de puntos?')">Sistema de puntos</div>
+      <div class="cp-chip" onclick="cpAsk('¿Cómo conecto WhatsApp?')">Conectar WhatsApp</div>
+      <div class="cp-chip" onclick="cpAsk('¿Cómo invito un barbero?')">Invitar barbero</div>
+    </div>
+
+    <div class="cp-input-row">
+      <input id="cp-input" placeholder="Escribí tu pregunta..." onkeydown="if(event.key==='Enter') cpSend()">
+      <button id="cp-send" onclick="cpSend()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Isla/pill -->
+  <div id="copilot-pill" onclick="toggleCopilot()">
+    <div class="copilot-avatar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </div>
+    <div class="copilot-pill-text">
+      <div class="copilot-pill-label">FILO Copilot</div>
+      <div class="copilot-pill-sub">¿En qué te ayudo?</div>
+    </div>
+    <div class="copilot-dot"></div>
+  </div>
+</div>
+
+<script>
+// ── FILO COPILOT ──────────────────────────────────────────
+let cpOpen = false;
+let cpHistory = [];
+
+const COPILOT_KB = [
+  {
+    keys: ['turno','agregar turno','nuevo turno','crear turno','agendar'],
+    answer: `Para agregar un turno:
+1. Andá a la sección **Agenda** en el menú izquierdo
+2. Hacé clic en **+ Nuevo Turno**
+3. Completá cliente, servicio, fecha y hora
+4. Si querés, podés seleccionar un premio a canjear
+5. Hacé clic en **Guardar**
+
+El turno aparece automáticamente en la agenda y se asigna al barbero disponible.`
+  },
+  {
+    keys: ['puntos','sistema de puntos','recompensas','premios','canjear'],
+    answer: `El sistema de puntos funciona así:
+- Los clientes **acumulan puntos** cada vez que completan un servicio
+- La tasa es configurable (por defecto: 0.01 puntos por peso)
+- Los puntos se pueden **canjear en la tienda** por premios que vos configurás
+- Cuando creás un turno podés seleccionar un premio a canjear
+- FILO envía un WhatsApp automático con los puntos ganados al completar el turno
+
+Podés ver los puntos de cada cliente en la sección **Clientes**.`
+  },
+  {
+    keys: ['whatsapp','conectar whatsapp','wpp','qr','código de emparejamiento'],
+    answer: `Para conectar WhatsApp:
+1. Andá a **Configuración** (ícono de engranaje)
+2. Buscá la sección **WhatsApp**
+3. Podés conectar de dos formas:
+   - **QR**: escaneá el código con tu celular desde WhatsApp > Dispositivos vinculados
+   - **Código de emparejamiento**: ingresá tu número y usá el código en WhatsApp
+4. Una vez conectado, FILO envía mensajes automáticos al completar turnos
+
+Necesitás tener WhatsApp instalado en tu celular.`
+  },
+  {
+    keys: ['barbero','invitar barbero','agregar barbero','staff','equipo','código de invitación'],
+    answer: `Para invitar un barbero al equipo:
+1. Andá a **Mi Equipo** (ícono de personas)
+2. Hacé clic en **+ Invitar barbero**
+3. Ingresá el nombre (opcional) y generá el código
+4. Compartí el link o código con el barbero
+5. El barbero lo usa en **/app?invite=CÓDIGO** para crear su cuenta
+
+Cada barbero tiene su propio dashboard en **/barber** donde ve su agenda y estadísticas del día.`
+  },
+  {
+    keys: ['comisión','comisiones','split','porcentaje'],
+    answer: `El sistema de comisiones (Split):
+- Activalo desde **Mi Equipo** → toggle **Split automático**
+- Cada barbero tiene un porcentaje configurable (por defecto 50%)
+- Al completar un turno, FILO calcula automáticamente la comisión
+- El barbero ve su comisión del día en su dashboard personal
+
+Para cambiar el porcentaje de un barbero, hacé clic en el lápiz ✏️ al lado de su nombre.`
+  },
+  {
+    keys: ['servicio','servicios','agregar servicio','precio','duración'],
+    answer: `Para gestionar los servicios:
+1. Andá a **Configuración** → sección **Servicios**
+2. Podés **agregar** un servicio con nombre, precio, costo y duración
+3. La duración se usa para calcular el horario de fin del turno
+4. Para **eliminar** un servicio, hacé clic en el ícono de papelera
+
+Los servicios activos aparecen como opciones al crear un turno.`
+  },
+  {
+    keys: ['cliente','clientes','agregar cliente','nuevo cliente'],
+    answer: `Para gestionar clientes:
+- La sección **Clientes** muestra todos tus clientes con sus visitas, gasto total y puntos
+- Los clientes se crean automáticamente al hacer la primera reserva
+- También podés crear un cliente manualmente desde la sección Clientes
+- Podés buscar clientes por nombre o teléfono
+
+Cada cliente tiene historial de visitas y puntos acumulados.`
+  },
+  {
+    keys: ['reserva','reservas','booking','link de reserva','reservar'],
+    answer: `El sistema de reservas online:
+- Tu link de reservas es único y se genera automáticamente
+- Los clientes pueden reservar desde **/reservar/tu-slug**
+- Podés ver el link en **Configuración**
+- Las reservas aparecen automáticamente en tu agenda
+- Los clientes también pueden canjear premios al reservar
+
+Compartí el link por WhatsApp o redes sociales para que tus clientes reserven solos.`
+  },
+  {
+    keys: ['tienda','store','premios','ítem','agregar premio'],
+    answer: `La tienda de premios:
+- Los clientes acceden desde **/tienda/tu-slug**
+- Podés agregar premios con nombre, descripción y costo en puntos
+- Los premios se pueden canjear al hacer una reserva
+- Activá/desactivá premios según disponibilidad
+
+Esto incentiva a los clientes a volver y acumular puntos.`
+  },
+  {
+    keys: ['membresía','membresías','membership','suscripción'],
+    answer: `Las membresías permiten planes recurrentes para tus clientes:
+- Podés crear membresías con precio mensual y cantidad de cortes incluidos
+- Los clientes con membresía activa aparecen marcados
+- Ayuda a tener ingresos recurrentes predecibles (MRR)
+
+Podés gestionar membresías desde la sección correspondiente en el menú.`
+  },
+  {
+    keys: ['configuración','settings','cuenta','nombre','dirección'],
+    answer: `En **Configuración** podés:
+- Cambiar el nombre de tu barbería, teléfono, ciudad y dirección
+- Configurar los mensajes automáticos de WhatsApp
+- Ver y gestionar tus servicios
+- Conectar/desconectar WhatsApp
+- Ver tu link de reservas
+- Activar el split de comisiones
+
+Todos los cambios se guardan automáticamente.`
+  },
+  {
+    keys: ['dashboard','estadísticas','stats','métricas','ingresos','facturado'],
+    answer: `El Dashboard muestra:
+- **Turnos del día**: total, completados y pendientes
+- **Facturado hoy**: ingresos del día
+- **MRR**: ingresos recurrentes por membresías
+- **Sillón libre**: clientes que no han visitado en un tiempo
+- **Comisiones del equipo**: split del día por barbero
+
+Se actualiza en tiempo real cada vez que completás un turno.`
+  },
+];
+
+function cpMatch(query) {
+  const q = query.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  let best = null;
+  let bestScore = 0;
+  for (const entry of COPILOT_KB) {
+    for (const key of entry.keys) {
+      const k = key.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      if (q.includes(k) || k.includes(q)) {
+        const score = k.length;
+        if (score > bestScore) { bestScore = score; best = entry; }
+      }
+    }
+  }
+  return best;
+}
+
+function cpFormatText(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/
+/g, '<br>');
+}
+
+function cpAddMsg(role, text) {
+  const msgs = document.getElementById('cp-messages');
+  const div = document.createElement('div');
+  div.className = 'cp-msg ' + role;
+
+  if (role === 'bot') {
+    div.innerHTML = `
+      <div class="cp-msg-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+        </svg>
+      </div>
+      <div class="cp-bubble">${cpFormatText(text)}</div>`;
+  } else {
+    div.innerHTML = `<div class="cp-bubble">${text}</div>`;
+  }
+
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function cpShowTyping() {
+  const msgs = document.getElementById('cp-messages');
+  const div = document.createElement('div');
+  div.className = 'cp-msg bot';
+  div.id = 'cp-typing-indicator';
+  div.innerHTML = `
+    <div class="cp-msg-avatar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </div>
+    <div class="cp-bubble"><div class="cp-typing"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function cpHideTyping() {
+  const el = document.getElementById('cp-typing-indicator');
+  if (el) el.remove();
+}
+
+async function cpRespond(query) {
+  cpShowTyping();
+  await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
+  cpHideTyping();
+
+  const match = cpMatch(query);
+  if (match) {
+    cpAddMsg('bot', match.answer);
+  } else {
+    cpAddMsg('bot', `No encontré una respuesta exacta para eso. 🤔
+
+Podés preguntarme sobre:
+- Cómo agregar turnos o clientes
+- Sistema de puntos y premios
+- Conectar WhatsApp
+- Invitar barberos
+- Comisiones y splits
+- Configuración general
+
+¿Sobre cuál de estos te puedo ayudar?`);
+  }
+}
+
+function cpSend() {
+  const input = document.getElementById('cp-input');
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = '';
+  document.getElementById('cp-chips').style.display = 'none';
+  cpAddMsg('user', query);
+  cpRespond(query);
+}
+
+function cpAsk(query) {
+  document.getElementById('cp-chips').style.display = 'none';
+  cpAddMsg('user', query);
+  cpRespond(query);
+}
+
+function toggleCopilot() {
+  cpOpen = !cpOpen;
+  const panel = document.getElementById('copilot-panel');
+  if (cpOpen) {
+    panel.classList.add('open');
+    // Mensaje de bienvenida solo la primera vez
+    if (cpHistory.length === 0) {
+      setTimeout(() => {
+        cpAddMsg('bot', '¡Hola! Soy el **FILO Copilot** ✂️
+
+Estoy acá para ayudarte con cualquier duda sobre el sistema. ¿Qué necesitás saber?');
+        cpHistory.push(1);
+      }, 200);
+    }
+    setTimeout(() => document.getElementById('cp-input').focus(), 300);
+  } else {
+    panel.classList.remove('open');
+  }
+}
+
+document.getElementById('cp-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') cpSend();
+});
+</script>
+
 </body>
 </html>
