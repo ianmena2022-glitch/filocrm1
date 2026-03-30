@@ -433,6 +433,84 @@
     @media (min-width: 769px) {
       .appt-card-mobile { display: none; }
     }
+
+    /* ── WEEK CALENDAR ─────────────────────────────────────── */
+    .cal-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .cal-header {
+      display: grid;
+      background: rgba(0,0,0,0.25);
+      border-bottom: 1px solid var(--border);
+    }
+    .cal-day-header {
+      padding: 10px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--gray);
+      border-right: 1px solid var(--border);
+    }
+    .cal-day-header:last-child { border-right: none; }
+    .cal-day-header.today { color: var(--yellow); }
+    .cal-day-num {
+      font-family: "Oswald", sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--white);
+      display: block;
+      margin-top: 2px;
+    }
+    .cal-day-header.today .cal-day-num {
+      background: var(--yellow);
+      color: #000d1f;
+      border-radius: 50%;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 4px auto 0;
+    }
+    .cal-body {
+      display: grid;
+    }
+    .cal-col {
+      border-right: 1px solid var(--border);
+      min-height: 120px;
+      padding: 6px 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .cal-col:last-child { border-right: none; }
+    .cal-event {
+      background: rgba(255,209,0,0.15);
+      border-left: 3px solid var(--yellow);
+      border-radius: 5px;
+      padding: 5px 7px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background .15s;
+      overflow: hidden;
+    }
+    .cal-event:hover { background: rgba(255,209,0,0.25); }
+    .cal-event.completed {
+      background: rgba(0,230,118,0.1);
+      border-left-color: var(--green);
+      opacity: 0.7;
+    }
+    .cal-event.cancelled {
+      background: rgba(255,255,255,0.04);
+      border-left-color: var(--gray);
+      opacity: 0.5;
+    }
+    .cal-event-time { font-weight: 700; color: var(--yellow); font-size: 10px; }
+    .cal-event.completed .cal-event-time { color: var(--green); }
+    .cal-event-client { color: var(--white); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cal-empty { color: var(--border); font-size: 11px; text-align: center; padding-top: 16px; }
   </style>
 </head>
 <body>
@@ -541,11 +619,16 @@
           </div>
         </div>
 
-        <!-- Próximos turnos hoy -->
+        <!-- Calendario semanal -->
         <div class="section-header">
-          <div class="section-title">Próximos turnos de hoy</div>
+          <div class="section-title">Próximas 2 semanas</div>
+          <div style="display:flex;gap:8px">
+            <button class="date-btn" onclick="weekOffset--; renderCalendar()" style="width:28px;height:28px;font-size:13px">←</button>
+            <button class="date-btn" onclick="weekOffset=0; renderCalendar()" style="padding:0 10px;width:auto;font-size:11px;font-weight:700;letter-spacing:1px">HOY</button>
+            <button class="date-btn" onclick="weekOffset++; renderCalendar()" style="width:28px;height:28px;font-size:13px">→</button>
+          </div>
         </div>
-        <div id="dashboard-upcoming"></div>
+        <div id="week-calendar"></div>
 
       </div>
 
@@ -753,7 +836,7 @@ async function loadDashboard() {
     document.getElementById('stat-pendientes').textContent = pendientes;
     document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
 
-    renderUpcoming(allAppts);
+    renderCalendar();
   } catch(e) { console.error(e); }
 }
 
@@ -856,6 +939,100 @@ async function completeAppt(id) {
   } catch(e) {
     showToast('❌ ' + e.message);
   }
+}
+
+
+// ── WEEK CALENDAR ─────────────────────────────────────────
+let weekOffset = 0;
+let calendarAppts = {}; // { 'YYYY-MM-DD': [appts] }
+
+function getWeekDates(offset) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  // Empezar desde hoy + offset*7 días
+  const start = new Date(today);
+  start.setDate(start.getDate() + offset * 7);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+async function loadCalendarWeek(dates) {
+  const promises = dates.map(async d => {
+    const ds = d.toISOString().split("T")[0];
+    if (calendarAppts[ds] !== undefined) return; // ya cargado
+    try {
+      const appts = await api("GET", "/appointments?date=" + ds);
+      calendarAppts[ds] = appts;
+    } catch(e) {
+      calendarAppts[ds] = [];
+    }
+  });
+  await Promise.all(promises);
+}
+
+async function renderCalendar() {
+  const el = document.getElementById("week-calendar");
+  if (!el) return;
+
+  const dates = getWeekDates(weekOffset);
+  const today = new Date().toISOString().split("T")[0];
+
+  // Mostrar skeleton mientras carga
+  el.innerHTML = "<div style='padding:24px;text-align:center;color:var(--gray);font-size:13px'>Cargando...</div>";
+
+  await loadCalendarWeek(dates);
+
+  const DAYS_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const cols = dates.length;
+
+  let headerHTML = "<div class='cal-header' style='grid-template-columns:repeat(" + cols + ",1fr)'>";
+  dates.forEach(d => {
+    const ds = d.toISOString().split("T")[0];
+    const isToday = ds === today;
+    headerHTML += "<div class='cal-day-header" + (isToday ? " today" : "") + "'>";
+    headerHTML += DAYS_ES[d.getDay()];
+    if (isToday) {
+      headerHTML += "<span class='cal-day-num'>" + d.getDate() + "</span>";
+    } else {
+      headerHTML += "<span class='cal-day-num'>" + d.getDate() + "</span>";
+    }
+    // Mes si es el primero o es día 1
+    if (d.getDate() === 1 || dates.indexOf(d) === 0) {
+      const MONTHS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+      headerHTML += "<span style='font-size:9px;opacity:.6'>" + MONTHS[d.getMonth()] + "</span>";
+    }
+    headerHTML += "</div>";
+  });
+  headerHTML += "</div>";
+
+  let bodyHTML = "<div class='cal-body' style='grid-template-columns:repeat(" + cols + ",1fr)'>";
+  dates.forEach(d => {
+    const ds = d.toISOString().split("T")[0];
+    const appts = calendarAppts[ds] || [];
+    bodyHTML += "<div class='cal-col'>";
+    if (!appts.length) {
+      bodyHTML += "<div class='cal-empty'>—</div>";
+    } else {
+      appts.forEach(a => {
+        const statusClass = a.status === "completed" ? " completed" : a.status === "cancelled" || a.status === "noshow" ? " cancelled" : "";
+        const time = String(a.time_start||'').slice(0,5);
+        const client = a.client_name || "Sin nombre";
+        bodyHTML += "<div class='cal-event" + statusClass + "' title='" + client + " - " + (a.service_name||'') + "'>";
+        bodyHTML += "<div class='cal-event-time'>" + time + "</div>";
+        bodyHTML += "<div class='cal-event-client'>" + client + "</div>";
+        bodyHTML += "</div>";
+      });
+    }
+    bodyHTML += "</div>";
+  });
+  bodyHTML += "</div>";
+
+  el.innerHTML = "<div class='cal-wrapper'>" + headerHTML + bodyHTML + "</div>";
 }
 
 // ── INIT ──────────────────────────────────────────────────
