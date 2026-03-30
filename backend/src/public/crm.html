@@ -1248,36 +1248,14 @@ body {
           </div>
 
           <!-- Selector de método -->
-          <div style="display:flex;gap:10px;margin-bottom:14px">
-            <button id="wpp-method-qr" onclick="setWppMethod('qr')" class="btn-motor" style="flex:1;padding:10px;font-size:13px">📷 QR</button>
-            <button id="wpp-method-pair" onclick="setWppMethod('pair')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🔢 Código</button>
+          <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
+          <div id="wpp-qr-container" style="margin-top:16px;display:none">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
+            <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
+            <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
           </div>
 
-          <!-- Método QR -->
-          <div id="wpp-method-qr-section">
-            <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar con QR</button>
-            <div id="wpp-qr-container" style="margin-top:16px;display:none">
-              <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
-              <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
-              <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
-            </div>
-          </div>
-
-          <!-- Método Pairing Code -->
-          <div id="wpp-method-pair-section" style="display:none">
-            <div class="form-field" style="margin-bottom:12px">
-              <label>Número de WhatsApp (con código de país, sin +)</label>
-              <input type="tel" id="wpp-pair-phone" placeholder="5491112345678" style="font-size:16px">
-            </div>
-            <button class="btn-motor" id="wpp-pair-btn" onclick="connectWithPairingCode()">🔢 Obtener código</button>
-            <div id="wpp-pair-result" style="display:none;margin-top:16px;padding:20px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.3);border-radius:12px;text-align:center">
-              <div style="font-size:13px;color:var(--gray);margin-bottom:8px">Ingresá este código en WhatsApp → Dispositivos vinculados → Vincular con número</div>
-              <div id="wpp-pair-code" style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--yellow);font-family:'Oswald',sans-serif"></div>
-              <div style="font-size:11px;color:var(--gray);margin-top:8px">El código expira en 60 segundos</div>
-            </div>
-          </div>
-
-          <!-- Templates de mensajes desplegables -->
+                    <!-- Templates de mensajes desplegables -->
           <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
             <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">🤖 Mensajes de respaldo (si la IA falla)</div>
 
@@ -2639,19 +2617,10 @@ async function renderQR(qrData) {
   }
 }
 
-function setWppMethod(method) {
-  const isQr = method === 'qr';
-  document.getElementById('wpp-method-qr-section').style.display = isQr ? 'block' : 'none';
-  document.getElementById('wpp-method-pair-section').style.display = isQr ? 'none' : 'block';
-  document.getElementById('wpp-method-qr').className = isQr ? 'btn-motor' : 'btn-motor secondary';
-  document.getElementById('wpp-method-pair').className = isQr ? 'btn-motor secondary' : 'btn-motor';
-}
-
 function onWppConnected() {
   document.getElementById('wpp-dot').className = 'wpp-dot connected';
   document.getElementById('wpp-status-text').textContent = 'WhatsApp conectado ✅';
   document.getElementById('wpp-qr-container').style.display = 'none';
-  document.getElementById('wpp-pair-result').style.display = 'none';
   showToast('✅', 'WhatsApp conectado', 'Ya podés enviar mensajes desde FILO');
 }
 
@@ -2677,39 +2646,11 @@ async function connectWhatsapp() {
   } catch (e) {
     showToast('❌', 'Error', e.message);
   } finally {
-    btn.disabled = false; btn.textContent = '📱 Conectar con QR';
+    btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp';
   }
 }
 
-async function connectWithPairingCode() {
-  const phone = document.getElementById('wpp-pair-phone').value.trim().replace(/\D/g, '');
-  if (!phone || phone.length < 10) return showToast('⚠️', 'Ingresá un número válido', 'Ej: 5491112345678');
-  const btn = document.getElementById('wpp-pair-btn');
-  btn.disabled = true; btn.textContent = 'Generando código...';
-  try {
-    const res = await api('POST', '/settings/whatsapp/pairing-code', { phone });
-    if (res.code) {
-      document.getElementById('wpp-pair-code').textContent = res.code;
-      document.getElementById('wpp-pair-result').style.display = 'block';
-      showToast('🔢', 'Código generado', 'Ingresalo en WhatsApp → Dispositivos vinculados');
-      // Polling para detectar conexión
-      const check = setInterval(async () => {
-        try {
-          const status = await api('GET', '/settings/whatsapp/status');
-          if (status.connected) { clearInterval(check); onWppConnected(); }
-        } catch { clearInterval(check); }
-      }, 3000);
-      // Limpiar polling después de 2 min
-      setTimeout(() => clearInterval(check), 120000);
-    } else {
-      showToast('❌', 'Error', res.error || 'No se pudo generar el código');
-    }
-  } catch (e) {
-    showToast('❌', 'Error', e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '🔢 Obtener código';
-  }
-}
+
 
 
 // ─── MODALES ───
