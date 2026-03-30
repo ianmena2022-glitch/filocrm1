@@ -915,6 +915,33 @@ body {
       </div>
       <button class="btn-primary" onclick="register()">🚀 Crear mi cuenta</button>
     </div>
+
+    <!-- Registro barbero con código -->
+    <div id="form-barber" style="display:none">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:32px;margin-bottom:6px">✂️</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Unirse como barbero</div>
+        <div style="font-size:13px;color:var(--gray)">Tu jefe te invitó a FILO</div>
+      </div>
+      <div class="form-group">
+        <label>Código de invitación</label>
+        <input type="text" id="barber-code" placeholder="Ej: EA66CCC1" style="text-transform:uppercase;letter-spacing:3px;font-size:18px;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>Tu nombre</label>
+        <input type="text" id="barber-name" placeholder="Tu nombre">
+      </div>
+      <div class="form-group">
+        <label>Tu email</label>
+        <input type="email" id="barber-email" placeholder="tu@email.com">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="barber-pass" placeholder="Mínimo 6 caracteres">
+      </div>
+      <button class="btn-primary" onclick="registerBarber()">✂️ Unirme al equipo</button>
+      <button onclick="switchAuthTab('login')" style="width:100%;margin-top:10px;background:none;border:none;color:var(--gray);font-size:13px;cursor:pointer;padding:8px">← Ya tengo cuenta</button>
+    </div>
   </div>
 </div>
 
@@ -1567,6 +1594,7 @@ body {
 const API = window.location.origin + '/api';
 let token = localStorage.getItem('filo_token');
 let currentShop = JSON.parse(localStorage.getItem('filo_shop') || 'null');
+checkInviteCode();
 let agendaDate = new Date().toISOString().split('T')[0];
 let services = [];
 let clients = [];
@@ -1619,6 +1647,48 @@ async function login() {
     showAuthError(e.message);
   } finally {
     btn.disabled = false; btn.textContent = '✂️ Entrar a FILO';
+  }
+}
+
+// Detectar invite code en URL al cargar
+function checkInviteCode() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('invite');
+  if (code) {
+    // Mostrar tab de barbero
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('form-login').style.display = 'none';
+    document.getElementById('form-register').style.display = 'none';
+    document.getElementById('form-barber').style.display = 'block';
+    document.getElementById('barber-code').value = code.toUpperCase();
+    // Limpiar URL
+    window.history.replaceState({}, '', '/app');
+  }
+}
+
+async function registerBarber() {
+  const code  = document.getElementById('barber-code').value.trim().toUpperCase();
+  const name  = document.getElementById('barber-name').value.trim();
+  const email = document.getElementById('barber-email').value.trim();
+  const pass  = document.getElementById('barber-pass').value;
+
+  if (!code || !name || !email || !pass) return showAuthError('Completá todos los campos');
+  if (pass.length < 6) return showAuthError('La contraseña debe tener al menos 6 caracteres');
+
+  const btn = document.querySelector('#form-barber .btn-primary');
+  btn.disabled = true; btn.textContent = 'Uniéndome...';
+  try {
+    const data = await api('POST', '/auth/register-barber', {
+      name, email, password: pass, invite_code: code
+    });
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    startApp();
+  } catch(e) {
+    showAuthError(e.message);
+    btn.disabled = false; btn.textContent = '✂️ Unirme al equipo';
   }
 }
 
