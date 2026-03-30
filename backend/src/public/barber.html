@@ -15,12 +15,16 @@
       --red: #FF4343;
       --green: #00E676;
       --radius: 12px;
+      --sidebar-w: 220px;
+      --bg: #000d1f;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.07);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #000d1f; color: var(--white); font-family: 'Barlow', sans-serif; min-height: 100vh; }
+    body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-serif; min-height: 100vh; }
 
-    /* AUTH */
-    #auth-screen { position: fixed; inset: 0; background: #000d1f; display: flex; align-items: center; justify-content: center; z-index: 100; }
+    /* ── AUTH ─────────────────────────────────────────────── */
+    #auth-screen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .auth-box { width: 100%; max-width: 380px; padding: 0 24px; }
     .auth-logo { display: flex; justify-content: center; margin-bottom: 32px; }
     .form-group { margin-bottom: 16px; }
@@ -30,67 +34,410 @@
     .btn-primary { width: 100%; background: var(--yellow); color: var(--navy); border: none; padding: 16px; border-radius: 12px; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-top: 8px; }
     .auth-error { background: rgba(255,67,67,0.1); border: 1px solid rgba(255,67,67,0.3); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--red); margin-bottom: 16px; display: none; }
 
-    /* APP */
-    #app { display: none; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .topbar-title { font-family: 'Oswald', sans-serif; font-size: 20px; letter-spacing: 1px; }
-    .topbar-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
-    .btn-logout { background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--gray); padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+    /* ── APP SHELL ────────────────────────────────────────── */
+    #app { display: none; height: 100vh; overflow: hidden; }
 
-    /* STATS */
-    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px 20px; }
-    .stat-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius); padding: 16px; }
-    .stat-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); margin-bottom: 6px; }
-    .stat-value { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700; color: var(--yellow); }
+    /* ── DESKTOP LAYOUT ───────────────────────────────────── */
+    .app-layout {
+      display: flex;
+      height: 100vh;
+    }
 
-    /* AGENDA */
-    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); padding: 0 20px; margin: 16px 0 10px; }
-    .appt-card { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .appt-time { font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700; color: var(--yellow); min-width: 50px; }
-    .appt-info { flex: 1; }
+    /* ── SIDEBAR ──────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: rgba(0,10,25,0.9);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .sidebar-logo {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-logo img { height: 36px; object-fit: contain; }
+    .sidebar-brand {
+      font-family: 'Oswald', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--yellow);
+    }
+
+    .sidebar-user {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-greeting {
+      font-family: 'Oswald', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--white);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar-shop {
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 3px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 0;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      cursor: pointer;
+      color: var(--gray);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      transition: all .15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { color: var(--white); background: rgba(255,255,255,0.04); }
+    .nav-item.active { color: var(--yellow); border-left-color: var(--yellow); background: rgba(255,209,0,0.06); }
+    .nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-logout {
+      display: flex; align-items: center; gap: 8px;
+      background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--gray);
+      padding: 9px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; width: 100%;
+      transition: all .15s;
+    }
+    .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── MAIN CONTENT ─────────────────────────────────────── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,13,31,0.8);
+      backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .topbar-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .topbar-date {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    /* ── TAB SECTIONS ─────────────────────────────────────── */
+    .tab-section { display: none; padding: 28px; }
+    .tab-section.active { display: block; }
+
+    /* ── DASHBOARD STATS ──────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 20px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--yellow);
+      opacity: 0.4;
+    }
+    .stat-card.highlight::before { opacity: 1; }
+    .stat-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 10px;
+    }
+    .stat-value {
+      font-family: 'Oswald', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--yellow);
+      line-height: 1;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 6px;
+    }
+
+    /* ── SECTION HEADER ───────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: var(--white);
+    }
+
+    /* ── DATE NAV ─────────────────────────────────────────── */
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      margin-bottom: 16px;
+    }
+    .date-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--white);
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    .date-btn:hover { background: rgba(255,255,255,0.1); }
+    .date-label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+      flex: 1;
+    }
+    .date-summary { font-size: 13px; color: var(--gray); }
+
+    /* ── APPOINTMENT CARDS ────────────────────────────────── */
+    .appts-table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .appt-row {
+      display: grid;
+      grid-template-columns: 70px 1fr 160px 120px 110px;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .appt-row:last-child { border-bottom: none; }
+    .appt-row:hover { background: rgba(255,255,255,0.02); }
+    .appt-row.header-row {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gray);
+      padding: 12px 20px;
+      background: rgba(0,0,0,0.2);
+    }
+    .appt-row.header-row:hover { background: rgba(0,0,0,0.2); }
+    .appt-time {
+      font-family: 'Oswald', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--yellow);
+    }
     .appt-client { font-weight: 700; font-size: 15px; }
     .appt-service { font-size: 12px; color: var(--gray); margin-top: 2px; }
-    .appt-price { font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 700; }
-    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .appt-price {
+      font-family: 'Oswald', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--white);
+    }
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      display: inline-block;
+    }
     .status-pending { background: rgba(255,145,0,0.2); color: #FF9100; }
     .status-completed { background: rgba(0,230,118,0.2); color: var(--green); }
     .status-noshow { background: rgba(255,67,67,0.2); color: var(--red); }
     .status-cancelled { background: rgba(255,255,255,0.1); color: var(--gray); }
-    .btn-complete { background: rgba(0,230,118,0.15); border: 1px solid rgba(0,230,118,0.3); color: var(--green); padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-left: 8px; }
-    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray); }
-    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .status-confirmed { background: rgba(0,180,255,0.2); color: #00B4FF; }
+    .btn-complete {
+      background: rgba(0,230,118,0.12);
+      border: 1px solid rgba(0,230,118,0.3);
+      color: var(--green);
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .btn-complete:hover { background: rgba(0,230,118,0.22); }
 
-    /* BOTTOM NAV */
-    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #000d1f; border-top: 1px solid rgba(255,255,255,0.07); display: flex; }
-    .bottom-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 0; font-size: 10px; color: var(--gray); cursor: pointer; gap: 4px; }
-    .bottom-nav-item.active { color: var(--yellow); }
-    .bottom-nav-icon { font-size: 22px; }
-    .content { padding-bottom: 70px; }
+    /* ── CLIENTS ──────────────────────────────────────────── */
+    .clients-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+    }
+    .client-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color .15s;
+    }
+    .client-card:hover { border-color: rgba(255,209,0,0.2); }
+    .client-avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: var(--yellow);
+      color: #000d1f;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 16px;
+      flex-shrink: 0;
+      font-family: 'Oswald', sans-serif;
+    }
+    .client-name { font-weight: 700; font-size: 15px; }
+    .client-meta { font-size: 12px; color: var(--gray); margin-top: 3px; }
 
-    /* DATE NAV */
-    .date-nav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; }
-    .date-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--white); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 16px; }
-    .date-label { font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 600; flex: 1; }
-    .date-summary { font-size: 12px; color: var(--gray); margin-left: auto; }
+    /* ── SEARCH ───────────────────────────────────────────── */
+    .search-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--white);
+      font-size: 14px;
+      outline: none;
+      margin-bottom: 20px;
+      transition: border-color .2s;
+    }
+    .search-input:focus { border-color: var(--yellow); }
 
-    /* SECTIONS */
-    .tab-section { display: none; }
-    .tab-section.active { display: block; }
+    /* ── EMPTY STATE ──────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--gray);
+    }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 14px; opacity: .4; }
+    .empty-state p { font-size: 14px; }
 
-    /* TOAST */
-    #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,20,40,0.95); border: 1px solid rgba(255,209,0,0.3); border-radius: 12px; padding: 12px 20px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+    /* ── TOAST ────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: rgba(0,20,40,0.97);
+      border: 1px solid rgba(255,209,0,0.3);
+      border-radius: 12px;
+      padding: 14px 22px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+      z-index: 999;
+    }
     #toast.show { opacity: 1; }
 
-    /* CLIENTS */
-    .client-card { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .client-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--yellow); color: #000d1f; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
-    .client-name { font-weight: 700; font-size: 14px; }
-    .client-meta { font-size: 12px; color: var(--gray); margin-top: 2px; }
+    /* ── MOBILE BOTTOM NAV (solo <768px) ─────────────────── */
+    .bottom-nav { display: none; }
+
+    /* ── RESPONSIVE ───────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .appt-row { grid-template-columns: 60px 1fr 110px 100px; }
+      .appt-row > :nth-child(5) { display: none; } /* oculta botón en la tabla, se puede adaptar */
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .tab-section { padding: 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .appts-table { display: none; }
+
+      /* Mobile card view */
+      .appt-card-mobile {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin-bottom: 10px;
+      }
+
+      .bottom-nav {
+        display: flex;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: #000d1f;
+        border-top: 1px solid var(--border);
+        z-index: 20;
+      }
+      .bottom-nav-item {
+        flex: 1; display: flex; flex-direction: column; align-items: center;
+        padding: 10px 0; font-size: 10px; color: var(--gray);
+        cursor: pointer; gap: 4px;
+      }
+      .bottom-nav-item.active { color: var(--yellow); }
+      .bottom-nav-icon { width: 22px; height: 22px; }
+      .main-content { padding-bottom: 64px; }
+    }
+
+    @media (min-width: 769px) {
+      .appt-card-mobile { display: none; }
+    }
   </style>
 </head>
 <body>
 
-<!-- AUTH -->
+<!-- ── AUTH ──────────────────────────────────────────── -->
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">
@@ -105,67 +452,174 @@
       <label>Contraseña</label>
       <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button class="btn-primary" onclick="login()">✂️ Entrar</button>
+    <button class="btn-primary" onclick="login()">Entrar</button>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ── APP ───────────────────────────────────────────── -->
 <div id="app">
-  <div class="topbar">
-    <div>
-      <div class="topbar-title" id="barber-greeting">Buenos días ✂️</div>
-      <div class="topbar-sub" id="shop-name-label"></div>
-    </div>
-    <button class="btn-logout" onclick="logout()">Salir</button>
-  </div>
+  <div class="app-layout">
 
-  <div class="content">
-    <!-- DASHBOARD -->
-    <div id="tab-dashboard" class="tab-section active">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Turnos hoy</div>
-          <div class="stat-value" id="stat-turnos">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Completados</div>
-          <div class="stat-value" id="stat-completados">0</div>
-        </div>
-        <div class="stat-card" id="commission-card" style="display:none">
-          <div class="stat-label">Mi comisión</div>
-          <div class="stat-value" id="stat-comision" style="font-size:18px">$0</div>
-        </div>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="/logo_filo.png" alt="FILO">
       </div>
 
-      <div class="section-title">Turnos de hoy</div>
-      <div class="date-nav">
-        <button class="date-btn" onclick="changeDate(-1)">←</button>
-        <div class="date-label" id="date-label">Hoy</div>
-        <div class="date-summary" id="date-summary"></div>
-        <button class="date-btn" onclick="changeDate(1)">→</button>
+      <div class="sidebar-user">
+        <div class="sidebar-greeting" id="barber-greeting">—</div>
+        <div class="sidebar-shop" id="shop-name-label"></div>
       </div>
-      <div id="agenda-list"></div>
-    </div>
 
-    <!-- CLIENTES -->
-    <div id="tab-clientes" class="tab-section">
-      <div style="padding:16px 20px">
-        <input type="text" id="client-search" placeholder="🔍 Buscar cliente..." oninput="searchClients(this.value)"
-          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--white);font-size:14px;outline:none">
+      <nav class="sidebar-nav">
+        <div class="nav-item active" onclick="showTab('dashboard')" id="nav-dashboard">
+          <!-- Dashboard icon -->
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          Dashboard
+        </div>
+        <div class="nav-item" onclick="showTab('agenda')" id="nav-agenda">
+          <!-- Calendar icon -->
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2.5"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Agenda
+        </div>
+        <div class="nav-item" onclick="showTab('clientes')" id="nav-clientes">
+          <!-- Users icon -->
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+          </svg>
+          Clientes
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="logout()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Salir
+        </button>
       </div>
-      <div id="clients-list"></div>
-    </div>
-  </div>
+    </aside>
 
-  <!-- BOTTOM NAV -->
+    <!-- MAIN -->
+    <div class="main-content">
+
+      <div class="topbar">
+        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div class="topbar-date" id="topbar-date"></div>
+      </div>
+
+      <!-- ── DASHBOARD ── -->
+      <div id="tab-dashboard" class="tab-section active">
+
+        <div class="stats-grid">
+          <div class="stat-card highlight">
+            <div class="stat-label">Turnos hoy</div>
+            <div class="stat-value" id="stat-turnos">0</div>
+            <div class="stat-sub">del día actual</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Completados</div>
+            <div class="stat-value" id="stat-completados">0</div>
+            <div class="stat-sub">finalizados hoy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pendientes</div>
+            <div class="stat-value" id="stat-pendientes">0</div>
+            <div class="stat-sub">por atender</div>
+          </div>
+          <div class="stat-card" id="commission-card" style="display:none">
+            <div class="stat-label">Mi comisión</div>
+            <div class="stat-value" id="stat-comision" style="font-size:22px">$0</div>
+            <div class="stat-sub">sobre completados</div>
+          </div>
+        </div>
+
+        <!-- Próximos turnos hoy -->
+        <div class="section-header">
+          <div class="section-title">Próximos turnos de hoy</div>
+        </div>
+        <div id="dashboard-upcoming"></div>
+
+      </div>
+
+      <!-- ── AGENDA ── -->
+      <div id="tab-agenda" class="tab-section">
+        <div class="date-nav">
+          <button class="date-btn" onclick="changeDate(-1)">←</button>
+          <div class="date-label" id="date-label">Hoy</div>
+          <div class="date-summary" id="date-summary"></div>
+          <button class="date-btn" onclick="changeDate(1)">→</button>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="appts-table" id="agenda-table">
+          <div class="appt-row header-row">
+            <div>Hora</div>
+            <div>Cliente</div>
+            <div>Precio</div>
+            <div>Estado</div>
+            <div>Acción</div>
+          </div>
+          <div id="agenda-list"></div>
+        </div>
+
+        <!-- Mobile cards -->
+        <div id="agenda-list-mobile"></div>
+      </div>
+
+      <!-- ── CLIENTES ── -->
+      <div id="tab-clientes" class="tab-section">
+        <input type="text" class="search-input" id="client-search" placeholder="Buscar cliente..." oninput="searchClients(this.value)">
+        <div class="clients-grid" id="clients-list"></div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /app-layout -->
+
+  <!-- Mobile bottom nav -->
   <div class="bottom-nav">
-    <div class="bottom-nav-item active" onclick="showTab('dashboard')">
-      <div class="bottom-nav-icon">📊</div>
-      <div>Agenda</div>
+    <div class="bottom-nav-item active" onclick="showTab('dashboard')" id="mob-nav-dashboard">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+      <span>Dashboard</span>
     </div>
-    <div class="bottom-nav-item" onclick="showTab('clientes')">
-      <div class="bottom-nav-icon">👥</div>
-      <div>Clientes</div>
+    <div class="bottom-nav-item" onclick="showTab('agenda')" id="mob-nav-agenda">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2.5"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span>Agenda</span>
+    </div>
+    <div class="bottom-nav-item" onclick="showTab('clientes')" id="mob-nav-clientes">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+      </svg>
+      <span>Clientes</span>
     </div>
   </div>
 </div>
@@ -178,6 +632,7 @@ let token = localStorage.getItem('barber_token');
 let me = JSON.parse(localStorage.getItem('barber_me') || 'null');
 let currentDate = new Date().toISOString().split('T')[0];
 let allClients = [];
+let allAppts = [];
 
 async function api(method, path, body) {
   const res = await fetch(API + path, {
@@ -197,7 +652,7 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// AUTH
+// ── AUTH ────────────────────────────────────────────────
 async function login() {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-pass').value;
@@ -222,17 +677,6 @@ async function login() {
     me = data.shop;
     localStorage.setItem('barber_token', token);
     localStorage.setItem('barber_me', JSON.stringify(me));
-    // Obtener configuración de la cuenta principal
-    if (me.parent_shop_id) {
-      try {
-        const parentRes = await fetch(API + '/barbers/parent-config', {
-          headers: { 'Authorization': `Bearer ${data.token}` }
-        });
-        const parentData = await parentRes.json();
-        me.commission_enabled = parentData.commission_enabled;
-        localStorage.setItem('barber_me', JSON.stringify(me));
-      } catch(e) { me.commission_enabled = false; }
-    }
     startApp();
   } catch(e) {
     errEl.textContent = 'Error al conectar';
@@ -252,27 +696,42 @@ function startApp() {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
-  document.getElementById('barber-greeting').textContent = `${greeting}, ${me.name} ✂️`;
+  document.getElementById('barber-greeting').textContent = `${greeting}, ${me.name}`;
+  if (me.shop_name) document.getElementById('shop-name-label').textContent = me.shop_name;
 
-  // Mostrar comisión solo si está activada en la cuenta principal
-  const commCard = document.getElementById('commission-card');
-  if (commCard) {
-    commCard.style.display = me.commission_enabled ? 'block' : 'none';
-  }
+  // Topbar date
+  const now = new Date();
+  document.getElementById('topbar-date').textContent = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   loadDashboard();
   loadClients();
 }
 
-// NAVIGATION
+// ── NAVIGATION ───────────────────────────────────────────
+const TABS = ['dashboard', 'agenda', 'clientes'];
+
 function showTab(tab) {
-  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.bottom-nav-item').forEach(n => n.classList.remove('active'));
+  TABS.forEach(t => {
+    document.getElementById('tab-' + t).classList.remove('active');
+    const navEl = document.getElementById('nav-' + t);
+    if (navEl) navEl.classList.remove('active');
+    const mobEl = document.getElementById('mob-nav-' + t);
+    if (mobEl) mobEl.classList.remove('active');
+  });
+
   document.getElementById('tab-' + tab).classList.add('active');
-  document.querySelectorAll('.bottom-nav-item')[tab === 'dashboard' ? 0 : 1].classList.add('active');
+  const navEl = document.getElementById('nav-' + tab);
+  if (navEl) navEl.classList.add('active');
+  const mobEl = document.getElementById('mob-nav-' + tab);
+  if (mobEl) mobEl.classList.add('active');
+
+  const titles = { dashboard: 'Dashboard', agenda: 'Agenda', clientes: 'Clientes' };
+  document.getElementById('topbar-title').textContent = titles[tab] || tab;
+
+  if (tab === 'agenda') loadAgenda();
 }
 
-// DATE
+// ── DATE ─────────────────────────────────────────────────
 function changeDate(delta) {
   const d = new Date(currentDate + 'T12:00:00');
   d.setDate(d.getDate() + delta);
@@ -287,11 +746,85 @@ function formatDateLabel(dateStr) {
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-// DASHBOARD
+// ── DASHBOARD ─────────────────────────────────────────────
 async function loadDashboard() {
-  await loadAgenda();
+  if (me.parent_shop_id || me.is_barber) {
+    try {
+      const parentData = await api('GET', '/barbers/parent-config');
+      me.commission_enabled = parentData.commission_enabled;
+      me.barber_commission_pct = parentData.barber_commission_pct || me.barber_commission_pct;
+      localStorage.setItem('barber_me', JSON.stringify(me));
+    } catch(e) {}
+  }
+
+  const commCard = document.getElementById('commission-card');
+  if (commCard) commCard.style.display = me.commission_enabled ? 'block' : 'none';
+
+  // Load today's appointments for dashboard
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const appts = await api('GET', `/appointments?date=${today}`);
+    allAppts = appts.filter(a => !a.barber_id || a.barber_id === me.id);
+
+    const completados = allAppts.filter(a => a.status === 'completed').length;
+    const pendientes = allAppts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
+    const facturado = allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
+    const comision = me.commission_enabled ? facturado * (me.barber_commission_pct || 50) / 100 : 0;
+
+    document.getElementById('stat-turnos').textContent = allAppts.length;
+    document.getElementById('stat-completados').textContent = completados;
+    document.getElementById('stat-pendientes').textContent = pendientes;
+    document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
+
+    renderUpcoming(allAppts);
+  } catch(e) { console.error(e); }
 }
 
+function renderUpcoming(appts) {
+  const el = document.getElementById('dashboard-upcoming');
+  const now = new Date();
+  const currentTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  // Show pending/confirmed from now on, max 5
+  const upcoming = appts
+    .filter(a => (a.status === 'pending' || a.status === 'confirmed') && (a.time_start||'') >= currentTime)
+    .slice(0, 5);
+
+  if (!upcoming.length) {
+    const hasPending = appts.some(a => a.status === 'pending' || a.status === 'confirmed');
+    el.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <p>${hasPending ? 'No hay más turnos pendientes por hoy' : 'Sin turnos para hoy'}</p>
+    </div>`;
+    return;
+  }
+
+  const statusLabel = { pending:'Pendiente', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', confirmed:'Confirmado' };
+  el.innerHTML = `
+    <div class="appts-table">
+      <div class="appt-row header-row">
+        <div>Hora</div><div>Cliente</div><div>Precio</div><div>Estado</div><div>Acción</div>
+      </div>
+      ${upcoming.map(a => apptRowHTML(a, statusLabel)).join('')}
+    </div>
+    ${upcoming.length > 0 ? `<div style="margin-top:12px;text-align:right"><span style="font-size:13px;color:var(--gray);cursor:pointer" onclick="showTab('agenda')">Ver agenda completa →</span></div>` : ''}
+  `;
+}
+
+function apptRowHTML(a, statusLabel) {
+  return `<div class="appt-row">
+    <div class="appt-time">${String(a.time_start||'').slice(0,5)}</div>
+    <div>
+      <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
+      <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
+    </div>
+    <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+    <div><span class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</span></div>
+    <div>${a.status === 'pending' || a.status === 'confirmed' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}</div>
+  </div>`;
+}
+
+// ── AGENDA ────────────────────────────────────────────────
 async function loadAgenda() {
   document.getElementById('date-label').textContent = formatDateLabel(currentDate);
   try {
@@ -300,33 +833,40 @@ async function loadAgenda() {
 
     const completados = myAppts.filter(a => a.status === 'completed').length;
     const facturado = myAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
-    const comision = me.commission_enabled ? facturado * (me.barber_commission_pct || 50) / 100 : 0;
-
-    document.getElementById('stat-turnos').textContent = myAppts.length;
-    document.getElementById('stat-completados').textContent = completados;
-    document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
     document.getElementById('date-summary').textContent = `${myAppts.length} turnos · $${facturado.toLocaleString('es-AR')}`;
 
+    const statusLabel = { pending:'Pendiente', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', confirmed:'Confirmado' };
+
+    // Desktop table
     const el = document.getElementById('agenda-list');
+    // Mobile list
+    const elMob = document.getElementById('agenda-list-mobile');
+
     if (!myAppts.length) {
-      el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>Sin turnos para este día</p></div>`;
+      el.innerHTML = `<div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <p>Sin turnos para este día</p>
+      </div>`;
+      elMob.innerHTML = el.innerHTML;
       return;
     }
 
-    const statusLabel = { pending:'Pendiente', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', confirmed:'Confirmado' };
-    el.innerHTML = myAppts.map(a => `
-      <div class="appt-card">
+    el.innerHTML = myAppts.map(a => apptRowHTML(a, statusLabel)).join('');
+
+    elMob.innerHTML = myAppts.map(a => `
+      <div class="appt-card-mobile">
         <div class="appt-time">${String(a.time_start||'').slice(0,5)}</div>
-        <div class="appt-info">
+        <div style="flex:1">
           <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
           <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
-          <div class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</div>
-          ${a.status === 'pending' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}
+          <span class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</span>
+          ${a.status === 'pending' || a.status === 'confirmed' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}
         </div>
       </div>`).join('');
+
   } catch(e) { console.error(e); }
 }
 
@@ -334,13 +874,14 @@ async function completeAppt(id) {
   try {
     await api('PUT', `/appointments/${id}/status`, { status: 'completed' });
     showToast('✅ Turno completado');
-    loadAgenda();
+    loadDashboard();
+    if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
   } catch(e) {
     showToast('❌ ' + e.message);
   }
 }
 
-// CLIENTS
+// ── CLIENTS ───────────────────────────────────────────────
 async function loadClients() {
   try {
     allClients = await api('GET', '/clients');
@@ -351,7 +892,10 @@ async function loadClients() {
 function renderClients(list) {
   const el = document.getElementById('clients-list');
   if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">👥</div><p>Sin clientes</p></div>`;
+    el.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
+      <p>Sin clientes</p>
+    </div>`;
     return;
   }
   el.innerHTML = list.map(c => {
@@ -373,7 +917,7 @@ function searchClients(q) {
   renderClients(allClients.filter(c => c.name.toLowerCase().includes(lower) || (c.phone||'').includes(q)));
 }
 
-// INIT
+// ── INIT ──────────────────────────────────────────────────
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
 if (token && me?.is_barber) {
