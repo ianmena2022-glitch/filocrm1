@@ -931,6 +931,7 @@ body {
       <div class="nav-item" onclick="showSection('motores')" title="Motores">⚡</div>
       <div class="nav-item" onclick="showSection('membresias')" title="Membresías">👑</div>
     </div>
+      <div class="nav-item" id="nav-equipo" onclick="showSection('equipo')" title="Mi Equipo" style="display:none">👥✂️</div>
     <div class="sidebar-bottom">
       <div class="nav-item" onclick="showSection('configuracion')" title="Configuración">⚙️</div>
       <div class="avatar" id="user-avatar" onclick="logout()" title="Cerrar sesión">?</div>
@@ -1092,6 +1093,62 @@ body {
       <div id="memb-list"></div>
     </section>
 
+    <!-- ─── EQUIPO (STAFF) ─── -->
+    <section id="sec-equipo" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>✂️ MI EQUIPO</h1>
+          <p id="equipo-stats">Cargando...</p>
+        </div>
+        <button class="btn-add" onclick="openInviteModal()">+ Invitar barbero</button>
+      </div>
+
+      <!-- Stats del equipo -->
+      <div id="equipo-stats-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px"></div>
+
+      <!-- Lista de barberos -->
+      <div id="equipo-list"></div>
+
+      <!-- Toggle comisión -->
+      <div style="margin-top:28px;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <div style="font-size:14px;font-weight:700">💰 Split automático de comisiones</div>
+            <div style="font-size:12px;color:var(--gray);margin-top:3px">Al completar un turno, se calcula automáticamente la comisión de cada barbero</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:48px;height:26px;cursor:pointer">
+            <input type="checkbox" id="toggle-commission" onchange="toggleCommission()" style="opacity:0;width:0;height:0">
+            <span id="commission-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:26px;transition:.3s"></span>
+          </label>
+        </div>
+        <div id="commission-status" style="font-size:12px;color:var(--gray)">Split desactivado</div>
+      </div>
+    </section>
+
+    <!-- Modal: Invitar barbero -->
+    <div class="modal-overlay" id="modal-invite">
+      <div class="modal">
+        <div class="modal-title">✂️ Invitar barbero</div>
+        <div class="modal-sub">Se genera un código único para que el barbero cree su cuenta</div>
+        <div id="invite-result" style="display:none;margin-bottom:16px;padding:16px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.3);border-radius:10px">
+          <div style="font-size:12px;color:var(--gray);margin-bottom:6px">Código de invitación (válido 7 días):</div>
+          <div id="invite-code" style="font-size:28px;font-weight:900;letter-spacing:6px;color:var(--yellow);font-family:'Oswald',sans-serif"></div>
+          <div style="font-size:12px;color:var(--gray);margin-top:8px">O compartí el link:</div>
+          <div id="invite-link" style="font-size:12px;color:var(--yellow);word-break:break-all;margin-top:4px;cursor:pointer" onclick="copyInviteLink()"></div>
+        </div>
+        <div id="invite-form">
+          <div class="form-field">
+            <label>Nombre del barbero (opcional)</label>
+            <input type="text" id="invite-name" placeholder="Ej: Matías">
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal-primary" onclick="generateInvite()">🔗 Generar código</button>
+            <button class="btn-modal-secondary" onclick="closeModal('modal-invite')">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ─── CONFIGURACIÓN ─── -->
     <section id="sec-configuracion" class="section">
       <div class="topbar">
@@ -1105,6 +1162,17 @@ body {
       <div class="settings-grid">
         <!-- Barbería -->
         <div class="settings-section">
+          <!-- Switch de plan — solo para cuentas test -->
+          <div id="test-plan-switcher" style="display:none;margin-bottom:20px;padding:16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:12px">🧪 CUENTA DE TESTING</div>
+            <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Cambiá de plan para testear las distintas experiencias</div>
+            <div style="display:flex;gap:10px">
+              <button id="btn-plan-starter" onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
+              <button id="btn-plan-staff" onclick="switchPlan('staff')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
+            </div>
+            <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
+          </div>
+
           <div class="settings-section-title">✂️ Mi barbería</div>
           <div class="form-field" style="margin-bottom:14px">
             <label>Nombre de la barbería</label>
@@ -1598,15 +1666,47 @@ function startApp() {
   loadServices();
   loadClients();
   loadStoreItems(); // precarga premios para el modal de turno
+  initStaffUI();
 }
 
 // ─── NAVIGATION ───
+async function switchPlan(plan) {
+  try {
+    await api('PUT', '/settings/plan', { plan });
+    currentShop.plan = plan;
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    showToast('✅', `Plan cambiado a ${plan}`, 'Recargando...');
+    setTimeout(() => location.reload(), 1000);
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+function initStaffUI() {
+  const plan = currentShop?.plan;
+  const isBarber = currentShop?.is_barber;
+  const navEquipo = document.getElementById('nav-equipo');
+
+  // Mostrar sección equipo solo para dueños con plan staff o test
+  if ((plan === 'staff' || plan === 'test') && !isBarber) {
+    if (navEquipo) navEquipo.style.display = 'flex';
+  }
+
+  // Mostrar switcher de plan para cuentas test
+  const switcher = document.getElementById('test-plan-switcher');
+  if (plan === 'test' && switcher) {
+    switcher.style.display = 'block';
+    const label = document.getElementById('current-plan-label');
+    if (label) label.textContent = `Plan activo: ${currentShop?.plan || 'starter'}`;
+  }
+}
+
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name).classList.add('active');
 
-  const navMap = { dashboard: 0, agenda: 1, clientes: 2, motores: 3, membresias: 4 };
+  const navMap = { dashboard: 0, agenda: 1, clientes: 2, motores: 3, membresias: 4, equipo: 5 };
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
 
@@ -1615,6 +1715,7 @@ function showSection(name) {
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); }
+  if (name === 'equipo') loadEquipo();
 }
 
 // ─── DASHBOARD ───
@@ -2651,6 +2752,131 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
   }
 });
+
+// ─── EQUIPO (STAFF) ───
+async function loadEquipo() {
+  try {
+    const [barbers, stats] = await Promise.all([
+      api('GET', '/barbers'),
+      api('GET', '/barbers/stats')
+    ]);
+
+    // Stats grid
+    const statsEl = document.getElementById('equipo-stats-grid');
+    const totalHoy = barbers.reduce((s, b) => s + parseInt(b.turnos_hoy || 0), 0);
+    const facturadoMes = stats.reduce((s, b) => s + parseFloat(b.facturado_mes || 0), 0);
+    statsEl.innerHTML = `
+      <div class="metric-card"><div class="metric-label">BARBEROS ACTIVOS</div><div class="metric-value">${barbers.length}</div></div>
+      <div class="metric-card"><div class="metric-label">TURNOS HOY (EQUIPO)</div><div class="metric-value">${totalHoy}</div></div>
+      <div class="metric-card"><div class="metric-label">FACTURADO MES</div><div class="metric-value">$${facturadoMes.toLocaleString('es-AR')}</div></div>
+    `;
+    document.getElementById('equipo-stats').textContent = `${barbers.length} barberos en el equipo`;
+
+    // Lista de barberos
+    const el = document.getElementById('equipo-list');
+    if (!barbers.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">✂️</div><h3>Sin equipo todavía</h3><p>Invitá a tu primer barbero con el botón +</p></div>`;
+      return;
+    }
+
+    el.innerHTML = barbers.map(b => {
+      const stat = stats.find(s => s.id === b.id) || {};
+      return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
+        <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f">${b.name.charAt(0).toUpperCase()}</div>
+        <div class="client-info">
+          <div class="client-name">${b.name}</div>
+          <div class="client-meta">
+            <span>📅 ${b.turnos_hoy || 0} turnos hoy</span>
+            <span>✅ ${stat.completados_mes || 0} completados este mes</span>
+            <span>💰 $${parseFloat(stat.facturado_mes || 0).toLocaleString('es-AR')} facturado</span>
+            <span style="color:var(--yellow)">🤝 ${b.barber_commission_pct}% comisión</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="appt-btn" onclick="editBarber(${b.id},'${b.name}',${b.barber_commission_pct})" title="Editar">✏️</button>
+          <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Estado comisión
+    const commEnabled = currentShop?.commission_enabled;
+    const toggle = document.getElementById('toggle-commission');
+    const slider = document.getElementById('commission-slider');
+    const status = document.getElementById('commission-status');
+    toggle.checked = commEnabled;
+    slider.style.background = commEnabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+    status.textContent = commEnabled ? '✅ Split activado — las comisiones se calculan automáticamente al completar turnos' : 'Split desactivado';
+    status.style.color = commEnabled ? 'var(--green)' : 'var(--gray)';
+
+  } catch(e) { console.error('loadEquipo error:', e); }
+}
+
+function openInviteModal() {
+  document.getElementById('invite-result').style.display = 'none';
+  document.getElementById('invite-form').style.display = 'block';
+  document.getElementById('invite-name').value = '';
+  openModal('modal-invite');
+}
+
+async function generateInvite() {
+  const name = document.getElementById('invite-name').value.trim();
+  try {
+    const res = await api('POST', '/barbers/invite', { barber_name: name || null });
+    document.getElementById('invite-code').textContent = res.code;
+    document.getElementById('invite-link').textContent = res.link;
+    document.getElementById('invite-result').style.display = 'block';
+    document.getElementById('invite-form').querySelector('.modal-actions').style.display = 'none';
+    showToast('✅', 'Código generado', 'Válido por 7 días');
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+function copyInviteLink() {
+  const link = document.getElementById('invite-link').textContent;
+  navigator.clipboard.writeText(link).then(() => showToast('✅', 'Link copiado', ''));
+}
+
+async function toggleCommission() {
+  const enabled = document.getElementById('toggle-commission').checked;
+  const slider = document.getElementById('commission-slider');
+  const status = document.getElementById('commission-status');
+  slider.style.background = enabled ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+  status.textContent = enabled ? '✅ Split activado — las comisiones se calculan automáticamente al completar turnos' : 'Split desactivado';
+  status.style.color = enabled ? 'var(--green)' : 'var(--gray)';
+  try {
+    await api('PUT', '/settings', { commission_enabled: enabled });
+    if (currentShop) currentShop.commission_enabled = enabled;
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    showToast('✅', enabled ? 'Split activado' : 'Split desactivado', '');
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function editBarber(id, name, commission) {
+  const newPct = prompt(`Comisión para ${name} (%):`, commission);
+  if (!newPct || isNaN(newPct)) return;
+  try {
+    await api('PUT', `/barbers/${id}`, { barber_commission_pct: parseInt(newPct) });
+    showToast('✅', 'Comisión actualizada', `${name}: ${newPct}%`);
+    loadEquipo();
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function removeBarber(id, name) {
+  if (!confirm(`¿Eliminar a ${name} del equipo?`)) return;
+  try {
+    await api('DELETE', `/barbers/${id}`);
+    showToast('🗑', `${name} eliminado del equipo`, '');
+    loadEquipo();
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
 
 // ─── ENTER en login ───
 document.getElementById('login-pass').addEventListener('keydown', e => {

@@ -21,7 +21,7 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, service_radius_km, churn_days, msg_templates } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled } = req.body;
 
   try {
     // Auto-generar booking_slug si no existe
@@ -41,13 +41,14 @@ router.put('/', auth, async (req, res) => {
       `UPDATE shops SET
          name=$1, phone=$2, city=$3, address=$4,
          service_radius_km=$5, churn_days=$6, msg_templates=$7,
-         booking_slug=COALESCE(booking_slug, $8)
-       WHERE id=$9
+         booking_slug=COALESCE(booking_slug, $8),
+         commission_enabled=COALESCE($9, commission_enabled)
+       WHERE id=$10
        RETURNING id, name, email, phone, city, address,
-                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug`,
+                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled`,
       [name, phone||null, city||null, address||null,
        service_radius_km||3, churn_days||20, msg_templates||null,
-       slug, req.shopId]
+       slug, commission_enabled !== undefined ? commission_enabled : null, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {
@@ -156,6 +157,25 @@ router.post('/generate-slug', auth, async (req, res) => {
 
     await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
     res.json({ slug });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/settings/plan — cambiar plan (solo cuentas test)
+router.put('/plan', auth, async (req, res) => {
+  const { plan } = req.body;
+  const validPlans = ['starter', 'staff', 'test'];
+  if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
+
+  try {
+    // Solo cuentas test pueden cambiar de plan
+    const shop = await pool.query('SELECT plan FROM shops WHERE id=$1', [req.shopId]);
+    if (shop.rows[0]?.plan !== 'test') {
+      return res.status(403).json({ error: 'Solo las cuentas de testing pueden cambiar de plan' });
+    }
+    await pool.query('UPDATE shops SET plan=$1 WHERE id=$2', [plan, req.shopId]);
+    res.json({ ok: true, plan });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
