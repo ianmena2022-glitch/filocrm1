@@ -138,4 +138,39 @@ async function getAIResponse(shopId, phone, userMessage) {
   }
 }
 
-module.exports = { getAIResponse, isBarberiaRelated };
+async function generateMessage(shopId, type, context) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const prompts = {
+    sillon_libre: `Escribí un mensaje de WhatsApp corto y amigable para avisarle a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}. ${context.incentivo ? `Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+
+    rescate: `Escribí un mensaje de WhatsApp corto y amigable para ${context.clientName}, un cliente que no visita ${context.shopName} hace ${context.daysSince} días. El objetivo es que vuelva a reservar un turno. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+
+    turno_completado: `Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
+  };
+
+  const prompt = prompts[type];
+  if (!prompt) return null;
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 150,
+        temperature: 0.8,
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('generateMessage error:', e.message);
+    return null;
+  }
+}
+
+module.exports = { getAIResponse, isBarberiaRelated, generateMessage };

@@ -149,26 +149,27 @@ router.put('/:id/status', auth, async (req, res) => {
       if (client.phone && shopData.wpp_connected) {
         try {
           const wpp = require('../services/whatsapp');
+          const { generateMessage } = require('../services/ai');
           const slug = shopData.booking_slug;
           const tiendaLink = slug
             ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
             : null;
 
-          const newPoints = client.points;
-          const msg = [
-            `✂️ *¡Servicio completado!* Gracias ${client.name}.`,
-            ``,
-            `⭐ *Puntos FILO acumulados:* ${pointsEarned > 0 ? `+${pointsEarned} puntos (total: ${newPoints})` : `${newPoints} puntos`}`,
-            ``,
-            pointsEarned > 0
-              ? `💡 Cada $1.000 que gastás = 10 puntos. Canjeá tus puntos por premios exclusivos.`
-              : ``,
+          let msg = await generateMessage(req.shopId, 'turno_completado', {
+            clientName: client.name,
+            pointsEarned,
+            totalPoints: client.points,
             tiendaLink
-              ? `🎁 *Ver tu saldo y premios:*\n${tiendaLink}`
-              : ``,
-            ``,
-            `¡Hasta la próxima! 💈`
-          ].filter(Boolean).join('\n');
+          });
+
+          if (!msg) {
+            msg = [
+              `✂️ *¡Servicio completado!* Gracias ${client.name}.`,
+              `⭐ *Puntos acumulados:* ${pointsEarned > 0 ? `+${pointsEarned} (total: ${client.points})` : client.points}`,
+              tiendaLink ? `🎁 Ver premios: ${tiendaLink}` : ``,
+              `¡Hasta la próxima! 💈`
+            ].filter(Boolean).join('\n');
+          }
 
           await wpp.sendText(req.shopId, client.phone, msg);
         } catch(wppErr) {

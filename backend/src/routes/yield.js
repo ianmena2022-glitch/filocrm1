@@ -83,11 +83,18 @@ router.post('/send-flash-offer', auth, async (req, res) => {
     );
 
     let sent = 0;
-    const incentiveText = incentivo || '';
+    const { generateMessage } = require('../services/ai');
 
     for (const c of clients.rows) {
       if (!c.phone) continue;
-      const msg = `¡Hola ${c.name}! 👋\n\nTenemos un sillón libre hoy a las *${slot}* en ${shopData.name}.\n\n${incentiveText}\n\n¿Te anotamos? ✂️`;
+      let msg = await generateMessage(req.shopId, 'sillon_libre', {
+        clientName: c.name,
+        slot,
+        shopName: shopData.name,
+        incentivo: incentivo || ''
+      });
+      // Fallback si la IA falla
+      if (!msg) msg = `¡Hola ${c.name}! 👋\n\nTenemos un sillón libre hoy a las *${slot}* en ${shopData.name}.${incentivo ? '\n\n' + incentivo : ''}\n\n¿Te anotamos? ✂️`;
 
       try {
         await wpp.sendText(req.shopId, c.phone, msg);
@@ -162,7 +169,14 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
 
     if (!client.phone) return res.status(400).json({ error: 'El cliente no tiene teléfono registrado' });
 
-    const msg = `¡Hola ${client.name}! 👋\n\nHace un tiempo que no te vemos por ${shopData.name} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.`;
+    const { generateMessage } = require('../services/ai');
+    const daysSince = Math.round((Date.now() - new Date(client.last_visit).getTime()) / (1000*60*60*24)) || '?';
+    let msg = await generateMessage(req.shopId, 'rescate', {
+      clientName: client.name,
+      shopName: shopData.name,
+      daysSince
+    });
+    if (!msg) msg = `¡Hola ${client.name}! 👋\n\nHace un tiempo que no te vemos por ${shopData.name} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.`;
 
     await wpp.sendText(req.shopId, client.phone, msg);
 
