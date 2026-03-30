@@ -1633,6 +1633,13 @@ async function login() {
     currentShop = data.shop;
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    // Redirigir barberos a su dashboard
+    if (data.shop?.is_barber) {
+      localStorage.setItem('barber_token', token);
+      localStorage.setItem('barber_me', JSON.stringify(data.shop));
+      window.location.href = '/barber';
+      return;
+    }
     startApp();
   } catch (e) {
     showAuthError(e.message);
@@ -2913,7 +2920,13 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 
 // ─── INIT ───
 if (token && currentShop) {
-  startApp();
+  if (currentShop.is_barber) {
+    localStorage.setItem('barber_token', token);
+    localStorage.setItem('barber_me', JSON.stringify(currentShop));
+    window.location.href = '/barber';
+  } else {
+    startApp();
+  }
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
