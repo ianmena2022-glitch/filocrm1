@@ -55,7 +55,7 @@ function authDir(shopId) {
   return dir;
 }
 
-// Restaurar sesión desde PostgreSQL — solo credenciales, NO session keys Signal
+// Restaurar sesión desde PostgreSQL   solo credenciales, NO session keys Signal
 async function restoreSessionFromDB(shopId) {
   try {
     const result = await pool.query(
@@ -69,7 +69,7 @@ async function restoreSessionFromDB(shopId) {
     const parsed = JSON.parse(sessionData);
 
     for (const [filename, content] of Object.entries(parsed)) {
-      // Excluir session keys Signal — generan Bad MAC al reconectar
+      // Excluir session keys Signal   generan Bad MAC al reconectar
       // Solo restaurar creds.json (credenciales principales)
       if (filename !== 'creds.json') continue;
       fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
@@ -82,7 +82,7 @@ async function restoreSessionFromDB(shopId) {
   }
 }
 
-// Guardar sesión en PostgreSQL — solo creds.json
+// Guardar sesión en PostgreSQL   solo creds.json
 async function saveSessionToDB(shopId) {
   try {
     const dir = authDir(shopId);
@@ -163,7 +163,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     syncFullHistory: false,
     markOnlineOnConnect: false,
     retryRequestDelayMs: 0,      // No reintentar mensajes fallidos
-    maxMsgRetryCount: 0,         // Sin reintentos — evita el sendRetryRequest que crashea
+    maxMsgRetryCount: 0,         // Sin reintentos   evita el sendRetryRequest que crashea
     fireInitQueries: false,      // No hacer queries iniciales innecesarias
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
     getMessage: async (key) => {
@@ -221,7 +221,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       statuses[shopId] = 'disconnected';
 
       if (code === DisconnectReason.loggedOut) {
-        // Sesión cerrada — limpiar
+        // Sesión cerrada   limpiar
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
@@ -232,9 +232,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
-  // Manejar fallos de descifrado — ocurre cuando la sesión Signal está desincronizada
+  // Manejar fallos de descifrado   ocurre cuando la sesión Signal está desincronizada
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
+    console.log(`[WPP] Error de descifrado para shop ${shopId}   ${failedMessages?.length || 0} mensajes fallidos`);
     decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
 
     // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
@@ -285,7 +285,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         // Log de diagnóstico: mostrar las keys del mensaje para detectar tipo
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
-        console.log(`[WPP] Mensaje de ${phone} — keys: ${msgKeys.join(', ')}`);
+        console.log(`[WPP] Mensaje de ${phone} (${jid}) - keys: ${msgKeys.join(', ')}`);
+        if (jid.endsWith('@lid')) {
+          console.log(`[WPP] @lid msg: ${JSON.stringify(msg).slice(0, 500)}`);
+        }
 
         // Extraer texto usando handler multi-tipo
         const text = extractTextFromMessage(msgContent);
@@ -334,9 +337,9 @@ async function startSession(shopId) {
       await connect(
         shopId,
         (qr) => {
-          // QR generado — convertir a base64 image para el frontend
+          // QR generado   convertir a base64 image para el frontend
           clearTimeout(timeout);
-          // qr es el string raw del QR — el frontend lo mostrará con qrcode lib
+          // qr es el string raw del QR   el frontend lo mostrará con qrcode lib
           resolve({ qrcode: qr, type: 'raw' });
         },
         () => {
