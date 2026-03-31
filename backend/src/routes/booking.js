@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected
+      `SELECT id, name, city, address, phone, wpp_connected, schedule
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -57,9 +57,30 @@ router.get('/:slug/available', async (req, res) => {
       [shopId, date]
     );
 
-    // Generar slots de 30 minutos entre 9:00 y 20:00
-    const workStart = 9 * 60;
-    const workEnd   = 20 * 60;
+    // Generar slots según horario configurado
+    const shopFull = await pool.query('SELECT schedule FROM shops WHERE id=$1', [shopId]);
+    const scheduleRaw = shopFull.rows[0]?.schedule;
+    const schedule = scheduleRaw ? JSON.parse(scheduleRaw) : null;
+
+    // Día de la semana (0=domingo, 1=lunes... 6=sábado)
+    const dayOfWeek = new Date(date + 'T12:00:00').getDay();
+    const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+    const dayKey = dayNames[dayOfWeek];
+
+    // Si hay horario configurado, verificar si ese día trabajan
+    let workStart = 9 * 60;
+    let workEnd   = 20 * 60;
+
+    if (schedule) {
+      const daySchedule = schedule[dayKey];
+      if (!daySchedule || !daySchedule.active) {
+        return res.json({ slots: [], duration, closed: true });
+      }
+      const [startH, startM] = daySchedule.start.split(':').map(Number);
+      const [endH, endM]     = daySchedule.end.split(':').map(Number);
+      workStart = startH * 60 + startM;
+      workEnd   = endH * 60 + endM;
+    }
 
     const occupiedRanges = occupied.rows.map(a => {
       const [sh, sm] = String(a.time_start).split(':').map(Number);
@@ -107,6 +128,16 @@ router.post('/:slug/reserve', async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+
+    // Verificar que el día esté habilitado en el horario
+    if (shopData.schedule) {
+      const schedule = JSON.parse(shopData.schedule);
+      const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+      const dayKey = dayNames[new Date(date + 'T12:00:00').getDay()];
+      if (!schedule[dayKey]?.active) {
+        return res.status(400).json({ error: 'La barbería no atiende ese día.' });
+      }
+    }
 
     // Resolver servicio
     let svcName = null, svcPrice = 0, svcCost = 0, duration = 30;

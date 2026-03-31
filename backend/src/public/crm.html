@@ -1323,6 +1323,12 @@ body {
             <label>Días sin visita = cliente en fuga</label>
             <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
           </div>
+
+          <!-- Horarios de atención -->
+          <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:14px">🕐 Horarios de atención</div>
+            <div id="schedule-grid" style="display:flex;flex-direction:column;gap:10px"></div>
+          </div>
         </div>
 
         <!-- WhatsApp -->
@@ -3000,14 +3006,90 @@ function copyBookingLink() {
   });
 }
 
+// ─── HORARIOS ───
+const DAYS = [
+  { key: 'lunes',     label: 'Lunes' },
+  { key: 'martes',    label: 'Martes' },
+  { key: 'miercoles', label: 'Miércoles' },
+  { key: 'jueves',    label: 'Jueves' },
+  { key: 'viernes',   label: 'Viernes' },
+  { key: 'sabado',    label: 'Sábado' },
+  { key: 'domingo',   label: 'Domingo' },
+];
+
+const DEFAULT_SCHEDULE = {
+  lunes:     { active: true,  start: '09:00', end: '20:00' },
+  martes:    { active: true,  start: '09:00', end: '20:00' },
+  miercoles: { active: true,  start: '09:00', end: '20:00' },
+  jueves:    { active: true,  start: '09:00', end: '20:00' },
+  viernes:   { active: true,  start: '09:00', end: '20:00' },
+  sabado:    { active: true,  start: '09:00', end: '14:00' },
+  domingo:   { active: false, start: '09:00', end: '14:00' },
+};
+
+function renderSchedule(schedule) {
+  const grid = document.getElementById('schedule-grid');
+  if (!grid) return;
+  const s = schedule || DEFAULT_SCHEDULE;
+  grid.innerHTML = DAYS.map(({ key, label }) => {
+    const day = s[key] || { active: false, start: '09:00', end: '20:00' };
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px">
+      <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;cursor:pointer">
+        <input type="checkbox" id="sch-active-${key}" ${day.active ? 'checked' : ''} onchange="toggleDaySchedule('${key}')" style="opacity:0;width:0;height:0;position:absolute">
+        <span id="sch-slider-${key}" style="position:absolute;inset:0;background:${day.active ? 'var(--yellow)' : 'rgba(255,255,255,0.12)'};border-radius:22px;transition:.2s">
+          <span style="position:absolute;top:3px;left:${day.active ? '21px' : '3px'};width:16px;height:16px;background:${day.active ? '#000d1f' : '#8a9ab5'};border-radius:50%;transition:.2s" id="sch-thumb-${key}"></span>
+        </span>
+      </label>
+      <span style="width:90px;font-size:13px;font-weight:600">${label}</span>
+      <div id="sch-times-${key}" style="display:${day.active ? 'flex' : 'none'};align-items:center;gap:8px;flex:1">
+        <input type="time" id="sch-start-${key}" value="${day.start}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none">
+        <span style="color:var(--gray);font-size:12px">a</span>
+        <input type="time" id="sch-end-${key}" value="${day.end}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none">
+      </div>
+      <div id="sch-closed-${key}" style="display:${day.active ? 'none' : 'flex'};align-items:center">
+        <span style="font-size:12px;color:var(--gray)">Cerrado</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDaySchedule(key) {
+  const active = document.getElementById(`sch-active-${key}`).checked;
+  const slider = document.getElementById(`sch-slider-${key}`);
+  const thumb  = document.getElementById(`sch-thumb-${key}`);
+  const times  = document.getElementById(`sch-times-${key}`);
+  const closed = document.getElementById(`sch-closed-${key}`);
+  slider.style.background = active ? 'var(--yellow)' : 'rgba(255,255,255,0.12)';
+  thumb.style.background  = active ? '#000d1f' : '#8a9ab5';
+  thumb.style.left        = active ? '21px' : '3px';
+  times.style.display     = active ? 'flex' : 'none';
+  closed.style.display    = active ? 'none' : 'flex';
+}
+
+function getScheduleFromUI() {
+  const schedule = {};
+  DAYS.forEach(({ key }) => {
+    schedule[key] = {
+      active: document.getElementById(`sch-active-${key}`)?.checked || false,
+      start:  document.getElementById(`sch-start-${key}`)?.value || '09:00',
+      end:    document.getElementById(`sch-end-${key}`)?.value || '20:00',
+    };
+  });
+  return schedule;
+}
+
 async function loadSettings() {
   try {
     const settings = await api('GET', '/settings');
     document.getElementById('cfg-name').value = settings.name || '';
     document.getElementById('cfg-city').value = settings.city || '';
     document.getElementById('cfg-address').value = settings.address || '';
-    document.getElementById('cfg-radius').value = settings.service_radius_km || 3;
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
+
+    // Horarios
+    const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
+    renderSchedule(schedule);
 
     // Templates de mensajes
     const tpls = settings.msg_templates ? JSON.parse(settings.msg_templates) : {};
@@ -3047,8 +3129,8 @@ async function saveSettings() {
     name: document.getElementById('cfg-name').value.trim(),
     city: document.getElementById('cfg-city').value.trim(),
     address: document.getElementById('cfg-address').value.trim(),
-    service_radius_km: parseInt(document.getElementById('cfg-radius').value) || 3,
     churn_days: parseInt(document.getElementById('cfg-churn').value) || 20,
+    schedule: JSON.stringify(getScheduleFromUI()),
     msg_templates: JSON.stringify({
       sillon:       document.getElementById('tpl-sillon').value.trim(),
       rescate:      document.getElementById('tpl-rescate').value.trim(),
