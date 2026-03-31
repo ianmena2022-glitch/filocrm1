@@ -3214,18 +3214,26 @@ document.addEventListener('DOMContentLoaded', async function() {
       localStorage.setItem('barber_me', JSON.stringify(currentShop));
       window.location.href = '/barber';
     } else {
-      // Refrescar shop desde backend para tener datos actualizados
-      // (ej: usuario que volvio de MP sin completar la tarjeta)
+      // Siempre refrescar desde backend — nunca confiar en localStorage
       try {
         const fresh = await api('GET', '/auth/me');
         if (fresh && fresh.shop) {
           currentShop = fresh.shop;
           localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+          startApp();
+        } else {
+          // Respuesta inválida — limpiar sesión
+          localStorage.removeItem('filo_token');
+          localStorage.removeItem('filo_shop');
+          location.reload();
         }
       } catch(e) {
-        console.warn('No se pudo refrescar sesion:', e.message);
+        // Si el token es inválido o expiró, limpiar sesión
+        console.warn('Sesion inválida:', e.message);
+        localStorage.removeItem('filo_token');
+        localStorage.removeItem('filo_shop');
+        location.reload();
       }
-      startApp();
     }
   }
 });
