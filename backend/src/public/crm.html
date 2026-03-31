@@ -549,6 +549,36 @@ body {
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .toast.show { display: flex; }
+
+/* ── CARD REQUIRED & PAYWALL SCREENS ── */
+#card-required-screen,
+#paywall-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #000d1f;
+  z-index: 9000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 20px;
+  overflow-y: auto;
+}
+#card-required-screen.show,
+#paywall-screen.show { display: flex; }
+.pw-logo { width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-family:Oswald,sans-serif;font-size:28px;font-weight:700;color:#000d1f; }
+.pw-title { font-family:Oswald,sans-serif;font-size:28px;font-weight:700;color:#fff;margin-bottom:8px; }
+.pw-sub { font-size:15px;color:rgba(255,255,255,.5);margin-bottom:32px;max-width:360px; }
+.pw-badge { display:inline-block;background:rgba(255,67,67,.15);border:1px solid rgba(255,67,67,.3);color:#FF4343;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:28px; }
+.pw-plans { display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;justify-content:center; }
+.pw-plan { background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 22px;cursor:pointer;transition:all .2s;min-width:140px; }
+.pw-plan:hover,.pw-plan.selected { border-color:var(--yellow);background:rgba(255,209,0,.08); }
+.pw-plan-name { font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:4px; }
+.pw-plan-price { font-family:Oswald,sans-serif;font-size:24px;font-weight:700;color:#fff; }
+.pw-plan-period { font-size:11px;color:rgba(255,255,255,.35);margin-top:2px; }
+.pw-btn { background:var(--yellow);color:#000d1f;border:none;padding:14px 32px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer; }
+.pw-trial-note { font-size:12px;color:rgba(255,255,255,.3);margin-top:12px; }
 .toast-icon { font-size: 22px; }
 .toast-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
 .toast-text p { font-size: 12px; color: var(--gray); }
@@ -3170,15 +3200,17 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 });
 
 // ─── INIT ───
-if (token && currentShop) {
-  if (currentShop.is_barber) {
-    localStorage.setItem('barber_token', token);
-    localStorage.setItem('barber_me', JSON.stringify(currentShop));
-    window.location.href = '/barber';
-  } else {
-    startApp();
+document.addEventListener('DOMContentLoaded', function() {
+  if (token && currentShop) {
+    if (currentShop.is_barber) {
+      localStorage.setItem('barber_token', token);
+      localStorage.setItem('barber_me', JSON.stringify(currentShop));
+      window.location.href = '/barber';
+    } else {
+      startApp();
+    }
   }
-}
+});
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
@@ -3452,7 +3484,7 @@ async function deleteAccount() {
 
 
 <!-- CARD REQUIRED SCREEN -->
-<div id="card-required-screen" style="display:none">
+<div id="card-required-screen">
   <div style="width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">💳</div>
   <div style="font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:8px">Activá tu prueba gratuita</div>
   <div style="font-size:15px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:380px;line-height:1.6">Para usar FILO necesitás cargar una tarjeta. No se te cobra nada hoy — el cobro es automático al día 8.</div>
@@ -3491,7 +3523,7 @@ async function deleteAccount() {
 </div>
 
 <!-- PAYWALL SCREEN -->
-<div id="paywall-screen" style="display:none">
+<div id="paywall-screen">
   <div class="pw-logo">F</div>
   <div class="pw-badge">Período de prueba finalizado</div>
   <div class="pw-title">Seguí usando FILO</div>
