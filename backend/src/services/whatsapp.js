@@ -105,6 +105,44 @@ async function saveSessionToDB(shopId) {
   }
 }
 
+// Extraer texto de cualquier tipo de mensaje de Baileys
+function extractTextFromMessage(msgContent) {
+  if (!msgContent) return null;
+
+  // Tipos directos
+  if (msgContent.conversation) return msgContent.conversation;
+  if (msgContent.extendedTextMessage?.text) return msgContent.extendedTextMessage.text;
+
+  // Mensajes con contexto (viewOnce, ephemeral, etc.)
+  if (msgContent.ephemeralMessage?.message) {
+    return extractTextFromMessage(msgContent.ephemeralMessage.message);
+  }
+  if (msgContent.viewOnceMessage?.message) {
+    return extractTextFromMessage(msgContent.viewOnceMessage.message);
+  }
+  if (msgContent.viewOnceMessageV2?.message) {
+    return extractTextFromMessage(msgContent.viewOnceMessageV2.message);
+  }
+  if (msgContent.documentWithCaptionMessage?.message) {
+    return extractTextFromMessage(msgContent.documentWithCaptionMessage.message);
+  }
+  if (msgContent.editedMessage?.message) {
+    return extractTextFromMessage(msgContent.editedMessage.message);
+  }
+
+  // Mensajes con caption (imágenes, videos, docs con texto)
+  if (msgContent.imageMessage?.caption) return msgContent.imageMessage.caption;
+  if (msgContent.videoMessage?.caption) return msgContent.videoMessage.caption;
+  if (msgContent.documentMessage?.caption) return msgContent.documentMessage.caption;
+
+  // Botones y listas
+  if (msgContent.buttonsResponseMessage?.selectedDisplayText) return msgContent.buttonsResponseMessage.selectedDisplayText;
+  if (msgContent.listResponseMessage?.title) return msgContent.listResponseMessage.title;
+  if (msgContent.templateButtonReplyMessage?.selectedDisplayText) return msgContent.templateButtonReplyMessage.selectedDisplayText;
+
+  return null;
+}
+
 // Conectar o reconectar WhatsApp
 async function connect(shopId, onQR, onConnected, onDisconnected) {
   // Restaurar sesión previa si existe
@@ -221,7 +259,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log(`[WPP] messages.upsert type=${type} count=${messages.length} shopId=${shopId}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
@@ -242,15 +279,19 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phone = phoneRaw;
         const msgContent = msg.message;
 
-        // Ignorar todo tipo de mensaje que no sea texto puro
-        const text =
-          msgContent?.conversation ||
-          msgContent?.extendedTextMessage?.text ||
-          null;
+        // Log de diagnóstico: mostrar las keys del mensaje para detectar tipo
+        const msgKeys = msgContent ? Object.keys(msgContent) : [];
+        console.log(`[WPP] Mensaje de ${phone} — keys: ${msgKeys.join(', ')}`);
 
-        if (!text) continue;
+        // Extraer texto usando handler multi-tipo
+        const text = extractTextFromMessage(msgContent);
 
-        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
+        if (!text || !text.trim()) {
+          console.log(`[WPP] Mensaje sin texto de ${phone} (tipo no soportado o media sin caption)`);
+          continue;
+        }
+
+        console.log(`[WPP] Texto extraído de ${phone}: "${text}"`);
 
         // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
@@ -259,6 +300,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         if (reply) {
           console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
           await sock.sendMessage(msg.key.remoteJid, { text: reply });
+        } else {
+          console.log(`[WPP] AI no respondió (ignorado por clasificador o sin contexto)`);
         }
       } catch (e) {
         console.error('[WPP] Error procesando mensaje entrante:', e.message);
