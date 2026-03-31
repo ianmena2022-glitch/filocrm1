@@ -121,22 +121,27 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
-    syncFullHistory: false,       // No sincronizar historial al reconectar
-    markOnlineOnConnect: false,   // No marcar como online al conectar
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+    retryRequestDelayMs: 0,      // No reintentar mensajes fallidos
+    maxMsgRetryCount: 0,         // Sin reintentos — evita el sendRetryRequest que crashea
+    fireInitQueries: false,      // No hacer queries iniciales innecesarias
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
     getMessage: async (key) => {
-      // Intentar recuperar el mensaje desde la DB de sesión
-      // Si no existe, devolver un objeto vacío para que Baileys no crashee
-      try {
-        return { conversation: '' };
-      } catch {
-        return { conversation: '' };
-      }
+      return { conversation: '' };
     },
   });
 
   sockets[shopId]  = sock;
   statuses[shopId] = 'connecting';
+
+  // Capturar errores no manejados del socket para evitar crash de Node
+  sock.ev.on('CB:receipt', () => {}); // ignorar receipts
+  process.on('unhandledRejection', (reason) => {
+    if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
+      console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
+    }
+  });
 
   sock.ev.on('creds.update', async () => {
     await saveCreds();
@@ -228,21 +233,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phone = phoneRaw;
         const msgContent = msg.message;
 
-        // DEBUG — ver estructura real
-        console.log(`[WPP DEBUG] phone=${phone} msgKeys=${JSON.stringify(Object.keys(msgContent || {}))}`);
-        if (msgContent?.conversation) console.log(`[WPP DEBUG] conversation="${msgContent.conversation}"`);
-        if (msgContent?.extendedTextMessage) console.log(`[WPP DEBUG] extendedText="${msgContent.extendedTextMessage?.text}"`);
-
         // Ignorar todo tipo de mensaje que no sea texto puro
         const text =
           msgContent?.conversation ||
           msgContent?.extendedTextMessage?.text ||
           null;
 
-        if (!text) {
-          console.log(`[WPP DEBUG] sin texto — ignorando`);
-          continue;
-        }
+        if (!text) continue;
 
         console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
