@@ -27,7 +27,11 @@ async function isBarberiaRelated(text, apiKey) {
         messages: [
           {
             role: 'system',
-            content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido está relacionado con servicios de barbería: turnos, reservas, precios, cortes, barba, horarios, ubicación, puntos/premios, cancelaciones, consultas sobre servicios, saludos iniciales, o cualquier consulta que una persona le haría a una barbería. Respondé ÚNICAMENTE con "true" o "false", sin ninguna otra palabra ni explicación.`
+            content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido tiene una intención clara relacionada con servicios de barbería: pedir turno, consultar precios, preguntar horarios, consultar ubicación, preguntar por servicios, cancelar o modificar un turno, preguntar por puntos o premios, o cualquier consulta específica que una persona le haría a una barbería.
+
+NO clasificar como relacionado: saludos solos ("hola", "buenas", "hey"), mensajes genéricos sin contexto, conversación casual, mensajes que no tienen nada que ver con una barbería.
+
+Respondé ÚNICAMENTE con "true" o "false", sin ninguna otra palabra ni explicación.`
           },
           {
             role: 'user',
