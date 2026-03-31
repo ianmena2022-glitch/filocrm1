@@ -224,10 +224,23 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         if (msg.key.fromMe) { console.log('[WPP DEBUG] skip fromMe'); continue; }
 
         const jid = msg.key.remoteJid || '';
-        if (!jid.endsWith('@s.whatsapp.net')) { console.log(`[WPP DEBUG] skip jid=${jid}`); continue; }
 
-        const phoneRaw = jid.replace('@s.whatsapp.net', '');
-        if (!/^\d+$/.test(phoneRaw)) { console.log(`[WPP DEBUG] skip phoneRaw=${phoneRaw}`); continue; }
+        // WhatsApp usa @lid para cuentas con múltiples dispositivos
+        // El número real está en senderPn o participantPn
+        const isLid = jid.endsWith('@lid');
+        const isIndividual = jid.endsWith('@s.whatsapp.net');
+
+        if (!isIndividual && !isLid) { console.log(`[WPP DEBUG] skip jid=${jid}`); continue; }
+
+        // Para @lid usar senderPn, para @s.whatsapp.net usar el jid directo
+        const senderJid = isLid
+          ? (msg.key.senderPn || msg.key.participantPn || null)
+          : jid;
+
+        if (!senderJid) { console.log(`[WPP DEBUG] skip: sin senderJid para lid`); continue; }
+
+        const phoneRaw = senderJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+        if (!phoneRaw || phoneRaw.length < 8) { console.log(`[WPP DEBUG] skip phoneRaw=${phoneRaw}`); continue; }
 
         const msgContent = msg.message;
         console.log(`[WPP DEBUG] msgContent keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
@@ -244,7 +257,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (reply) {
           console.log(`[WPP] Respondiendo a ${phoneRaw}: "${reply}"`);
-          await sock.sendMessage(jid, { text: reply });
+          await sock.sendMessage(senderJid, { text: reply });
         } else {
           console.log(`[WPP DEBUG] AI no respondió`);
         }
