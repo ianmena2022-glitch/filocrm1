@@ -247,4 +247,30 @@ router.delete('/delete-account', async (req, res) => {
   }
 });
 
+// GET /api/auth/me — devuelve el shop actualizado desde la DB (usado en el INIT del frontend)
+router.get('/me', async (req, res) => {
+  const header = req.headers.authorization || '';
+  const tkn = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!tkn) return res.status(401).json({ error: 'Token requerido' });
+
+  try {
+    const payload = jwt.verify(tkn, process.env.JWT_SECRET);
+    const result = await pool.query('SELECT * FROM shops WHERE id=$1', [payload.shopId]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
+    const shop = result.rows[0];
+
+    // Auto-expirar trial si venció
+    if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
+      await pool.query("UPDATE shops SET subscription_status='expired' WHERE id=$1", [payload.shopId]);
+      shop.subscription_status = 'expired';
+    }
+
+    const shopData = shopPayload(shop);
+    shopData.trial_days_left = trialDaysLeft(shop.trial_ends_at);
+    res.json({ shop: shopData });
+  } catch (e) {
+    res.status(401).json({ error: 'Token inválido' });
+  }
+});
+
 module.exports = router;
