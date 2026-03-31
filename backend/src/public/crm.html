@@ -1881,6 +1881,40 @@ async function paywallSubscribe() {
   }
 }
 
+
+// ── CARD REQUIRED ─────────────────────────────────────────────────────────
+let selectedCrPlan = 'staff';
+
+function showCardRequired() {
+  document.getElementById('card-required-screen').classList.add('show');
+}
+
+function selectCrPlan(plan, el) {
+  selectedCrPlan = plan;
+  document.querySelectorAll('#cr-plans > div').forEach(d => {
+    d.style.background = 'rgba(255,255,255,.04)';
+    d.style.borderColor = 'rgba(255,255,255,.08)';
+  });
+  el.style.background = 'rgba(255,209,0,.1)';
+  el.style.borderColor = 'rgba(255,209,0,.4)';
+}
+
+async function activateCardRequired() {
+  const email = currentShop?.email;
+  if (!email) return;
+  try {
+    await api('PUT', '/settings', { filo_plan: selectedCrPlan });
+    const data = await api('POST', '/payments/filo-subscription', { payer_email: email });
+    if (data.payment_url) {
+      currentShop.mp_shop_payment_url = data.payment_url;
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      window.location.href = data.payment_url;
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 function checkPaywall() {
   if (!currentShop) return;
   // Cuentas test y barberos siempre tienen acceso
@@ -1896,6 +1930,15 @@ const _originalApi = window.api;
 
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
+
+  // Si no es test/barbero y no tiene tarjeta cargada, mostrar pantalla de tarjeta
+  if (currentShop && !currentShop.is_test && currentShop.plan !== 'test' && !currentShop.is_barber) {
+    if (!currentShop.mp_shop_payment_url) {
+      showCardRequired();
+      return;
+    }
+  }
+
   document.getElementById('app').style.display = 'block';
   checkPaywall();
 
@@ -3406,6 +3449,46 @@ async function deleteAccount() {
 
 </script>
 
+
+
+<!-- CARD REQUIRED SCREEN -->
+<div id="card-required-screen">
+  <div style="width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">💳</div>
+  <div style="font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:8px">Activá tu prueba gratuita</div>
+  <div style="font-size:15px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:380px;line-height:1.6">Para usar FILO necesitás cargar una tarjeta. No se te cobra nada hoy — el cobro es automático al día 8.</div>
+
+  <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:12px;padding:16px 20px;margin-bottom:28px;max-width:380px;text-align:left;font-size:13px;color:rgba(255,255,255,.6);line-height:1.8">
+    <div style="font-weight:700;color:var(--yellow);margin-bottom:8px">&#128203; Lo que va a pasar:</div>
+    &#10003; Hoy: cargás la tarjeta (sin cobro)<br>
+    &#10003; Días 1-7: usás FILO completamente gratis<br>
+    &#10003; Día 8: se cobra el primer mes automáticamente<br>
+    &#10003; Podés cancelar desde Configuración antes del día 8
+  </div>
+
+  <div id="cr-plans" style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;justify-content:center">
+    <div onclick="selectCrPlan('starter',this)" style="padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;cursor:pointer;min-width:120px;text-align:center">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,209,0,.6);margin-bottom:3px">Starter</div>
+      <div style="font-size:18px;font-weight:700;color:#fff">$40.000</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3)">por mes</div>
+    </div>
+    <div onclick="selectCrPlan('staff',this)" style="padding:12px 16px;background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.4);border-radius:12px;cursor:pointer;min-width:120px;text-align:center">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,209,0,.8);margin-bottom:3px">Staff &#11088;</div>
+      <div style="font-size:18px;font-weight:700;color:#fff">$80.000</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3)">por mes</div>
+    </div>
+    <div onclick="selectCrPlan('enterprise',this)" style="padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;cursor:pointer;min-width:120px;text-align:center">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,209,0,.6);margin-bottom:3px">Enterprise</div>
+      <div style="font-size:18px;font-weight:700;color:#fff">$130.000</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3)">por mes</div>
+    </div>
+  </div>
+
+  <button onclick="activateCardRequired()" style="background:var(--yellow);color:#000d1f;border:none;padding:14px 36px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;margin-bottom:12px">
+    Cargar tarjeta en Mercado Pago
+  </button>
+  <div style="font-size:12px;color:rgba(255,255,255,.25);letter-spacing:.5px">PAGO SEGURO · CANCELÁ CUANDO QUIERAS</div>
+  <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.2);font-size:12px;cursor:pointer;padding:12px;margin-top:8px">Cerrar sesión</button>
+</div>
 
 <!-- PAYWALL SCREEN -->
 <div id="paywall-screen">
