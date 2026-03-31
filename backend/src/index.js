@@ -23,6 +23,8 @@ app.use('/api/memberships',  require('./routes/memberships'));
 app.use('/api/booking',      require('./routes/booking'));
 app.use('/api/points',       require('./routes/points'));
 app.use('/api/barbers',      require('./routes/barbers'));
+app.use('/api/payments/webhook', require('./routes/payments'));
+app.use('/api/payments',     require('./routes/payments'));
 
 // Dashboard barbero
 app.get('/barber', (req, res) => {
