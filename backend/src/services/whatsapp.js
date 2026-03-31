@@ -259,6 +259,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    const firstJid = messages[0]?.key?.remoteJid || 'unknown';
+    const fromMe = messages[0]?.key?.fromMe;
+    console.log(`[WPP] upsert type=${type} count=${messages.length} fromMe=${fromMe} jid=${firstJid}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
