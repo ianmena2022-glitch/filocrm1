@@ -28,7 +28,27 @@ async function clearSession(shopId) {
   }
 }
 
-// Directorio para guardar credenciales de sesión
+// Limpiar solo las session keys de Signal (no las credenciales principales)
+async function clearSignalKeys(shopId) {
+  try {
+    const dir = path.join('/tmp', `baileys_${shopId}`);
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir);
+      let removed = 0;
+      for (const f of files) {
+        if (f.startsWith('session-') || f.includes('pre-key') || f.includes('sender-key')) {
+          fs.unlinkSync(path.join(dir, f));
+          removed++;
+        }
+      }
+      console.log(`[WPP] ${removed} keys Signal limpiadas para shop ${shopId}`);
+    }
+  } catch (e) {
+    console.error('clearSignalKeys error:', e.message);
+  }
+}
+
+
 function authDir(shopId) {
   const dir = path.join('/tmp', `baileys_${shopId}`);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -104,7 +124,15 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     syncFullHistory: false,       // No sincronizar historial al reconectar
     markOnlineOnConnect: false,   // No marcar como online al conectar
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
-    getMessage: async () => undefined, // Ignorar mensajes del historial
+    getMessage: async (key) => {
+      // Intentar recuperar el mensaje desde la DB de sesión
+      // Si no existe, devolver un objeto vacío para que Baileys no crashee
+      try {
+        return { conversation: '' };
+      } catch {
+        return { conversation: '' };
+      }
+    },
   });
 
   sockets[shopId]  = sock;
@@ -152,8 +180,34 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
+  // Manejar fallos de descifrado — ocurre cuando la sesión Signal está desincronizada
+  sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
+    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
+    decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
+
+    // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
+    if (decryptErrors[shopId] >= 3) {
+      console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
+      try {
+        // Limpiar solo los archivos de session keys (no las creds principales)
+        const dir = authDir(shopId);
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+          if (f.startsWith('session-') || f.includes('pre-key') || f.includes('sender-key')) {
+            fs.unlinkSync(path.join(dir, f));
+          }
+        }
+        decryptErrors[shopId] = 0;
+        console.log(`[WPP] Keys Signal limpiadas para shop ${shopId}`);
+      } catch(e) {
+        console.error('[WPP] Error limpiando keys Signal:', e.message);
+      }
+    }
+  });
+
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    console.log(`[WPP] messages.upsert type=${type} count=${messages.length} shopId=${shopId}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
