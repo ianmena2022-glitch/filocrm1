@@ -271,12 +271,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         const jid = msg.key.remoteJid || '';
 
-        // Solo responder a contactos individuales (números @s.whatsapp.net)
+        // Solo responder a contactos individuales (@s.whatsapp.net o @lid)
         // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
-        if (!jid.endsWith('@s.whatsapp.net')) continue;
+        const isIndividual = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
+        if (!isIndividual) continue;
 
-        // Verificar que el JID sea efectivamente un número de teléfono
-        const phoneRaw = jid.replace('@s.whatsapp.net', '');
+        // Extraer el número/id del JID
+        const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
         const phone = phoneRaw;
