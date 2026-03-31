@@ -1211,7 +1211,10 @@ body {
           <h1>👑 MEMBRESÍAS</h1>
           <p id="memb-stats">Cargando...</p>
         </div>
-        <button class="btn-add" onclick="openModal('modal-membresia')">+ Nueva membresía</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn-add" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--white)" onclick="loadPlanesConfig();openModal('modal-planes-config')">⚙️ Configurar planes</button>
+          <button class="btn-add" onclick="openModal('modal-membresia')">+ Nueva membresía</button>
+        </div>
       </div>
       <div id="memb-list"></div>
     </section>
@@ -1600,6 +1603,73 @@ body {
     <div class="modal-actions">
       <button class="btn-modal-primary" id="sillon-send-btn" onclick="sendFlashOffer()" style="display:none">💬 Enviar WhatsApp</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-sillon')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Configurar planes de membresía -->
+<div class="modal-overlay" id="modal-planes-config">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">⚙️ Configurar planes</div>
+    <div class="modal-sub">Personalizá los planes que ofrecés a tus clientes</div>
+
+    <!-- Plan Básico -->
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:12px">Plan Básico</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Nombre</label>
+          <input type="text" id="plan-basic-name" placeholder="Básico">
+        </div>
+        <div class="form-field">
+          <label>Precio mensual ($)</label>
+          <input type="number" id="plan-basic-price" placeholder="8000">
+        </div>
+        <div class="form-field" style="grid-column:1/-1">
+          <label>Descripción</label>
+          <input type="text" id="plan-basic-desc" placeholder="2 cortes por mes">
+        </div>
+        <div class="form-field">
+          <label>Créditos por mes</label>
+          <input type="number" id="plan-basic-credits" placeholder="2" min="1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Premium -->
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:12px">Plan Premium</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Nombre</label>
+          <input type="text" id="plan-premium-name" placeholder="Premium">
+        </div>
+        <div class="form-field">
+          <label>Precio mensual ($)</label>
+          <input type="number" id="plan-premium-price" placeholder="15000">
+        </div>
+        <div class="form-field" style="grid-column:1/-1">
+          <label>Descripción</label>
+          <input type="text" id="plan-premium-desc" placeholder="Cortes ilimitados por mes">
+        </div>
+      </div>
+    </div>
+
+    <!-- CBU / Alias MP -->
+    <div style="background:rgba(0,148,255,0.06);border:1px solid rgba(0,148,255,0.2);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(0,148,255,.8);margin-bottom:12px">💳 Cobros con Mercado Pago</div>
+      <div class="form-grid">
+        <div class="form-field" style="grid-column:1/-1">
+          <label>CBU o Alias de tu cuenta MP</label>
+          <input type="text" id="plan-mp-cbu" placeholder="mi.alias.mp o 0000003100...">
+          <div style="font-size:11px;color:var(--gray);margin-top:4px">Los pagos de suscripciones se acreditarán en esta cuenta</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="savePlanesConfig()">✅ Guardar cambios</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-planes-config')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -2682,6 +2752,46 @@ async function quickRescue(clientId, name) {
 }
 
 // ─── MEMBRESÍAS ───
+async function loadPlanesConfig() {
+  try {
+    const data = await api('GET', '/settings');
+    const planes = data.membership_plans ? JSON.parse(data.membership_plans) : {};
+    document.getElementById('plan-basic-name').value    = planes.basic?.name    || 'Básico';
+    document.getElementById('plan-basic-price').value   = planes.basic?.price   || '';
+    document.getElementById('plan-basic-desc').value    = planes.basic?.desc    || '2 cortes por mes';
+    document.getElementById('plan-basic-credits').value = planes.basic?.credits || 2;
+    document.getElementById('plan-premium-name').value  = planes.premium?.name  || 'Premium';
+    document.getElementById('plan-premium-price').value = planes.premium?.price || '';
+    document.getElementById('plan-premium-desc').value  = planes.premium?.desc  || 'Cortes ilimitados por mes';
+    document.getElementById('plan-mp-cbu').value        = planes.mp_cbu         || '';
+  } catch(e) { console.error('loadPlanesConfig error:', e); }
+}
+
+async function savePlanesConfig() {
+  const planes = {
+    basic: {
+      name:    document.getElementById('plan-basic-name').value.trim() || 'Básico',
+      price:   parseFloat(document.getElementById('plan-basic-price').value) || 0,
+      desc:    document.getElementById('plan-basic-desc').value.trim() || '2 cortes por mes',
+      credits: parseInt(document.getElementById('plan-basic-credits').value) || 2,
+    },
+    premium: {
+      name:  document.getElementById('plan-premium-name').value.trim() || 'Premium',
+      price: parseFloat(document.getElementById('plan-premium-price').value) || 0,
+      desc:  document.getElementById('plan-premium-desc').value.trim() || 'Cortes ilimitados por mes',
+    },
+    mp_cbu: document.getElementById('plan-mp-cbu').value.trim(),
+  };
+  try {
+    await api('PUT', '/settings', { membership_plans: JSON.stringify(planes) });
+    closeModal('modal-planes-config');
+    showToast('✅', 'Planes guardados', 'La configuración se actualizó');
+    // Actualizar precios en el modal de nueva membresía
+    document.getElementById('m-price').placeholder = planes.basic.price || '8000';
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
 async function loadMemberships() {
   try {
     const [membs, stats] = await Promise.all([
