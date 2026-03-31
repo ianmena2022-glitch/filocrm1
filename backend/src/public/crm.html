@@ -1419,6 +1419,13 @@ body {
             <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
             <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
           </div>
+
+          <!-- Reconexión limpia -->
+          <div style="margin-top:16px;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.2);border-radius:12px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:#FF9100;margin-bottom:6px;letter-spacing:.5px">⚠️ ¿El bot no responde o hay problemas de conexión?</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:12px">Puede pasar si el servidor se reinició, si hay muchos mensajes pendientes acumulados, o si WhatsApp perdió la sincronización. Usá este botón para hacer una reconexión limpia — borra la sesión guardada y genera un QR nuevo.</div>
+            <button onclick="resetWhatsapp()" style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.35);color:#FF9100;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif;width:100%">🔄 Reconexión limpia</button>
+          </div>
           <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:16px">
             <div onclick="toggleTpl('cfg-tpls-body')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:4px">
               <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow)">🤖 Mensajes de respaldo (si la IA falla)</div>
@@ -3623,6 +3630,20 @@ async function connectWhatsapp() {
     showToast('❌', 'Error', e.message);
   } finally {
     btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp';
+  }
+}
+
+async function resetWhatsapp() {
+  if (!confirm('¿Hacer una reconexión limpia? Se va a cerrar la sesión actual y necesitás escanear el QR de nuevo.')) return;
+  try {
+    showToast('🔄', 'Limpiando sesión...', 'Esperá un momento');
+    await api('POST', '/settings/whatsapp/reset');
+    // Esperar 2 segundos y luego abrir el QR
+    await new Promise(r => setTimeout(r, 2000));
+    showToast('✅', 'Sesión limpiada', 'Escaneá el QR para reconectar');
+    connectWhatsapp();
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
   }
 }
 

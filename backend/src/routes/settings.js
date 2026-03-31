@@ -125,6 +125,18 @@ router.delete('/services/:id', auth, async (req, res) => {
 
 // ── WHATSAPP ──────────────────────────────────────────
 
+// POST /api/settings/whatsapp/reset — reconexión limpia
+router.post('/whatsapp/reset', auth, async (req, res) => {
+  try {
+    await wpp.clearSession(req.shopId);
+    console.log(`[WPP] Reset limpio para shop ${req.shopId}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('WPP reset error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 router.post('/whatsapp/connect', auth, async (req, res) => {
   try {
     const data = await wpp.startSession(req.shopId);

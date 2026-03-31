@@ -380,4 +380,4 @@ async function reconnectAllShops() {
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, reconnectAllShops, qrCodes };
+module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes };
