@@ -230,3 +230,114 @@ router.delete('/subscription/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+
+// ── SUSCRIPCIÓN DEL SHOP A FILO ────────────────────────────────────────────
+
+const FILO_PLANS = {
+  starter:    { price: 40000, name: 'FILO Starter' },
+  staff:      { price: 80000, name: 'FILO Staff' },
+  enterprise: { price: 130000, name: 'FILO Enterprise' },
+};
+
+// POST /api/payments/filo-subscription — el shop se suscribe a FILO
+router.post('/filo-subscription', auth, async (req, res) => {
+  const { payer_email } = req.body;
+  if (!payer_email) return res.status(400).json({ error: 'payer_email es requerido' });
+
+  try {
+    // Obtener plan del shop
+    const shopData = await pool.query(
+      'SELECT filo_plan, name FROM shops WHERE id=',
+      [req.shopId]
+    );
+    if (!shopData.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
+
+    const shop = shopData.rows[0];
+    const planKey = shop.filo_plan || 'starter';
+    const plan = FILO_PLANS[planKey] || FILO_PLANS.starter;
+    const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
+
+    // Crear plan en MP
+    const mpPlan = await mpFetch('POST', '/preapproval_plan', {
+      reason: plan.name,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: plan.price,
+        currency_id: 'ARS'
+      },
+      payment_methods_allowed: {
+        payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
+      },
+      back_url: appUrl + '/app'
+    });
+
+    // Crear suscripción para el shop
+    const subscription = await mpFetch('POST', '/preapproval', {
+      preapproval_plan_id: mpPlan.id,
+      payer_email,
+      reason: plan.name,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: plan.price,
+        currency_id: 'ARS'
+      },
+      back_url: appUrl + '/app',
+      notification_url: appUrl + '/api/payments/webhook-filo'
+    });
+
+    // Guardar en DB
+    await pool.query(
+      `UPDATE shops SET
+         mp_shop_subscription_id = $1,
+         mp_shop_status = $2,
+         mp_shop_payment_url = $3
+       WHERE id = $4`,
+      [subscription.id, subscription.status, subscription.init_point, req.shopId]
+    );
+
+    console.log(`[FILO PAY] Shop ${req.shopId} → ${planKey} ${subscription.init_point}`);
+
+    res.json({
+      ok: true,
+      payment_url: subscription.init_point,
+      plan: planKey,
+      price: plan.price
+    });
+  } catch (e) {
+    console.error('[FILO PAY] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/payments/webhook-filo — MP notifica pagos de suscripción FILO
+router.post('/webhook-filo', async (req, res) => {
+  try {
+    const { type, data } = req.body;
+    console.log(`[FILO Webhook] type=${type} id=${data?.id}`);
+
+    if (type === 'subscription_preapproval') {
+      const subId = data?.id;
+      if (!subId) return res.sendStatus(200);
+
+      const subscription = await mpFetch('GET', `/preapproval/${subId}`);
+      const status = subscription.status;
+
+      await pool.query(
+        `UPDATE shops SET
+           mp_shop_status = $1,
+           subscription_status = $2
+         WHERE mp_shop_subscription_id = $3`,
+        [status, status === 'authorized' ? 'active' : 'expired', subId]
+      );
+
+      console.log(`[FILO Webhook] Shop suscripción ${subId} → ${status}`);
+    }
+
+    res.sendStatus(200);
+  } catch (e) {
+    console.error('[FILO Webhook] error:', e.message);
+    res.sendStatus(200);
+  }
+});

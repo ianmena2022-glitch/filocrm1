@@ -1724,9 +1724,47 @@ function logout() {
 }
 
 // ─── APP INIT ───
+
+// ── PAYWALL ───────────────────────────────────────────────────────────────
+let selectedPwPlan = 'staff';
+
+function selectPwPlan(plan, el) {
+  selectedPwPlan = plan;
+  document.querySelectorAll('.pw-plan').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function paywallSubscribe() {
+  const email = currentShop?.email;
+  if (!email) return;
+  try {
+    // Actualizar plan elegido
+    await api('PUT', '/settings', { filo_plan: selectedPwPlan });
+    const data = await api('POST', '/payments/filo-subscription', { payer_email: email });
+    if (data.payment_url) window.open(data.payment_url, '_blank');
+    showToast('✅', 'Link de pago generado', 'Completá el pago en Mercado Pago');
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+function checkPaywall() {
+  if (!currentShop) return;
+  // Cuentas test y barberos siempre tienen acceso
+  if (currentShop.is_test || currentShop.plan === 'test' || currentShop.is_barber) return;
+  const status = currentShop.subscription_status;
+  if (status === 'expired' || status === 'cancelled') {
+    document.getElementById('paywall-screen').classList.add('show');
+  }
+}
+
+// Escuchar respuesta 402 de la API (trial expirado)
+const _originalApi = window.api;
+
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  checkPaywall();
 
   // Avatar
   const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
@@ -2429,9 +2467,14 @@ async function loadMemberships() {
           </div>
         </div>
         ${m.plan === 'basic' ? `<div class="memb-credits" style="color:${m.credits_remaining > 0 ? 'var(--green)' : 'var(--red)'}">${m.credits_remaining}<div style="font-size:11px;color:var(--gray);font-family:'Barlow',sans-serif;font-weight:400">créditos</div></div>` : '<div style="color:var(--yellow);font-size:20px">∞</div>'}
-        <div style="display:flex;gap:8px">
-          ${m.active ? `<button class="appt-btn complete" onclick="checkin(${m.id})" title="Usar crédito / Check-in">✓</button>` : ''}
-          ${m.active ? `<button class="appt-btn noshow" onclick="cancelMembership(${m.id})" title="Cancelar membresía">✗</button>` : ''}
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <div style="display:flex;gap:8px">
+            ${m.active ? `<button class="appt-btn complete" onclick="checkin(${m.id})" title="Usar crédito / Check-in">✓</button>` : ''}
+            ${m.active ? `<button class="appt-btn noshow" onclick="cancelMembership(${m.id})" title="Cancelar membresía">✗</button>` : ''}
+          </div>
+          ${m.mp_status === 'authorized' ? `<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#00E676;background:rgba(0,230,118,0.1);padding:3px 8px;border-radius:20px">MP ACTIVO</span>` : ''}
+          ${!m.mp_subscription_id && m.active && m.price_monthly > 0 ? `<button style="background:rgba(0,148,255,0.12);border:1px solid rgba(0,148,255,0.3);color:#0094FF;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="linkMP(${m.id},'${m.client_phone || ''}','${m.plan}',${m.price_monthly})">💳 Cobrar con MP</button>` : ''}
+          ${m.mp_subscription_id && m.mp_status !== 'authorized' ? `<button style="background:rgba(0,148,255,0.12);border:1px solid rgba(0,148,255,0.3);color:#0094FF;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="window.open('${m.payment_url}','_blank')">🔗 Link de pago</button>` : ''}
         </div>
       </div>
     `).join('');
@@ -2477,6 +2520,28 @@ async function checkin(id) {
   } catch (e) {
     showToast('❌', 'Error', e.message);
     loadMemberships();
+  }
+}
+
+
+async function linkMP(membId, phone, plan, price) {
+  const email = prompt('Email del cliente para Mercado Pago:');
+  if (!email || !email.includes('@')) return showToast('⚠️', 'Email inválido', '');
+  try {
+    showToast('⏳', 'Creando suscripción en MP...', '');
+    const planName = plan === 'premium' ? 'Membresía Premium FILO' : 'Membresía Básica FILO';
+    const data = await api('POST', '/payments/subscription', {
+      membership_id: membId,
+      payer_email: email,
+      plan_name: planName,
+      price_monthly: price
+    });
+    showToast('✅', 'Link generado', 'Enviá el link al cliente');
+    // Abrir link de pago en nueva pestaña
+    if (data.payment_url) window.open(data.payment_url, '_blank');
+    loadMemberships();
+  } catch (e) {
+    showToast('❌', 'Error MP', e.message);
   }
 }
 
@@ -3140,6 +3205,34 @@ if (token && currentShop) {
   });
 })();
 </script>
+
+
+<!-- PAYWALL SCREEN -->
+<div id="paywall-screen">
+  <div class="pw-logo">F</div>
+  <div class="pw-badge">Período de prueba finalizado</div>
+  <div class="pw-title">Seguí usando FILO</div>
+  <div class="pw-sub">Tu prueba gratuita de 7 días terminó. Elegí tu plan para continuar.</div>
+  <div class="pw-plans" id="pw-plans">
+    <div class="pw-plan" onclick="selectPwPlan('starter',this)">
+      <div class="pw-plan-name">Starter</div>
+      <div class="pw-plan-price">$40.000</div>
+      <div class="pw-plan-period">por mes</div>
+    </div>
+    <div class="pw-plan selected" onclick="selectPwPlan('staff',this)">
+      <div class="pw-plan-name">Staff ⭐</div>
+      <div class="pw-plan-price">$80.000</div>
+      <div class="pw-plan-period">por mes</div>
+    </div>
+    <div class="pw-plan" onclick="selectPwPlan('enterprise',this)">
+      <div class="pw-plan-name">Enterprise</div>
+      <div class="pw-plan-price">$130.000</div>
+      <div class="pw-plan-period">por mes</div>
+    </div>
+  </div>
+  <button class="pw-btn" onclick="paywallSubscribe()">Suscribirme con Mercado Pago</button>
+  <div class="pw-trial-note">Pago seguro · Cancelá cuando quieras</div>
+</div>
 
 </body>
 </html>

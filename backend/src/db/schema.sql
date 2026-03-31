@@ -174,3 +174,14 @@ ON CONFLICT (email) DO NOTHING;
 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 UPDATE shops SET is_test=TRUE WHERE email IN ('ian@filocrm.com','socio@filocrm.com');
+
+-- ── PAYWALL FILO ──────────────────────────────────────────────────────────────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'trial' CHECK (subscription_status IN ('trial','active','expired','cancelled'));
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_shop_subscription_id VARCHAR(100);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_shop_status VARCHAR(50);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_shop_payment_url TEXT;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS filo_plan VARCHAR(20) DEFAULT 'starter' CHECK (filo_plan IN ('starter','staff','enterprise'));
+
+-- Actualizar plan en el CHECK constraint para incluir enterprise
+-- (ya existe el CHECK en el ALTER anterior, este extiende el enum)
