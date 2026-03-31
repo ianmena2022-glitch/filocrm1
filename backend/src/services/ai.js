@@ -1,40 +1,51 @@
 const pool = require('../db/pool');
 
-// Palabras clave de barbería para filtrar mensajes relevantes
-const KEYWORDS = [
-  'turno', 'reserva', 'reservar', 'sacar', 'agendar', 'cita',
-  'precio', 'precios', 'cuánto', 'cuanto', 'vale', 'cuesta', 'cobran',
-  'corte', 'barba', 'pelo', 'cabello', 'lavado', 'tintura', 'degrade',
-  'horario', 'horarios', 'atienden', 'abren', 'cierran', 'dias', 'días',
-  'disponible', 'disponibilidad', 'libre', 'hay lugar', 'lugar',
-  'barbero', 'barbería', 'barberia', 'servicio', 'servicios',
-  'hola', 'buenas', 'buen dia', 'buen día', 'hello', 'hi',
-  'info', 'información', 'informacion', 'consulta',
-  'puntos', 'premio', 'descuento', 'promo',
-  'cancelar', 'cancel', 'cambiar turno',
-  'dirección', 'direccion', 'donde están', 'dónde están', 'ubicación', 'ubicacion',
-];
-
 // Historial de conversaciones en memoria
 const conversations = {};
 const lastActivity = {};
 const CONVERSATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
 
-function isBarberiaRelated(text) {
-  const lower = text.toLowerCase();
-  return KEYWORDS.some(kw => lower.includes(kw));
-}
-
 function hasActiveConversation(shopId, phone) {
   const key = `${shopId}:${phone}`;
   if (!conversations[key] || conversations[key].length === 0) return false;
-  // Limpiar si pasaron más de 30 minutos sin actividad
   if (Date.now() - (lastActivity[key] || 0) > CONVERSATION_TIMEOUT_MS) {
     delete conversations[key];
     delete lastActivity[key];
     return false;
   }
   return true;
+}
+
+// Clasificación contextual con IA — reemplaza el sistema de keywords
+async function isBarberiaRelated(text, apiKey) {
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido está relacionado con servicios de barbería: turnos, reservas, precios, cortes, barba, horarios, ubicación, puntos/premios, cancelaciones, consultas sobre servicios, saludos iniciales, o cualquier consulta que una persona le haría a una barbería. Respondé ÚNICAMENTE con "true" o "false", sin ninguna otra palabra ni explicación.`
+          },
+          {
+            role: 'user',
+            content: `Mensaje: "${text}"`
+          }
+        ],
+        max_tokens: 5,
+        temperature: 0,
+      })
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    const answer = data.choices?.[0]?.message?.content?.trim().toLowerCase();
+    return answer === 'true';
+  } catch (e) {
+    console.error('[AI] Error clasificando mensaje:', e.message);
+    return false;
+  }
 }
 
 async function getShopContext(shopId) {
@@ -98,9 +109,13 @@ async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
-  if (!isBarberiaRelated(userMessage) && !hasActiveConversation(shopId, phone)) {
-    console.log(`[AI] Ignorado: "${userMessage}"`);
-    return null;
+  // Si no hay conversación activa, clasificar el mensaje con IA antes de responder
+  if (!hasActiveConversation(shopId, phone)) {
+    const related = await isBarberiaRelated(userMessage, apiKey);
+    if (!related) {
+      console.log(`[AI] Ignorado (no relacionado con barbería): "${userMessage}"`);
+      return null;
+    }
   }
 
   const [shopCtx, client] = await Promise.all([getShopContext(shopId), getClientContext(shopId, phone)]);
