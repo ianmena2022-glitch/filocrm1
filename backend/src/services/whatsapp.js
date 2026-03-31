@@ -101,7 +101,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
-    logger: { level: 'silent', log: () => {}, info: () => {}, warn: console.warn, error: console.error, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
+    syncFullHistory: false,       // No sincronizar historial al reconectar
+    markOnlineOnConnect: false,   // No marcar como online al conectar
+    logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
+    getMessage: async () => undefined, // Ignorar mensajes del historial
   });
 
   sockets[shopId]  = sock;
