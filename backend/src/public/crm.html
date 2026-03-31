@@ -2283,6 +2283,7 @@ async function loadDashboard() {
     // Calendario semanal
     _dashCalOffset = 0;
     renderDashCalendar(today.appointments);
+    loadDashCalendar(); // carga turnos del resto de la semana
 
     // Gráfico 30 días
     renderChart30(chart);
@@ -2319,10 +2320,11 @@ async function loadDashboard() {
         </div>`).join('');
     }
 
-    // Comisiones (solo Staff/Enterprise)
+    // Comisiones (solo Staff/Enterprise — nunca Starter)
     const filoPlan = currentShop?.filo_plan || currentShop?.plan;
+    const isStaff = filoPlan === 'staff' || filoPlan === 'enterprise';
     const splitsCard = document.getElementById('dash-splits-card');
-    if (filoPlan === 'staff' || filoPlan === 'enterprise' || currentShop?.is_test) {
+    if (isStaff) {
       if (today.splits?.length) {
         document.getElementById('dash-splits').innerHTML = today.splits.map(s => `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
@@ -2354,8 +2356,43 @@ function renderChart30(data) {
   }).join('');
 }
 
-// Calendario semanal del dashboard
+// Calendario semanal del dashboard — tipo Google Calendar
+let _dashWeekAppts = {}; // cache de turnos por fecha
+
+async function loadDashCalendar() {
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  const dow = now.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  startOfWeek.setDate(now.getDate() + diff + (_dashCalOffset * 7));
+
+  // Cargar turnos de toda la semana
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+
+  try {
+    const promises = dates.map(date =>
+      api('GET', `/appointments?date=${date}`).catch(() => [])
+    );
+    const results = await Promise.all(promises);
+    _dashWeekAppts = {};
+    dates.forEach((date, i) => { _dashWeekAppts[date] = results[i] || []; });
+  } catch(e) { console.warn('Cal load error:', e.message); }
+
+  renderDashCalendar();
+}
+
 function renderDashCalendar(todayAppts) {
+  // Si se pasan turnos de hoy, actualizamos el cache
+  if (todayAppts?.length) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    _dashWeekAppts[todayStr] = todayAppts;
+  }
+
   const now = new Date();
   const startOfWeek = new Date(now);
   const dow = now.getDay();
@@ -2371,13 +2408,31 @@ function renderDashCalendar(todayAppts) {
     const dateStr = d.toISOString().split('T')[0];
     const isToday = dateStr === todayStr;
     const isPast  = dateStr < todayStr;
-    const dayAppts = isToday ? todayAppts : [];
-    const count = dayAppts.length;
+    const appts = _dashWeekAppts[dateStr] || [];
+    const completed = appts.filter(a => a.status === 'completed').length;
+    const pending   = appts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
+    const total = appts.length;
 
-    return `<div onclick="goToDate('${dateStr}')" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;background:${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.07)'};transition:.15s" onmouseover="this.style.background='${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.08)'}'" onmouseout="this.style.background='${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.03)'}'">
-      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:${isToday ? '#000d1f' : 'var(--gray)'};margin-bottom:4px">${label}</div>
-      <div style="font-size:14px;font-weight:700;color:${isToday ? '#000d1f' : isPast ? 'rgba(255,255,255,0.3)' : 'var(--white)'}">${d.getDate()}</div>
-      ${isToday && count > 0 ? `<div style="margin-top:4px;font-size:10px;font-weight:700;color:#000d1f">${count} turnos</div>` : '<div style="height:14px"></div>'}
+    // Dots de colores para representar turnos
+    const dotsHtml = total > 0 ? `
+      <div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:6px;min-height:16px">
+        ${appts.slice(0, 6).map(a => {
+          const color = a.status === 'completed' ? '#00E676' : a.status === 'noshow' ? '#FF4343' : 'rgba(255,209,0,0.8)';
+          return `<div style="width:7px;height:7px;border-radius:50%;background:${isToday ? (a.status === 'completed' ? '#006830' : '#7a6200') : color}"></div>`;
+        }).join('')}
+        ${appts.length > 6 ? `<div style="font-size:9px;color:${isToday ? '#000d1f' : 'var(--gray)'};align-self:center">+${appts.length - 6}</div>` : ''}
+      </div>` : `<div style="min-height:22px"></div>`;
+
+    const countHtml = total > 0 ? `
+      <div style="margin-top:5px;font-size:10px;color:${isToday ? '#000d1f' : 'var(--gray)'}">
+        ${completed > 0 ? `<span style="color:${isToday ? '#004d20' : '#00E676'}">${completed}✓</span> ` : ''}${pending > 0 ? `<span>${pending} pend.</span>` : ''}
+      </div>` : '';
+
+    return `<div onclick="goToDate('${dateStr}')" style="cursor:pointer;text-align:center;padding:10px 6px 10px;border-radius:12px;background:${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isToday ? 'var(--yellow)' : 'rgba(255,255,255,0.07)'};transition:all .15s;min-height:100px;display:flex;flex-direction:column;align-items:center" onmouseover="if(!${isToday})this.style.background='rgba(255,255,255,0.07)'" onmouseout="if(!${isToday})this.style.background='rgba(255,255,255,0.03)'">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:${isToday ? '#000d1f' : 'var(--gray)'};margin-bottom:5px">${label}</div>
+      <div style="font-size:18px;font-weight:700;color:${isToday ? '#000d1f' : isPast ? 'rgba(255,255,255,0.3)' : 'var(--white)'}">${d.getDate()}</div>
+      ${dotsHtml}
+      ${countHtml}
     </div>`;
   });
 
@@ -2388,8 +2443,8 @@ function renderDashCalendar(todayAppts) {
   document.getElementById('dash-calendar').innerHTML = cells.join('');
 }
 
-function dashCalPrev() { _dashCalOffset--; renderDashCalendar([]); }
-function dashCalNext() { _dashCalOffset++; renderDashCalendar([]); }
+function dashCalPrev() { _dashCalOffset--; loadDashCalendar(); }
+function dashCalNext() { _dashCalOffset++; loadDashCalendar(); }
 
 function goToDate(dateStr) {
   showSection('agenda');
