@@ -240,12 +240,12 @@ const FILO_PLANS = {
 };
 
 // POST /api/payments/filo-subscription — el shop se suscribe a FILO
+// Usa preapproval_plan para generar un link donde el usuario ingresa la tarjeta
 router.post('/filo-subscription', auth, async (req, res) => {
   const { payer_email } = req.body;
   if (!payer_email) return res.status(400).json({ error: 'payer_email es requerido' });
 
   try {
-    // Obtener plan del shop
     const shopData = await pool.query(
       'SELECT filo_plan, name FROM shops WHERE id=$1',
       [req.shopId]
@@ -257,51 +257,45 @@ router.post('/filo-subscription', auth, async (req, res) => {
     const plan = FILO_PLANS[planKey] || FILO_PLANS.starter;
     const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
 
-    // Crear plan en MP
+    // Crear plan de suscripción con trial de 7 días
+    // El usuario ingresa la tarjeta en el checkout de MP, no se cobra hasta el día 8
     const mpPlan = await mpFetch('POST', '/preapproval_plan', {
       reason: plan.name,
       auto_recurring: {
         frequency: 1,
         frequency_type: 'months',
         transaction_amount: plan.price,
-        currency_id: 'ARS'
+        currency_id: 'ARS',
+        free_trial: {
+          frequency: 7,
+          frequency_type: 'days'
+        }
       },
       payment_methods_allowed: {
         payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
-      },
-      back_url: appUrl + '/app'
-    });
-
-    // Crear suscripción para el shop
-    const subscription = await mpFetch('POST', '/preapproval', {
-      preapproval_plan_id: mpPlan.id,
-      payer_email,
-      reason: plan.name,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: plan.price,
-        currency_id: 'ARS'
       },
       back_url: appUrl + '/app',
       notification_url: appUrl + '/api/payments/webhook-filo'
     });
 
-    // Guardar en DB
+    // El init_point del plan es el link donde el usuario ingresa la tarjeta
+    const paymentUrl = mpPlan.init_point;
+
+    // Guardar plan_id y URL en DB
     await pool.query(
       `UPDATE shops SET
          mp_shop_subscription_id = $1,
-         mp_shop_status = $2,
-         mp_shop_payment_url = $3
-       WHERE id = $4`,
-      [subscription.id, subscription.status, subscription.init_point, req.shopId]
+         mp_shop_status = 'pending',
+         mp_shop_payment_url = $2
+       WHERE id = $3`,
+      [mpPlan.id, paymentUrl, req.shopId]
     );
 
-    console.log(`[FILO PAY] Shop ${req.shopId} → ${planKey} ${subscription.init_point}`);
+    console.log(`[FILO PAY] Shop ${req.shopId} → plan ${planKey} url: ${paymentUrl}`);
 
     res.json({
       ok: true,
-      payment_url: subscription.init_point,
+      payment_url: paymentUrl,
       plan: planKey,
       price: plan.price
     });
