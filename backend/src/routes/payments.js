@@ -247,7 +247,7 @@ router.post('/filo-subscription', auth, async (req, res) => {
   try {
     // Obtener plan del shop
     const shopData = await pool.query(
-      'SELECT filo_plan, name FROM shops WHERE id=',
+      'SELECT filo_plan, name FROM shops WHERE id=$1',
       [req.shopId]
     );
     if (!shopData.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
