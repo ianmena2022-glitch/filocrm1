@@ -1968,9 +1968,9 @@ const _originalApi = window.api;
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
 
-  // Si no es test/barbero, debe tener suscripción creada en MP (tarjeta cargada)
+  // Si no es test/barbero, debe haber completado el checkout de tarjeta en MP
   if (currentShop && !currentShop.is_test && currentShop.plan !== 'test' && !currentShop.is_barber) {
-    if (!currentShop.mp_shop_subscription_id) {
+    if (currentShop.mp_shop_status !== 'authorized') {
       showCardRequired();
       return;
     }
