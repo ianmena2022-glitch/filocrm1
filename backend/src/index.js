@@ -28,6 +28,7 @@ app.use('/api/points',       require('./routes/points'));
 app.use('/api/barbers',      require('./routes/barbers'));
 app.use('/api/payments/webhook', require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
+app.use('/api/payments/filo-cancel',   require('./routes/payments'));
 app.use('/api/payments',     require('./routes/payments'));
 
 // Dashboard barbero

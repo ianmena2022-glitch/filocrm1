@@ -341,3 +341,29 @@ router.post('/webhook-filo', async (req, res) => {
     res.sendStatus(200);
   }
 });
+
+// POST /api/payments/filo-cancel — cancelar suscripción del shop a FILO
+router.post('/filo-cancel', auth, async (req, res) => {
+  try {
+    const shopData = await pool.query(
+      'SELECT mp_shop_subscription_id FROM shops WHERE id=$1',
+      [req.shopId]
+    );
+    const subId = shopData.rows[0]?.mp_shop_subscription_id;
+
+    if (subId) {
+      await mpFetch('PUT', `/preapproval/${subId}`, { status: 'cancelled' });
+    }
+
+    await pool.query(
+      "UPDATE shops SET subscription_status='cancelled', mp_shop_status='cancelled' WHERE id=$1",
+      [req.shopId]
+    );
+
+    console.log(`[FILO] Shop ${req.shopId} canceló suscripción`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[FILO cancel]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
