@@ -233,13 +233,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phone = phoneRaw;
         const msgContent = msg.message;
 
+        // DEBUG
+        console.log(`[WPP DEBUG] phone=${phone} keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
+
         // Ignorar todo tipo de mensaje que no sea texto puro
         const text =
           msgContent?.conversation ||
           msgContent?.extendedTextMessage?.text ||
           null;
 
-        if (!text) continue;
+        console.log(`[WPP DEBUG] text="${text}"`);
+
+        if (!text) { console.log('[WPP DEBUG] sin texto, ignorando'); continue; }
 
         console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
