@@ -2777,7 +2777,7 @@ function renderClients(filtered) {
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="appt-btn" onclick="editClientById(${c.id})"" title="Editar">✏️</button>
+        <button class="appt-btn" onclick="editClientById(${c.id})" title="Editar">✏️</button>
         <button class="appt-btn" onclick="quickRescue(${c.id},'${c.name}')" title="Enviar WhatsApp de rescate">💬</button>
         <button class="appt-btn" onclick="deleteClient(${c.id})" title="Eliminar">🗑</button>
       </div>
@@ -2904,7 +2904,7 @@ function renderServicesList() {
         <div style="font-size:12px;color:var(--gray)">$${parseFloat(s.price).toLocaleString('es-AR')} · ${s.duration_minutes} min</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="appt-btn" onclick="editServiceById(${s.id})"" title="Editar">✏️</button>
+        <button class="appt-btn" onclick="editServiceById(${s.id})" title="Editar">✏️</button>
         <button class="appt-btn" onclick="deleteService(${s.id})" title="Eliminar">🗑</button>
       </div>
     </div>
@@ -3670,7 +3670,7 @@ function renderStoreItems() {
         <div style="font-size:12px;color:var(--gray)">${item.description || ''} · <span style="color:var(--yellow)">${item.points_cost} puntos</span></div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="appt-btn" onclick="editStoreItemById(${item.id})"" title="Editar">✏️</button>
+        <button class="appt-btn" onclick="editStoreItemById(${item.id})" title="Editar">✏️</button>
         <button class="appt-btn" onclick="deleteStoreItem(${item.id})" title="Eliminar">🗑</button>
       </div>
     </div>
@@ -3902,6 +3902,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 // ─── EDITAR CLIENTE ───
+});
+
+
 // ─── EDITAR CLIENTE ───
 function editClientById(id) {
   const c = clients.find(x => x.id === id);
@@ -3928,7 +3931,7 @@ async function saveEditClient() {
 }
 
 // ─── EDITAR TURNO ───
-let _editApptCache = {};
+var _editApptCache = {};
 
 function editApptById(id) {
   const card = document.querySelector(`[onclick*="editApptById(${id})"]`)?.closest('.appointment-card');
@@ -4024,8 +4027,6 @@ async function saveEditStoreItem() {
     loadStoreItems();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
-
-});
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
