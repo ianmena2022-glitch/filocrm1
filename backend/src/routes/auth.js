@@ -30,7 +30,8 @@ function shopPayload(shop) {
     barber_color:         shop.barber_color || '#FFD100',
     subscription_status:  shop.subscription_status || 'trial',
     trial_ends_at:        shop.trial_ends_at || null,
-    mp_shop_payment_url:  shop.mp_shop_payment_url || null,
+    mp_shop_payment_url:     shop.mp_shop_payment_url || null,
+    mp_shop_subscription_id: shop.mp_shop_subscription_id || null,
   };
 }
 

@@ -1843,9 +1843,12 @@ async function register() {
       }
     } catch(payErr) {
       console.error('MP error:', payErr);
-      // Si falla MP, igual dejar entrar (se pedirá después)
+      // Si falla MP, mostrar pantalla de tarjeta requerida
+      showCardRequired();
+      return;
     }
 
+    // Solo llegar acá si no hubo payment_url ni error (caso raro)
     startApp();
   } catch (e) {
     showAuthError(e.message);
@@ -1965,9 +1968,9 @@ const _originalApi = window.api;
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
 
-  // Si no es test/barbero y no tiene tarjeta cargada, mostrar pantalla de tarjeta
+  // Si no es test/barbero, debe tener suscripción creada en MP (tarjeta cargada)
   if (currentShop && !currentShop.is_test && currentShop.plan !== 'test' && !currentShop.is_barber) {
-    if (!currentShop.mp_shop_payment_url) {
+    if (!currentShop.mp_shop_subscription_id) {
       showCardRequired();
       return;
     }
@@ -3204,13 +3207,24 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 });
 
 // ─── INIT ───
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   if (token && currentShop) {
     if (currentShop.is_barber) {
       localStorage.setItem('barber_token', token);
       localStorage.setItem('barber_me', JSON.stringify(currentShop));
       window.location.href = '/barber';
     } else {
+      // Refrescar shop desde backend para tener datos actualizados
+      // (ej: usuario que volvio de MP sin completar la tarjeta)
+      try {
+        const fresh = await api('GET', '/auth/me');
+        if (fresh && fresh.shop) {
+          currentShop = fresh.shop;
+          localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+        }
+      } catch(e) {
+        console.warn('No se pudo refrescar sesion:', e.message);
+      }
       startApp();
     }
   }
