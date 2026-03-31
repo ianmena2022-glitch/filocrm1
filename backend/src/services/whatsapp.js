@@ -136,9 +136,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     for (const msg of messages) {
       try {
-        // Ignorar mensajes propios o de grupos
+        // Ignorar mensajes propios
         if (msg.key.fromMe) continue;
-        if (msg.key.remoteJid?.endsWith('@g.us')) continue;
+
+        const jid = msg.key.remoteJid || '';
+
+        // Solo responder a contactos individuales (números @s.whatsapp.net)
+        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
+        if (!jid.endsWith('@s.whatsapp.net')) continue;
+
+        // Verificar que el JID sea efectivamente un número de teléfono
+        const phoneRaw = jid.replace('@s.whatsapp.net', '');
+        if (!/^\d+$/.test(phoneRaw)) continue;
 
         const text =
           msg.message?.conversation ||
@@ -148,7 +157,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (!text) continue;
 
-        const phone = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+        const phone = phoneRaw;
         console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
         // Obtener respuesta del AI
