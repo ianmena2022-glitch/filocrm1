@@ -1856,6 +1856,128 @@ body {
   <button class="toast-close" onclick="hideToast()">✕</button>
 </div>
 
+<!-- Modal: Editar cliente -->
+<div class="modal-overlay" id="modal-edit-cliente">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar cliente</div>
+    <input type="hidden" id="edit-c-id">
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre completo</label>
+        <input type="text" id="edit-c-name" placeholder="Juan García">
+      </div>
+      <div class="form-field">
+        <label>Teléfono / WhatsApp</label>
+        <input type="tel" id="edit-c-phone" placeholder="+54 9113425876">
+      </div>
+      <div class="form-field">
+        <label>Notas (opcional)</label>
+        <input type="text" id="edit-c-notes" placeholder="Corte fade, alérgico a...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="saveEditClient()">✅ Guardar cambios</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-edit-cliente')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar turno -->
+<div class="modal-overlay" id="modal-edit-turno">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar turno</div>
+    <input type="hidden" id="edit-a-id">
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre del cliente</label>
+        <input type="text" id="edit-a-client-name" placeholder="Juan García">
+      </div>
+      <div class="form-field">
+        <label>Hora inicio</label>
+        <input type="time" id="edit-a-time-start">
+      </div>
+      <div class="form-field">
+        <label>Hora fin</label>
+        <input type="time" id="edit-a-time-end">
+      </div>
+      <div class="form-field">
+        <label>Precio ($)</label>
+        <input type="number" id="edit-a-price" placeholder="5000">
+      </div>
+      <div class="form-field">
+        <label>Estado</label>
+        <select id="edit-a-status">
+          <option value="pending">Pendiente</option>
+          <option value="confirmed">Confirmado</option>
+          <option value="completed">Completado</option>
+          <option value="noshow">No vino</option>
+          <option value="cancelled">Cancelado</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="saveEditAppt()">✅ Guardar cambios</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-edit-turno')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar servicio -->
+<div class="modal-overlay" id="modal-edit-servicio">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar servicio</div>
+    <input type="hidden" id="edit-s-id">
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre del servicio</label>
+        <input type="text" id="edit-s-name" placeholder="Corte + barba">
+      </div>
+      <div class="form-field">
+        <label>Precio ($)</label>
+        <input type="number" id="edit-s-price" placeholder="5500">
+      </div>
+      <div class="form-field">
+        <label>Costo de insumos ($)</label>
+        <input type="number" id="edit-s-cost" placeholder="300">
+      </div>
+      <div class="form-field">
+        <label>Duración (minutos)</label>
+        <input type="number" id="edit-s-duration" placeholder="30">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="saveEditService()">✅ Guardar cambios</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-edit-servicio')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar premio tienda -->
+<div class="modal-overlay" id="modal-edit-store-item">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar premio</div>
+    <input type="hidden" id="edit-si-id">
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre del premio</label>
+        <input type="text" id="edit-si-name" placeholder="Lavado gratis">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Descripción (opcional)</label>
+        <input type="text" id="edit-si-desc" placeholder="Un lavado de cabello sin costo...">
+      </div>
+      <div class="form-field">
+        <label>Costo en puntos</label>
+        <input type="number" id="edit-si-points" placeholder="300" min="1">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="saveEditStoreItem()">✅ Guardar cambios</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-edit-store-item')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════
 //  FILO CRM — Frontend Logic
@@ -2472,6 +2594,7 @@ function renderApptCard(a) {
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
     <div class="appt-actions">
+      <button class="appt-btn" onclick="editAppt(${JSON.stringify(a).replace(/"/g,'&quot;')})" title="Editar">✏️</button>
       ${a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : ''}
       ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
       <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>
@@ -2647,6 +2770,7 @@ function renderClients(filtered) {
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
+        <button class="appt-btn" onclick="editClient(${c.id},'${c.name.replace(/'/g,"\\'")}','${(c.phone||'').replace(/'/g,"\\'")}','${(c.notes||'').replace(/'/g,"\\'")}'')" title="Editar">✏️</button>
         <button class="appt-btn" onclick="quickRescue(${c.id},'${c.name}')" title="Enviar WhatsApp de rescate">💬</button>
         <button class="appt-btn" onclick="deleteClient(${c.id})" title="Eliminar">🗑</button>
       </div>
@@ -2772,7 +2896,10 @@ function renderServicesList() {
         <div style="font-size:14px;font-weight:600">${s.name}</div>
         <div style="font-size:12px;color:var(--gray)">$${parseFloat(s.price).toLocaleString('es-AR')} · ${s.duration_minutes} min</div>
       </div>
-      <button class="appt-btn" onclick="deleteService(${s.id})" title="Eliminar">🗑</button>
+      <div style="display:flex;gap:6px">
+        <button class="appt-btn" onclick="editService(${s.id},'${s.name.replace(/'/g,"\\'")}',${s.price},${s.cost||0},${s.duration_minutes})" title="Editar">✏️</button>
+        <button class="appt-btn" onclick="deleteService(${s.id})" title="Eliminar">🗑</button>
+      </div>
     </div>
   `).join('');
 }
@@ -3535,7 +3662,10 @@ function renderStoreItems() {
         <div style="font-size:14px;font-weight:600">${item.name}</div>
         <div style="font-size:12px;color:var(--gray)">${item.description || ''} · <span style="color:var(--yellow)">${item.points_cost} puntos</span></div>
       </div>
-      <button class="appt-btn" onclick="deleteStoreItem(${item.id})" title="Eliminar">🗑</button>
+      <div style="display:flex;gap:6px">
+        <button class="appt-btn" onclick="editStoreItem(${item.id},'${item.name.replace(/'/g,"\\'")}','${(item.description||'').replace(/'/g,"\\'")}',${item.points_cost})" title="Editar">✏️</button>
+        <button class="appt-btn" onclick="deleteStoreItem(${item.id})" title="Eliminar">🗑</button>
+      </div>
     </div>
   `).join('');
 }
@@ -3764,6 +3894,104 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     }
   }
+// ─── EDITAR CLIENTE ───
+function editClient(id, name, phone, notes) {
+  document.getElementById('edit-c-id').value = id;
+  document.getElementById('edit-c-name').value = name;
+  document.getElementById('edit-c-phone').value = phone || '+54';
+  document.getElementById('edit-c-notes').value = notes || '';
+  openModal('modal-edit-cliente');
+}
+
+async function saveEditClient() {
+  const id    = document.getElementById('edit-c-id').value;
+  const name  = document.getElementById('edit-c-name').value.trim();
+  const phone = document.getElementById('edit-c-phone').value.trim();
+  const notes = document.getElementById('edit-c-notes').value.trim();
+  if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
+  try {
+    await api('PUT', `/clients/${id}`, { name, phone: (phone === '+54' ? '' : phone), notes });
+    closeModal('modal-edit-cliente');
+    showToast('✅', 'Cliente actualizado', name);
+    await loadClients();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ─── EDITAR TURNO ───
+function editAppt(a) {
+  document.getElementById('edit-a-id').value = a.id;
+  document.getElementById('edit-a-client-name').value = a.client_name || '';
+  document.getElementById('edit-a-time-start').value = String(a.time_start||'').slice(0,5);
+  document.getElementById('edit-a-time-end').value = String(a.time_end||'').slice(0,5);
+  document.getElementById('edit-a-price').value = a.price || '';
+  document.getElementById('edit-a-status').value = a.status || 'pending';
+  openModal('modal-edit-turno');
+}
+
+async function saveEditAppt() {
+  const id         = document.getElementById('edit-a-id').value;
+  const clientName = document.getElementById('edit-a-client-name').value.trim();
+  const timeStart  = document.getElementById('edit-a-time-start').value;
+  const timeEnd    = document.getElementById('edit-a-time-end').value;
+  const price      = document.getElementById('edit-a-price').value;
+  const status     = document.getElementById('edit-a-status').value;
+  try {
+    await api('PUT', `/appointments/${id}`, { client_name: clientName, time_start: timeStart, time_end: timeEnd, price: parseFloat(price||0), status });
+    closeModal('modal-edit-turno');
+    showToast('✅', 'Turno actualizado', '');
+    loadAgenda();
+    loadDashboard();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ─── EDITAR SERVICIO ───
+function editService(id, name, price, cost, duration) {
+  document.getElementById('edit-s-id').value = id;
+  document.getElementById('edit-s-name').value = name;
+  document.getElementById('edit-s-price').value = price;
+  document.getElementById('edit-s-cost').value = cost;
+  document.getElementById('edit-s-duration').value = duration;
+  openModal('modal-edit-servicio');
+}
+
+async function saveEditService() {
+  const id       = document.getElementById('edit-s-id').value;
+  const name     = document.getElementById('edit-s-name').value.trim();
+  const price    = document.getElementById('edit-s-price').value;
+  const cost     = document.getElementById('edit-s-cost').value;
+  const duration = document.getElementById('edit-s-duration').value;
+  if (!name || !price) return showToast('⚠️', 'Nombre y precio son obligatorios', '');
+  try {
+    await api('PUT', `/settings/services/${id}`, { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30) });
+    closeModal('modal-edit-servicio');
+    showToast('✅', 'Servicio actualizado', name);
+    loadServices();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ─── EDITAR PREMIO TIENDA ───
+function editStoreItem(id, name, desc, points) {
+  document.getElementById('edit-si-id').value = id;
+  document.getElementById('edit-si-name').value = name;
+  document.getElementById('edit-si-desc').value = desc || '';
+  document.getElementById('edit-si-points').value = points;
+  openModal('modal-edit-store-item');
+}
+
+async function saveEditStoreItem() {
+  const id     = document.getElementById('edit-si-id').value;
+  const name   = document.getElementById('edit-si-name').value.trim();
+  const desc   = document.getElementById('edit-si-desc').value.trim();
+  const points = document.getElementById('edit-si-points').value;
+  if (!name || !points) return showToast('⚠️', 'Nombre y puntos son obligatorios', '');
+  try {
+    await api('PUT', `/points/store/${id}`, { name, description: desc, points_cost: parseInt(points) });
+    closeModal('modal-edit-store-item');
+    showToast('✅', 'Premio actualizado', name);
+    loadStoreItems();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
 });
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

@@ -201,6 +201,30 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+// PUT /api/appointments/:id — editar turno
+router.put('/:id', auth, async (req, res) => {
+  const { client_name, time_start, time_end, price, status } = req.body;
+  const shopId = realShopId(req);
+  try {
+    const result = await pool.query(
+      `UPDATE appointments SET
+         client_name = COALESCE($1, client_name),
+         time_start  = COALESCE($2, time_start),
+         time_end    = COALESCE($3, time_end),
+         price       = COALESCE($4, price),
+         status      = COALESCE($5, status)
+       WHERE id=$6 AND shop_id=$7 RETURNING *`,
+      [client_name||null, time_start||null, time_end||null,
+       price !== undefined ? parseFloat(price) : null,
+       status||null, req.params.id, shopId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PUT /api/appointments/:id/status
 router.put('/:id/status', auth, async (req, res) => {
   const { status } = req.body;

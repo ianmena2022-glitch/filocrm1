@@ -94,6 +94,23 @@ router.post('/services', auth, async (req, res) => {
   }
 });
 
+// PUT /api/settings/services/:id — editar servicio
+router.put('/services/:id', auth, async (req, res) => {
+  const { name, price, cost, duration_minutes } = req.body;
+  if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
+  try {
+    const result = await pool.query(
+      `UPDATE services SET name=$1, price=$2, cost=$3, duration_minutes=$4
+       WHERE id=$5 AND shop_id=$6 RETURNING *`,
+      [name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30), req.params.id, req.shopId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete('/services/:id', auth, async (req, res) => {
   try {
     await pool.query(
