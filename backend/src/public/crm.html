@@ -1881,8 +1881,12 @@ function logout() {
   if (!confirm('¿Cerrás sesión?')) return;
   localStorage.removeItem('filo_token');
   localStorage.removeItem('filo_shop');
+  localStorage.removeItem('barber_token');
+  localStorage.removeItem('barber_me');
   token = null; currentShop = null;
   document.getElementById('app').style.display = 'none';
+  document.getElementById('card-required-screen').classList.remove('show');
+  document.getElementById('paywall-screen').classList.remove('show');
   document.getElementById('auth-screen').style.display = 'flex';
 }
 
