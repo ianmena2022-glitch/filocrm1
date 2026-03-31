@@ -58,6 +58,8 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .cal-day.today{border-color:rgba(255,209,0,.4);color:var(--y)}
 .cal-day.selected{background:var(--y);color:var(--nk);border-color:var(--y)}
 .cal-day.disabled{opacity:.25;cursor:not-allowed}
+.cal-day.closed{opacity:.35;cursor:not-allowed;background:rgba(255,255,255,0.02);color:rgba(255,255,255,.3)}
+.cal-day.closed::after{content:'✕';display:block;font-size:8px;color:rgba(255,255,255,.25);margin-top:2px}
 .cal-day.empty{cursor:default}
 
 /* TIME SLOTS */
@@ -305,6 +307,10 @@ function renderCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
+  // Parsear horario del shop
+  const schedule = shopData?.schedule ? JSON.parse(shopData.schedule) : null;
+  const dayKeys = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+
   const days = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
   let html = days.map(d => `<div class="cal-day-header">${d}</div>`).join('');
 
@@ -314,13 +320,17 @@ function renderCalendar() {
     const date = new Date(year, month, d);
     const dateStr = date.toISOString().split('T')[0];
     const isPast = date < today;
-    const isSunday = date.getDay() === 0;
     const isToday = date.toDateString() === today.toDateString();
     const isSelected = dateStr === selectedDate;
-    const disabled = isPast || isSunday;
+
+    // Verificar si el día está habilitado en el horario
+    const dayKey = dayKeys[date.getDay()];
+    const isClosed = schedule ? !schedule[dayKey]?.active : date.getDay() === 0;
+    const disabled = isPast || isClosed;
 
     let cls = 'cal-day';
     if (disabled) cls += ' disabled';
+    if (isClosed && !isPast) cls += ' closed';
     if (isToday) cls += ' today';
     if (isSelected) cls += ' selected';
 
