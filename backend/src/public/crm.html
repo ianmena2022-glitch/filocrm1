@@ -1352,46 +1352,50 @@ body {
         <button class="btn-add" onclick="saveSettings()">💾 Guardar cambios</button>
       </div>
 
-      <div class="settings-grid">
-        <!-- Barbería -->
+      <!-- Testing switcher -->
+      <div id="test-plan-switcher" style="display:none;margin-bottom:20px;padding:16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:12px">🧪 CUENTA DE TESTING</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Cambiá de plan para testear las distintas experiencias</div>
+        <div style="display:flex;gap:10px">
+          <button id="btn-plan-starter" onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
+          <button id="btn-plan-staff" onclick="switchPlan('staff')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
+          <button id="btn-plan-enterprise" onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
+        </div>
+        <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;max-width:720px">
+
+        <!-- Mi barbería -->
         <div class="settings-section">
-          <!-- Switch de plan — solo para cuentas test -->
-          <div id="test-plan-switcher" style="display:none;margin-bottom:20px;padding:16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
-            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:12px">🧪 CUENTA DE TESTING</div>
-            <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Cambiá de plan para testear las distintas experiencias</div>
-            <div style="display:flex;gap:10px">
-              <button id="btn-plan-starter" onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
-              <button id="btn-plan-staff" onclick="switchPlan('staff')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
-              <button id="btn-plan-enterprise" onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
-            </div>
-            <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
-          </div>
-
           <div class="settings-section-title">✂️ Mi barbería</div>
-          <div class="form-field" style="margin-bottom:14px">
-            <label>Nombre de la barbería</label>
-            <input type="text" id="cfg-name" placeholder="Mi Barbería">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="form-field" style="margin-bottom:0">
+              <label>Nombre de la barbería</label>
+              <input type="text" id="cfg-name" placeholder="Mi Barbería">
+            </div>
+            <div class="form-field" style="margin-bottom:0">
+              <label>Ciudad</label>
+              <input type="text" id="cfg-city" placeholder="Buenos Aires">
+            </div>
+            <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
+              <label>Dirección</label>
+              <input type="text" id="cfg-address" placeholder="Av. Corrientes 1234">
+            </div>
+            <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
+              <label>Días sin visita = cliente en fuga</label>
+              <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
+            </div>
           </div>
-          <div class="form-field" style="margin-bottom:14px">
-            <label>Ciudad</label>
-            <input type="text" id="cfg-city" placeholder="Buenos Aires">
-          </div>
-          <div class="form-field" style="margin-bottom:14px">
-            <label>Dirección</label>
-            <input type="text" id="cfg-address" placeholder="Av. Corrientes 1234">
-          </div>
-          <div class="form-field" style="margin-bottom:14px">
-            <label>Radio para Sillón Libre (km)</label>
-            <input type="number" id="cfg-radius" placeholder="3" min="1" max="20">
-          </div>
-          <div class="form-field" style="margin-bottom:14px">
-            <label>Días sin visita = cliente en fuga</label>
-            <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
-          </div>
+        </div>
 
-          <!-- Horarios de atención -->
-          <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
-            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:14px">🕐 Horarios de atención</div>
+        <!-- Horarios — acordeón -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-schedule-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">🕐 Horarios de atención</div>
+            <span class="tpl-arrow" id="arrow-cfg-schedule-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-schedule-body" style="display:none;padding:0 22px 18px">
             <div id="schedule-grid" style="display:flex;flex-direction:column;gap:10px"></div>
           </div>
         </div>
@@ -1406,63 +1410,57 @@ body {
               <div style="font-size:12px;color:var(--gray)" id="wpp-phone-display"></div>
             </div>
           </div>
-
-          <!-- Selector de método -->
           <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
           <div id="wpp-qr-container" style="margin-top:16px;display:none">
             <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
             <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
             <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
           </div>
-
-                    <!-- Templates de mensajes desplegables -->
-          <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px">
-            <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:16px">🤖 Mensajes de respaldo (si la IA falla)</div>
-
-            <!-- Sillón Libre -->
-            <div class="tpl-accordion" style="margin-bottom:8px">
-              <div class="tpl-header" onclick="toggleTpl('tpl-sillon-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
-                <span style="font-size:13px;font-weight:700">💈 Sillón Libre</span>
-                <span class="tpl-arrow" id="arrow-tpl-sillon-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
-              </div>
-              <div id="tpl-sillon-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
-                <textarea id="tpl-sillon" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Tenemos un sillón libre hoy a las {hora}..."></textarea>
-                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code> <code style="color:var(--yellow)">{incentivo}</code></div>
-              </div>
+          <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:16px">
+            <div onclick="toggleTpl('cfg-tpls-body')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:4px">
+              <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow)">🤖 Mensajes de respaldo (si la IA falla)</div>
+              <span class="tpl-arrow" id="arrow-cfg-tpls-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
             </div>
-
-            <!-- Rescate -->
-            <div class="tpl-accordion" style="margin-bottom:8px">
-              <div class="tpl-header" onclick="toggleTpl('tpl-rescate-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
-                <span style="font-size:13px;font-weight:700">🔥 Rescate de clientes</span>
-                <span class="tpl-arrow" id="arrow-tpl-rescate-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+            <div id="cfg-tpls-body" style="display:none;margin-top:14px;display:flex;flex-direction:column;gap:8px">
+              <div class="tpl-accordion">
+                <div onclick="toggleTpl('tpl-sillon-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer">
+                  <span style="font-size:13px;font-weight:700">💈 Sillón Libre</span>
+                  <span class="tpl-arrow" id="arrow-tpl-sillon-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+                </div>
+                <div id="tpl-sillon-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                  <textarea id="tpl-sillon" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Tenemos un sillón libre hoy a las {hora}..."></textarea>
+                  <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code> <code style="color:var(--yellow)">{incentivo}</code></div>
+                </div>
               </div>
-              <div id="tpl-rescate-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
-                <textarea id="tpl-rescate" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Hace un tiempo que no te vemos por {barberia}..."></textarea>
-                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+              <div class="tpl-accordion">
+                <div onclick="toggleTpl('tpl-rescate-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer">
+                  <span style="font-size:13px;font-weight:700">🔥 Rescate de clientes</span>
+                  <span class="tpl-arrow" id="arrow-tpl-rescate-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+                </div>
+                <div id="tpl-rescate-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                  <textarea id="tpl-rescate" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6"></textarea>
+                  <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+                </div>
               </div>
-            </div>
-
-            <!-- Recordatorio -->
-            <div class="tpl-accordion" style="margin-bottom:8px">
-              <div class="tpl-header" onclick="toggleTpl('tpl-recordatorio-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
-                <span style="font-size:13px;font-weight:700">📅 Recordatorio de turno</span>
-                <span class="tpl-arrow" id="arrow-tpl-recordatorio-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+              <div class="tpl-accordion">
+                <div onclick="toggleTpl('tpl-recordatorio-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer">
+                  <span style="font-size:13px;font-weight:700">📅 Recordatorio de turno</span>
+                  <span class="tpl-arrow" id="arrow-tpl-recordatorio-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+                </div>
+                <div id="tpl-recordatorio-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                  <textarea id="tpl-recordatorio" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6"></textarea>
+                  <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code></div>
+                </div>
               </div>
-              <div id="tpl-recordatorio-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
-                <textarea id="tpl-recordatorio" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="¡Hola {nombre}! Te recordamos tu turno mañana a las {hora}..."></textarea>
-                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{hora}</code> <code style="color:var(--yellow)">{barberia}</code></div>
-              </div>
-            </div>
-
-            <div class="tpl-accordion" style="margin-bottom:0">
-              <div class="tpl-header" onclick="toggleTpl('tpl-completado-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer;transition:all .2s">
-                <span style="font-size:13px;font-weight:700">✅ Turno completado</span>
-                <span class="tpl-arrow" id="arrow-tpl-completado-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
-              </div>
-              <div id="tpl-completado-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
-                <textarea id="tpl-completado" rows="5" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6" placeholder="✂️ ¡Servicio completado! Gracias {nombre}..."></textarea>
-                <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{puntos}</code> <code style="color:var(--yellow)">{total}</code> <code style="color:var(--yellow)">{link}</code></div>
+              <div class="tpl-accordion">
+                <div onclick="toggleTpl('tpl-completado-body')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer">
+                  <span style="font-size:13px;font-weight:700">✅ Turno completado</span>
+                  <span class="tpl-arrow" id="arrow-tpl-completado-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+                </div>
+                <div id="tpl-completado-body" style="display:none;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 10px 10px">
+                  <textarea id="tpl-completado" rows="4" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--white);font-size:13px;font-family:Barlow,sans-serif;outline:none;resize:vertical;line-height:1.6"></textarea>
+                  <div style="font-size:11px;color:var(--gray);margin-top:6px">Variables: <code style="color:var(--yellow)">{nombre}</code> <code style="color:var(--yellow)">{puntos}</code> <code style="color:var(--yellow)">{total}</code> <code style="color:var(--yellow)">{link}</code></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1471,9 +1469,7 @@ body {
         <!-- Link de reservas -->
         <div class="settings-section">
           <div class="settings-section-title">🔗 Link de reservas</div>
-          <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">
-            Compartí este link con tus clientes para que reserven turno directo desde el celular. Sin apps externas.
-          </div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">Compartí este link con tus clientes para que reserven turno directo desde el celular.</div>
           <div id="booking-link-container" style="display:none">
             <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
               <span id="booking-link-text" style="font-size:13px;color:var(--yellow);word-break:break-all"></span>
@@ -1481,80 +1477,74 @@ body {
             </div>
             <a id="booking-link-open" href="#" target="_blank" class="btn-motor secondary" style="display:block;text-align:center;text-decoration:none;padding:11px">👁️ Ver página de reservas</a>
           </div>
-          <div id="booking-link-placeholder" style="font-size:13px;color:var(--gray)">
-            Guardá tu configuración primero para generar tu link.
+          <div id="booking-link-placeholder" style="font-size:13px;color:var(--gray)">Guardá tu configuración primero para generar tu link.</div>
+        </div>
+
+        <!-- Servicios — acordeón -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-services-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">✂️ Servicios y precios</div>
+            <span class="tpl-arrow" id="arrow-cfg-services-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-services-body" style="display:none;padding:0 22px 18px">
+            <div id="services-list" style="margin-bottom:16px"></div>
+            <button class="btn-motor secondary" onclick="openModal('modal-servicio')">+ Agregar servicio</button>
           </div>
         </div>
 
-        <!-- Tienda de Puntos -->
-        <div class="settings-section" style="grid-column:1/-1">
-          <div class="settings-section-title">⭐ Tienda de Puntos FILO</div>
-          <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
-            Tus clientes acumulan puntos con cada visita. 10 puntos = $1.000 gastados. Configurá los premios que pueden canjear.
+        <!-- Tienda de Puntos — acordeón -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-tienda-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">⭐ Tienda de Puntos FILO</div>
+            <span class="tpl-arrow" id="arrow-cfg-tienda-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-            <div class="form-field" style="margin-bottom:0">
-              <label>Nombre de la tienda</label>
-              <input type="text" id="cfg-store-name" placeholder="Tienda FILO">
-            </div>
-            <div class="form-field" style="margin-bottom:0">
-              <label>Link de la tienda</label>
-              <div style="display:flex;gap:8px;align-items:center">
-                <span id="store-link-text" style="font-size:12px;color:var(--yellow);word-break:break-all;flex:1"></span>
-                <button onclick="copyStoreLink()" style="background:var(--yellow);color:var(--navy);border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Copiar</button>
+          <div id="cfg-tienda-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">Tus clientes acumulan puntos con cada visita. 10 puntos = $1.000 gastados.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+              <div class="form-field" style="margin-bottom:0">
+                <label>Nombre de la tienda</label>
+                <input type="text" id="cfg-store-name" placeholder="Tienda FILO">
+              </div>
+              <div class="form-field" style="margin-bottom:0">
+                <label>Link de la tienda</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <span id="store-link-text" style="font-size:12px;color:var(--yellow);word-break:break-all;flex:1"></span>
+                  <button onclick="copyStoreLink()" style="background:var(--yellow);color:var(--navy);border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Copiar</button>
+                </div>
               </div>
             </div>
+            <button class="btn-motor" onclick="saveStoreConfig()" style="margin-bottom:20px">💾 Guardar nombre de tienda</button>
+            <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Premios disponibles</div>
+            <div id="store-items-list" style="margin-bottom:14px"></div>
+            <button class="btn-motor secondary" onclick="openModal('modal-store-item')">+ Agregar premio</button>
           </div>
-          <button class="btn-motor" onclick="saveStoreConfig()" style="margin-bottom:20px">💾 Guardar nombre de tienda</button>
-
-          <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Premios disponibles</div>
-          <div id="store-items-list" style="margin-bottom:14px"></div>
-          <button class="btn-motor secondary" onclick="openModal('modal-store-item')">+ Agregar premio</button>
         </div>
 
-        <!-- Servicios -->
-        <div class="settings-section">
-          <div class="settings-section-title">✂️ Servicios y precios</div>
-          <div id="services-list" style="margin-bottom:16px"></div>
-          <button class="btn-motor secondary" onclick="openModal('modal-servicio')">+ Agregar servicio</button>
-        </div>
-      </div>
-
-      <!-- Zona de peligro -->
-      <div style="margin-top:32px;padding-top:28px;border-top:1px solid rgba(255,255,255,0.06)">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,67,67,0.6);margin-bottom:16px">Zona de peligro</div>
-
-        <!-- Estado de suscripción -->
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-            <div>
-              <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Mi suscripción FILO</div>
-              <div id="subscription-status-text" style="font-size:12px;color:var(--gray)">Cargando...</div>
+        <!-- Zona de peligro -->
+        <div style="padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,67,67,0.6);margin-bottom:16px">Zona de peligro</div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+              <div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Mi suscripción FILO</div>
+                <div id="subscription-status-text" style="font-size:12px;color:var(--gray)">Cargando...</div>
+              </div>
+              <button id="btn-cancel-subscription" onclick="cancelFiloSubscription()" style="background:rgba(255,145,0,0.12);border:1px solid rgba(255,145,0,0.3);color:#FF9100;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancelar suscripción</button>
             </div>
-            <button id="btn-cancel-subscription" onclick="cancelFiloSubscription()" style="background:rgba(255,145,0,0.12);border:1px solid rgba(255,145,0,0.3);color:#FF9100;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-              Cancelar suscripción
-            </button>
+            <div style="margin-top:12px;padding:10px 14px;background:rgba(255,145,0,0.06);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">⚠️ Al cancelar seguís teniendo acceso hasta el final del período pago.</div>
           </div>
-          <div style="margin-top:12px;padding:10px 14px;background:rgba(255,145,0,0.06);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">
-            ⚠️ Al cancelar tu suscripción seguís teniendo acceso hasta el final del período pago. Después de eso se bloquea el acceso. Podés volver a suscribirte cuando quieras.
+          <div style="background:rgba(255,67,67,0.04);border:1px solid rgba(255,67,67,0.15);border-radius:12px;padding:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+              <div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Borrar mi cuenta</div>
+                <div style="font-size:12px;color:var(--gray)">Elimina tu cuenta y todos tus datos permanentemente</div>
+              </div>
+              <button onclick="deleteAccount()" style="background:rgba(255,67,67,0.12);border:1px solid rgba(255,67,67,0.3);color:var(--red);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Borrar cuenta</button>
+            </div>
+            <div style="margin-top:12px;padding:10px 14px;background:rgba(255,67,67,0.06);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">🔴 Esta acción es <strong style="color:var(--red)">irreversible</strong>. Se eliminarán todos tus datos.</div>
           </div>
         </div>
 
-        <!-- Borrar cuenta -->
-        <div style="background:rgba(255,67,67,0.04);border:1px solid rgba(255,67,67,0.15);border-radius:12px;padding:18px">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-            <div>
-              <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Borrar mi cuenta</div>
-              <div style="font-size:12px;color:var(--gray)">Elimina tu cuenta y todos tus datos permanentemente</div>
-            </div>
-            <button onclick="deleteAccount()" style="background:rgba(255,67,67,0.12);border:1px solid rgba(255,67,67,0.3);color:var(--red);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-              Borrar cuenta
-            </button>
-          </div>
-          <div style="margin-top:12px;padding:10px 14px;background:rgba(255,67,67,0.06);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">
-            🔴 Esta acción es <strong style="color:var(--red)">irreversible</strong>. Se eliminarán todos tus clientes, turnos, membresías y configuración. No podés deshacer esto.
-          </div>
-        </div>
       </div>
     </section>
 
