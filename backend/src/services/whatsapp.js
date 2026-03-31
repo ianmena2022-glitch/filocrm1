@@ -180,8 +180,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
       } else if (shouldReconnect) {
-        // Reconectar automáticamente
-        setTimeout(() => connect(shopId, null, null, null), 5000);
+        // Código 440 = otra instancia activa, esperar más
+        const delay = code === 440 ? 15000 : 5000;
+        console.log(`[WPP] Reconectando en ${delay/1000}s (código ${code})...`);
+        delete sockets[shopId];
+        setTimeout(() => {
+          if (!sockets[shopId]) connect(shopId, null, null, null);
+        }, delay);
       }
     }
   });
@@ -221,23 +226,22 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
-
-        // Soportar tanto @s.whatsapp.net (número directo) como @lid (multi-dispositivo)
         const isIndividual = jid.endsWith('@s.whatsapp.net');
-        const isLid = jid.endsWith('@lid');
+        const isLid        = jid.endsWith('@lid');
         if (!isIndividual && !isLid) continue;
 
         // Para @lid el número real está en senderPn
         const senderJid = isLid
           ? (msg.key.senderPn || msg.key.participantPn || null)
           : jid;
-
         if (!senderJid) continue;
 
         const phoneRaw = senderJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
         if (!phoneRaw || phoneRaw.length < 8) continue;
 
         const msgContent = msg.message;
+        console.log(`[WPP DEBUG] phone=${phoneRaw} keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
+
         const text =
           msgContent?.conversation ||
           msgContent?.extendedTextMessage?.text ||
@@ -255,7 +259,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           await sock.sendMessage(senderJid, { text: reply });
         }
       } catch (e) {
-        console.error('[WPP] Error procesando mensaje entrante:', e.message);
+        console.error('[WPP] Error:', e.message);
       }
     }
   });
