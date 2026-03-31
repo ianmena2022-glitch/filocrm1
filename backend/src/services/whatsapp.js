@@ -8,6 +8,25 @@ const path = require('path');
 const sockets  = {};
 const qrCodes  = {};
 const statuses = {};
+const decryptErrors = {}; // contador de errores de descifrado por shopId
+
+// Limpiar sesión completamente (tmp + DB)
+async function clearSession(shopId) {
+  try {
+    const dir = path.join('/tmp', `baileys_${shopId}`);
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`Baileys: sesion limpiada en /tmp para shop ${shopId}`);
+    }
+    await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
+    console.log(`Baileys: sesion limpiada en DB para shop ${shopId}`);
+    delete sockets[shopId];
+    delete statuses[shopId];
+    delete decryptErrors[shopId];
+  } catch (e) {
+    console.error('clearSession error:', e.message);
+  }
+}
 
 // Directorio para guardar credenciales de sesión
 function authDir(shopId) {
@@ -179,6 +198,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
 // Iniciar sesión (devuelve QR como base64 o status connected)
 async function startSession(shopId) {
+  // Limpiar sesión anterior para reconectar desde cero
+  await clearSession(shopId);
+  if (sockets[shopId]) {
+    try { sockets[shopId].end(); } catch(e) {}
+    delete sockets[shopId];
+  }
+
   return new Promise(async (resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error('Timeout esperando QR de WhatsApp'));
