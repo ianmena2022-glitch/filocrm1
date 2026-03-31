@@ -1828,7 +1828,7 @@ function showTrialRedirect(paymentUrl) {
   // Reemplazar el formulario con pantalla de confirmación
   const authBox = document.querySelector('.auth-box');
   if (!authBox) { window.location.href = paymentUrl; return; }
-  authBox.innerHTML = \`
+  authBox.innerHTML = `
     <div style="text-align:center;padding:20px 0">
       <div style="width:56px;height:56px;background:var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px">✓</div>
       <div style="font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:8px">¡Cuenta creada!</div>
