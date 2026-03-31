@@ -218,23 +218,26 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     for (const msg of messages) {
       try {
-        // Ignorar mensajes propios
         if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
 
-        // Solo responder a contactos individuales (números @s.whatsapp.net)
-        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
-        if (!jid.endsWith('@s.whatsapp.net')) continue;
+        // Soportar tanto @s.whatsapp.net (número directo) como @lid (multi-dispositivo)
+        const isIndividual = jid.endsWith('@s.whatsapp.net');
+        const isLid = jid.endsWith('@lid');
+        if (!isIndividual && !isLid) continue;
 
-        // Verificar que el JID sea efectivamente un número de teléfono
-        const phoneRaw = jid.replace('@s.whatsapp.net', '');
-        if (!/^\d+$/.test(phoneRaw)) continue;
+        // Para @lid el número real está en senderPn
+        const senderJid = isLid
+          ? (msg.key.senderPn || msg.key.participantPn || null)
+          : jid;
 
-        const phone = phoneRaw;
+        if (!senderJid) continue;
+
+        const phoneRaw = senderJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+        if (!phoneRaw || phoneRaw.length < 8) continue;
+
         const msgContent = msg.message;
-
-        // Ignorar todo tipo de mensaje que no sea texto puro
         const text =
           msgContent?.conversation ||
           msgContent?.extendedTextMessage?.text ||
@@ -242,15 +245,14 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (!text) continue;
 
-        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
+        console.log(`[WPP] Mensaje de ${phoneRaw}: "${text}"`);
 
-        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
-        const reply = await getAIResponse(shopId, phone, text);
+        const reply = await getAIResponse(shopId, phoneRaw, text);
 
         if (reply) {
-          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
-          await sock.sendMessage(msg.key.remoteJid, { text: reply });
+          console.log(`[WPP] Respondiendo a ${phoneRaw}: "${reply}"`);
+          await sock.sendMessage(senderJid, { text: reply });
         }
       } catch (e) {
         console.error('[WPP] Error procesando mensaje entrante:', e.message);
