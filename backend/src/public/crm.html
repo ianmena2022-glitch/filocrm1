@@ -1213,7 +1213,7 @@ body {
         </div>
         <div style="display:flex;gap:10px">
           <button class="btn-add" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--white)" onclick="loadPlanesConfig();openModal('modal-planes-config')">⚙️ Configurar planes</button>
-          <button class="btn-add" onclick="openModal('modal-membresia')">+ Nueva membresía</button>
+          <button class="btn-add" onclick="openMembresiaModal()">+ Nueva membresía</button>
         </div>
       </div>
       <div id="memb-list"></div>
@@ -1686,16 +1686,17 @@ body {
           <option value="">-- Elegí un cliente --</option>
         </select>
       </div>
-      <div class="form-field">
+      <div class="form-field" style="grid-column:1/-1">
         <label>Plan</label>
-        <select id="m-plan">
-          <option value="basic">Básico — 2 cortes por mes</option>
-          <option value="premium">Premium — Ilimitado</option>
+        <select id="m-plan" onchange="updateMembresiaPrice()">
+          <option value="basic">Básico</option>
+          <option value="premium">Premium</option>
         </select>
       </div>
-      <div class="form-field">
-        <label>Precio mensual ($)</label>
-        <input type="number" id="m-price" placeholder="8000">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Precio mensual</label>
+        <div id="m-price-display" style="padding:12px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;font-size:18px;font-weight:700;color:var(--yellow);font-family:'Oswald',sans-serif">—</div>
+        <div id="m-plan-desc" style="font-size:12px;color:var(--gray);margin-top:4px"></div>
       </div>
     </div>
     <div class="modal-actions">
@@ -2785,6 +2786,7 @@ async function savePlanesConfig() {
   try {
     await api('PUT', '/settings', { membership_plans: JSON.stringify(planes) });
     closeModal('modal-planes-config');
+    _planesConfig = null; // invalidar cache
     showToast('✅', 'Planes guardados', 'La configuración se actualizó');
     // Actualizar precios en el modal de nueva membresía
     document.getElementById('m-price').placeholder = planes.basic.price || '8000';
@@ -2832,15 +2834,45 @@ async function loadMemberships() {
   }
 }
 
+// Cache de planes config
+let _planesConfig = null;
+
+async function getPlanesConfig() {
+  if (_planesConfig) return _planesConfig;
+  try {
+    const data = await api('GET', '/settings');
+    _planesConfig = data.membership_plans ? JSON.parse(data.membership_plans) : {};
+  } catch(e) { _planesConfig = {}; }
+  return _planesConfig;
+}
+
+async function updateMembresiaPrice() {
+  const plan = document.getElementById('m-plan').value;
+  const planes = await getPlanesConfig();
+  const cfg = planes[plan] || {};
+  const price = cfg.price || 0;
+  const desc = cfg.desc || (plan === 'basic' ? '2 cortes por mes' : 'Cortes ilimitados');
+  const name = cfg.name || (plan === 'basic' ? 'Básico' : 'Premium');
+  document.getElementById('m-price-display').textContent = price ? `$${parseFloat(price).toLocaleString('es-AR')}/mes` : 'Sin precio configurado';
+  document.getElementById('m-plan-desc').textContent = `${name} — ${desc}`;
+}
+
+async function openMembresiaModal() {
+  _planesConfig = null; // refrescar config
+  openModal('modal-membresia');
+  await updateMembresiaPrice();
+}
+
 async function createMembership() {
   const clientId = document.getElementById('m-client').value;
   const plan = document.getElementById('m-plan').value;
-  const price = document.getElementById('m-price').value;
   if (!clientId) return showToast('⚠️', 'Elegí un cliente', '');
+  const planes = await getPlanesConfig();
+  const price = planes[plan]?.price || 0;
   closeModal('modal-membresia');
   showToast('✅', 'Membresía creada', '');
   try {
-    await api('POST', '/memberships', { client_id: parseInt(clientId), plan, price_monthly: parseFloat(price||0) });
+    await api('POST', '/memberships', { client_id: parseInt(clientId), plan, price_monthly: parseFloat(price) });
     loadMemberships();
     loadClients();
   } catch (e) {
