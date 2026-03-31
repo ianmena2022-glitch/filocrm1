@@ -225,15 +225,17 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phoneRaw = jid.replace('@s.whatsapp.net', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
+        const phone = phoneRaw;
+        const msgContent = msg.message;
+
+        // Ignorar todo tipo de mensaje que no sea texto puro
         const text =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.imageMessage?.caption ||
+          msgContent?.conversation ||
+          msgContent?.extendedTextMessage?.text ||
           null;
 
         if (!text) continue;
 
-        const phone = phoneRaw;
         console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
         // Obtener respuesta del AI
