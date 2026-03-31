@@ -179,8 +179,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
       } else if (shouldReconnect) {
-        // Reconectar automáticamente
-        setTimeout(() => connect(shopId, null, null, null), 5000);
+        // Código 440 = otra sesión activa, esperar más para no pisarse
+        const delay = code === 440 ? 15000 : 5000;
+        console.log(`[WPP] Reconectando en ${delay/1000}s...`);
+        setTimeout(() => connect(shopId, null, null, null), delay);
       }
     }
   });
@@ -210,54 +212,44 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
-  // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     console.log(`[WPP] messages.upsert type=${type} count=${messages.length} shopId=${shopId}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
+      // DEBUG fuera del try para ver si el objeto existe
+      console.log(`[WPP DEBUG] msg existe=${!!msg} key=${JSON.stringify(msg?.key)} hasMessage=${!!msg?.message}`);
+
       try {
-        // Ignorar mensajes propios
-        if (msg.key.fromMe) continue;
+        if (msg.key.fromMe) { console.log('[WPP DEBUG] skip fromMe'); continue; }
 
         const jid = msg.key.remoteJid || '';
+        if (!jid.endsWith('@s.whatsapp.net')) { console.log(`[WPP DEBUG] skip jid=${jid}`); continue; }
 
-        // Solo responder a contactos individuales (números @s.whatsapp.net)
-        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
-        if (!jid.endsWith('@s.whatsapp.net')) continue;
-
-        // Verificar que el JID sea efectivamente un número de teléfono
         const phoneRaw = jid.replace('@s.whatsapp.net', '');
-        if (!/^\d+$/.test(phoneRaw)) continue;
+        if (!/^\d+$/.test(phoneRaw)) { console.log(`[WPP DEBUG] skip phoneRaw=${phoneRaw}`); continue; }
 
-        const phone = phoneRaw;
         const msgContent = msg.message;
+        console.log(`[WPP DEBUG] msgContent keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
 
-        // DEBUG
-        console.log(`[WPP DEBUG] phone=${phone} keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
-
-        // Ignorar todo tipo de mensaje que no sea texto puro
-        const text =
-          msgContent?.conversation ||
-          msgContent?.extendedTextMessage?.text ||
-          null;
-
+        const text = msgContent?.conversation || msgContent?.extendedTextMessage?.text || null;
         console.log(`[WPP DEBUG] text="${text}"`);
 
-        if (!text) { console.log('[WPP DEBUG] sin texto, ignorando'); continue; }
+        if (!text) { console.log('[WPP DEBUG] sin texto'); continue; }
 
-        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
+        console.log(`[WPP] Mensaje de ${phoneRaw}: "${text}"`);
 
-        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
-        const reply = await getAIResponse(shopId, phone, text);
+        const reply = await getAIResponse(shopId, phoneRaw, text);
 
         if (reply) {
-          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
-          await sock.sendMessage(msg.key.remoteJid, { text: reply });
+          console.log(`[WPP] Respondiendo a ${phoneRaw}: "${reply}"`);
+          await sock.sendMessage(jid, { text: reply });
+        } else {
+          console.log(`[WPP DEBUG] AI no respondió`);
         }
       } catch (e) {
-        console.error('[WPP] Error procesando mensaje entrante:', e.message);
+        console.error('[WPP] Error:', e.message, e.stack?.split('\n')[1]);
       }
     }
   });
