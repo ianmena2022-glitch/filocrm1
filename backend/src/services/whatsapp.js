@@ -55,7 +55,7 @@ function authDir(shopId) {
   return dir;
 }
 
-// Restaurar sesión desde PostgreSQL   solo credenciales, NO session keys Signal
+// Restaurar sesión desde PostgreSQL — todos los archivos de auth
 async function restoreSessionFromDB(shopId) {
   try {
     const result = await pool.query(
@@ -69,20 +69,17 @@ async function restoreSessionFromDB(shopId) {
     const parsed = JSON.parse(sessionData);
 
     for (const [filename, content] of Object.entries(parsed)) {
-      // Excluir session keys Signal   generan Bad MAC al reconectar
-      // Solo restaurar creds.json (credenciales principales)
-      if (filename !== 'creds.json') continue;
       fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
     }
-    console.log(`Baileys: sesión restaurada para shop ${shopId}`);
+    console.log(`Baileys: sesion restaurada para shop ${shopId} (${Object.keys(parsed).length} archivos)`);
     return true;
   } catch (e) {
-    console.error('Error restaurando sesión:', e.message);
+    console.error('Error restaurando sesion:', e.message);
     return false;
   }
 }
 
-// Guardar sesión en PostgreSQL   solo creds.json
+// Guardar sesión en PostgreSQL — todos los archivos de auth
 async function saveSessionToDB(shopId) {
   try {
     const dir = authDir(shopId);
@@ -91,19 +88,27 @@ async function saveSessionToDB(shopId) {
     const credsPath = path.join(dir, 'creds.json');
     if (!fs.existsSync(credsPath)) return;
 
-    const sessionData = {
-      'creds.json': JSON.parse(fs.readFileSync(credsPath, 'utf8'))
-    };
+    const sessionData = {};
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      try {
+        const raw = fs.readFileSync(path.join(dir, file), 'utf8');
+        sessionData[file] = JSON.parse(raw);
+      } catch(e) {
+        // ignorar archivos no JSON
+      }
+    }
 
     await pool.query(
       'UPDATE shops SET wpp_session=$1 WHERE id=$2',
       [JSON.stringify(sessionData), shopId]
     );
-    console.log(`Baileys: sesión guardada en DB para shop ${shopId}`);
+    console.log(`Baileys: sesion guardada en DB para shop ${shopId} (${Object.keys(sessionData).length} archivos)`);
   } catch (e) {
-    console.error('Error guardando sesión:', e.message);
+    console.error('Error guardando sesion:', e.message);
   }
 }
+
 
 // Extraer texto de cualquier tipo de mensaje de Baileys
 function extractTextFromMessage(msgContent) {
@@ -148,8 +153,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   // Restaurar sesión previa si existe
   await restoreSessionFromDB(shopId);
 
-  // Limpiar PreKeys Signal al conectar — evita "Invalid PreKey ID" en el primer mensaje
-  await clearSignalKeys(shopId);
 
   const dir = authDir(shopId);
   const { state, saveCreds } = await useMultiFileAuthState(dir);
