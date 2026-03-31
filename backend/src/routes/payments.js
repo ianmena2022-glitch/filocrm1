@@ -30,7 +30,7 @@ router.post('/subscription', auth, async (req, res) => {
   try {
     const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
 
-    // Crear plan de suscripción en MP
+    // Crear plan de suscripción en MP — el cliente completa el pago desde el init_point
     const plan = await mpFetch('POST', '/preapproval_plan', {
       reason: plan_name || 'Membresía FILO',
       auto_recurring: {
@@ -42,35 +42,23 @@ router.post('/subscription', auth, async (req, res) => {
       payment_methods_allowed: {
         payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
       },
-      back_url: `${appUrl}/app`
-    });
-
-    // Crear suscripción para el pagador
-    const subscription = await mpFetch('POST', '/preapproval', {
-      preapproval_plan_id: plan.id,
-      payer_email,
-      reason: plan_name || 'Membresía FILO',
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: parseFloat(price_monthly),
-        currency_id: 'ARS'
-      },
       back_url: `${appUrl}/app`,
       notification_url: `${appUrl}/api/payments/webhook`
     });
 
-    // Guardar en DB
+    const paymentUrl = plan.init_point;
+
+    // Guardar plan_id y URL en DB (el mp_subscription_id real llega por webhook cuando el cliente paga)
     await pool.query(
       `UPDATE memberships SET
          mp_subscription_id = $1,
-         mp_status = $2,
-         payment_url = $3
-       WHERE id = $4 AND shop_id = $5`,
-      [subscription.id, subscription.status, subscription.init_point, membership_id, req.shopId]
+         mp_status = 'pending',
+         payment_url = $2
+       WHERE id = $3 AND shop_id = $4`,
+      [plan.id, paymentUrl, membership_id, req.shopId]
     );
 
-    // Enviar WhatsApp al cliente si tiene teléfono y el shop está conectado
+    // Enviar WhatsApp al cliente con el link de pago
     try {
       const membData = await pool.query(
         `SELECT c.phone, c.name, s.wpp_connected, s.name AS shop_name
@@ -83,17 +71,7 @@ router.post('/subscription', auth, async (req, res) => {
       const row = membData.rows[0];
       if (row?.phone && row?.wpp_connected) {
         const wpp = require('../services/whatsapp');
-        const msg = `✂️ *${row.shop_name}* — Membresía
-
-Hola ${row.name}! 👋
-
-Tu membresía está lista. Para activarla hacé clic en el siguiente link y completá el pago:
-
-🔗 ${subscription.init_point}
-
-💳 Podés pagar con tarjeta de crédito o débito a través de Mercado Pago.
-
-¡Gracias! 🙌`;
+        const msg = `✂️ *${row.shop_name}* — Membresía\n\nHola ${row.name}! 👋\n\nTu membresía está lista. Para activarla hacé clic en el siguiente link y completá el pago:\n\n🔗 ${paymentUrl}\n\n💳 Podés pagar con tarjeta de crédito o débito a través de Mercado Pago.\n\n¡Gracias! 🙌`;
         await wpp.sendText(req.shopId, row.phone, msg);
         console.log(`[MP] WhatsApp enviado a ${row.phone}`);
       }
@@ -103,9 +81,8 @@ Tu membresía está lista. Para activarla hacé clic en el siguiente link y comp
 
     res.json({
       ok: true,
-      subscription_id: subscription.id,
-      payment_url: subscription.init_point,
-      status: subscription.status
+      payment_url: paymentUrl,
+      status: 'pending'
     });
   } catch (e) {
     console.error('MP subscription error:', e.message);
