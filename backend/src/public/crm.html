@@ -1161,7 +1161,7 @@ body {
         <div class="motor-card">
           <div class="motor-icon">💈</div>
           <div class="motor-title">SILLÓN LIBRE</div>
-          <div class="motor-desc">Detecta huecos en tu agenda y manda WhatsApp a clientes cercanos que no vienen hace rato.</div>
+          <div class="motor-desc">Detecta huecos en tu agenda y manda WhatsApp con un incentivo a tus clientes en fuga para recuperarlos.</div>
           <div class="motor-stat" id="vacant-slots-count">—</div>
           <div class="motor-stat-label">huecos detectados hoy</div>
           <button class="btn-motor" onclick="runSillonLibre()">💬 Llenar sillón ahora</button>
@@ -1222,6 +1222,7 @@ body {
         <div class="topbar-left">
           <h1>✂️ MI EQUIPO</h1>
           <p id="equipo-stats">Cargando...</p>
+          <p id="equipo-cap" style="font-size:12px;color:var(--yellow);margin-top:2px"></p>
         </div>
         <button class="btn-add" onclick="openInviteModal()">+ Invitar barbero</button>
       </div>
@@ -2025,22 +2026,28 @@ async function switchPlan(plan) {
 }
 
 function initStaffUI() {
+  const filoPlan = currentShop?.filo_plan || currentShop?.plan || 'starter';
   const plan = currentShop?.plan;
   const isTest = currentShop?.is_test || plan === 'test';
   const isBarber = currentShop?.is_barber;
   const navEquipo = document.getElementById('nav-equipo');
 
-  // Mostrar sección equipo solo si el plan activo es staff (o test original)
-  // En cuentas test: mostrar solo si el plan activo es staff o test
-  const showEquipo = (plan === 'staff' || plan === 'test') && !isBarber;
+  // Mostrar sección equipo para staff, enterprise y cuentas test
+  const showEquipo = (filoPlan === 'staff' || filoPlan === 'enterprise' || plan === 'test') && !isBarber;
   if (navEquipo) navEquipo.style.display = showEquipo ? 'flex' : 'none';
+
+  // Aplicar cap de empleados según plan
+  if (!isBarber) {
+    const maxBarbers = filoPlan === 'enterprise' ? 20 : filoPlan === 'staff' ? 10 : 1;
+    window._maxBarbers = maxBarbers;
+  }
 
   // Mostrar switcher de plan para cuentas test
   const switcher = document.getElementById('test-plan-switcher');
   if (isTest && switcher) {
     switcher.style.display = 'block';
     const label = document.getElementById('current-plan-label');
-    if (label) label.textContent = `Plan activo: ${currentShop?.plan || 'starter'}`;
+    if (label) label.textContent = `Plan activo: ${filoPlan}`;
   }
 }
 
@@ -2573,13 +2580,13 @@ async function runSillonLibre() {
   document.getElementById('sillon-send-btn').style.display = 'none';
 
   try {
-    const [slotsData, clientsData] = await Promise.all([
+    const [slotsData, churnData] = await Promise.all([
       api('GET', '/yield/vacant-slots'),
-      api('GET', '/yield/target-clients')
+      api('GET', '/yield/churn/at-risk')
     ]);
 
     const slots = slotsData.vacant_slots;
-    sillonTargetClients = clientsData.clients;
+    sillonTargetClients = churnData.clients || [];
 
     if (!slots.length) {
       document.getElementById('sillon-slots').innerHTML = `<div style="color:var(--green);font-size:14px">✅ Tu agenda está completa hoy. ¡Bien hecho!</div>`;
@@ -2596,10 +2603,10 @@ async function runSillonLibre() {
     if (sillonTargetClients.length) {
       document.getElementById('sillon-clients').innerHTML = `
         <div style="font-size:13px;color:var(--gray);margin:12px 0 6px">
-          ${sillonTargetClients.length} clientes cercanos sin visitar hace +20 días
+          ${sillonTargetClients.length} clientes en fuga que no vienen hace +${churnData.churn_days || 20} días
         </div>`;
     } else {
-      document.getElementById('sillon-clients').innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin clientes en el radio configurado.</div>`;
+      document.getElementById('sillon-clients').innerHTML = `<div style="font-size:13px;color:var(--gray)">No hay clientes en fuga por ahora. ¡Bien hecho!</div>`;
     }
   } catch (e) {
     document.getElementById('sillon-slots').innerHTML = `<div style="color:var(--red)">${e.message}</div>`;
@@ -3107,6 +3114,11 @@ async function loadEquipo() {
     `;
     document.getElementById('equipo-stats').textContent = `${barbers.length} barberos en el equipo`;
 
+    // Mostrar cap del plan
+    const maxB = window._maxBarbers || 10;
+    const capEl = document.getElementById('equipo-cap');
+    if (capEl) capEl.textContent = `${barbers.length} / ${maxB} barberos (plan ${(currentShop?.filo_plan || 'staff').toUpperCase()})`;
+
     // Lista de barberos
     const el = document.getElementById('equipo-list');
     if (!barbers.length) {
@@ -3160,6 +3172,13 @@ function openInviteModal() {
 async function generateInvite() {
   const name = document.getElementById('invite-name').value.trim();
   try {
+    // Verificar cap del plan antes de invitar
+    const barbers = await api('GET', '/barbers');
+    const maxB = window._maxBarbers || 10;
+    if (barbers.length >= maxB) {
+      showToast('❌', 'Límite alcanzado', `Tu plan ${(currentShop?.filo_plan || 'staff').toUpperCase()} permite hasta ${maxB} barberos. Cambiá de plan para agregar más.`);
+      return;
+    }
     const res = await api('POST', '/barbers/invite', { barber_name: name || null });
     document.getElementById('invite-code').textContent = res.code;
     document.getElementById('invite-link').textContent = res.link;
