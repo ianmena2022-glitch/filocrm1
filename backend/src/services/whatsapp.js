@@ -124,9 +124,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     keepAliveIntervalMs: 15000,
     syncFullHistory: false,
     markOnlineOnConnect: false,
-    retryRequestDelayMs: 0,      // No reintentar mensajes fallidos
-    maxMsgRetryCount: 0,         // Sin reintentos — evita el sendRetryRequest que crashea
-    fireInitQueries: false,      // No hacer queries iniciales innecesarias
+    retryRequestDelayMs: 0,
+    maxMsgRetryCount: 0,
+    fireInitQueries: false,
+    shouldIgnoreJid: (jid) => {
+      // Ignorar status broadcast y cualquier JID que no sea individual o lid
+      return jid === 'status@broadcast' || jid.endsWith('@newsletter');
+    },
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
     getMessage: async (key) => {
       return { conversation: '' };
@@ -180,13 +184,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
       } else if (shouldReconnect) {
-        // Código 440 = otra instancia activa, esperar más
-        const delay = code === 440 ? 15000 : 5000;
-        console.log(`[WPP] Reconectando en ${delay/1000}s (código ${code})...`);
-        delete sockets[shopId];
-        setTimeout(() => {
-          if (!sockets[shopId]) connect(shopId, null, null, null);
-        }, delay);
+        // Reconectar automáticamente
+        setTimeout(() => connect(shopId, null, null, null), 5000);
       }
     }
   });
@@ -223,25 +222,23 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     for (const msg of messages) {
       try {
+        // Ignorar mensajes propios
         if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
-        const isIndividual = jid.endsWith('@s.whatsapp.net');
-        const isLid        = jid.endsWith('@lid');
-        if (!isIndividual && !isLid) continue;
 
-        // Para @lid el número real está en senderPn
-        const senderJid = isLid
-          ? (msg.key.senderPn || msg.key.participantPn || null)
-          : jid;
-        if (!senderJid) continue;
+        // Solo responder a contactos individuales (números @s.whatsapp.net)
+        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
+        if (!jid.endsWith('@s.whatsapp.net')) continue;
 
-        const phoneRaw = senderJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
-        if (!phoneRaw || phoneRaw.length < 8) continue;
+        // Verificar que el JID sea efectivamente un número de teléfono
+        const phoneRaw = jid.replace('@s.whatsapp.net', '');
+        if (!/^\d+$/.test(phoneRaw)) continue;
 
+        const phone = phoneRaw;
         const msgContent = msg.message;
-        console.log(`[WPP DEBUG] phone=${phoneRaw} keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
 
+        // Ignorar todo tipo de mensaje que no sea texto puro
         const text =
           msgContent?.conversation ||
           msgContent?.extendedTextMessage?.text ||
@@ -249,17 +246,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (!text) continue;
 
-        console.log(`[WPP] Mensaje de ${phoneRaw}: "${text}"`);
+        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
+        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
-        const reply = await getAIResponse(shopId, phoneRaw, text);
+        const reply = await getAIResponse(shopId, phone, text);
 
         if (reply) {
-          console.log(`[WPP] Respondiendo a ${phoneRaw}: "${reply}"`);
-          await sock.sendMessage(senderJid, { text: reply });
+          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
+          await sock.sendMessage(msg.key.remoteJid, { text: reply });
         }
       } catch (e) {
-        console.error('[WPP] Error:', e.message);
+        console.error('[WPP] Error procesando mensaje entrante:', e.message);
       }
     }
   });
@@ -368,6 +366,11 @@ async function reconnectAllShops() {
       'SELECT id FROM shops WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL'
     );
     for (const shop of result.rows) {
+      // No reconectar si ya hay un socket activo
+      if (sockets[shop.id] && statuses[shop.id] === 'connected') {
+        console.log(`Baileys: shop ${shop.id} ya conectado, saltando reconexión`);
+        continue;
+      }
       console.log(`Baileys: reconectando shop ${shop.id}...`);
       connect(shop.id, null, null, null).catch(e =>
         console.error(`Error reconectando shop ${shop.id}:`, e.message)
