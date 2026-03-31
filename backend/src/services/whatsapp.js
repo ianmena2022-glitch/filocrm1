@@ -148,6 +148,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   // Restaurar sesión previa si existe
   await restoreSessionFromDB(shopId);
 
+  // Limpiar PreKeys Signal al conectar — evita "Invalid PreKey ID" en el primer mensaje
+  await clearSignalKeys(shopId);
+
   const dir = authDir(shopId);
   const { state, saveCreds } = await useMultiFileAuthState(dir);
   const { version } = await fetchLatestBaileysVersion();
@@ -280,15 +283,24 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
-        const phone = phoneRaw;
+        // Si es @lid, usar senderPn como número real
+        const phone = (jid.endsWith('@lid') && msg.senderPn)
+          ? msg.senderPn.replace('@s.whatsapp.net', '')
+          : phoneRaw;
+
+        // Detectar error de PreKey (mensaje no descifrable) — limpiar keys Signal
+        if (msg.messageStubParameters?.includes('Invalid PreKey ID')) {
+          console.log(`[WPP] Invalid PreKey ID para shop ${shopId} — limpiando keys Signal...`);
+          await clearSignalKeys(shopId);
+          console.log(`[WPP] Keys limpiadas, proximos mensajes deberan descifrar correctamente`);
+          continue;
+        }
+
         const msgContent = msg.message;
 
-        // Log de diagnóstico: mostrar las keys del mensaje para detectar tipo
+        // Log de diagnostico
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
-        console.log(`[WPP] Mensaje de ${phone} (${jid}) - keys: ${msgKeys.join(', ')}`);
-        if (jid.endsWith('@lid')) {
-          console.log(`[WPP] @lid msg: ${JSON.stringify(msg).slice(0, 500)}`);
-        }
+        console.log(`[WPP] Mensaje de ${phone} - keys: ${msgKeys.join(', ')}`);
 
         // Extraer texto usando handler multi-tipo
         const text = extractTextFromMessage(msgContent);
