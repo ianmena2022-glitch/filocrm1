@@ -70,6 +70,37 @@ router.post('/subscription', auth, async (req, res) => {
       [subscription.id, subscription.status, subscription.init_point, membership_id, req.shopId]
     );
 
+    // Enviar WhatsApp al cliente si tiene teléfono y el shop está conectado
+    try {
+      const membData = await pool.query(
+        `SELECT c.phone, c.name, s.wpp_connected, s.name AS shop_name
+         FROM memberships m
+         JOIN clients c ON c.id = m.client_id
+         JOIN shops s ON s.id = m.shop_id
+         WHERE m.id = $1`,
+        [membership_id]
+      );
+      const row = membData.rows[0];
+      if (row?.phone && row?.wpp_connected) {
+        const wpp = require('../services/whatsapp');
+        const msg = `✂️ *${row.shop_name}* — Membresía
+
+Hola ${row.name}! 👋
+
+Tu membresía está lista. Para activarla hacé clic en el siguiente link y completá el pago:
+
+🔗 ${subscription.init_point}
+
+💳 Podés pagar con tarjeta de crédito o débito a través de Mercado Pago.
+
+¡Gracias! 🙌`;
+        await wpp.sendText(req.shopId, row.phone, msg);
+        console.log(`[MP] WhatsApp enviado a ${row.phone}`);
+      }
+    } catch (wppErr) {
+      console.error('[MP] Error enviando WhatsApp:', wppErr.message);
+    }
+
     res.json({
       ok: true,
       subscription_id: subscription.id,
