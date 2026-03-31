@@ -1203,7 +1203,10 @@ body {
           <h1>👥 CLIENTES</h1>
           <p id="clients-count">Cargando...</p>
         </div>
-        <button class="btn-add" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn-add" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);color:#00E676" onclick="openReferidoModal()">🤝 Referido</button>
+          <button class="btn-add" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
+        </div>
       </div>
       <div class="toolbar">
         <input type="text" class="search-input" placeholder="🔍 Buscar por nombre o teléfono..." id="client-search" oninput="searchClients(this.value)">
@@ -1506,6 +1509,11 @@ body {
                 <input type="text" id="cfg-store-name" placeholder="Tienda FILO">
               </div>
               <div class="form-field" style="margin-bottom:0">
+                <label>Puntos por referido</label>
+                <input type="number" id="cfg-referral-points" placeholder="100" min="1">
+                <div style="font-size:11px;color:var(--gray);margin-top:4px">Puntos que gana el cliente que trae a alguien nuevo</div>
+              </div>
+              <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
                 <label>Link de la tienda</label>
                 <div style="display:flex;gap:8px;align-items:center">
                   <span id="store-link-text" style="font-size:12px;color:var(--yellow);word-break:break-all;flex:1"></span>
@@ -1614,6 +1622,35 @@ body {
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="createAppointment()">✅ Guardar turno</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-turno')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Referido -->
+<div class="modal-overlay" id="modal-referido">
+  <div class="modal">
+    <div class="modal-title">🤝 Cargar referido</div>
+    <div class="modal-sub">Sumale puntos a un cliente por traer a alguien nuevo</div>
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Cliente que refirió</label>
+        <select id="ref-client">
+          <option value="">-- Elegí el cliente --</option>
+        </select>
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Puntos a sumar</label>
+        <input type="number" id="ref-points" placeholder="100" min="1" value="100">
+        <div style="font-size:11px;color:var(--gray);margin-top:4px">Podés customizar la cantidad según tu política de referidos</div>
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nota (opcional)</label>
+        <input type="text" id="ref-note" placeholder="Trajo a Juan García">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" style="background:#00E676;color:#000d1f" onclick="saveReferido()">✅ Sumar puntos</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-referido')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -3642,6 +3679,7 @@ async function loadStoreConfig() {
   try {
     const config = await api('GET', '/points/config');
     document.getElementById('cfg-store-name').value = config.store_name || '';
+    document.getElementById('cfg-referral-points').value = config.referral_points || 100;
     if (config.booking_slug) {
       const url = window.location.origin + '/tienda/' + config.booking_slug;
       document.getElementById('store-link-text').textContent = url;
@@ -3704,9 +3742,49 @@ async function deleteStoreItem(id) {
 
 async function saveStoreConfig() {
   const name = document.getElementById('cfg-store-name').value.trim();
+  const referralPoints = parseInt(document.getElementById('cfg-referral-points').value) || 100;
   try {
-    await api('PUT', '/points/config', { store_name: name, points_per_peso: 0.01 });
+    await api('PUT', '/points/config', { store_name: name, points_per_peso: 0.01, referral_points: referralPoints });
     showToast('✅', 'Tienda guardada', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ─── REFERIDOS ───
+async function openReferidoModal() {
+  const sel = document.getElementById('ref-client');
+  sel.innerHTML = '<option value="">-- Elegí el cliente referente --</option>' +
+    clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${c.name} (${c.points||0} pts)</option>`).join('');
+  try {
+    const config = await api('GET', '/points/config');
+    document.getElementById('ref-points').value = config.referral_points || 100;
+  } catch(e) { document.getElementById('ref-points').value = 100; }
+  document.getElementById('ref-note').value = '';
+  document.getElementById('ref-client-pts').textContent = '';
+  openModal('modal-referido');
+}
+
+function onRefClientChange() {
+  const sel = document.getElementById('ref-client');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && sel.value) {
+    document.getElementById('ref-client-pts').textContent = `Puntos actuales: ${opt.dataset.points || 0} pts`;
+  } else {
+    document.getElementById('ref-client-pts').textContent = '';
+  }
+}
+
+async function saveReferido() {
+  const clientId = document.getElementById('ref-client').value;
+  const points   = parseInt(document.getElementById('ref-points').value);
+  const note     = document.getElementById('ref-note').value.trim();
+  if (!clientId) return showToast('⚠️', 'Elegí un cliente', '');
+  if (!points || points < 1) return showToast('⚠️', 'Ingresá los puntos a sumar', '');
+  try {
+    await api('POST', '/clients/referral', { client_id: parseInt(clientId), points, note });
+    const client = clients.find(c => c.id === parseInt(clientId));
+    closeModal('modal-referido');
+    showToast('🤝', `+${points} pts para ${client?.name || 'el cliente'}`, note || 'Referido registrado');
+    await loadClients();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
@@ -3906,6 +3984,35 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 // ─── EDITAR CLIENTE ───
+// ─── REFERIDOS ───
+function openReferidoModal() {
+  // Llenar selector con clientes
+  const sel = document.getElementById('ref-client');
+  sel.innerHTML = '<option value="">-- Elegí el cliente --</option>' +
+    clients.map(c => `<option value="${c.id}">${c.name}${c.points > 0 ? ` · ${c.points} pts` : ''}</option>`).join('');
+  document.getElementById('ref-points').value = 100;
+  document.getElementById('ref-note').value = '';
+  openModal('modal-referido');
+}
+
+async function saveReferido() {
+  const clientId = document.getElementById('ref-client').value;
+  const points   = parseInt(document.getElementById('ref-points').value) || 0;
+  const note     = document.getElementById('ref-note').value.trim();
+  if (!clientId) return showToast('⚠️', 'Elegí un cliente', '');
+  if (points <= 0) return showToast('⚠️', 'Los puntos deben ser mayor a 0', '');
+  try {
+    await api('PUT', `/clients/${clientId}`, {
+      _add_points: points,
+      _note: note || 'Referido'
+    });
+    closeModal('modal-referido');
+    const c = clients.find(x => x.id == clientId);
+    showToast('✅', `+${points} puntos`, `Sumado a ${c?.name || 'cliente'}`);
+    await loadClients();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
 function editClientById(id) {
   const c = clients.find(x => x.id === id);
   if (!c) return;

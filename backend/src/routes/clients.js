@@ -58,8 +58,21 @@ router.post('/', auth, async (req, res) => {
 
 // PUT /api/clients/:id
 router.put('/:id', auth, async (req, res) => {
-  const { name, phone, notes } = req.body;
+  const { name, phone, notes, _add_points, _note } = req.body;
   try {
+    // Modo referido: solo sumar puntos sin tocar otros campos
+    if (_add_points !== undefined) {
+      const pts = parseInt(_add_points) || 0;
+      const result = await pool.query(
+        `UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3 RETURNING *`,
+        [pts, req.params.id, req.shopId]
+      );
+      if (!result.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+      console.log(`[REFERIDO] +${pts} puntos a cliente ${req.params.id} — ${_note || ''}`);
+      return res.json(result.rows[0]);
+    }
+
+    // Modo edición normal
     const result = await pool.query(
       `UPDATE clients SET name=$1, phone=$2, notes=$3 WHERE id=$4 AND shop_id=$5 RETURNING *`,
       [name, phone || null, notes || null, req.params.id, req.shopId]
