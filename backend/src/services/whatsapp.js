@@ -179,90 +179,69 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
       } else if (shouldReconnect) {
-        // Código 440 = otra sesión activa, esperar más para no pisarse
-        const delay = code === 440 ? 15000 : 5000;
-        console.log(`[WPP] Reconectando en ${delay/1000}s...`);
-        setTimeout(() => connect(shopId, null, null, null), delay);
+        // Reconectar automáticamente
+        setTimeout(() => connect(shopId, null, null, null), 5000);
       }
     }
   });
 
   // Manejar fallos de descifrado — ocurre cuando la sesión Signal está desincronizada
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
-    decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
-
-    // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
-    if (decryptErrors[shopId] >= 3) {
-      console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
-      try {
-        // Limpiar solo los archivos de session keys (no las creds principales)
-        const dir = authDir(shopId);
-        const files = fs.readdirSync(dir);
-        for (const f of files) {
-          if (f.startsWith('session-') || f.includes('pre-key') || f.includes('sender-key')) {
-            fs.unlinkSync(path.join(dir, f));
-          }
-        }
-        decryptErrors[shopId] = 0;
-        console.log(`[WPP] Keys Signal limpiadas para shop ${shopId}`);
-      } catch(e) {
-        console.error('[WPP] Error limpiando keys Signal:', e.message);
+    // Los errores Bad MAC de grupos (@g.us) son normales y no requieren acción
+    // Solo loguear para diagnóstico, sin limpiar sesión
+    for (const msg of (failedMessages || [])) {
+      const jid = msg?.key?.remoteJid || '';
+      if (jid.endsWith('@g.us')) {
+        // Ignorar silenciosamente — Bad MAC en grupos es esperado
+        continue;
       }
+      console.log(`[WPP] Error de descifrado en mensaje individual de ${jid}`);
     }
   });
 
+  // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     console.log(`[WPP] messages.upsert type=${type} count=${messages.length} shopId=${shopId}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
-      // DEBUG fuera del try para ver si el objeto existe
-      console.log(`[WPP DEBUG] msg existe=${!!msg} key=${JSON.stringify(msg?.key)} hasMessage=${!!msg?.message}`);
-
       try {
-        if (msg.key.fromMe) { console.log('[WPP DEBUG] skip fromMe'); continue; }
+        // Ignorar mensajes propios
+        if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
 
-        // WhatsApp usa @lid para cuentas con múltiples dispositivos
-        // El número real está en senderPn o participantPn
-        const isLid = jid.endsWith('@lid');
-        const isIndividual = jid.endsWith('@s.whatsapp.net');
+        // Solo responder a contactos individuales (números @s.whatsapp.net)
+        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
+        if (!jid.endsWith('@s.whatsapp.net')) continue;
 
-        if (!isIndividual && !isLid) { console.log(`[WPP DEBUG] skip jid=${jid}`); continue; }
+        // Verificar que el JID sea efectivamente un número de teléfono
+        const phoneRaw = jid.replace('@s.whatsapp.net', '');
+        if (!/^\d+$/.test(phoneRaw)) continue;
 
-        // Para @lid usar senderPn, para @s.whatsapp.net usar el jid directo
-        const senderJid = isLid
-          ? (msg.key.senderPn || msg.key.participantPn || null)
-          : jid;
-
-        if (!senderJid) { console.log(`[WPP DEBUG] skip: sin senderJid para lid`); continue; }
-
-        const phoneRaw = senderJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
-        if (!phoneRaw || phoneRaw.length < 8) { console.log(`[WPP DEBUG] skip phoneRaw=${phoneRaw}`); continue; }
-
+        const phone = phoneRaw;
         const msgContent = msg.message;
-        console.log(`[WPP DEBUG] msgContent keys=${JSON.stringify(Object.keys(msgContent || {}))}`);
 
-        const text = msgContent?.conversation || msgContent?.extendedTextMessage?.text || null;
-        console.log(`[WPP DEBUG] text="${text}"`);
+        // Ignorar todo tipo de mensaje que no sea texto puro
+        const text =
+          msgContent?.conversation ||
+          msgContent?.extendedTextMessage?.text ||
+          null;
 
-        if (!text) { console.log('[WPP DEBUG] sin texto'); continue; }
+        if (!text) continue;
 
-        console.log(`[WPP] Mensaje de ${phoneRaw}: "${text}"`);
+        console.log(`[WPP] Mensaje de ${phone}: "${text}"`);
 
+        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
-        const reply = await getAIResponse(shopId, phoneRaw, text);
+        const reply = await getAIResponse(shopId, phone, text);
 
         if (reply) {
-          console.log(`[WPP] Respondiendo a ${phoneRaw}: "${reply}"`);
-          await sock.sendMessage(senderJid, { text: reply });
-        } else {
-          console.log(`[WPP DEBUG] AI no respondió`);
+          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
+          await sock.sendMessage(msg.key.remoteJid, { text: reply });
         }
       } catch (e) {
-        console.error('[WPP] Error:', e.message, e.stack?.split('\n')[1]);
+        console.error('[WPP] Error procesando mensaje entrante:', e.message);
       }
     }
   });
