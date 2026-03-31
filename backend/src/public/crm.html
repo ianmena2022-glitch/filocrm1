@@ -1607,6 +1607,30 @@ body {
   </div>
 </div>
 
+<!-- Modal: Cobrar membresía con MP -->
+<div class="modal-overlay" id="modal-cobrar-mp">
+  <div class="modal">
+    <div class="modal-title">💳 Cobrar con Mercado Pago</div>
+    <div class="modal-sub" id="cobrar-mp-sub">Se enviará un link de suscripción al cliente por WhatsApp</div>
+    <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:12px;padding:16px;margin-bottom:20px;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.7">
+      <div style="font-weight:700;color:var(--yellow);margin-bottom:8px">📋 Lo que va a pasar:</div>
+      ✓ Se crea una suscripción mensual en Mercado Pago<br>
+      ✓ Se manda un WhatsApp al cliente con el link de pago<br>
+      ✓ El cliente hace clic, carga su tarjeta y queda suscripto<br>
+      ✓ Cada mes se cobra automáticamente
+    </div>
+    <div class="form-field" style="margin-bottom:16px">
+      <label>Email del cliente (para MP)</label>
+      <input type="email" id="cobrar-mp-email" placeholder="cliente@email.com">
+      <div style="font-size:11px;color:var(--gray);margin-top:4px">Requerido por Mercado Pago para crear la suscripción</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="confirmLinkMP()">💬 Enviar WhatsApp al cliente</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-cobrar-mp')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Configurar planes de membresía -->
 <div class="modal-overlay" id="modal-planes-config">
   <div class="modal" style="max-width:520px">
@@ -2905,24 +2929,38 @@ async function checkin(id) {
 }
 
 
-async function linkMP(membId, phone, plan, price) {
-  const email = prompt('Email del cliente para Mercado Pago:');
-  if (!email || !email.includes('@')) return showToast('⚠️', 'Email inválido', '');
+// Estado temporal para el modal cobrar MP
+let _cobrarMpData = null;
+
+function linkMP(membId, phone, plan, price) {
+  _cobrarMpData = { membId, phone, plan, price };
+  const planName = plan === 'premium' ? 'Premium' : 'Básico';
+  document.getElementById('cobrar-mp-sub').textContent =
+    `Plan ${planName} · $${parseFloat(price).toLocaleString('es-AR')}/mes · WhatsApp al ${phone || 'cliente'}`;
+  document.getElementById('cobrar-mp-email').value = '';
+  openModal('modal-cobrar-mp');
+}
+
+async function confirmLinkMP() {
+  const email = document.getElementById('cobrar-mp-email').value.trim();
+  if (!email || !email.includes('@')) return showToast('⚠️', 'Ingresá un email válido', '');
+  const { membId, phone, plan, price } = _cobrarMpData;
+  const btn = document.querySelector('#modal-cobrar-mp .btn-modal-primary');
+  btn.disabled = true; btn.textContent = 'Generando link...';
   try {
-    showToast('⏳', 'Creando suscripción en MP...', '');
-    const planName = plan === 'premium' ? 'Membresía Premium FILO' : 'Membresía Básica FILO';
+    const planName = plan === 'premium' ? 'Membresía Premium' : 'Membresía Básica';
     const data = await api('POST', '/payments/subscription', {
       membership_id: membId,
       payer_email: email,
       plan_name: planName,
       price_monthly: price
     });
-    showToast('✅', 'Link generado', 'Enviá el link al cliente');
-    // Abrir link de pago en nueva pestaña
-    if (data.payment_url) window.open(data.payment_url, '_blank');
+    closeModal('modal-cobrar-mp');
+    showToast('💬', 'WhatsApp enviado', `Link de suscripción enviado a ${phone}`);
     loadMemberships();
   } catch (e) {
     showToast('❌', 'Error MP', e.message);
+    btn.disabled = false; btn.textContent = '💬 Enviar WhatsApp al cliente';
   }
 }
 
