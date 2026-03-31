@@ -174,7 +174,7 @@ router.post('/generate-slug', auth, async (req, res) => {
 // PUT /api/settings/plan — cambiar plan (solo cuentas test)
 router.put('/plan', auth, async (req, res) => {
   const { plan } = req.body;
-  const validPlans = ['starter', 'staff', 'test'];
+  const validPlans = ['starter', 'staff', 'enterprise', 'test'];
   if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
 
   try {
@@ -183,7 +183,7 @@ router.put('/plan', auth, async (req, res) => {
     if (!shop.rows[0]?.is_test) {
       return res.status(403).json({ error: 'Solo las cuentas de testing pueden cambiar de plan' });
     }
-    await pool.query('UPDATE shops SET plan=$1 WHERE id=$2', [plan, req.shopId]);
+    await pool.query('UPDATE shops SET plan=$1, filo_plan=$1 WHERE id=$2', [plan, req.shopId]);
     res.json({ ok: true, plan });
   } catch (e) {
     res.status(500).json({ error: e.message });

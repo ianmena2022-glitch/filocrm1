@@ -1362,6 +1362,7 @@ body {
             <div style="display:flex;gap:10px">
               <button id="btn-plan-starter" onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
               <button id="btn-plan-staff" onclick="switchPlan('staff')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
+              <button id="btn-plan-enterprise" onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
             </div>
             <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
           </div>
@@ -2181,7 +2182,8 @@ async function switchPlan(plan) {
   try {
     await api('PUT', '/settings/plan', { plan });
     currentShop.plan = plan;
-    currentShop.is_test = true; // preservar flag test
+    currentShop.filo_plan = plan; // actualizar también filo_plan
+    currentShop.is_test = true;
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     showToast('✅', `Plan cambiado a ${plan}`, 'Recargando...');
     setTimeout(() => location.reload(), 1000);
