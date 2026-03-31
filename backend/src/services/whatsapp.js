@@ -55,7 +55,7 @@ function authDir(shopId) {
   return dir;
 }
 
-// Restaurar sesión desde PostgreSQL
+// Restaurar sesión desde PostgreSQL — solo credenciales, NO session keys Signal
 async function restoreSessionFromDB(shopId) {
   try {
     const result = await pool.query(
@@ -68,8 +68,10 @@ async function restoreSessionFromDB(shopId) {
     const dir = authDir(shopId);
     const parsed = JSON.parse(sessionData);
 
-    // Escribir archivos de credenciales
     for (const [filename, content] of Object.entries(parsed)) {
+      // Excluir session keys Signal — generan Bad MAC al reconectar
+      // Solo restaurar creds.json (credenciales principales)
+      if (filename !== 'creds.json') continue;
       fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
     }
     console.log(`Baileys: sesión restaurada para shop ${shopId}`);
@@ -80,19 +82,18 @@ async function restoreSessionFromDB(shopId) {
   }
 }
 
-// Guardar sesión en PostgreSQL
+// Guardar sesión en PostgreSQL — solo creds.json
 async function saveSessionToDB(shopId) {
   try {
     const dir = authDir(shopId);
     if (!fs.existsSync(dir)) return;
 
-    const files = fs.readdirSync(dir);
-    const sessionData = {};
-    for (const file of files) {
-      try {
-        sessionData[file] = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
-      } catch { }
-    }
+    const credsPath = path.join(dir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return;
+
+    const sessionData = {
+      'creds.json': JSON.parse(fs.readFileSync(credsPath, 'utf8'))
+    };
 
     await pool.query(
       'UPDATE shops SET wpp_session=$1 WHERE id=$2',
@@ -187,15 +188,26 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Manejar fallos de descifrado — ocurre cuando la sesión Signal está desincronizada
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    // Los errores Bad MAC de grupos (@g.us) son normales y no requieren acción
-    // Solo loguear para diagnóstico, sin limpiar sesión
-    for (const msg of (failedMessages || [])) {
-      const jid = msg?.key?.remoteJid || '';
-      if (jid.endsWith('@g.us')) {
-        // Ignorar silenciosamente — Bad MAC en grupos es esperado
-        continue;
+    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
+    decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
+
+    // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
+    if (decryptErrors[shopId] >= 3) {
+      console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
+      try {
+        // Limpiar solo los archivos de session keys (no las creds principales)
+        const dir = authDir(shopId);
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+          if (f.startsWith('session-') || f.includes('pre-key') || f.includes('sender-key')) {
+            fs.unlinkSync(path.join(dir, f));
+          }
+        }
+        decryptErrors[shopId] = 0;
+        console.log(`[WPP] Keys Signal limpiadas para shop ${shopId}`);
+      } catch(e) {
+        console.error('[WPP] Error limpiando keys Signal:', e.message);
       }
-      console.log(`[WPP] Error de descifrado en mensaje individual de ${jid}`);
     }
   });
 
