@@ -2575,6 +2575,7 @@ function renderDashAppointments(appts) {
 }
 
 function renderApptCard(a) {
+  _editApptCache[a.id] = a; // cachear para edición
   const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado' };
   const time = String(a.time_start || '').slice(0,5);
   const redeemBadge = a.redeem_info
@@ -3895,11 +3896,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 // ─── EDITAR CLIENTE ───
-function editClient(id, name, phone, notes) {
-  document.getElementById('edit-c-id').value = id;
-  document.getElementById('edit-c-name').value = name;
-  document.getElementById('edit-c-phone').value = phone || '+54';
-  document.getElementById('edit-c-notes').value = notes || '';
+// ─── EDITAR CLIENTE ───
+function editClientById(id) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('edit-c-id').value = c.id;
+  document.getElementById('edit-c-name').value = c.name || '';
+  document.getElementById('edit-c-phone').value = c.phone || '+54';
+  document.getElementById('edit-c-notes').value = c.notes || '';
   openModal('modal-edit-cliente');
 }
 
@@ -3918,13 +3922,32 @@ async function saveEditClient() {
 }
 
 // ─── EDITAR TURNO ───
-function editAppt(a) {
-  document.getElementById('edit-a-id').value = a.id;
-  document.getElementById('edit-a-client-name').value = a.client_name || '';
-  document.getElementById('edit-a-time-start').value = String(a.time_start||'').slice(0,5);
-  document.getElementById('edit-a-time-end').value = String(a.time_end||'').slice(0,5);
-  document.getElementById('edit-a-price').value = a.price || '';
-  document.getElementById('edit-a-status').value = a.status || 'pending';
+let _editApptCache = {};
+
+function editApptById(id) {
+  const card = document.querySelector(`[onclick*="editApptById(${id})"]`)?.closest('.appointment-card');
+  // Buscar en los datos del DOM si no tenemos el objeto
+  const a = _editApptCache[id];
+  if (!a) {
+    // Fallback: leer desde DOM
+    const timeEl = card?.querySelector('.appt-time');
+    const timeEndEl = card?.querySelector('.appt-time-end');
+    const clientEl = card?.querySelector('.appt-client');
+    const priceEl = card?.querySelector('.appt-price');
+    document.getElementById('edit-a-id').value = id;
+    document.getElementById('edit-a-client-name').value = clientEl?.textContent || '';
+    document.getElementById('edit-a-time-start').value = timeEl?.textContent || '';
+    document.getElementById('edit-a-time-end').value = timeEndEl?.textContent || '';
+    document.getElementById('edit-a-price').value = (priceEl?.textContent || '').replace(/\$|\./g,'').replace(',','.');
+    document.getElementById('edit-a-status').value = 'pending';
+  } else {
+    document.getElementById('edit-a-id').value = a.id;
+    document.getElementById('edit-a-client-name').value = a.client_name || '';
+    document.getElementById('edit-a-time-start').value = String(a.time_start||'').slice(0,5);
+    document.getElementById('edit-a-time-end').value = String(a.time_end||'').slice(0,5);
+    document.getElementById('edit-a-price').value = a.price || '';
+    document.getElementById('edit-a-status').value = a.status || 'pending';
+  }
   openModal('modal-edit-turno');
 }
 
@@ -3945,12 +3968,14 @@ async function saveEditAppt() {
 }
 
 // ─── EDITAR SERVICIO ───
-function editService(id, name, price, cost, duration) {
-  document.getElementById('edit-s-id').value = id;
-  document.getElementById('edit-s-name').value = name;
-  document.getElementById('edit-s-price').value = price;
-  document.getElementById('edit-s-cost').value = cost;
-  document.getElementById('edit-s-duration').value = duration;
+function editServiceById(id) {
+  const s = services.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('edit-s-id').value = s.id;
+  document.getElementById('edit-s-name').value = s.name || '';
+  document.getElementById('edit-s-price').value = s.price || '';
+  document.getElementById('edit-s-cost').value = s.cost || 0;
+  document.getElementById('edit-s-duration').value = s.duration_minutes || 30;
   openModal('modal-edit-servicio');
 }
 
@@ -3970,11 +3995,13 @@ async function saveEditService() {
 }
 
 // ─── EDITAR PREMIO TIENDA ───
-function editStoreItem(id, name, desc, points) {
-  document.getElementById('edit-si-id').value = id;
-  document.getElementById('edit-si-name').value = name;
-  document.getElementById('edit-si-desc').value = desc || '';
-  document.getElementById('edit-si-points').value = points;
+function editStoreItemById(id) {
+  const item = storeItems.find(x => x.id === id);
+  if (!item) return;
+  document.getElementById('edit-si-id').value = item.id;
+  document.getElementById('edit-si-name').value = item.name || '';
+  document.getElementById('edit-si-desc').value = item.description || '';
+  document.getElementById('edit-si-points').value = item.points_cost || '';
   openModal('modal-edit-store-item');
 }
 
