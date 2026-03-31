@@ -2812,8 +2812,6 @@ async function savePlanesConfig() {
     closeModal('modal-planes-config');
     _planesConfig = null; // invalidar cache
     showToast('✅', 'Planes guardados', 'La configuración se actualizó');
-    // Actualizar precios en el modal de nueva membresía
-    document.getElementById('m-price').placeholder = planes.basic.price || '8000';
   } catch(e) {
     showToast('❌', 'Error', e.message);
   }
