@@ -1825,34 +1825,27 @@ async function register() {
 }
 
 function showTrialRedirect(paymentUrl) {
-  // Reemplazar el formulario con pantalla de confirmación
-  const authBox = document.querySelector('.auth-box');
+  var authBox = document.querySelector('.auth-box');
   if (!authBox) { window.location.href = paymentUrl; return; }
-  authBox.innerHTML = `
-    <div style="text-align:center;padding:20px 0">
-      <div style="width:56px;height:56px;background:var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px">✓</div>
-      <div style="font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:8px">¡Cuenta creada!</div>
-      <div style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:28px;line-height:1.6">
-        Ahora vas a ingresar tu tarjeta en Mercado Pago.<br>
-        <strong style="color:var(--yellow)">No se te va a cobrar nada hoy.</strong><br>
-        El primer cobro es al día 8.
-      </div>
-      <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:14px;margin-bottom:24px;font-size:12px;color:rgba(255,255,255,.6);text-align:left;line-height:1.7">
-        <div style="font-weight:700;color:var(--yellow);margin-bottom:6px">Lo que va a pasar:</div>
-        ✓ Hoy: ingresás tu tarjeta (sin cargo)<br>
-        ✓ Días 1-7: usás FILO gratis<br>
-        ✓ Día 8: se cobra el primer mes automáticamente<br>
-        ✓ Podés cancelar desde Configuración antes del día 8
-      </div>
-      <a href="\${paymentUrl}" style="display:block;background:var(--yellow);color:#000d1f;padding:14px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;text-decoration:none;letter-spacing:.5px;margin-bottom:12px">
-        Ingresar tarjeta en Mercado Pago
-      </a>
-      <button onclick="startApp()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer;padding:8px">
-        Hacerlo después →
-      </button>
-    </div>
-  \`;
+  var html = '<div style="text-align:center;padding:20px 0">';
+  html += '<div style="width:56px;height:56px;background:var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px">&#10003;</div>';
+  html += '<div style="font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:8px">Cuenta creada!</div>';
+  html += '<div style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:28px;line-height:1.6">';
+  html += 'Ahora vas a ingresar tu tarjeta en Mercado Pago.<br>';
+  html += '<strong style="color:var(--yellow)">No se te va a cobrar nada hoy.</strong><br>';
+  html += 'El primer cobro es al dia 8.</div>';
+  html += '<div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:14px;margin-bottom:24px;font-size:12px;color:rgba(255,255,255,.6);text-align:left;line-height:1.7">';
+  html += '<div style="font-weight:700;color:var(--yellow);margin-bottom:6px">Lo que va a pasar:</div>';
+  html += '&#10003; Hoy: ingresas tu tarjeta (sin cargo)<br>';
+  html += '&#10003; Dias 1-7: usas FILO gratis<br>';
+  html += '&#10003; Dia 8: se cobra el primer mes automaticamente<br>';
+  html += '&#10003; Podes cancelar desde Configuracion antes del dia 8</div>';
+  html += '<a href="' + paymentUrl + '" style="display:block;background:var(--yellow);color:#000d1f;padding:14px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;text-decoration:none;letter-spacing:.5px;margin-bottom:12px">Ingresar tarjeta en Mercado Pago</a>';
+  html += '<button onclick="startApp()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer;padding:8px">Hacerlo despues &rarr;</button>';
+  html += '</div>';
+  authBox.innerHTML = html;
 }
+
 
 function logout() {
   if (!confirm('¿Cerrás sesión?')) return;
