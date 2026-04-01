@@ -3,7 +3,7 @@ const pool = require('../db/pool');
 // Historial de conversaciones en memoria
 const conversations = {};
 const lastActivity = {};
-const CONVERSATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+const CONVERSATION_TIMEOUT_MS = 1 * 60 * 1000; // 1 minuto
 
 function hasActiveConversation(shopId, phone) {
   const key = `${shopId}:${phone}`;
