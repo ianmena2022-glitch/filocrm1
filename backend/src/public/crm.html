@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="/logo_f.png">
-<link rel="icon" type="image/png" href="/logo_f.png">
 <title>FILO CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -2399,7 +2398,7 @@ function showSection(name) {
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
 
-  if (name === 'agenda') loadAgenda();
+  if (name === 'agenda') { agendaDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]; loadAgenda(); }
   if (name === 'clientes') renderClients();
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
