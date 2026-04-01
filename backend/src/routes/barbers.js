@@ -93,7 +93,7 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
          COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
          COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
          COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
-         COALESCE(SUM(a.price * s.barber_commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes
+         COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes
        FROM shops s
        LEFT JOIN appointments a ON a.barber_id = s.id AND a.shop_id = $1
        WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE

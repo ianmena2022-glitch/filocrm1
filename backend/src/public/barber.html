@@ -829,7 +829,10 @@ async function loadDashboard() {
     const completados = allAppts.filter(a => a.status === 'completed').length;
     const pendientes = allAppts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
     const facturado = allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
-    const comision = me.commission_enabled ? facturado * (me.barber_commission_pct || 50) / 100 : 0;
+    // Usar commission_pct de cada turno individual (no el porcentaje actual del barbero)
+    const comision = me.commission_enabled
+      ? allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0) * (parseFloat(a.commission_pct||50) / 100), 0)
+      : 0;
 
     document.getElementById('stat-turnos').textContent = allAppts.length;
     document.getElementById('stat-completados').textContent = completados;
