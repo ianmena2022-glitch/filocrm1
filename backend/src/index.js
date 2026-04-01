@@ -90,6 +90,14 @@ async function start() {
       } catch(e) {
         console.error('WhatsApp reconnect error:', e.message);
       }
+
+      // Scheduler de recordatorios de turno
+      try {
+        const { startScheduler } = require('./scheduler');
+        startScheduler();
+      } catch(e) {
+        console.error('Scheduler error:', e.message);
+      }
     });
   } catch (e) {
     console.error('❌ Error al iniciar:', e.message);
