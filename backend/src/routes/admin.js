@@ -34,15 +34,18 @@ router.get('/accounts', adminAuth, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        id, name, email, phone, city,
-        filo_plan, plan, subscription_status,
-        trial_ends_at, created_at,
-        wpp_connected,
-        mp_shop_subscription_id, mp_shop_status,
-        is_test
-      FROM shops
-      WHERE is_barber = FALSE OR is_barber IS NULL
-      ORDER BY created_at DESC
+        s.id, s.name, s.email, s.phone, s.city,
+        s.filo_plan, s.plan, s.subscription_status,
+        s.trial_ends_at, s.created_at,
+        s.wpp_connected,
+        s.mp_shop_subscription_id, s.mp_shop_status,
+        s.is_test,
+        COUNT(b.id) FILTER (WHERE b.is_barber = TRUE) AS barber_count
+      FROM shops s
+      LEFT JOIN shops b ON b.parent_shop_id = s.id AND b.is_barber = TRUE
+      WHERE s.is_barber = FALSE OR s.is_barber IS NULL
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
     `);
     res.json({ accounts: result.rows });
   } catch(e) {
