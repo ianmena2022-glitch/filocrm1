@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS shops (
   calendly_url      TEXT,
   service_radius_km INT DEFAULT 3,
   churn_days        INT DEFAULT 20,
-  wpp_session       VARCHAR(100),
+  wpp_session       TEXT,
   wpp_connected     BOOLEAN DEFAULT FALSE,
   logo_url          TEXT,
   msg_templates     TEXT,
@@ -185,3 +185,16 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS filo_plan VARCHAR(20) DEFAULT 'starte
 
 -- Actualizar plan en el CHECK constraint para incluir enterprise
 -- (ya existe el CHECK en el ALTER anterior, este extiende el enum)
+
+-- ── OPTIMIZACIONES DE ESCALA ──────────────────────────────────────────────────
+
+-- wpp_session como TEXT (por si existe como VARCHAR(100))
+ALTER TABLE shops ALTER COLUMN wpp_session TYPE TEXT;
+
+-- Índices para queries frecuentes
+CREATE INDEX IF NOT EXISTS idx_appointments_status       ON appointments(status);
+CREATE INDEX IF NOT EXISTS idx_clients_phone             ON clients(phone);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_logs_shop_type   ON whatsapp_logs(shop_id, type, sent_at);
+
+-- Columna para evitar recordatorios duplicados sin depender de whatsapp_logs
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;

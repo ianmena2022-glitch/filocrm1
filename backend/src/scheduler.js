@@ -34,13 +34,7 @@ async function sendReminders() {
           AND s.wpp_connected = TRUE
           AND c.phone IS NOT NULL
           AND c.phone != ''
-          AND NOT EXISTS (
-            SELECT 1 FROM whatsapp_logs wl
-            WHERE wl.shop_id = a.shop_id
-              AND wl.phone = c.phone
-              AND wl.type = 'recordatorio'
-              AND wl.sent_at > NOW() - INTERVAL '20 hours'
-          )
+          AND a.reminder_sent_at IS NULL
       `;
       params = [startDate, startTime, endTime];
     } else {
@@ -61,13 +55,7 @@ async function sendReminders() {
           AND s.wpp_connected = TRUE
           AND c.phone IS NOT NULL
           AND c.phone != ''
-          AND NOT EXISTS (
-            SELECT 1 FROM whatsapp_logs wl
-            WHERE wl.shop_id = a.shop_id
-              AND wl.phone = c.phone
-              AND wl.type = 'recordatorio'
-              AND wl.sent_at > NOW() - INTERVAL '20 hours'
-          )
+          AND a.reminder_sent_at IS NULL
       `;
       params = [startDate, startTime, endDate, endTime];
     }
@@ -105,11 +93,10 @@ async function sendReminders() {
 
         await wpp.sendText(appt.shop_id, appt.client_phone, msg);
 
-        // Registrar en whatsapp_logs para no enviar duplicados
+        // Marcar como enviado en el turno para no duplicar
         await pool.query(
-          `INSERT INTO whatsapp_logs (shop_id, phone, message, type, status)
-           VALUES ($1, $2, $3, 'recordatorio', 'sent')`,
-          [appt.shop_id, appt.client_phone, msg]
+          'UPDATE appointments SET reminder_sent_at = NOW() WHERE id = $1',
+          [appt.id]
         );
 
         console.log(`[CRON] Recordatorio enviado a ${clientName} (${appt.client_phone}) — turno ${fecha} ${hora}`);
