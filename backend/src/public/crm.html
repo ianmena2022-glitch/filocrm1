@@ -2852,6 +2852,7 @@ function renderClients(filtered) {
           <span>Visitas: ${c.total_visits}</span>
           <span>Total: $${parseFloat(c.total_spent||0).toLocaleString('es-AR')}</span>
           <span style="color:var(--yellow);font-weight:700">⭐ ${c.points || 0} pts</span>
+          ${c.notes ? `<span style="color:var(--gray);font-style:italic">📝 ${c.notes}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
