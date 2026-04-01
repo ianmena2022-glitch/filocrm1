@@ -166,7 +166,9 @@ async function generateMessage(shopId, type, context) {
 
     rescate: `Escribí un mensaje de WhatsApp corto y amigable para ${context.clientName}, un cliente que no visita ${context.shopName} hace ${context.daysSince} días. El objetivo es que vuelva a reservar un turno. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
 
-    turno_completado: `Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
+    turno_completado: `Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+
+    recordatorio: `Escribí un mensaje de WhatsApp corto y amigable para recordarle a ${context.clientName} que tiene un turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
   };
 
   const prompt = prompts[type];
