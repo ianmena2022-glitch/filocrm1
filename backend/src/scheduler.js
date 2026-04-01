@@ -7,8 +7,8 @@ async function sendReminders() {
     const now = new Date();
 
     // Ventana: turnos que empiezan entre 11:30hs y 12:30hs desde ahora
-    const windowStart = new Date(now.getTime() + 11.5 * 60 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + 12.5 * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() + 3.5 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 4.5 * 60 * 60 * 1000);
 
     const startDate = windowStart.toISOString().split('T')[0];
     const endDate   = windowEnd.toISOString().split('T')[0];
