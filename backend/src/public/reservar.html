@@ -182,7 +182,9 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         <div class="card-title">👤 Tus datos</div>
         <div class="form-field">
           <label>Tu WhatsApp</label>
-          <input type="tel" id="client-phone" placeholder="5491112345678" autocomplete="tel" inputmode="numeric">
+          <input type="tel" id="client-phone" placeholder="5491100000000" autocomplete="tel" inputmode="numeric" oninput="formatPhoneInput(this)">
+          <div style="font-size:11px;color:#4a5a75;margin-top:5px">Formato: <strong style="color:rgba(255,255,255,.5)">+54 9 11 XXXX-XXXX</strong> — ingresá solo números sin espacios ni guiones</div>
+          <div id="phone-error" style="font-size:12px;color:#FF4343;margin-top:4px;display:none"></div>
         </div>
         <div class="form-field">
           <label>Nombre completo</label>
@@ -440,6 +442,9 @@ async function confirmReservation() {
   const phone = document.getElementById('client-phone').value.trim();
   const address = document.getElementById('client-address')?.value.trim() || '';
   if (!phone) { showError('El número de WhatsApp es obligatorio'); return; }
+  // Validar formato +54911XXXXXXXX (solo dígitos, debe empezar con 549 y tener 13 dígitos)
+  const phoneClean = phone.replace(/\D/g, '');
+  if (phoneClean.length < 10) { showError('Ingresá un número de WhatsApp válido'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
   if (shopData?.home_service && !address) { showError('El domicilio es obligatorio para servicio a domicilio'); return; }
 
@@ -521,6 +526,27 @@ document.getElementById('client-phone')?.addEventListener('blur', async function
   clientPointsData = null;
   await checkPhonePoints(phone);
 });
+
+function formatPhoneInput(input) {
+  // Permitir solo dígitos y el + al inicio
+  let val = input.value.replace(/[^\d+]/g, '');
+  // Si empieza con 0, sugerir reemplazar con 549
+  const phoneErr = document.getElementById('phone-error');
+  if (val.startsWith('0')) {
+    phoneErr.textContent = 'No incluyas el 0 inicial. Ejemplo: 5491100000000';
+    phoneErr.style.display = 'block';
+  } else if (val.startsWith('+')) {
+    val = val.slice(1); // quitar el + para normalizar
+    input.value = val;
+    phoneErr.style.display = 'none';
+  } else if (val.length > 0 && !val.startsWith('54')) {
+    phoneErr.textContent = 'Debe empezar con 549 (código país + área). Ejemplo: 5491100000000';
+    phoneErr.style.display = 'block';
+  } else {
+    phoneErr.style.display = 'none';
+  }
+  input.value = val;
+}
 
 document.getElementById('client-phone')?.addEventListener('input', function() {
   // Reset prizes if phone changes
