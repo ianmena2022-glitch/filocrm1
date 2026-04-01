@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/logo_f.png">
   <title>FILO — Mi Dashboard</title>
   <link rel="icon" href="/favicon.ico">
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -829,10 +830,7 @@ async function loadDashboard() {
     const completados = allAppts.filter(a => a.status === 'completed').length;
     const pendientes = allAppts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
     const facturado = allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
-    // Usar commission_pct de cada turno individual (no el porcentaje actual del barbero)
-    const comision = me.commission_enabled
-      ? allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0) * (parseFloat(a.commission_pct||50) / 100), 0)
-      : 0;
+    const comision = me.commission_enabled ? facturado * (me.barber_commission_pct || 50) / 100 : 0;
 
     document.getElementById('stat-turnos').textContent = allAppts.length;
     document.getElementById('stat-completados').textContent = completados;

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/logo_f.png">
 <title>FILO CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -1602,9 +1603,14 @@ body {
         <label>Hora</label>
         <input type="time" id="t-time">
       </div>
-      <!-- barbero y comision se asignan automaticamente -->
-      <input type="hidden" id="t-barber" value="">
-      <input type="hidden" id="t-commission" value="50">
+      <div class="form-field">
+        <label>Barbero (opcional)</label>
+        <input type="text" id="t-barber" placeholder="Nombre del barbero">
+      </div>
+      <div class="form-field">
+        <label>Comisión del barbero (%)</label>
+        <input type="number" id="t-commission" placeholder="50" value="50" min="0" max="100">
+      </div>
     </div>
 
     <!-- Sección de canje de puntos -->

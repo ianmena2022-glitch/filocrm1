@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/logo_f.png">
 <title>FILO Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -202,7 +203,6 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Plan</th>
               <th>Estado</th>
               <th>Trial / Desde</th>
-              <th>Barberos</th>
               <th>WhatsApp</th>
               <th>Acciones</th>
             </tr>
@@ -454,17 +454,12 @@ function renderAccountsTable(accounts) {
         ? `<div style="font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</div>`
         : '—';
 
-    const barberCount = ['staff','enterprise'].includes(a.filo_plan)
-      ? `<span style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)">${a.barber_count || 0}</span><span style="font-size:11px;color:var(--g)"> / ${a.filo_plan === 'staff' ? '10' : '20'}</span>`
-      : `<span style="color:var(--g);font-size:12px">—</span>`;
-
     return `<tr>
       <td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:11px;color:var(--g)">#${a.id}</div></td>
       <td style="color:var(--g);font-size:12px">${esc(a.email)}</td>
       <td>${planBadge}</td>
       <td>${statusBadge}</td>
       <td>${dateInfo}</td>
-      <td>${barberCount}</td>
       <td style="font-size:12px">${wppDot}</td>
       <td style="display:flex;gap:6px">
         <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
