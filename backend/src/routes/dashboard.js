@@ -12,7 +12,7 @@ router.get('/today', auth, async (req, res) => {
     const metricsQ = await pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)          AS revenue,
-         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost ELSE 0 END), 0)   AS net_profit,
+         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
          COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
          COUNT(CASE WHEN status='pending' OR status='confirmed' THEN 1 END)             AS pending,
          COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
@@ -35,7 +35,7 @@ router.get('/today', auth, async (req, res) => {
     const weekQ = await pool.query(
       `SELECT
          date::text,
-         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost ELSE 0 END), 0) AS net_profit,
+         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
          COUNT(CASE WHEN status='completed' THEN 1 END) AS completed
        FROM appointments
        WHERE shop_id = $1 AND date >= CURRENT_DATE - INTERVAL '6 days' AND date <= CURRENT_DATE
@@ -87,7 +87,7 @@ router.get('/month', auth, async (req, res) => {
     const monthQ = await pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)        AS revenue,
-         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost ELSE 0 END), 0) AS net_profit,
+         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
          COUNT(CASE WHEN status='completed' THEN 1 END)                               AS completed,
          COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
          COUNT(*)                                                                      AS total
