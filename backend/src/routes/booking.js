@@ -193,14 +193,46 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     }
 
+    // Auto-asignar barbero con menos turnos en esa fecha
+    let assignedBarberId = null;
+    let assignedBarberCommission = 50;
+    try {
+      const barbers = await pool.query(
+        'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
+      );
+      if (barbers.rows.length) {
+        const counts = await pool.query(
+          `SELECT barber_id, COUNT(*) as total FROM appointments
+           WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
+          [shopData.id, date]
+        );
+        const countMap = {};
+        counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
+        let minCount = Infinity;
+        for (const b of barbers.rows) {
+          const c = countMap[b.id] || 0;
+          if (c < minCount) { minCount = c; assignedBarberId = b.id; }
+        }
+        if (assignedBarberId) {
+          const barberData = await pool.query(
+            'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+          );
+          if (barberData.rows[0]?.barber_commission_pct) {
+            assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
+          }
+        }
+      }
+    } catch(e) { console.error('autoAssign booking error:', e.message); }
+
     // Crear turno
     const appt = await pool.query(
       `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11)
+         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13)
        RETURNING *`,
       [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
-       svcPrice, svcCost, date, time_start, time_end, null]
+       svcPrice, svcCost, date, time_start, time_end, null,
+       assignedBarberId, assignedBarberCommission]
     );
 
     // Notificar al barbero por WhatsApp si está conectado
