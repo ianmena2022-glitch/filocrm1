@@ -44,17 +44,18 @@ router.get('/today', auth, async (req, res) => {
       [shopId]
     );
 
-    // Split de comisiones del dia (barberos) — usar commission_pct guardado en el turno
+    // Split de comisiones del dia (barberos) — agrupar por barbero usando su nombre real
     const splitsQ = await pool.query(
       `SELECT
-         a.barber_name,
+         s.name AS barber_name,
          SUM(a.price * a.commission_pct / 100.0) AS commission,
-         COUNT(*) AS cuts,
-         a.commission_pct
+         COUNT(*) AS cuts
        FROM appointments a
+       JOIN shops s ON s.id = a.barber_id
        WHERE a.shop_id = $1 AND a.date = $2 AND a.status = 'completed'
          AND a.barber_id IS NOT NULL
-       GROUP BY a.barber_name, a.commission_pct`,
+       GROUP BY s.id, s.name
+       ORDER BY s.name`,
       [shopId, today]
     );
 
