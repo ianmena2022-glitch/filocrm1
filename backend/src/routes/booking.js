@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -115,7 +115,7 @@ router.get('/:slug/available', async (req, res) => {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
-  const { client_name, client_phone, service_id, date, time_start, redeem_item_id } = req.body;
+  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id } = req.body;
 
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
@@ -180,10 +180,14 @@ router.post('/:slug/reserve', async (req, res) => {
       );
       if (existing.rows.length) {
         clientId = existing.rows[0].id;
+        // Actualizar domicilio si viene en la reserva
+        if (client_address) {
+          await pool.query('UPDATE clients SET address=$1 WHERE id=$2', [client_address.trim(), clientId]);
+        }
       } else {
         const newClient = await pool.query(
-          'INSERT INTO clients (shop_id, name, phone) VALUES ($1,$2,$3) RETURNING id',
-          [shopData.id, client_name.trim(), client_phone.trim()]
+          'INSERT INTO clients (shop_id, name, phone, address) VALUES ($1,$2,$3,$4) RETURNING id',
+          [shopData.id, client_name.trim(), client_phone.trim(), client_address?.trim() || null]
         );
         clientId = newClient.rows[0].id;
       }

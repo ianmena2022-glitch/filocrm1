@@ -1391,6 +1391,19 @@ body {
               <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
             </div>
           </div>
+          <!-- Toggle servicios a domicilio -->
+          <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
+            <div>
+              <div style="font-size:13px;font-weight:700">🏠 Servicios a domicilio</div>
+              <div style="font-size:11px;color:var(--gray);margin-top:3px">Solicita el domicilio del cliente al reservar un turno</div>
+            </div>
+            <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+              <input type="checkbox" id="toggle-home-service" onchange="toggleHomeService()" style="opacity:0;width:0;height:0;position:absolute">
+              <span id="home-service-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:28px;transition:.3s;border:1px solid rgba(255,255,255,0.1)">
+                <span id="home-service-thumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#8a9ab5;border-radius:50%;transition:.3s"></span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <!-- Horarios — acordeón -->
@@ -1419,6 +1432,19 @@ body {
             <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
             <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
             <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
+          </div>
+
+          <!-- Aviso WhatsApp Desktop -->
+          <div style="margin-top:16px;background:rgba(255,67,67,0.07);border:1px solid rgba(255,67,67,0.2);border-radius:12px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:700;color:#FF4343;margin-bottom:8px;letter-spacing:.5px">🖥️ No uses WhatsApp Desktop al mismo tiempo que el bot</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.7">Tener la <strong style="color:rgba(255,255,255,.8)">app de escritorio de WhatsApp</strong> abierta en tu PC al mismo tiempo que FILO genera conflictos de sesión. Esto puede causar:</div>
+            <ul style="margin:8px 0 0 16px;font-size:12px;color:var(--gray);line-height:1.9">
+              <li>❌ El bot <strong style="color:rgba(255,255,255,.7)">deja de recibir mensajes</strong> de los clientes</li>
+              <li>❌ <strong style="color:rgba(255,255,255,.7)">Errores de descifrado</strong> que rompen la sesión</li>
+              <li>❌ Desconexiones frecuentes con <strong style="color:rgba(255,255,255,.7)">código 440</strong></li>
+              <li>❌ Mensajes que llegan pero <strong style="color:rgba(255,255,255,.7)">no generan respuesta</strong></li>
+            </ul>
+            <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.5)">✅ Podés usar WhatsApp normalmente desde el <strong style="color:rgba(255,255,255,.7)">celular</strong> sin ningún problema.</div>
           </div>
 
           <!-- Aviso WhatsApp Desktop -->
@@ -1685,6 +1711,10 @@ body {
         <label>Teléfono / WhatsApp</label>
         <input type="tel" id="c-phone" value="+54" placeholder="+54 9113425876">
       </div>
+      <div class="form-field" id="c-address-field" style="display:none">
+        <label>Domicilio</label>
+        <input type="text" id="c-address" placeholder="Av. Rivadavia 1234">
+      </div>
       <div class="form-field">
         <label>Notas (opcional)</label>
         <input type="text" id="c-notes" placeholder="Corte fade, alérgico a...">
@@ -1922,6 +1952,10 @@ body {
       <div class="form-field">
         <label>Teléfono / WhatsApp</label>
         <input type="tel" id="edit-c-phone" placeholder="+54 9113425876">
+      </div>
+      <div class="form-field" id="edit-c-address-field" style="display:none">
+        <label>Domicilio</label>
+        <input type="text" id="edit-c-address" placeholder="Av. Rivadavia 1234">
       </div>
       <div class="form-field">
         <label>Notas (opcional)</label>
@@ -2650,6 +2684,7 @@ function renderApptCard(a) {
       <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
       ${(a.assigned_barber_name || a.barber_name) ? `<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--yellow)"><svg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>${a.assigned_barber_name || a.barber_name}</span></div>` : ''}
       ${redeemBadge}
+      ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
@@ -2823,6 +2858,7 @@ function renderClients(filtered) {
         </div>
         <div class="client-meta">
           <span>${c.phone || 'Sin teléfono'}</span>
+          ${c.address ? `<span>🏠 ${c.address}</span>` : ''}
           <span>Última visita: ${lastVisit}</span>
           <span>Visitas: ${c.total_visits}</span>
           <span>Total: $${parseFloat(c.total_spent||0).toLocaleString('es-AR')}</span>
@@ -2898,7 +2934,8 @@ async function createClient() {
   document.getElementById('c-notes').value = '';
   showToast('✅', 'Cliente agregado', name + ' ya está en tu base');
   try {
-    await api('POST', '/clients', { name, phone, notes });
+    const address = document.getElementById('c-address').value.trim();
+    await api('POST', '/clients', { name, phone, notes, address });
     loadClients(); // refresca para obtener id real y datos completos
   } catch (e) {
     showToast('❌', 'Error', e.message);
@@ -3175,6 +3212,7 @@ async function showChurnList() {
           <div class="client-name">${c.name} <span class="risk-badge risk-${c.risk_level}" style="margin-left:8px">${c.risk_level === 'critico' ? '🔴 Crítico' : '🟠 En fuga'}</span></div>
           <div class="client-meta">
             <span>${c.phone || 'Sin teléfono'}</span>
+          ${c.address ? `<span>🏠 ${c.address}</span>` : ''}
             <span>Hace ${c.days_since_last} días sin visitar</span>
           </div>
         </div>
@@ -3504,6 +3542,21 @@ async function loadSettings() {
     document.getElementById('cfg-address').value = settings.address || '';
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
 
+    // Home service toggle
+    const homeService = settings.home_service || false;
+    document.getElementById('toggle-home-service').checked = homeService;
+    const hs = document.getElementById('home-service-slider');
+    const ht = document.getElementById('home-service-thumb');
+    if (homeService) { hs.style.background = 'var(--yellow)'; ht.style.left = '29px'; ht.style.background = 'var(--dark)'; }
+    else { hs.style.background = 'rgba(255,255,255,0.12)'; ht.style.left = '3px'; ht.style.background = '#8a9ab5'; }
+    // Mostrar/ocultar campos domicilio en modales de cliente
+    const showAddr = homeService;
+    const af = document.getElementById('c-address-field');
+    const eaf = document.getElementById('edit-c-address-field');
+    if (af) af.style.display = showAddr ? 'block' : 'none';
+    if (eaf) eaf.style.display = showAddr ? 'block' : 'none';
+    if (typeof window !== 'undefined') window._homeServiceEnabled = homeService;
+
     // Horarios
     const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
     renderSchedule(schedule);
@@ -3553,7 +3606,8 @@ async function saveSettings() {
       rescate:      document.getElementById('tpl-rescate').value.trim(),
       recordatorio: document.getElementById('tpl-recordatorio').value.trim(),
       completado:   document.getElementById('tpl-completado').value.trim()
-    })
+    }),
+    home_service: document.getElementById('toggle-home-service').checked
   };
   try {
     const res = await api('PUT', '/settings', body);
@@ -3564,6 +3618,25 @@ async function saveSettings() {
   } catch (e) {
     showToast('❌', 'Error', e.message);
   }
+}
+
+async function toggleHomeService() {
+  const enabled = document.getElementById('toggle-home-service').checked;
+  const slider = document.getElementById('home-service-slider');
+  const thumb  = document.getElementById('home-service-thumb');
+  if (enabled) { slider.style.background = 'var(--yellow)'; thumb.style.left = '29px'; thumb.style.background = 'var(--dark)'; }
+  else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
+  window._homeServiceEnabled = enabled;
+  // Mostrar/ocultar campo domicilio en modales
+  const af = document.getElementById('c-address-field');
+  const eaf = document.getElementById('edit-c-address-field');
+  if (af) af.style.display = enabled ? 'block' : 'none';
+  if (eaf) eaf.style.display = enabled ? 'block' : 'none';
+  try {
+    await api('PUT', '/settings', { home_service: enabled });
+    if (currentShop) currentShop.home_service = enabled;
+    showToast(enabled ? '🏠' : '✂️', enabled ? 'Servicio a domicilio activado' : 'Servicio a domicilio desactivado', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 function toggleTpl(id) {
@@ -4050,6 +4123,7 @@ function editClientById(id) {
   document.getElementById('edit-c-name').value = c.name || '';
   document.getElementById('edit-c-phone').value = c.phone || '+54';
   document.getElementById('edit-c-notes').value = c.notes || '';
+  document.getElementById('edit-c-address').value = c.address || '';
   openModal('modal-edit-cliente');
 }
 
@@ -4060,7 +4134,8 @@ async function saveEditClient() {
   const notes = document.getElementById('edit-c-notes').value.trim();
   if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
   try {
-    await api('PUT', `/clients/${id}`, { name, phone: (phone === '+54' ? '' : phone), notes });
+    const address = document.getElementById('edit-c-address').value.trim();
+    await api('PUT', `/clients/${id}`, { name, phone: (phone === '+54' ? '' : phone), notes, address });
     closeModal('modal-edit-cliente');
     showToast('✅', 'Cliente actualizado', name);
     await loadClients();

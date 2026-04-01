@@ -198,3 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_logs_shop_type   ON whatsapp_logs(shop_i
 
 -- Columna para evitar recordatorios duplicados sin depender de whatsapp_logs
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+
+-- Servicios a domicilio
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS home_service BOOLEAN DEFAULT FALSE;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address VARCHAR(255);

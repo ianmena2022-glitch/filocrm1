@@ -188,6 +188,10 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
           <label>Nombre completo</label>
           <input type="text" id="client-name" placeholder="Juan García" autocomplete="name">
         </div>
+        <div class="form-field" id="client-address-field" style="display:none">
+          <label>Domicilio 🏠</label>
+          <input type="text" id="client-address" placeholder="Av. Rivadavia 1234" autocomplete="street-address">
+        </div>
         <!-- Puntos FILO -->
         <div class="points-section" id="points-section">
           <div class="points-header">
@@ -247,6 +251,11 @@ async function init() {
 
     shopData = data.shop;
     services = data.services;
+    // Mostrar campo domicilio si el shop tiene servicios a domicilio
+    if (shopData.home_service) {
+      const af = document.getElementById('client-address-field');
+      if (af) af.style.display = 'block';
+    }
 
     document.getElementById('shop-name').textContent = shopData.name;
     document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
@@ -429,8 +438,10 @@ async function checkPhonePoints(phone) {
 async function confirmReservation() {
   const name = document.getElementById('client-name').value.trim();
   const phone = document.getElementById('client-phone').value.trim();
+  const address = document.getElementById('client-address')?.value.trim() || '';
   if (!phone) { showError('El número de WhatsApp es obligatorio'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
+  if (shopData?.home_service && !address) { showError('El domicilio es obligatorio para servicio a domicilio'); return; }
 
   const btn = document.querySelector('#screen-form .btn-primary');
   btn.disabled = true; btn.textContent = 'Confirmando...';
@@ -443,6 +454,7 @@ async function confirmReservation() {
       body: JSON.stringify({
         client_name: name,
         client_phone: phone,
+        client_address: address || null,
         service_id: selectedService?.id || null,
         date: selectedDate,
         time_start: selectedTime,

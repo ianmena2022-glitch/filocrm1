@@ -42,13 +42,13 @@ router.get('/:id', auth, async (req, res) => {
 
 // POST /api/clients
 router.post('/', auth, async (req, res) => {
-  const { name, phone, notes } = req.body;
+  const { name, phone, notes, address } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
   try {
     const result = await pool.query(
-      'INSERT INTO clients (shop_id, name, phone, notes) VALUES ($1,$2,$3,$4) RETURNING *',
-      [req.shopId, name.trim(), phone?.trim() || null, notes?.trim() || null]
+      'INSERT INTO clients (shop_id, name, phone, notes, address) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.shopId, name.trim(), phone?.trim() || null, notes?.trim() || null, address?.trim() || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (e) {
@@ -73,9 +73,10 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     // Modo edición normal
+    const { address } = req.body;
     const result = await pool.query(
-      `UPDATE clients SET name=$1, phone=$2, notes=$3 WHERE id=$4 AND shop_id=$5 RETURNING *`,
-      [name, phone || null, notes || null, req.params.id, req.shopId]
+      `UPDATE clients SET name=$1, phone=$2, notes=$3, address=$4 WHERE id=$5 AND shop_id=$6 RETURNING *`,
+      [name, phone || null, notes || null, address || null, req.params.id, req.shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(result.rows[0]);
