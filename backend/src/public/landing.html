@@ -178,9 +178,26 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;height:68px;display:flex;al
 .cta-badge::before{content:"✓";color:var(--gr);font-weight:700}
 footer{background:rgba(0,8,16,.8);border-top:1px solid var(--border);padding:32px 6%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
 .footer-copy{font-size:12px;color:var(--g)}
-.footer-links{display:flex;gap:20px}
+.footer-links{display:flex;gap:20px;align-items:center}
 .footer-links a{font-size:12px;color:var(--g);text-decoration:none;transition:color .2s}
 .footer-links a:hover{color:var(--w)}
+.footer-social{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g);text-decoration:none;transition:color .2s}
+.footer-social:hover{color:var(--w)}
+.footer-social svg{width:15px;height:15px;fill:currentColor}
+/* Modal TyC */
+.tyc-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;padding:20px}
+.tyc-overlay.open{display:flex}
+.tyc-modal{background:#0d1e35;border:1px solid var(--border-y);border-radius:12px;max-width:720px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.tyc-modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.tyc-modal-header h3{font-family:'Oswald',sans-serif;font-size:18px;color:var(--y);letter-spacing:.5px}
+.tyc-close{background:none;border:none;color:var(--g);font-size:22px;cursor:pointer;line-height:1;padding:0;transition:color .2s}
+.tyc-close:hover{color:var(--w)}
+.tyc-modal-body{padding:24px;overflow-y:auto;font-size:13px;color:rgba(255,255,255,.75);line-height:1.8}
+.tyc-modal-body h4{font-family:'Oswald',sans-serif;color:var(--y);font-size:15px;margin:20px 0 8px;letter-spacing:.5px}
+.tyc-modal-body h4:first-child{margin-top:0}
+.tyc-modal-body p{margin-bottom:10px}
+.tyc-modal-body ul{margin:8px 0 10px 18px}
+.tyc-modal-body ul li{margin-bottom:4px}
 .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
 .reveal.up{opacity:1;transform:translateY(0)}
 .delay-1{transition-delay:.1s}.delay-2{transition-delay:.2s}.delay-3{transition-delay:.3s}
@@ -364,12 +381,69 @@ footer{background:rgba(0,8,16,.8);border-top:1px solid var(--border);padding:32p
   </div>
 </section>
 
+<!-- Modal Términos y Condiciones -->
+<div class="tyc-overlay" id="tycOverlay">
+  <div class="tyc-modal">
+    <div class="tyc-modal-header">
+      <h3>TÉRMINOS Y CONDICIONES</h3>
+      <button class="tyc-close" onclick="document.getElementById('tycOverlay').classList.remove('open')">×</button>
+    </div>
+    <div class="tyc-modal-body">
+      <p style="color:var(--g);font-size:11px;margin-bottom:16px">Versión vigente: 28 de marzo de 2026</p>
+      <p>FILO es una plataforma tecnológica de gestión táctica e inteligencia de negocios diseñada específicamente para la industria de la estética masculina. Para operar en la plataforma, todas las Personas Usuarias deben aceptar estos Términos y Condiciones y la Declaración de Privacidad.</p>
+
+      <h4>1. Definición del Servicio</h4>
+      <p>FILO proporciona un software como servicio (SaaS) que actúa como un asistente de negocios. El "Servicio" incluye:</p>
+      <ul>
+        <li><strong>Gestión de Rentabilidad:</strong> Calculadoras de splits, dashboards de ticket promedio y radares de insumos.</li>
+        <li><strong>Yield Management:</strong> Herramientas para la liquidación de horas vacías y optimización de agenda.</li>
+        <li><strong>Estrategias de Retención:</strong> Algoritmos de detección de churn y sistemas de suscripción recurrente.</li>
+        <li><strong>Fidelización:</strong> Sistemas de gamificación por puntos y programas de afiliados.</li>
+      </ul>
+
+      <h4>2. Registro y Capacidad Legal</h4>
+      <p>Podrán utilizar los servicios de FILO aquellas personas humanas con capacidad legal para contratar o personas jurídicas debidamente representadas. El registro exige completar un formulario con datos exactos y veraces. La Persona Usuaria es la única responsable del resguardo de su contraseña y de las operaciones realizadas en su cuenta.</p>
+
+      <h4>3. Propiedad de la Información y Privacidad (Ley 25.326)</h4>
+      <p>FILO cumple con los estándares de la Ley de Protección de Datos Personales. La "Información Comercial" generada por la barbería es propiedad exclusiva de la Persona Usuaria. FILO actúa como un Encargado de Tratamiento. FILO podrá utilizar información agregada y anónima para generar estadísticas de mercado sin identificar jamás a individuos específicos.</p>
+
+      <h4>4. Uso de Integraciones de Terceros (WhatsApp API)</h4>
+      <p>La Persona Usuaria es la única responsable por el contenido de los mensajes enviados. Queda prohibido el uso del sistema para el envío de comunicaciones masivas no solicitadas (SPAM). FILO no será responsable por la suspensión de cuentas de terceros derivadas de un uso inadecuado.</p>
+
+      <h4>5. Tarifas y Facturación</h4>
+      <p>El uso del Ecosistema FILO está sujeto al pago de tarifas mensuales o anuales según el plan contratado. FILO podrá modificar las tarifas con un preaviso de 10 días corridos. La falta de pago facultará a FILO a suspender el acceso a la plataforma.</p>
+
+      <h4>6. Limitación de Responsabilidad</h4>
+      <p>FILO es una herramienta de asistencia tecnológica. El cumplimiento de las obligaciones laborales, impositivas y previsionales frente a los barberos y empleados es responsabilidad exclusiva del titular de la barbería.</p>
+
+      <h4>7. Propiedad Intelectual</h4>
+      <p>FILO y sus sociedades relacionadas son propietarias de todos los derechos de propiedad intelectual sobre el código fuente, algoritmos, diseños de interfaz, logos y marcas. Está prohibida cualquier forma de ingeniería inversa, descompilación o copia de las funcionalidades core del sistema.</p>
+
+      <h4>8. Sanciones y Suspensión</h4>
+      <p>En caso de detectar el incumplimiento de la ley o de estas Condiciones, FILO podrá advertir, suspender o inhabilitar de forma definitiva la cuenta del usuario.</p>
+
+      <h4>9. Uso Automatizado y Seguridad</h4>
+      <p>Queda prohibido el uso de sistemas automatizados (bots o scrapers) para extraer información del sitio de FILO sin autorización expresa.</p>
+
+      <h4>10. Jurisdicción y Ley Aplicable</h4>
+      <p>Estos Términos y Condiciones se rigen por la ley de la República Argentina. Toda controversia será resuelta por los tribunales ordinarios competentes de la Ciudad Autónoma de Buenos Aires.</p>
+    </div>
+  </div>
+</div>
+
 <footer>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="logo-mark" style="width:28px;height:28px;font-size:11px">✂</div>
     <span class="footer-copy">© 2026 FILO CRM — El sistema del barbero inteligente</span>
   </div>
-  <div class="footer-links"><a href="#">Privacidad</a><a href="#">Términos</a><a href="#">Contacto</a></div>
+  <div class="footer-links">
+    <a href="https://www.instagram.com/filocrm/?hl=es" target="_blank" rel="noopener" class="footer-social">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      Instagram
+    </a>
+    <a href="#" onclick="document.getElementById('tycOverlay').classList.add('open');return false;">Términos y Condiciones</a>
+    <a href="mailto:serviciosfilocrm@gmail.com">Contacto</a>
+  </div>
 </footer>
 
 <script>
