@@ -26,10 +26,16 @@ app.use('/api/memberships',  require('./routes/memberships'));
 app.use('/api/booking',      require('./routes/booking'));
 app.use('/api/points',       require('./routes/points'));
 app.use('/api/barbers',      require('./routes/barbers'));
+app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/payments/webhook', require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/filo-cancel',   require('./routes/payments'));
 app.use('/api/payments',     require('./routes/payments'));
+
+// Panel admin
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(publicDir, 'admin.html'));
+});
 
 // Dashboard barbero
 app.get('/barber', (req, res) => {
@@ -89,14 +95,6 @@ async function start() {
         console.log('📱 WhatsApp: reconexión iniciada');
       } catch(e) {
         console.error('WhatsApp reconnect error:', e.message);
-      }
-
-      // Scheduler de recordatorios de turno
-      try {
-        const { startScheduler } = require('./scheduler');
-        startScheduler();
-      } catch(e) {
-        console.error('Scheduler error:', e.message);
       }
     });
   } catch (e) {
