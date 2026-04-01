@@ -156,6 +156,18 @@ router.post('/', auth, async (req, res) => {
 
     console.log(`[APPT] Auto-asignando barber_id=${assignedBarberId} para shop=${shopId} fecha=${date}`);
 
+    // Obtener comision real del barbero asignado
+    let realCommissionPct = 50;
+    if (assignedBarberId) {
+      const barberData = await pool.query(
+        'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+      );
+      if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
+        realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
+      }
+    }
+    console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
+
     const result = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
@@ -170,7 +182,7 @@ router.post('/', auth, async (req, res) => {
         date, time_start, time_end,
         assignedBarberId,
         barber_name || null,
-        parseInt(commission_pct)||50,
+        realCommissionPct,
         notes || null,
         redeemInfo
       ]
