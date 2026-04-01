@@ -1602,14 +1602,9 @@ body {
         <label>Hora</label>
         <input type="time" id="t-time">
       </div>
-      <div class="form-field">
-        <label>Barbero (opcional)</label>
-        <input type="text" id="t-barber" placeholder="Nombre del barbero">
-      </div>
-      <div class="form-field">
-        <label>Comisión del barbero (%)</label>
-        <input type="number" id="t-commission" placeholder="50" value="50" min="0" max="100">
-      </div>
+      <!-- barbero y comision se asignan automaticamente -->
+      <input type="hidden" id="t-barber" value="">
+      <input type="hidden" id="t-commission" value="50">
     </div>
 
     <!-- Sección de canje de puntos -->
@@ -2031,7 +2026,7 @@ const API = window.location.origin + '/api';
 let token = localStorage.getItem('filo_token');
 let currentShop = JSON.parse(localStorage.getItem('filo_shop') || 'null');
 checkInviteCode();
-let agendaDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+let agendaDate = new Date().toISOString().split('T')[0];
 let services = [];
 let clients = [];
 let sillonTargetClients = [];
