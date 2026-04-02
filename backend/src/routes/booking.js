@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -19,7 +19,17 @@ router.get('/:slug', async (req, res) => {
       [shopData.id]
     );
 
-    res.json({ shop: shopData, services: services.rows });
+    // Si tiene eleccion de barbero activa, incluir lista de barberos
+    let barbers = [];
+    if (shopData.allow_barber_choice) {
+      const barbersQ = await pool.query(
+        'SELECT id, name, barber_color FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
+        [shopData.id]
+      );
+      barbers = barbersQ.rows;
+    }
+
+    res.json({ shop: shopData, services: services.rows, barbers });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -115,7 +125,7 @@ router.get('/:slug/available', async (req, res) => {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
-  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id } = req.body;
+  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id } = req.body;
 
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
@@ -193,33 +203,39 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     }
 
-    // Auto-asignar barbero con menos turnos en esa fecha
+    // Asignar barbero: elegido por el cliente o auto-asignado por menos turnos
     let assignedBarberId = null;
     let assignedBarberCommission = 50;
     try {
-      const barbers = await pool.query(
-        'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
-      );
-      if (barbers.rows.length) {
-        const counts = await pool.query(
-          `SELECT barber_id, COUNT(*) as total FROM appointments
-           WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
-          [shopData.id, date]
+      if (chosen_barber_id && shopData.allow_barber_choice) {
+        // Usar el barbero elegido por el cliente
+        assignedBarberId = parseInt(chosen_barber_id);
+      } else {
+        // Auto-asignar al barbero con menos turnos
+        const barbers = await pool.query(
+          'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
         );
-        const countMap = {};
-        counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
-        let minCount = Infinity;
-        for (const b of barbers.rows) {
-          const c = countMap[b.id] || 0;
-          if (c < minCount) { minCount = c; assignedBarberId = b.id; }
-        }
-        if (assignedBarberId) {
-          const barberData = await pool.query(
-            'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+        if (barbers.rows.length) {
+          const counts = await pool.query(
+            `SELECT barber_id, COUNT(*) as total FROM appointments
+             WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
+            [shopData.id, date]
           );
-          if (barberData.rows[0]?.barber_commission_pct) {
-            assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
+          const countMap = {};
+          counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
+          let minCount = Infinity;
+          for (const b of barbers.rows) {
+            const c = countMap[b.id] || 0;
+            if (c < minCount) { minCount = c; assignedBarberId = b.id; }
           }
+        }
+      }
+      if (assignedBarberId) {
+        const barberData = await pool.query(
+          'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+        );
+        if (barberData.rows[0]?.barber_commission_pct) {
+          assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
         }
       }
     } catch(e) { console.error('autoAssign booking error:', e.message); }

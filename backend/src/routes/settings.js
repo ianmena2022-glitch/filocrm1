@@ -8,7 +8,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, phone, city, address, calendly_url,
-              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service
+              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -21,7 +21,7 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice } = req.body;
 
   try {
     // Auto-generar booking_slug si no existe
@@ -51,15 +51,17 @@ router.put('/', auth, async (req, res) => {
          membership_plans=COALESCE($10, membership_plans),
          filo_plan=COALESCE($11, filo_plan),
          schedule=COALESCE($12, schedule),
-         home_service=COALESCE($13, home_service)
-       WHERE id=$14
+         home_service=COALESCE($13, home_service),
+         allow_barber_choice=COALESCE($14, allow_barber_choice)
+       WHERE id=$15
        RETURNING id, name, email, phone, city, address,
-                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled, membership_plans, schedule, home_service`,
+                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled, membership_plans, schedule, home_service, allow_barber_choice`,
       [name||null, phone||null, city||null, address||null,
        service_radius_km||null, churn_days||null, msg_templates||null,
        slug, commission_enabled !== undefined ? commission_enabled : null,
        membership_plans||null, filo_plan||null, schedule||null,
-       home_service !== undefined ? home_service : null, req.shopId]
+       home_service !== undefined ? home_service : null,
+       allow_barber_choice !== undefined ? allow_barber_choice : null, req.shopId]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {

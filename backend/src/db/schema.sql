@@ -202,3 +202,6 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
 -- Servicios a domicilio
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS home_service BOOLEAN DEFAULT FALSE;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address VARCHAR(255);
+
+-- Eleccion de barbero en reservas
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS allow_barber_choice BOOLEAN DEFAULT FALSE;

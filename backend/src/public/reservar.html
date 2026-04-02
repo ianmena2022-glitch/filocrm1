@@ -139,7 +139,8 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
       <div class="step active" id="step-1"><div class="step-dot">1</div><div class="step-lbl">Servicio</div></div>
       <div class="step" id="step-2"><div class="step-dot">2</div><div class="step-lbl">Fecha</div></div>
       <div class="step" id="step-3"><div class="step-dot">3</div><div class="step-lbl">Hora</div></div>
-      <div class="step" id="step-4"><div class="step-dot">4</div><div class="step-lbl">Datos</div></div>
+      <div class="step" id="step-4" style="display:none"><div class="step-dot">4</div><div class="step-lbl">Barbero</div></div>
+      <div class="step" id="step-5"><div class="step-dot">5</div><div class="step-lbl">Datos</div></div>
     </div>
 
     <div id="error-banner" class="error-banner"></div>
@@ -176,7 +177,17 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
       <button class="btn-back" onclick="goBack(2)">← Volver</button>
     </div>
 
-    <!-- Step 4: Datos del cliente -->
+    <!-- Step 4: Barbero (solo si allow_barber_choice) -->
+    <div id="screen-barber" style="display:none">
+      <div class="card">
+        <div class="card-title">✂️ ¿Con quién querés atenderte?</div>
+        <div id="barber-grid" style="display:flex;flex-direction:column;gap:10px;margin-top:8px"></div>
+      </div>
+      <button class="btn-primary" id="btn-next-barber" onclick="goToForm()" disabled>Continuar →</button>
+      <button class="btn-back" onclick="goBackFromForm()">← Volver</button>
+    </div>
+
+    <!-- Step 5: Datos del cliente -->
     <div id="screen-form" style="display:none">
       <div class="card">
         <div class="card-title">👤 Tus datos</div>
@@ -235,6 +246,8 @@ let services = [];
 let selectedService = null;
 let selectedDate = null;
 let selectedTime = null;
+let selectedBarber = null;
+let barbers = [];
 let currentMonth = new Date();
 let clientPointsData = null;
 let selectedPrize = null;
@@ -253,6 +266,10 @@ async function init() {
 
     shopData = data.shop;
     services = data.services;
+    barbers = data.barbers || [];
+    // Mostrar step de barbero si aplica
+    const step4El = document.getElementById('step-4');
+    if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
     // Mostrar campo domicilio si el shop tiene servicios a domicilio
     if (shopData.home_service) {
       const af = document.getElementById('client-address-field');
@@ -404,8 +421,15 @@ function selectTime(time) {
 
 // ── FORM ──
 function goToForm() {
+  if (shopData?.allow_barber_choice && barbers.length && !selectedBarber) {
+    renderBarbers();
+    showScreen('barber');
+    setStep(4);
+    return;
+  }
+  updateSummary();
   showScreen('form');
-  setStep(4);
+  setStep(shopData?.allow_barber_choice && barbers.length ? 5 : 4);
 
   const dateFormatted = new Date(selectedDate + 'T12:00:00')
     .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
@@ -414,6 +438,7 @@ function goToForm() {
     <div class="summary-row"><span class="summary-label">Servicio</span><span class="summary-value">${selectedService?.name || 'Sin servicio'}</span></div>
     <div class="summary-row"><span class="summary-label">Fecha</span><span class="summary-value">${dateFormatted}</span></div>
     <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
+    ${selectedBarber ? `<div class="summary-row"><span class="summary-label">Barbero</span><span class="summary-value">✂️ ${selectedBarber.name}</span></div>` : ''}
     <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">$${parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
   `;
 
@@ -460,6 +485,7 @@ async function confirmReservation() {
         client_name: name,
         client_phone: phone,
         client_address: address || null,
+        chosen_barber_id: selectedBarber?.id || null,
         service_id: selectedService?.id || null,
         date: selectedDate,
         time_start: selectedTime,
@@ -491,7 +517,7 @@ async function confirmReservation() {
 
 // ── HELPERS ──
 function showScreen(name) {
-  ['service','date','time','form','success'].forEach(s => {
+  ['service','date','time','barber','form','success'].forEach(s => {
     document.getElementById('screen-' + s).style.display = s === name ? 'block' : 'none';
   });
 }
@@ -506,9 +532,17 @@ function setStep(n) {
 }
 
 function goBack(toStep) {
-  const screens = ['service','date','time','form'];
-  showScreen(screens[toStep - 1]);
-  setStep(toStep);
+  // Si hay eleccion de barbero activa, el flujo es: service(1) > date(2) > time(3) > barber(4) > form(5)
+  // Si no, el flujo es: service(1) > date(2) > time(3) > form(4)
+  if (shopData?.allow_barber_choice && barbers.length) {
+    const screens = ['service','date','time','barber','form'];
+    showScreen(screens[toStep - 1]);
+    setStep(toStep);
+  } else {
+    const screens = ['service','date','time','form'];
+    showScreen(screens[toStep - 1]);
+    setStep(toStep);
+  }
 }
 
 function showError(msg) {
@@ -519,8 +553,46 @@ function hideError() {
   document.getElementById('error-banner').style.display = 'none';
 }
 
+function renderBarbers() {
+  const grid = document.getElementById('barber-grid');
+  if (!grid) return;
+  grid.innerHTML = barbers.map(b => `
+    <div class="service-btn ${selectedBarber?.id === b.id ? 'selected' : ''}"
+         onclick="selectBarber(${b.id})"
+         id="barber-${b.id}"
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+      <div style="width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${b.name.charAt(0).toUpperCase()}</div>
+      <div style="font-weight:600;font-size:15px">${b.name}</div>
+    </div>
+  `).join('');
+}
+
+function selectBarber(id) {
+  selectedBarber = barbers.find(b => b.id === id);
+  document.querySelectorAll('#barber-grid .service-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('barber-' + id)?.classList.add('selected');
+  document.getElementById('btn-next-barber').disabled = false;
+}
+
+function goToForm() {
+  updateSummary();
+  showScreen('form');
+  setStep(5);
+}
+
+function goBackFromForm() {
+  if (shopData?.allow_barber_choice && barbers.length) {
+    showScreen('barber');
+    setStep(4);
+  } else {
+    showScreen('time');
+    setStep(3);
+  }
+}
+
 // Check points when phone is entered
-document.getElementById('client-phone')?.addEventListener('blur', async function() {
+document.getElementById('client-phone')?.addEventListener('blur'
+, async function() {
   const phone = this.value.trim().replace(/\D/g, '');
   if (phone.length < 8 || !slug) return;
   clientPointsData = null;
