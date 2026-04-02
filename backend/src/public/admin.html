@@ -203,6 +203,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Plan</th>
               <th>Estado</th>
               <th>Trial / Desde</th>
+              <th>Barberos</th>
               <th>WhatsApp</th>
               <th>Acciones</th>
             </tr>
@@ -448,6 +449,10 @@ function renderAccountsTable(accounts) {
       ? `<span style="color:var(--gr)">● Conectado</span>`
       : `<span style="color:var(--g)">○ Sin conectar</span>`;
 
+    const barberCount = ['staff','enterprise'].includes(a.filo_plan)
+      ? `<span style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)">${a.barber_count || 0}</span><span style="font-size:11px;color:var(--g)"> / ${a.filo_plan === 'staff' ? '10' : '20'}</span>`
+      : `<span style="color:var(--g);font-size:12px">—</span>`;
+
     const dateInfo = a.subscription_status === 'trial'
       ? `<div style="font-size:12px;color:var(--or)">Trial: ${daysUntil(a.trial_ends_at)} días</div>`
       : a.created_at
@@ -460,6 +465,7 @@ function renderAccountsTable(accounts) {
       <td>${planBadge}</td>
       <td>${statusBadge}</td>
       <td>${dateInfo}</td>
+      <td>${barberCount}</td>
       <td style="font-size:12px">${wppDot}</td>
       <td style="display:flex;gap:6px">
         <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
