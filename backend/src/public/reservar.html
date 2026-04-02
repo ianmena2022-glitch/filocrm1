@@ -427,7 +427,6 @@ function goToForm() {
     setStep(4);
     return;
   }
-  updateSummary();
   showScreen('form');
   setStep(shopData?.allow_barber_choice && barbers.length ? 5 : 4);
 
