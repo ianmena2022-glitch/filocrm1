@@ -922,7 +922,7 @@ body {
 <body>
 
 <!-- ═══ PANTALLA DE LOGIN ═══ -->
-<div id="auth-screen">
+<div id="auth-screen" style="display:none">
   <div class="auth-box">
     <div class="auth-logo" style="justify-content:center">
       <img src="/logo_filo.png" alt="FILO CRM" style="height:64px;object-fit:contain">
@@ -4105,6 +4105,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         location.reload();
       }
     }
+  } else {
+    // No hay sesión — mostrar pantalla de login
+    document.getElementById('auth-screen').style.display = 'flex';
   }
 // ─── EDITAR CLIENTE ───
 });
