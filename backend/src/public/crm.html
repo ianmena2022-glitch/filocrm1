@@ -2199,38 +2199,23 @@ async function register() {
   const phone = document.getElementById('reg-phone').value.trim();
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
   const btn = document.querySelector('#form-register .btn-primary');
-  btn.disabled = true; btn.textContent = 'Creando cuenta...';
+  btn.disabled = true; btn.textContent = 'Preparando tu cuenta...';
   try {
-    // 1. Crear cuenta con el plan seleccionado
-    const data = await api('POST', '/auth/register', { name, email, password: pass, phone, filo_plan: selectedRegPlan });
-    token = data.token;
-    currentShop = data.shop;
-    localStorage.setItem('filo_token', token);
-    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    // Pre-registro: guarda datos y devuelve link MP SIN crear la cuenta todavía
+    const res = await fetch('/api/auth/pre-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan })
+    });
+    const data = await res.json();
+    if (!res.ok) return showAuthError(data.error || 'Error al iniciar el registro');
 
-    // 2. Crear suscripción en MP con trial de 7 días y redirigir para cargar tarjeta
-    btn.textContent = 'Redirigiendo a Mercado Pago...';
-    try {
-      const payData = await fetch('/api/payments/filo-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ payer_email: email })
-      }).then(r => r.json());
-
-      if (payData.payment_url) {
-        // Mostrar pantalla intermedia explicativa antes de redirigir
-        showTrialRedirect(payData.payment_url);
-        return;
-      }
-    } catch(payErr) {
-      console.error('MP error:', payErr);
-      // Si falla MP, mostrar pantalla de tarjeta requerida
-      showCardRequired();
+    if (data.payment_url) {
+      btn.textContent = 'Redirigiendo a Mercado Pago...';
+      showTrialRedirect(data.payment_url);
       return;
     }
-
-    // Solo llegar acá si no hubo payment_url ni error (caso raro)
-    startApp();
+    showAuthError('No se pudo obtener el link de pago');
   } catch (e) {
     showAuthError(e.message);
   } finally {
@@ -2345,6 +2330,28 @@ function checkPaywall() {
 
 // Escuchar respuesta 402 de la API (trial expirado)
 const _originalApi = window.api;
+
+// Al volver de MP con ?pending=ID, completar el registro
+async function checkPendingRegistration() {
+  const params = new URLSearchParams(window.location.search);
+  const pendingId = params.get('pending');
+  if (!pendingId) return false;
+  window.history.replaceState({}, '', '/app');
+  try {
+    const res = await fetch('/api/auth/complete-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pending_id: parseInt(pendingId) })
+    });
+    const data = await res.json();
+    if (!res.ok) return false;
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    return true;
+  } catch(e) { return false; }
+}
 
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
@@ -4047,6 +4054,30 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async function() {
+  // Verificar si viene de MP con ?pending=ID para completar el registro
+  const pendingParams = new URLSearchParams(window.location.search);
+  const pendingId = pendingParams.get('pending');
+  if (pendingId) {
+    window.history.replaceState({}, '', '/app');
+    try {
+      const res = await fetch('/api/auth/complete-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pending_id: parseInt(pendingId) })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        token = data.token;
+        currentShop = data.shop;
+        localStorage.setItem('filo_token', token);
+        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+        console.log('[REGISTRO] Cuenta completada para', currentShop.email);
+        startApp();
+        return;
+      }
+    } catch(e) { console.error('complete-registration error:', e.message); }
+  }
+
   if (token && currentShop) {
     if (currentShop.is_barber) {
       localStorage.setItem('barber_token', token);

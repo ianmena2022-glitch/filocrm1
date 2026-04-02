@@ -43,6 +43,144 @@ function trialDaysLeft(trial_ends_at) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+// POST /api/auth/pre-register — guarda datos temporales, devuelve link MP
+// La cuenta real se crea cuando MP confirma el pago vía webhook
+router.post('/pre-register', async (req, res) => {
+  const { name, email, password, phone, filo_plan } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
+  if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+
+  try {
+    // Verificar que no exista cuenta real con ese email
+    const exists = await pool.query('SELECT id FROM shops WHERE email = $1', [email.toLowerCase()]);
+    if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
+
+    // Eliminar pre-registros anteriores del mismo email
+    await pool.query('DELETE FROM pending_registrations WHERE email = $1', [email.toLowerCase()]);
+
+    const hash = await bcrypt.hash(password, 12);
+    const validFiloPlans = ['starter', 'staff', 'enterprise'];
+    const filoPlan = validFiloPlans.includes(filo_plan) ? filo_plan : 'starter';
+
+    // Guardar en pending_registrations
+    const pending = await pool.query(
+      `INSERT INTO pending_registrations (name, email, password, phone, filo_plan)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan]
+    );
+    const pendingId = pending.rows[0].id;
+
+    // Crear link MP con pending_id en la back_url
+    const FILO_PLANS = {
+      starter:    { price: 40000, name: 'FILO Starter' },
+      staff:      { price: 80000, name: 'FILO Staff' },
+      enterprise: { price: 130000, name: 'FILO Enterprise' },
+    };
+    const planConfig = FILO_PLANS[filoPlan] || FILO_PLANS.starter;
+    const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
+    const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
+
+    const mpRes = await fetch('https://api.mercadopago.com/preapproval_plan', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${MP_TOKEN}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': `pre-reg-${pendingId}-${Date.now()}`
+      },
+      body: JSON.stringify({
+        reason: planConfig.name,
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: 'months',
+          transaction_amount: planConfig.price,
+          currency_id: 'ARS',
+          free_trial: { frequency: 7, frequency_type: 'days' }
+        },
+        payment_methods_allowed: {
+          payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
+        },
+        back_url: `${appUrl}/app?pending=${pendingId}`,
+        notification_url: `${appUrl}/api/payments/webhook-filo`
+      })
+    });
+    const mpData = await mpRes.json();
+    if (!mpRes.ok) throw new Error(mpData.message || 'Error MP');
+
+    // Guardar mp_plan_id en el pending
+    await pool.query(
+      'UPDATE pending_registrations SET mp_plan_id=$1 WHERE id=$2',
+      [mpData.id, pendingId]
+    );
+
+    console.log(`[PRE-REG] ${email} → plan ${filoPlan} · pending_id=${pendingId}`);
+    res.json({ ok: true, payment_url: mpData.init_point, pending_id: pendingId });
+  } catch (e) {
+    console.error('Pre-register error:', e.message);
+    res.status(500).json({ error: 'Error al iniciar el registro: ' + e.message });
+  }
+});
+
+// POST /api/auth/complete-registration — completa el registro desde pending (llamado por back_url)
+router.post('/complete-registration', async (req, res) => {
+  const { pending_id } = req.body;
+  if (!pending_id) return res.status(400).json({ error: 'pending_id requerido' });
+
+  try {
+    const pending = await pool.query(
+      'SELECT * FROM pending_registrations WHERE id=$1 AND expires_at > NOW()',
+      [pending_id]
+    );
+    if (!pending.rows.length) return res.status(404).json({ error: 'Registro expirado o no encontrado' });
+    const p = pending.rows[0];
+
+    // Verificar que no exista cuenta ya creada
+    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [p.email]);
+    if (exists.rows.length) {
+      // Ya existe — hacer login directo
+      const shop = exists.rows[0];
+      return res.json({ token: makeToken(shop), shop: shopPayload(shop), already_exists: true });
+    }
+
+    // Crear la cuenta real
+    const trialEnds = new Date();
+    trialEnds.setDate(trialEnds.getDate() + 7);
+
+    const result = await pool.query(
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial') RETURNING *`,
+      [p.name, p.email, p.password, p.phone, p.filo_plan, trialEnds.toISOString()]
+    );
+    const shop = result.rows[0];
+
+    // Servicios de ejemplo
+    await pool.query(
+      `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
+       ($1, 'Corte de cabello', 3500, 200, 30),
+       ($1, 'Corte + barba', 5000, 300, 45),
+       ($1, 'Barba', 2000, 150, 20),
+       ($1, 'Corte + lavado', 4500, 250, 40)`,
+      [shop.id]
+    );
+
+    // Asociar el mp_plan_id al shop
+    if (p.mp_plan_id) {
+      await pool.query(
+        "UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending' WHERE id=$2",
+        [p.mp_plan_id, shop.id]
+      );
+    }
+
+    // Eliminar el pending
+    await pool.query('DELETE FROM pending_registrations WHERE id=$1', [pending_id]);
+
+    console.log(`[REGISTRO] ${p.email} → cuenta creada · plan ${p.filo_plan}`);
+    res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
+  } catch (e) {
+    console.error('Complete registration error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/auth/register — cuenta normal
 router.post('/register', async (req, res) => {
   const { name, email, password, phone, filo_plan } = req.body;

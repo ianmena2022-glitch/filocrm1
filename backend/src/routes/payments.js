@@ -294,16 +294,45 @@ router.post('/webhook-filo', async (req, res) => {
 
       const subscription = await mpFetch('GET', `/preapproval/${subId}`);
       const status = subscription.status;
+      console.log(`[FILO Webhook] suscripción ${subId} → ${status}`);
 
-      await pool.query(
-        `UPDATE shops SET
-           mp_shop_status = $1,
-           subscription_status = $2
-         WHERE mp_shop_subscription_id = $3`,
+      // 1. Intentar actualizar shop existente
+      const updated = await pool.query(
+        `UPDATE shops SET mp_shop_status=$1, subscription_status=$2
+         WHERE mp_shop_subscription_id=$3 RETURNING id`,
         [status, status === 'authorized' ? 'active' : 'expired', subId]
       );
 
-      console.log(`[FILO Webhook] Shop suscripción ${subId} → ${status}`);
+      // 2. Si no hay shop, buscar en pending_registrations y crear la cuenta
+      if (!updated.rows.length && status === 'authorized') {
+        const bcrypt = require('bcryptjs');
+        const pending = await pool.query(
+          'SELECT * FROM pending_registrations WHERE mp_plan_id=$1 AND expires_at > NOW()',
+          [subId]
+        );
+        if (pending.rows.length) {
+          const p = pending.rows[0];
+          // Verificar que no exista ya
+          const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [p.email]);
+          if (!exists.rows.length) {
+            const trialEnds = new Date();
+            trialEnds.setDate(trialEnds.getDate() + 7);
+            const shop = await pool.query(
+              `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, mp_shop_subscription_id, mp_shop_status)
+               VALUES ($1,$2,$3,$4,'starter',$5,$6,'active',$7,'authorized') RETURNING *`,
+              [p.name, p.email, p.password, p.phone, p.filo_plan, trialEnds.toISOString(), subId]
+            );
+            await pool.query(
+              `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
+               ($1,'Corte de cabello',3500,200,30),($1,'Corte + barba',5000,300,45),
+               ($1,'Barba',2000,150,20),($1,'Corte + lavado',4500,250,40)`,
+              [shop.rows[0].id]
+            );
+            await pool.query('DELETE FROM pending_registrations WHERE id=$1', [p.id]);
+            console.log(`[FILO Webhook] Cuenta creada para ${p.email} via webhook`);
+          }
+        }
+      }
     }
 
     res.sendStatus(200);

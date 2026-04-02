@@ -205,3 +205,18 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS address VARCHAR(255);
 
 -- Eleccion de barbero en reservas
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS allow_barber_choice BOOLEAN DEFAULT FALSE;
+
+-- ── REGISTRO PENDIENTE (pre-registro antes de completar pago MP) ──────────────
+CREATE TABLE IF NOT EXISTS pending_registrations (
+  id          SERIAL PRIMARY KEY,
+  name        VARCHAR(255) NOT NULL,
+  email       VARCHAR(255) NOT NULL,
+  password    VARCHAR(255) NOT NULL,
+  phone       VARCHAR(50),
+  filo_plan   VARCHAR(20) DEFAULT 'starter',
+  mp_plan_id  VARCHAR(100),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ DEFAULT NOW() + INTERVAL '2 hours'
+);
+CREATE INDEX IF NOT EXISTS idx_pending_email ON pending_registrations(email);
+CREATE INDEX IF NOT EXISTS idx_pending_mp_plan ON pending_registrations(mp_plan_id);
