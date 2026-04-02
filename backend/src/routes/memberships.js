@@ -40,7 +40,7 @@ router.get('/stats', auth, async (req, res) => {
 
 // POST /api/memberships
 router.post('/', auth, async (req, res) => {
-  const { client_id, plan, price_monthly } = req.body;
+  const { client_id, plan, price_monthly, credits_total } = req.body;
   if (!client_id || !plan) return res.status(400).json({ error: 'Cliente y plan son requeridos' });
 
   try {
@@ -51,7 +51,17 @@ router.post('/', auth, async (req, res) => {
       [client_id, req.shopId]
     );
 
-    const credits = plan === 'basic' ? 2 : 999;
+    // Usar créditos configurados por el dueño, o defaults si no se especifican
+    let credits;
+    if (credits_total !== undefined && credits_total !== null) {
+      credits = parseInt(credits_total);
+    } else {
+      // Intentar leer del plan configurado en el shop
+      const shopData = await pool.query('SELECT membership_plans FROM shops WHERE id=$1', [req.shopId]);
+      const plans = shopData.rows[0]?.membership_plans ? JSON.parse(shopData.rows[0].membership_plans) : {};
+      const planConfig = plans[plan];
+      credits = planConfig?.credits !== undefined ? parseInt(planConfig.credits) : (plan === 'basic' ? 2 : 999);
+    }
     const renews  = new Date();
     renews.setMonth(renews.getMonth() + 1);
 

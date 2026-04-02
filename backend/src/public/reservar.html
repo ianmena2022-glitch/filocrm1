@@ -523,7 +523,7 @@ function showScreen(name) {
 }
 
 function setStep(n) {
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const el = document.getElementById('step-' + i);
     el.classList.remove('active','done');
     if (i < n) el.classList.add('done');
@@ -574,11 +574,6 @@ function selectBarber(id) {
   document.getElementById('btn-next-barber').disabled = false;
 }
 
-function goToForm() {
-  updateSummary();
-  showScreen('form');
-  setStep(5);
-}
 
 function goBackFromForm() {
   if (shopData?.allow_barber_choice && barbers.length) {
