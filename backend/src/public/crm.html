@@ -1406,6 +1406,20 @@ body {
               </span>
             </label>
           </div>
+
+          <!-- Toggle elección de barbero — solo Staff/Enterprise -->
+          <div id="toggle-barber-choice-wrap" style="margin-top:10px;display:none;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
+            <div>
+              <div style="font-size:13px;font-weight:700">✂️ Elección de barbero</div>
+              <div style="font-size:11px;color:var(--gray);margin-top:3px">El cliente puede elegir su barbero al reservar online</div>
+            </div>
+            <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+              <input type="checkbox" id="toggle-barber-choice" onchange="toggleBarberChoice()" style="opacity:0;width:0;height:0;position:absolute">
+              <span id="barber-choice-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:28px;transition:.3s;border:1px solid rgba(255,255,255,0.1)">
+                <span id="barber-choice-thumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#8a9ab5;border-radius:50%;transition:.3s"></span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <!-- Horarios — acordeón -->
@@ -3557,6 +3571,21 @@ async function loadSettings() {
     if (eaf) eaf.style.display = showAddr ? 'block' : 'none';
     if (typeof window !== 'undefined') window._homeServiceEnabled = homeService;
 
+    // Eleccion de barbero (solo Staff/Enterprise)
+    const filoPlanCheck = currentShop?.filo_plan || currentShop?.plan;
+    const isStaffPlan = filoPlanCheck === 'staff' || filoPlanCheck === 'enterprise' || filoPlanCheck === 'test';
+    const bcWrap = document.getElementById('toggle-barber-choice-wrap');
+    if (bcWrap) bcWrap.style.display = isStaffPlan ? 'flex' : 'none';
+    const barberChoice = settings.allow_barber_choice || false;
+    const bci = document.getElementById('toggle-barber-choice');
+    if (bci) bci.checked = barberChoice;
+    const bcs = document.getElementById('barber-choice-slider');
+    const bct = document.getElementById('barber-choice-thumb');
+    if (bcs && bct) {
+      if (barberChoice) { bcs.style.background = 'var(--yellow)'; bct.style.left = '29px'; bct.style.background = 'var(--dark)'; }
+      else { bcs.style.background = 'rgba(255,255,255,0.12)'; bct.style.left = '3px'; bct.style.background = '#8a9ab5'; }
+    }
+
     // Horarios
     const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
     renderSchedule(schedule);
@@ -3636,6 +3665,19 @@ async function toggleHomeService() {
     await api('PUT', '/settings', { home_service: enabled });
     if (currentShop) currentShop.home_service = enabled;
     showToast(enabled ? '🏠' : '✂️', enabled ? 'Servicio a domicilio activado' : 'Servicio a domicilio desactivado', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function toggleBarberChoice() {
+  const enabled = document.getElementById('toggle-barber-choice').checked;
+  const slider = document.getElementById('barber-choice-slider');
+  const thumb  = document.getElementById('barber-choice-thumb');
+  if (enabled) { slider.style.background = 'var(--yellow)'; thumb.style.left = '29px'; thumb.style.background = 'var(--dark)'; }
+  else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
+  try {
+    await api('PUT', '/settings', { allow_barber_choice: enabled });
+    if (currentShop) currentShop.allow_barber_choice = enabled;
+    showToast(enabled ? '✂️' : '🔀', enabled ? 'Elección de barbero activada' : 'Elección de barbero desactivada', '');
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
