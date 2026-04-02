@@ -216,66 +216,100 @@ const FILO_PLANS = {
   enterprise: { price: 130000, name: 'FILO Enterprise' },
 };
 
-// POST /api/payments/filo-subscription — el shop se suscribe a FILO
-// Usa preapproval_plan para generar un link donde el usuario ingresa la tarjeta
+// GET /api/payments/setup-plans — crear los 3 planes fijos en MP (ejecutar UNA sola vez)
+// Protegido por ADMIN_SECRET — llamar desde consola o Postman
+router.get('/setup-plans', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== (process.env.ADMIN_PASSWORD || 'filo-admin-2026')) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+  const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
+  const results = {};
+  for (const [key, plan] of Object.entries(FILO_PLANS)) {
+    try {
+      const mpPlan = await mpFetch('POST', '/preapproval_plan', {
+        reason: plan.name,
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: 'months',
+          transaction_amount: plan.price,
+          currency_id: 'ARS',
+          free_trial: { frequency: 7, frequency_type: 'days' }
+        },
+        payment_methods_allowed: {
+          payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
+        },
+        back_url: appUrl + '/app',
+        notification_url: appUrl + '/api/payments/webhook-filo'
+      });
+      results[key] = { id: mpPlan.id, init_point: mpPlan.init_point };
+      console.log(`[SETUP] Plan ${key} creado: ${mpPlan.id}`);
+    } catch(e) {
+      results[key] = { error: e.message };
+    }
+  }
+  res.json({
+    message: 'Guardá estos IDs como variables de entorno en Railway:',
+    env_vars: {
+      MP_PLAN_STARTER:    results.starter?.id,
+      MP_PLAN_STAFF:      results.staff?.id,
+      MP_PLAN_ENTERPRISE: results.enterprise?.id,
+    },
+    full: results
+  });
+});
+
+// POST /api/payments/filo-subscription — el shop se suscribe a FILO usando planes fijos
 router.post('/filo-subscription', auth, async (req, res) => {
   const { payer_email } = req.body;
   if (!payer_email) return res.status(400).json({ error: 'payer_email es requerido' });
 
   try {
-    const shopData = await pool.query(
-      'SELECT filo_plan, name FROM shops WHERE id=$1',
-      [req.shopId]
-    );
+    const shopData = await pool.query('SELECT filo_plan, name FROM shops WHERE id=$1', [req.shopId]);
     if (!shopData.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
 
-    const shop = shopData.rows[0];
-    const planKey = shop.filo_plan || 'starter';
-    const plan = FILO_PLANS[planKey] || FILO_PLANS.starter;
+    const planKey = shopData.rows[0].filo_plan || 'starter';
+    const planConfig = FILO_PLANS[planKey] || FILO_PLANS.starter;
     const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
 
-    // Crear plan de suscripción con trial de 7 días
-    // El usuario ingresa la tarjeta en el checkout de MP, no se cobra hasta el día 8
-    const mpPlan = await mpFetch('POST', '/preapproval_plan', {
-      reason: plan.name,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: plan.price,
-        currency_id: 'ARS',
-        free_trial: {
-          frequency: 7,
-          frequency_type: 'days'
-        }
-      },
-      payment_methods_allowed: {
-        payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
-      },
-      back_url: appUrl + '/app',
-      notification_url: appUrl + '/api/payments/webhook-filo'
-    });
+    // Obtener ID del plan fijo desde env vars
+    const planIds = {
+      starter:    process.env.MP_PLAN_STARTER,
+      staff:      process.env.MP_PLAN_STAFF,
+      enterprise: process.env.MP_PLAN_ENTERPRISE,
+    };
+    const fixedPlanId = planIds[planKey];
 
-    // El init_point del plan es el link donde el usuario ingresa la tarjeta
-    const paymentUrl = mpPlan.init_point;
+    let paymentUrl;
 
-    // Guardar plan_id y URL en DB
+    if (fixedPlanId) {
+      // Usar el plan fijo — el init_point del plan ya tiene el trial incorporado
+      const mpPlan = await mpFetch('GET', `/preapproval_plan/${fixedPlanId}`);
+      paymentUrl = mpPlan.init_point;
+      console.log(`[FILO PAY] Shop ${req.shopId} → plan fijo ${planKey} (${fixedPlanId})`);
+    } else {
+      // Fallback: crear plan nuevo si no hay plan fijo configurado
+      console.warn(`[FILO PAY] Plan fijo no configurado para ${planKey}, creando uno nuevo...`);
+      const mpPlan = await mpFetch('POST', '/preapproval_plan', {
+        reason: planConfig.name,
+        auto_recurring: {
+          frequency: 1, frequency_type: 'months',
+          transaction_amount: planConfig.price, currency_id: 'ARS',
+          free_trial: { frequency: 7, frequency_type: 'days' }
+        },
+        payment_methods_allowed: { payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }] },
+        back_url: appUrl + '/app',
+        notification_url: appUrl + '/api/payments/webhook-filo'
+      });
+      paymentUrl = mpPlan.init_point;
+    }
+
     await pool.query(
-      `UPDATE shops SET
-         mp_shop_subscription_id = $1,
-         mp_shop_status = 'pending',
-         mp_shop_payment_url = $2
-       WHERE id = $3`,
-      [mpPlan.id, paymentUrl, req.shopId]
+      `UPDATE shops SET mp_shop_status='pending', mp_shop_payment_url=$1 WHERE id=$2`,
+      [paymentUrl, req.shopId]
     );
 
-    console.log(`[FILO PAY] Shop ${req.shopId} → plan ${planKey} url: ${paymentUrl}`);
-
-    res.json({
-      ok: true,
-      payment_url: paymentUrl,
-      plan: planKey,
-      price: plan.price
-    });
+    res.json({ ok: true, payment_url: paymentUrl, plan: planKey, price: planConfig.price });
   } catch (e) {
     console.error('[FILO PAY] Error:', e.message);
     res.status(500).json({ error: e.message });

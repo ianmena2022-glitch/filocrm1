@@ -70,7 +70,7 @@ router.post('/pre-register', async (req, res) => {
     );
     const pendingId = pending.rows[0].id;
 
-    // Crear link MP con pending_id en la back_url
+    // Obtener link del plan fijo de MP según el plan elegido
     const FILO_PLANS = {
       starter:    { price: 40000, name: 'FILO Starter' },
       staff:      { price: 80000, name: 'FILO Staff' },
@@ -80,40 +80,83 @@ router.post('/pre-register', async (req, res) => {
     const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
     const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
 
-    const mpRes = await fetch('https://api.mercadopago.com/preapproval_plan', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MP_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': `pre-reg-${pendingId}-${Date.now()}`
-      },
-      body: JSON.stringify({
-        reason: planConfig.name,
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          transaction_amount: planConfig.price,
-          currency_id: 'ARS',
-          free_trial: { frequency: 7, frequency_type: 'days' }
+    // Usar plan fijo si está configurado como env var
+    const planIds = {
+      starter:    process.env.MP_PLAN_STARTER,
+      staff:      process.env.MP_PLAN_STAFF,
+      enterprise: process.env.MP_PLAN_ENTERPRISE,
+    };
+    const fixedPlanId = planIds[filoPlan];
+
+    let paymentUrl;
+    let mpPlanId;
+
+    if (fixedPlanId) {
+      // Obtener el init_point del plan fijo (ya tiene el trial y back_url incorporados)
+      // Como el plan fijo tiene una back_url genérica, necesitamos crear una suscripción
+      // con el pending_id en la external_reference para identificar al usuario
+      const mpRes = await fetch(`https://api.mercadopago.com/preapproval`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${MP_TOKEN}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `pre-reg-${pendingId}-${Date.now()}`
         },
-        payment_methods_allowed: {
-          payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
+        body: JSON.stringify({
+          preapproval_plan_id: fixedPlanId,
+          reason: planConfig.name,
+          external_reference: `pending:${pendingId}`,
+          payer_email: email,
+          back_url: `${appUrl}/app?pending=${pendingId}`,
+          auto_recurring: {
+            frequency: 1,
+            frequency_type: 'months',
+            transaction_amount: planConfig.price,
+            currency_id: 'ARS',
+            free_trial: { frequency: 7, frequency_type: 'days' }
+          }
+        })
+      });
+      const mpData = await mpRes.json();
+      if (!mpRes.ok) throw new Error(mpData.message || 'Error MP');
+      paymentUrl = mpData.init_point;
+      mpPlanId = mpData.id;
+    } else {
+      // Fallback: crear plan nuevo
+      console.warn(`[PRE-REG] Plan fijo no configurado para ${filoPlan}, creando uno nuevo...`);
+      const mpRes = await fetch('https://api.mercadopago.com/preapproval_plan', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${MP_TOKEN}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `pre-reg-${pendingId}-${Date.now()}`
         },
-        back_url: `${appUrl}/app?pending=${pendingId}`,
-        notification_url: `${appUrl}/api/payments/webhook-filo`
-      })
-    });
-    const mpData = await mpRes.json();
-    if (!mpRes.ok) throw new Error(mpData.message || 'Error MP');
+        body: JSON.stringify({
+          reason: planConfig.name,
+          auto_recurring: {
+            frequency: 1, frequency_type: 'months',
+            transaction_amount: planConfig.price, currency_id: 'ARS',
+            free_trial: { frequency: 7, frequency_type: 'days' }
+          },
+          payment_methods_allowed: { payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }] },
+          back_url: `${appUrl}/app?pending=${pendingId}`,
+          notification_url: `${appUrl}/api/payments/webhook-filo`
+        })
+      });
+      const mpData = await mpRes.json();
+      if (!mpRes.ok) throw new Error(mpData.message || 'Error MP');
+      paymentUrl = mpData.init_point;
+      mpPlanId = mpData.id;
+    }
 
     // Guardar mp_plan_id en el pending
     await pool.query(
       'UPDATE pending_registrations SET mp_plan_id=$1 WHERE id=$2',
-      [mpData.id, pendingId]
+      [mpPlanId, pendingId]
     );
 
     console.log(`[PRE-REG] ${email} → plan ${filoPlan} · pending_id=${pendingId}`);
-    res.json({ ok: true, payment_url: mpData.init_point, pending_id: pendingId });
+    res.json({ ok: true, payment_url: paymentUrl, pending_id: pendingId });
   } catch (e) {
     console.error('Pre-register error:', e.message);
     res.status(500).json({ error: 'Error al iniciar el registro: ' + e.message });
