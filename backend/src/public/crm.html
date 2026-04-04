@@ -4915,12 +4915,35 @@ async function deleteExpense(id) {
   } catch(e) { showToast('❌','Error',e.message); }
 }
 
-async function payDebt(id) {
+function payDebt(id) {
+  const existing = document.getElementById('debt-pay-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'debt-pay-popup';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.innerHTML = `
+    <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:360px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo cobró la deuda?</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px">Elegí el método de pago para registrar en caja</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <button onclick="confirmDebtPayment(${id},'cash')"     style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600">💵 Efectivo</button>
+        <button onclick="confirmDebtPayment(${id},'debit')"    style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Débito</button>
+        <button onclick="confirmDebtPayment(${id},'credit')"   style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Crédito</button>
+        <button onclick="confirmDebtPayment(${id},'transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600">📲 Transferencia</button>
+      </div>
+      <button onclick="document.getElementById('debt-pay-popup').remove()" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,.4);padding:10px;cursor:pointer;font-size:13px">Cancelar</button>
+    </div>`;
+  document.body.appendChild(popup);
+}
+
+async function confirmDebtPayment(id, method) {
+  document.getElementById('debt-pay-popup')?.remove();
   try {
-    await api('PUT', `/dashboard/debts/${id}/pay`);
-    showToast('✅','Deuda cobrada','');
+    await api('PUT', `/dashboard/debts/${id}/pay`, { payment_method: method });
+    showToast('✅', 'Deuda cobrada', '¡Registrado en caja!');
     loadCashSummary();
-  } catch(e) { showToast('❌','Error',e.message); }
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 // Cerrar caja automáticamente (llamado por el scheduler o manualmente)
