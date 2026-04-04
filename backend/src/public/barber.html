@@ -774,11 +774,14 @@ let _pollingInterval = null;
 
 function startPolling() {
   if (_pollingInterval) clearInterval(_pollingInterval);
-  _pollingInterval = setInterval(() => {
+  _pollingInterval = setInterval(async () => {
     if (document.hidden) return;
-    const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
-    if (!activeTab || activeTab === 'dash') loadDashboard();
-    else if (activeTab === 'agenda') loadAgenda();
+    if (document.getElementById('payment-popup')) return;
+    try {
+      const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+      if (!activeTab || activeTab === 'dash') await loadDashboard();
+      else if (activeTab === 'agenda') await loadAgenda();
+    } catch(e) { console.warn('[polling] error:', e.message); }
   }, 15000);
 }
 
