@@ -109,12 +109,32 @@ async function sendReminders() {
   }
 }
 
+async function closeCashRegisters() {
+  try {
+    const appUrl = process.env.APP_URL || 'https://filocrm.com.ar';
+    const res = await fetch(`${appUrl}/api/dashboard/cash/auto-close`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-scheduler-secret': process.env.JWT_SECRET
+      }
+    });
+    const data = await res.json();
+    if (data.closed > 0) console.log(`[CRON] Caja cerrada para ${data.closed} barbería(s)`);
+  } catch(e) {
+    console.error('[CRON] Error en closeCashRegisters:', e.message);
+  }
+}
+
+async function runHourlyTasks() {
+  await sendReminders();
+  await closeCashRegisters();
+}
+
 function startScheduler() {
-  console.log('⏰ Scheduler de recordatorios iniciado');
-  // Correr inmediatamente al arrancar (por si hay turnos pendientes)
-  sendReminders();
-  // Luego cada hora
-  setInterval(sendReminders, 60 * 60 * 1000);
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja)');
+  runHourlyTasks();
+  setInterval(runHourlyTasks, 60 * 60 * 1000);
 }
 
 module.exports = { startScheduler };
