@@ -616,7 +616,7 @@
           <div class="stat-card" id="commission-card" style="display:none">
             <div class="stat-label">Mi comisión</div>
             <div class="stat-value" id="stat-comision" style="font-size:22px">$0</div>
-            <div class="stat-sub">sobre completados</div>
+            <div class="stat-sub" id="stat-comision-sub">sobre completados</div>
           </div>
         </div>
 
@@ -830,15 +830,19 @@ async function loadDashboard() {
     const completados = allAppts.filter(a => a.status === 'completed').length;
     const pendientes = allAppts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
     const facturado = allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
-    // Usar commission_pct de cada turno individual para calcular comision real
-    const comision = me.commission_enabled
-      ? allAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0) * (parseFloat(a.commission_pct||50) / 100), 0)
+    // Usar commission_pct de cada turno individual + propinas
+    const completadosAppts = allAppts.filter(a => a.status === 'completed');
+    const comisionBase = me.commission_enabled
+      ? completadosAppts.reduce((s, a) => s + parseFloat(a.price||0) * (parseFloat(a.commission_pct||50) / 100), 0)
       : 0;
+    const propinas = completadosAppts.reduce((s, a) => s + parseFloat(a.tip||0), 0);
+    const comision = comisionBase + propinas;
 
     document.getElementById('stat-turnos').textContent = allAppts.length;
     document.getElementById('stat-completados').textContent = completados;
     document.getElementById('stat-pendientes').textContent = pendientes;
     document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
+    const subEl = document.getElementById('stat-comision-sub'); if (subEl && propinas > 0) subEl.textContent = `Comisión + $${propinas.toLocaleString('es-AR')} propinas`;
 
     renderCalendar();
   } catch(e) { console.error(e); }
