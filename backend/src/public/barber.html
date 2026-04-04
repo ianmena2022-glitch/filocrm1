@@ -766,6 +766,20 @@ function startApp() {
   document.getElementById('topbar-date').textContent = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   loadDashboard();
+  startPolling();
+}
+
+// ── AUTO-REFRESH (polling cada 30 segundos) ───────────────
+let _pollingInterval = null;
+
+function startPolling() {
+  if (_pollingInterval) clearInterval(_pollingInterval);
+  _pollingInterval = setInterval(() => {
+    if (document.hidden) return;
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+    if (!activeTab || activeTab === 'dash') loadDashboard();
+    else if (activeTab === 'agenda') loadAgenda();
+  }, 15000);
 }
 
 // ── NAVIGATION ───────────────────────────────────────────

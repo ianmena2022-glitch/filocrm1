@@ -2442,6 +2442,26 @@ function startApp() {
   loadClients();
   loadStoreItems(); // precarga premios para el modal de turno
   initStaffUI();
+  startPolling();
+}
+
+// ── AUTO-REFRESH (polling cada 30 segundos) ───────────────
+let _pollingInterval = null;
+
+function startPolling() {
+  if (_pollingInterval) clearInterval(_pollingInterval);
+  _pollingInterval = setInterval(() => {
+    // Solo refrescar si la pestaña está visible y el usuario no está en un modal abierto
+    if (document.hidden) return;
+    const modalOpen = document.querySelector('.modal-overlay.open');
+    if (modalOpen) return;
+    // Refrescar según la sección activa
+    const activeSection = document.querySelector('.section.active')?.id;
+    if (activeSection === 'sec-dashboard') loadDashboard();
+    else if (activeSection === 'sec-agenda')    loadAgenda();
+    else if (activeSection === 'sec-clientes')  loadClients();
+    else if (activeSection === 'sec-membresias') loadMemberships();
+  }, 15000); // cada 30 segundos
 }
 
 // ─── NAVIGATION ───
