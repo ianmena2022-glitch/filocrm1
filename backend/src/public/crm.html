@@ -4965,5 +4965,28 @@ async function loadCashOnNavigation() {
   <div class="pw-trial-note">Pago seguro · Cancelá cuando quieras</div>
 </div>
 
+  <!-- Modal gasto -->
+  <div class="modal-overlay" id="modal-gasto" style="display:none">
+    <div class="modal">
+      <div class="modal-title">📋 Registrar gasto</div>
+      <label class="input-label">MONTO ($)</label>
+      <input type="number" id="gasto-amount" placeholder="5000" min="0" class="modal-input">
+      <label class="input-label">CATEGORÍA</label>
+      <select id="gasto-category" class="modal-input" style="background:#0d1f38;color:white">
+        <option value="insumos">🧴 Insumos</option>
+        <option value="alquiler">🏠 Alquiler</option>
+        <option value="servicios">⚡ Servicios (luz, agua, etc)</option>
+        <option value="salarios">👤 Salarios</option>
+        <option value="otros">📦 Otros</option>
+      </select>
+      <label class="input-label">DESCRIPCIÓN (OPCIONAL)</label>
+      <input type="text" id="gasto-desc" placeholder="Ej: Gel fijador x3" class="modal-input">
+      <div class="modal-actions">
+        <button class="btn-modal-primary" onclick="saveExpense()">✅ Guardar gasto</button>
+        <button class="btn-modal-cancel" onclick="closeModal('modal-gasto')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
