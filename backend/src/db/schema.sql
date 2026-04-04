@@ -220,3 +220,57 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_email ON pending_registrations(email);
 CREATE INDEX IF NOT EXISTS idx_pending_mp_plan ON pending_registrations(mp_plan_id);
+
+-- ── SISTEMA DE CAJA ───────────────────────────────────────────────────────────
+
+-- Método de pago y propina por turno
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT NULL
+  CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
+
+-- Gastos/egresos
+CREATE TABLE IF NOT EXISTS expenses (
+  id          SERIAL PRIMARY KEY,
+  shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  amount      NUMERIC(10,2) NOT NULL,
+  category    VARCHAR(50) NOT NULL CHECK (category IN ('insumos','alquiler','servicios','salarios','otros')),
+  description VARCHAR(255),
+  date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_shop_date ON expenses(shop_id, date);
+
+-- Caja diaria (calculada automáticamente al cierre)
+CREATE TABLE IF NOT EXISTS cash_registers (
+  id            SERIAL PRIMARY KEY,
+  shop_id       INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  date          DATE NOT NULL,
+  cash_total    NUMERIC(10,2) DEFAULT 0,
+  debit_total   NUMERIC(10,2) DEFAULT 0,
+  credit_total  NUMERIC(10,2) DEFAULT 0,
+  transfer_total NUMERIC(10,2) DEFAULT 0,
+  debt_total    NUMERIC(10,2) DEFAULT 0,
+  tips_total    NUMERIC(10,2) DEFAULT 0,
+  expenses_total NUMERIC(10,2) DEFAULT 0,
+  revenue_total NUMERIC(10,2) DEFAULT 0,
+  net_total     NUMERIC(10,2) DEFAULT 0,
+  cuts_count    INT DEFAULT 0,
+  closed_at     TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(shop_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_cash_registers_shop_date ON cash_registers(shop_id, date);
+
+-- Deudas de clientes
+CREATE TABLE IF NOT EXISTS client_debts (
+  id          SERIAL PRIMARY KEY,
+  shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  client_id   INT REFERENCES clients(id) ON DELETE SET NULL,
+  client_name VARCHAR(255),
+  appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL,
+  amount      NUMERIC(10,2) NOT NULL,
+  description VARCHAR(255),
+  paid        BOOLEAN DEFAULT FALSE,
+  paid_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_debts_shop ON client_debts(shop_id, paid);

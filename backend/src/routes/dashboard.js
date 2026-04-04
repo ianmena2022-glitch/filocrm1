@@ -228,3 +228,258 @@ router.get('/top-clients', auth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── SISTEMA DE CAJA ───────────────────────────────────────────────────────────
+
+// POST /api/dashboard/expenses — registrar gasto
+router.post('/expenses', auth, async (req, res) => {
+  const { amount, category, description, date } = req.body;
+  if (!amount || !category) return res.status(400).json({ error: 'Monto y categoría requeridos' });
+  const validCats = ['insumos','alquiler','servicios','salarios','otros'];
+  if (!validCats.includes(category)) return res.status(400).json({ error: 'Categoría inválida' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO expenses (shop_id, amount, category, description, date)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [req.shopId, parseFloat(amount), category, description || null,
+       date || new Date().toISOString().split('T')[0]]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/expenses?date=YYYY-MM-DD — gastos de un día
+router.get('/expenses', auth, async (req, res) => {
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  try {
+    const result = await pool.query(
+      `SELECT * FROM expenses WHERE shop_id=$1 AND date=$2 ORDER BY created_at DESC`,
+      [req.shopId, date]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/dashboard/expenses/:id — eliminar gasto
+router.delete('/expenses/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM expenses WHERE id=$1 AND shop_id=$2', [req.params.id, req.shopId]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/cash?date=YYYY-MM-DD — resumen de caja del día
+router.get('/cash', auth, async (req, res) => {
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const shopId = req.shopId;
+  try {
+    // Ingresos por método de pago
+    const appts = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
+         COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
+         COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
+         COALESCE(SUM(CASE WHEN payment_method IS NULL THEN price ELSE 0 END),0)    AS no_method_total,
+         COALESCE(SUM(tip),0)                                                        AS tips_total,
+         COALESCE(SUM(price),0)                                                      AS revenue_total,
+         COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      [shopId, date]
+    );
+    // Gastos del día
+    const exps = await pool.query(
+      `SELECT COALESCE(SUM(amount),0) AS expenses_total,
+              json_agg(json_build_object('id',id,'amount',amount,'category',category,'description',description) ORDER BY created_at DESC) AS items
+       FROM expenses WHERE shop_id=$1 AND date=$2`,
+      [shopId, date]
+    );
+    const a = appts.rows[0];
+    const e = exps.rows[0];
+    const revenue = parseFloat(a.revenue_total);
+    const expenses = parseFloat(e.expenses_total);
+    const tips = parseFloat(a.tips_total);
+    // net = ingresos - gastos - comisiones (comisiones ya descontadas en net_profit del dashboard)
+    const commissionQ = await pool.query(
+      `SELECT COALESCE(SUM(price * commission_pct / 100.0),0) AS total_commission
+       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      [shopId, date]
+    );
+    const commissions = parseFloat(commissionQ.rows[0].total_commission);
+    res.json({
+      date,
+      cash_total:      parseFloat(a.cash_total),
+      debit_total:     parseFloat(a.debit_total),
+      credit_total:    parseFloat(a.credit_total),
+      transfer_total:  parseFloat(a.transfer_total),
+      debt_total:      parseFloat(a.debt_total),
+      no_method_total: parseFloat(a.no_method_total),
+      tips_total:      tips,
+      revenue_total:   revenue,
+      expenses_total:  expenses,
+      commissions_total: commissions,
+      net_total:       revenue + tips - expenses - commissions,
+      cuts_count:      parseInt(a.cuts_count),
+      expenses_items:  e.items || [],
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/dashboard/cash/close — cerrar caja del día
+router.post('/cash/close', auth, async (req, res) => {
+  const date = req.body.date || new Date().toISOString().split('T')[0];
+  const shopId = req.shopId;
+  try {
+    // Calcular todo
+    const appts = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
+         COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
+         COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
+         COALESCE(SUM(tip),0) AS tips_total,
+         COALESCE(SUM(price),0) AS revenue_total,
+         COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
+         COUNT(*) FILTER (WHERE status='completed') AS cuts_count
+       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      [shopId, date]
+    );
+    const exps = await pool.query(
+      `SELECT COALESCE(SUM(amount),0) AS expenses_total FROM expenses WHERE shop_id=$1 AND date=$2`,
+      [shopId, date]
+    );
+    const a = appts.rows[0];
+    const revenue = parseFloat(a.revenue_total);
+    const expenses = parseFloat(exps.rows[0].expenses_total);
+    const tips = parseFloat(a.tips_total);
+    const commissions = parseFloat(a.commissions_total);
+    const net = revenue + tips - expenses - commissions;
+
+    await pool.query(
+      `INSERT INTO cash_registers
+         (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
+          debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (shop_id, date) DO UPDATE SET
+         cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
+         debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
+         net_total=$11, cuts_count=$12, closed_at=NOW()`,
+      [shopId, date, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
+       a.debt_total, tips, expenses, revenue, net, a.cuts_count]
+    );
+    console.log(`[CAJA] Cierre registrado para shop ${shopId} fecha ${date} net=$${net}`);
+    res.json({ ok: true, net_total: net });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/cash/history — historial de cierres
+router.get('/cash/history', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM cash_registers WHERE shop_id=$1 ORDER BY date DESC LIMIT 30`,
+      [req.shopId]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/debts — deudas pendientes
+router.get('/debts', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT d.*, c.phone AS client_phone
+       FROM client_debts d
+       LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.shop_id=$1 AND d.paid=FALSE
+       ORDER BY d.created_at DESC`,
+      [req.shopId]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada
+router.put('/debts/:id/pay', auth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE client_debts SET paid=TRUE, paid_at=NOW() WHERE id=$1 AND shop_id=$2`,
+      [req.params.id, req.shopId]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/dashboard/cash/auto-close — cerrar caja de todos los shops
+// Llamado por el scheduler a la hora de cierre + 3hs
+router.post('/cash/auto-close', async (req, res) => {
+  const secret = req.headers['x-scheduler-secret'];
+  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'No autorizado' });
+  try {
+    // Obtener todos los shops con horario configurado
+    const shops = await pool.query(
+      `SELECT id, schedule FROM shops WHERE is_barber=FALSE AND (is_barber IS NULL OR is_barber=FALSE) AND schedule IS NOT NULL`
+    );
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+    const dayKey = dayNames[now.getDay()];
+    let closed = 0;
+
+    for (const shop of shops.rows) {
+      try {
+        const schedule = JSON.parse(shop.schedule);
+        const daySchedule = schedule[dayKey];
+        if (!daySchedule?.active || !daySchedule?.end) continue;
+        const [endH, endM] = daySchedule.end.split(':').map(Number);
+        const closeMins = endH * 60 + endM + 180; // cierre + 3hs
+        // Solo cerrar si estamos en la ventana ±30min del cierre + 3hs
+        if (Math.abs(nowMins - closeMins) <= 30) {
+          // Calcular y guardar cierre
+          const appts = await pool.query(
+            `SELECT
+               COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0) AS cash_total,
+               COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0) AS debit_total,
+               COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0) AS credit_total,
+               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+               COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0) AS debt_total,
+               COALESCE(SUM(tip),0) AS tips_total,
+               COALESCE(SUM(price),0) AS revenue_total,
+               COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
+               COUNT(*) FILTER (WHERE status='completed') AS cuts_count
+             FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+            [shop.id, today]
+          );
+          const exps = await pool.query(
+            `SELECT COALESCE(SUM(amount),0) AS expenses_total FROM expenses WHERE shop_id=$1 AND date=$2`,
+            [shop.id, today]
+          );
+          const a = appts.rows[0];
+          const revenue = parseFloat(a.revenue_total);
+          const expenses = parseFloat(exps.rows[0].expenses_total);
+          const tips = parseFloat(a.tips_total);
+          const commissions = parseFloat(a.commissions_total);
+          const net = revenue + tips - expenses - commissions;
+          await pool.query(
+            `INSERT INTO cash_registers
+               (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
+                debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+             ON CONFLICT (shop_id, date) DO UPDATE SET
+               cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
+               debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
+               net_total=$11, cuts_count=$12, closed_at=NOW()`,
+            [shop.id, today, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
+             a.debt_total, tips, expenses, revenue, net, a.cuts_count]
+          );
+          closed++;
+          console.log(`[CAJA AUTO] Shop ${shop.id} cerrado · net=$${net}`);
+        }
+      } catch(e) { console.error(`[CAJA AUTO] Error shop ${shop.id}:`, e.message); }
+    }
+    res.json({ ok: true, closed });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});

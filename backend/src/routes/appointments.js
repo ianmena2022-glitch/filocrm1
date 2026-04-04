@@ -215,19 +215,34 @@ router.post('/', auth, async (req, res) => {
 
 // PUT /api/appointments/:id/status
 router.put('/:id/status', auth, async (req, res) => {
-  const { status } = req.body;
+  const { status, payment_method, tip } = req.body;
   const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
     const result = await pool.query(
-      `UPDATE appointments SET status=$1 WHERE id=$2 AND shop_id=$3 RETURNING *`,
-      [status, req.params.id, shopId]
+      `UPDATE appointments SET status=$1,
+         payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
+         tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
+       WHERE id=$4 AND shop_id=$5 RETURNING *`,
+      [status, payment_method || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 
     const appt = result.rows[0];
+
+    // Si es fiado, registrar deuda
+    if (status === 'completed' && payment_method === 'debt') {
+      await pool.query(
+        `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING`,
+        [shopId, appt.client_id || null, appt.client_name, appt.id,
+         parseFloat(appt.price || 0), `Turno ${appt.service_name || ''} - ${appt.date}`]
+      );
+      console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${appt.price}`);
+    }
 
     // Actualizar stats del cliente al completar
     if (status === 'completed' && appt.client_id) {
