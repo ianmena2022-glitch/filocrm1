@@ -2226,7 +2226,13 @@ async function registerBarber() {
     currentShop = data.shop;
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-    startApp();
+    if (data.shop.is_barber) {
+      localStorage.setItem('barber_token', token);
+      localStorage.setItem('barber_me', JSON.stringify(data.shop));
+      window.location.href = '/barber';
+    } else {
+      startApp();
+    }
   } catch(e) {
     showAuthError(e.message);
     btn.disabled = false; btn.textContent = '✂️ Unirme al equipo';
