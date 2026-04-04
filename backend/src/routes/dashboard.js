@@ -403,11 +403,44 @@ router.get('/debts', auth, async (req, res) => {
 
 // PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada
 router.put('/debts/:id/pay', auth, async (req, res) => {
+  const { payment_method } = req.body;
+  const validMethods = ['cash','debit','credit','transfer'];
+  const method = validMethods.includes(payment_method) ? payment_method : 'cash';
   try {
-    await pool.query(
-      `UPDATE client_debts SET paid=TRUE, paid_at=NOW() WHERE id=$1 AND shop_id=$2`,
+    // 1. Obtener la deuda para saber el appointment_id o client_id
+    const debtRes = await pool.query(
+      `SELECT * FROM client_debts WHERE id=$1 AND shop_id=$2`,
       [req.params.id, req.shopId]
     );
+    if (!debtRes.rows.length) return res.status(404).json({ error: 'Deuda no encontrada' });
+    const debt = debtRes.rows[0];
+
+    // 2. Marcar deuda como pagada
+    await pool.query(
+      `UPDATE client_debts SET paid=TRUE, paid_at=NOW(), payment_method=$3 WHERE id=$1 AND shop_id=$2`,
+      [req.params.id, req.shopId, method]
+    );
+
+    // 3. Actualizar el payment_method del appointment original (si existe)
+    if (debt.appointment_id) {
+      await pool.query(
+        `UPDATE appointments SET payment_method=$1 WHERE id=$2 AND shop_id=$3`,
+        [method, debt.appointment_id, req.shopId]
+      );
+    } else if (debt.client_id) {
+      // Fallback: actualizar el turno más reciente del cliente que esté como 'debt'
+      await pool.query(
+        `UPDATE appointments SET payment_method=$1
+         WHERE id = (
+           SELECT id FROM appointments
+           WHERE shop_id=$2 AND client_id=$3 AND payment_method='debt' AND status='completed'
+           ORDER BY date DESC, time_start DESC
+           LIMIT 1
+         )`,
+        [method, req.shopId, debt.client_id]
+      );
+    }
+
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
