@@ -778,9 +778,9 @@ function startPolling() {
     if (document.hidden) return;
     if (document.getElementById('payment-popup')) return;
     try {
-      const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
-      if (!activeTab || activeTab === 'dash') await loadDashboard();
-      else if (activeTab === 'agenda') await loadAgenda();
+      const agendaActive = document.getElementById('tab-agenda')?.classList.contains('active');
+      if (agendaActive) await loadAgenda();
+      else await loadDashboard();
     } catch(e) { console.warn('[polling] error:', e.message); }
   }, 15000);
 }
