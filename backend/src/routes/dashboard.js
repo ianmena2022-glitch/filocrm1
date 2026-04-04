@@ -483,3 +483,70 @@ router.post('/cash/auto-close', async (req, res) => {
     res.json({ ok: true, closed });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+// GET /api/dashboard/month-report?year=2026&month=4 — datos para exportar PDF
+router.get('/month-report', auth, async (req, res) => {
+  const shopId = req.shopId;
+  const year  = parseInt(req.query.year)  || new Date().getFullYear();
+  const month = parseInt(req.query.month) || new Date().getMonth() + 1;
+  const from  = `${year}-${String(month).padStart(2,'0')}-01`;
+  const to    = new Date(year, month, 0).toISOString().split('T')[0]; // último día del mes
+
+  try {
+    // Métricas generales
+    const metricsQ = await pool.query(
+      `SELECT
+         COALESCE(SUM(price),0)                                                          AS revenue,
+         COALESCE(SUM(tip),0)                                                             AS tips_total,
+         COALESCE(SUM(price * commission_pct / 100.0),0)                                 AS commissions_total,
+         COUNT(*) FILTER (WHERE status='completed')                                       AS completed,
+         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0)      AS cash,
+         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0)      AS debit,
+         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0)      AS credit,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0)      AS transfer,
+         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0)      AS debt
+       FROM appointments
+       WHERE shop_id=$1 AND date >= $2 AND date <= $3 AND status='completed'`,
+      [shopId, from, to]
+    );
+
+    // Gastos del mes
+    const expensesQ = await pool.query(
+      `SELECT * FROM expenses WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
+      [shopId, from, to]
+    );
+
+    // Cierres diarios del mes
+    const cashQ = await pool.query(
+      `SELECT * FROM cash_registers WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
+      [shopId, from, to]
+    );
+
+    const m = metricsQ.rows[0];
+    const expTotal = expensesQ.rows.reduce((s,e) => s + parseFloat(e.amount), 0);
+    const revenue = parseFloat(m.revenue);
+    const tips = parseFloat(m.tips_total);
+    const commissions = parseFloat(m.commissions_total);
+
+    res.json({
+      revenue,
+      tips_total:        tips,
+      commissions_total: commissions,
+      expenses_total:    expTotal,
+      net_total:         revenue + tips - commissions - expTotal,
+      completed:         parseInt(m.completed),
+      by_payment: {
+        cash:     parseFloat(m.cash),
+        debit:    parseFloat(m.debit),
+        credit:   parseFloat(m.credit),
+        transfer: parseFloat(m.transfer),
+        debt:     parseFloat(m.debt),
+      },
+      expenses:       expensesQ.rows,
+      cash_registers: cashQ.rows,
+    });
+  } catch(e) {
+    console.error('month-report error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
