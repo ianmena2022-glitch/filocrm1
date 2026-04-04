@@ -417,8 +417,8 @@ router.put('/debts/:id/pay', auth, async (req, res) => {
 
     // 2. Marcar deuda como pagada
     await pool.query(
-      `UPDATE client_debts SET paid=TRUE, paid_at=NOW(), payment_method=$3 WHERE id=$1 AND shop_id=$2`,
-      [req.params.id, req.shopId, method]
+      `UPDATE client_debts SET paid=TRUE, paid_at=NOW() WHERE id=$1 AND shop_id=$2`,
+      [req.params.id, req.shopId]
     );
 
     // 3. Actualizar el payment_method del appointment original (si existe)
