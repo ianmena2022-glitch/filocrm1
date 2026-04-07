@@ -477,13 +477,15 @@ body {
 
 /* ─── PAYWALL ─── */
 #card-required-screen,
+#payment-pending-screen,
 #paywall-screen {
   display: none; position: fixed; inset: 0;
   background: var(--navy); z-index: 9000;
   flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 32px 20px; overflow-y: auto;
 }
-#card-required-screen.show, #paywall-screen.show { display: flex; }
+#card-required-screen.show, #payment-pending-screen.show, #paywall-screen.show { display: flex; }
+@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 .pw-logo { width:48px;height:48px;background:var(--yellow);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-family:Oswald,sans-serif;font-size:24px;font-weight:700;color:#050d18; }
 .pw-title { font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:7px; }
 .pw-sub { font-size:14px;color:rgba(255,255,255,.4);margin-bottom:28px;max-width:340px; }
@@ -2122,6 +2124,7 @@ function showTrialRedirect(paymentUrl) {
 
 function logout() {
   if (!confirm('¿Cerrás sesión?')) return;
+  if (_pendingPollInterval) { clearInterval(_pendingPollInterval); _pendingPollInterval = null; }
   localStorage.removeItem('filo_token');
   localStorage.removeItem('filo_shop');
   localStorage.removeItem('barber_token');
@@ -2129,6 +2132,7 @@ function logout() {
   token = null; currentShop = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('card-required-screen').classList.remove('show');
+  document.getElementById('payment-pending-screen').classList.remove('show');
   document.getElementById('paywall-screen').classList.remove('show');
   document.getElementById('auth-screen').style.display = 'flex';
 }
@@ -2164,6 +2168,46 @@ let selectedCrPlan = 'staff';
 
 function showCardRequired() {
   document.getElementById('card-required-screen').classList.add('show');
+}
+
+let _pendingPollInterval = null;
+function showPendingCheck() {
+  document.getElementById('payment-pending-screen').classList.add('show');
+  // Polling automático cada 5s hasta 60s
+  let attempts = 0;
+  _pendingPollInterval = setInterval(async () => {
+    attempts++;
+    try {
+      const data = await api('/api/auth/me');
+      if (data && data.shop && data.shop.mp_shop_status === 'authorized') {
+        clearInterval(_pendingPollInterval);
+        currentShop = data.shop;
+        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+        document.getElementById('payment-pending-screen').classList.remove('show');
+        startApp();
+      }
+    } catch(e) { /* ignorar errores de red */ }
+    if (attempts >= 12) clearInterval(_pendingPollInterval); // 60s máx
+  }, 5000);
+}
+
+async function checkPaymentStatus() {
+  try {
+    const data = await api('/api/auth/me');
+    if (data && data.shop) {
+      currentShop = data.shop;
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      if (currentShop.mp_shop_status === 'authorized') {
+        clearInterval(_pendingPollInterval);
+        document.getElementById('payment-pending-screen').classList.remove('show');
+        startApp();
+      } else {
+        showToast('Tu pago aún no fue confirmado. Intentá de nuevo en unos segundos.');
+      }
+    }
+  } catch(e) {
+    showToast('No se pudo verificar el estado. Revisá tu conexión.');
+  }
 }
 
 function selectCrPlan(plan, el) {
@@ -2233,7 +2277,11 @@ function startApp() {
   // Si no es test/barbero, debe haber completado el checkout de tarjeta en MP
   if (currentShop && !currentShop.is_test && currentShop.plan !== 'test' && !currentShop.is_barber) {
     if (currentShop.mp_shop_status !== 'authorized') {
-      showCardRequired();
+      if (currentShop.mp_shop_status === 'pending') {
+        showPendingCheck();
+      } else {
+        showCardRequired();
+      }
       return;
     }
   }
@@ -5201,6 +5249,22 @@ async function bcmSave(id) {
   </button>
   <div style="font-size:12px;color:rgba(255,255,255,.25);letter-spacing:.5px">PAGO SEGURO · CANCELÁ CUANDO QUIERAS</div>
   <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.2);font-size:12px;cursor:pointer;padding:12px;margin-top:8px">Cerrar sesión</button>
+</div>
+
+<!-- PAYMENT PENDING SCREEN -->
+<div id="payment-pending-screen">
+  <div style="width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">⏳</div>
+  <div style="font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:8px">Verificando tu pago...</div>
+  <div style="font-size:15px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:380px;line-height:1.6">Tu tarjeta fue recibida. Estamos esperando la confirmación de Mercado Pago. Esto puede tardar unos segundos.</div>
+  <div style="display:flex;gap:8px;margin-bottom:6px;justify-content:center">
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite 0s"></span>
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite .4s"></span>
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite .8s"></span>
+  </div>
+  <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:10px">
+    <button onclick="checkPaymentStatus()" style="background:var(--yellow);color:#000d1f;border:none;padding:13px 32px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer">Ya está confirmado, ingresar</button>
+    <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.2);font-size:12px;cursor:pointer;padding:10px">Cerrar sesión</button>
+  </div>
 </div>
 
 <!-- PAYWALL SCREEN -->

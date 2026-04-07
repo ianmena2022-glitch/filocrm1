@@ -201,8 +201,11 @@ router.post('/complete-registration', async (req, res) => {
     // Eliminar el pending
     await pool.query('DELETE FROM pending_registrations WHERE id=$1', [pending_id]);
 
+    // Re-fetch para incluir mp_shop_status='pending' actualizado
+    const freshShop = (await pool.query('SELECT * FROM shops WHERE id=$1', [shop.id])).rows[0];
+
     console.log(`[REGISTRO] ${p.email} → cuenta creada · plan ${p.filo_plan}`);
-    res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
+    res.status(201).json({ token: makeToken(freshShop), shop: shopPayload(freshShop) });
   } catch (e) {
     console.error('Complete registration error:', e.message);
     res.status(500).json({ error: e.message });
