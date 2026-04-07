@@ -6,6 +6,8 @@ const PUBLIC_PATHS = [
   '/api/auth/register',
   '/api/auth/register-barber',
   '/api/auth/status',
+  '/api/auth/me',           // necesario para el polling de verificación de pago
+  '/api/auth/complete-registration',
   '/api/auth/setup-test',
   '/api/payments/webhook',
   '/api/booking',
