@@ -142,7 +142,7 @@ async function closeCashRegisters() {
 async function syncSubscriptions() {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, mp_shop_subscription_id
+      `SELECT id, email, mp_shop_subscription_id, mp_shop_status
        FROM shops
        WHERE subscription_status = 'active'
          AND mp_shop_subscription_id IS NOT NULL
@@ -153,6 +153,7 @@ async function syncSubscriptions() {
 
     for (const shop of rows) {
       try {
+        // Si ya está marcado como cancelled en BD, verificar con MP si el período venció
         const sub = await mpGet(`/preapproval/${shop.mp_shop_subscription_id}`);
         if (sub.status !== 'authorized') {
           await pool.query(
@@ -162,8 +163,18 @@ async function syncSubscriptions() {
           console.log(`[CRON] ${shop.email} → MP status=${sub.status} → acceso revocado`);
         }
       } catch (e) {
-        // No revocar acceso por error de red/MP — fail-safe
-        console.error(`[CRON] Error verificando suscripción de ${shop.email}:`, e.message);
+        // Si el ID almacenado es el plan_id y da 404, el shop canceló manualmente
+        // sin que el webhook actualizara el ID. Verificar por mp_shop_status en BD.
+        if (shop.mp_shop_status === 'cancelled') {
+          await pool.query(
+            "UPDATE shops SET subscription_status='expired' WHERE id=$1",
+            [shop.id]
+          );
+          console.log(`[CRON] ${shop.email} → cancelado manualmente (sin sub_id válido) → acceso revocado`);
+        } else {
+          // No revocar acceso por error de red/MP — fail-safe
+          console.error(`[CRON] Error verificando suscripción de ${shop.email}:`, e.message);
+        }
       }
     }
   } catch (e) {

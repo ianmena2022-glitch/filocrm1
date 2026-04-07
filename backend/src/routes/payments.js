@@ -381,17 +381,41 @@ router.post('/webhook-filo', async (req, res) => {
 router.post('/filo-cancel', auth, async (req, res) => {
   try {
     const shopData = await pool.query(
-      'SELECT mp_shop_subscription_id FROM shops WHERE id=$1',
+      'SELECT mp_shop_subscription_id, email FROM shops WHERE id=$1',
       [req.shopId]
     );
-    const subId = shopData.rows[0]?.mp_shop_subscription_id;
+    const shop = shopData.rows[0];
+    const storedId = shop?.mp_shop_subscription_id;
 
-    if (subId) {
-      await mpFetch('PUT', `/preapproval/${subId}`, { status: 'cancelled' });
+    if (storedId) {
+      try {
+        // Intentar cancelar con el ID almacenado (puede ser subscription_id o plan_id)
+        await mpFetch('PUT', `/preapproval/${storedId}`, { status: 'cancelled' });
+        console.log(`[FILO cancel] Suscripción ${storedId} cancelada en MP`);
+      } catch (mpErr) {
+        // Si falló, probablemente tenemos el plan_id — buscar la suscripción real del usuario
+        console.warn(`[FILO cancel] PUT directo falló (${mpErr.message}), buscando por plan_id...`);
+        try {
+          const search = await mpFetch('GET', `/preapproval/search?preapproval_plan_id=${storedId}&payer_email=${encodeURIComponent(shop.email)}`);
+          const realSub = search?.results?.[0];
+          if (realSub?.id) {
+            await mpFetch('PUT', `/preapproval/${realSub.id}`, { status: 'cancelled' });
+            // Guardar el ID real para futuras operaciones
+            await pool.query('UPDATE shops SET mp_shop_subscription_id=$1 WHERE id=$2', [realSub.id, req.shopId]);
+            console.log(`[FILO cancel] Suscripción ${realSub.id} cancelada via búsqueda por plan_id`);
+          }
+        } catch (searchErr) {
+          // Logear pero no fallar — el acceso se revoca igual al vencer el período
+          console.error(`[FILO cancel] Búsqueda en MP falló:`, searchErr.message);
+        }
+      }
     }
 
+    // Solo marcar mp_shop_status como 'cancelled' — NO tocar subscription_status.
+    // El acceso se mantiene hasta que venza el período (trial_ends_at o ciclo de facturación).
+    // El cron job / webhook revocarán el acceso cuando MP confirme el vencimiento.
     await pool.query(
-      "UPDATE shops SET subscription_status='cancelled', mp_shop_status='cancelled' WHERE id=$1",
+      "UPDATE shops SET mp_shop_status='cancelled' WHERE id=$1",
       [req.shopId]
     );
 
