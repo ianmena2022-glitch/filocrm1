@@ -164,9 +164,22 @@ router.post('/complete-registration', async (req, res) => {
     // Verificar que no exista cuenta ya creada
     const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [p.email]);
     if (exists.rows.length) {
-      // Ya existe — hacer login directo
-      const shop = exists.rows[0];
-      return res.json({ token: makeToken(shop), shop: shopPayload(shop), already_exists: true });
+      const shopId = exists.rows[0].id;
+      // Si viene con nuevo subscription_id (re-suscripción), actualizar la cuenta
+      const mpId = subscription_id || p.mp_plan_id;
+      if (mpId) {
+        const newTrialEnds = new Date();
+        newTrialEnds.setDate(newTrialEnds.getDate() + 7);
+        await pool.query(
+          `UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending',
+           subscription_status='trial', trial_ends_at=$2 WHERE id=$3`,
+          [mpId, newTrialEnds.toISOString(), shopId]
+        );
+        console.log(`[REGISTRO] Re-suscripción de ${p.email} con nuevo ID: ${mpId}`);
+      }
+      // Fetch completo (no solo id) para devolver todos los campos al frontend
+      const fullShop = (await pool.query('SELECT * FROM shops WHERE id=$1', [shopId])).rows[0];
+      return res.json({ token: makeToken(fullShop), shop: shopPayload(fullShop), already_exists: true });
     }
 
     // Crear la cuenta real
