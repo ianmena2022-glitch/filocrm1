@@ -932,9 +932,9 @@ body {
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">📈 Facturación últimos 30 días</div>
           <div id="dash-chart-30" style="height:120px;display:flex;align-items:flex-end;gap:3px"></div>
         </div>
-        <div class="card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">✂️ Servicios más vendidos</div>
-          <div id="dash-top-services"></div>
+        <div class="card" id="dash-productos-card">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">📦 Productos</div>
+          <div id="dash-product-sales"></div>
         </div>
       </div>
 
@@ -1399,6 +1399,37 @@ body {
             <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Premios disponibles</div>
             <div id="store-items-list" style="margin-bottom:14px"></div>
             <button class="btn-motor secondary" onclick="openModal('modal-store-item')">+ Agregar premio</button>
+          </div>
+        </div>
+
+        <!-- Productos & Stock -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-productos-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">📦 Productos & Stock</div>
+            <span class="tpl-arrow" id="arrow-cfg-productos-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-productos-body" style="display:none;padding:0 22px 20px">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:18px;line-height:1.6">Administrá el stock de productos. Registrá ventas, entradas y ajustes.</div>
+            <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+              <input id="prod-search" type="text" placeholder="Buscar producto..." oninput="renderProductosCfg()"
+                style="flex:1;min-width:160px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 13px;color:#fff;font-size:13px;outline:none">
+              <select id="prod-filter-cat" onchange="renderProductosCfg()"
+                style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 13px;color:#fff;font-size:13px;outline:none">
+                <option value="">Todas las categorías</option>
+                <option value="cuidado">💆 Cuidado del cabello</option>
+                <option value="barba">🪒 Barba</option>
+                <option value="piel">🧴 Piel</option>
+                <option value="accesorios">✂️ Accesorios</option>
+                <option value="otros">📦 Otros</option>
+              </select>
+              <button class="btn-add" onclick="openProductoModal()" style="padding:9px 16px;font-size:13px">+ Producto</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px" id="prod-stats-cfg"></div>
+            <div id="productos-list-cfg"></div>
+            <div style="margin-top:18px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Últimas ventas</div>
+              <div id="prod-ventas-list-cfg"></div>
+            </div>
           </div>
         </div>
 
@@ -2054,6 +2085,7 @@ async function register() {
 
     if (data.payment_url) {
       btn.textContent = 'Redirigiendo a Mercado Pago...';
+      if (data.pending_id) localStorage.setItem('filo_pending_id', data.pending_id);
       showTrialRedirect(data.payment_url);
       return;
     }
@@ -2299,7 +2331,7 @@ function showSection(name) {
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') loadSubscriptionStatus();
-  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); }
+  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
   if (name === 'equipo') loadEquipo();
 }
 
@@ -2308,11 +2340,11 @@ let _dashCalOffset = 0; // semanas desde hoy
 
 async function loadDashboard() {
   try {
-    const [today, month, chart, topSvcs, topClients] = await Promise.all([
+    const [today, month, chart, prodVentas, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
       api('GET', '/dashboard/month'),
       api('GET', '/dashboard/chart'),
-      api('GET', '/dashboard/top-services'),
+      api('GET', '/products/ventas?limit=5'),
       api('GET', '/dashboard/top-clients'),
     ]);
 
@@ -2357,23 +2389,8 @@ async function loadDashboard() {
     // Gráfico 30 días
     renderChart30(chart);
 
-    // Servicios top
-    const svcsEl = document.getElementById('dash-top-services');
-    if (!topSvcs.length) {
-      svcsEl.innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin datos este mes</div>`;
-    } else {
-      const maxCount = Math.max(...topSvcs.map(s => parseInt(s.count)));
-      svcsEl.innerHTML = topSvcs.map(s => `
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-            <span>${s.name}</span>
-            <span style="color:var(--yellow);font-weight:700">${s.count} turnos</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px">
-            <div style="background:var(--yellow);border-radius:4px;height:6px;width:${Math.max(5,(parseInt(s.count)/maxCount)*100)}%"></div>
-          </div>
-        </div>`).join('');
-    }
+    // Ventas de productos en dashboard
+    renderDashProductos(prodVentas);
 
     // Top clientes
     const clientsEl = document.getElementById('dash-top-clients');
@@ -3903,6 +3920,7 @@ async function loadEquipo() {
       return;
     }
 
+    window._barbersList = barbers;
     el.innerHTML = barbers.map(b => {
       const stat = stats.find(s => s.id === b.id) || {};
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
@@ -3913,7 +3931,7 @@ async function loadEquipo() {
             <span>📅 ${b.turnos_hoy || 0} turnos hoy</span>
             <span>✅ ${stat.completados_mes || 0} completados este mes</span>
             <span>💰 $${parseFloat(stat.facturado_mes || 0).toLocaleString('es-AR')} facturado</span>
-            <span style="color:var(--yellow)">🤝 ${b.barber_commission_pct}% comisión</span>
+            <span style="color:var(--yellow)">🤝 ${bcmLabel(b)}</span>
           </div>
         </div>
         <div style="display:flex;gap:8px">
@@ -4826,6 +4844,322 @@ function generatePDF(data, month) {
   setTimeout(() => { win.focus(); win.print(); }, 500);
 }
 
+
+// ═══════════════════════════════════════════
+// MÓDULO: PRODUCTOS & STOCK
+// ═══════════════════════════════════════════
+let _productos = [];
+let _ventasProductos = [];
+
+async function loadProductos() {
+  try {
+    [_productos, _ventasProductos] = await Promise.all([
+      api('GET', '/products'),
+      api('GET', '/products/ventas?limit=15'),
+    ]);
+    renderProdStatsCfg();
+    renderProductosCfg();
+    renderVentasCfg();
+  } catch(e) { console.error('loadProductos:', e); }
+}
+
+function renderProdStatsCfg() {
+  const el = document.getElementById('prod-stats-cfg');
+  if (!el) return;
+  const sinStock = _productos.filter(p => parseInt(p.stock||0) <= 0).length;
+  const alertas  = _productos.filter(p => parseInt(p.stock||0) > 0 && parseInt(p.stock||0) <= parseInt(p.stock_min||0)).length;
+  const valor    = _productos.reduce((s,p) => s + parseFloat(p.precio_costo||0)*parseInt(p.stock||0), 0);
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const warn = alertas + sinStock > 0;
+  el.innerHTML =
+    `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:11px 13px">
+       <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--gray);margin-bottom:5px">Productos</div>
+       <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700">${_productos.length}</div>
+     </div>` +
+    `<div style="background:${warn?'rgba(255,145,0,.08)':'rgba(255,255,255,.04)'};border:1px solid ${warn?'rgba(255,145,0,.25)':'rgba(255,255,255,.07)'};border-radius:9px;padding:11px 13px">
+       <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--gray);margin-bottom:5px">Stock bajo</div>
+       <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:${warn?'var(--orange)':'#fff'}">${alertas+sinStock}</div>
+     </div>` +
+    `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:11px 13px">
+       <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--gray);margin-bottom:5px">Valor stock</div>
+       <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--yellow)">${fmt(valor)}</div>
+     </div>`;
+}
+
+function renderDashProductos(ventas) {
+  const el = document.getElementById('dash-product-sales');
+  if (!el) return;
+  const fmt     = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const mIcon   = { cash:'💵', debit:'💳', credit:'💳', transfer:'📲' };
+  const catIcon = { cuidado:'💆', barba:'🪒', piel:'🧴', accesorios:'✂️', otros:'📦' };
+
+  // Cargar productos si no están en memoria
+  const render = (prods) => {
+    const sinStock = prods.filter(p => parseInt(p.stock||0) <= 0).length;
+    const alertas  = prods.filter(p => parseInt(p.stock||0) > 0 && parseInt(p.stock||0) <= parseInt(p.stock_min||0)).length;
+    const warnCount = sinStock + alertas;
+    const totalVentas = ventas.reduce((s,v) => s + parseFloat(v.total_price||0), 0);
+
+    let html = `<div style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray)">Productos</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700">${prods.length}</div>
+      </div>
+      <div style="flex:1;background:${warnCount>0?'rgba(255,145,0,.08)':'rgba(255,255,255,.04)'};border:1px solid ${warnCount>0?'rgba(255,145,0,.25)':'rgba(255,255,255,.07)'};border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray)">Alertas</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:${warnCount>0?'var(--orange)':'#fff'}">${warnCount}</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray)">Ventas hoy</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--yellow)">${fmt(totalVentas)}</div>
+      </div>
+    </div>`;
+
+    if (prods.length) {
+      html += `<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:8px">Stock actual</div>`;
+      prods.slice(0,5).forEach(p => {
+        const stock=parseInt(p.stock||0), sm=parseInt(p.stock_min||0);
+        const sinS=stock<=0, bajo=stock>0&&stock<=sm;
+        const col=sinS?'var(--red)':bajo?'var(--orange)':'var(--green)';
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+          <span style="font-size:14px">${catIcon[p.categoria]||'📦'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
+            <div style="font-size:10px;color:var(--gray)">${p.precio_venta?fmt(p.precio_venta):''}</div>
+          </div>
+          <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;color:${col};min-width:28px;text-align:right">${stock}</div>
+          <div style="display:flex;gap:4px">
+            <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\'")}',${p.precio_venta},${stock})" title="Vender"
+              style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">💰</button>
+            <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\'")}')" title="Stock"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">📦</button>
+            <button onclick="openProductoModal(${p.id})" title="Editar"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">✏️</button>
+          </div>
+        </div>`;
+      });
+      if (prods.length > 5) html += `<div style="font-size:11px;color:var(--gray);text-align:center;margin-top:8px;cursor:pointer" onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)">Ver todos (${prods.length}) →</div>`;
+      html += `</div>`;
+    }
+
+    if (ventas.length) {
+      html += `<div><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:8px">Últimas ventas</div>`;
+      ventas.forEach(v => {
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+          <span style="font-size:12px">${mIcon[v.payment_method]||'💰'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.product_name||'—'}</div>
+            <div style="font-size:10px;color:var(--gray)">${v.quantity} u. · ${v.client_name||'Sin nombre'}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    } else if (!prods.length) {
+      html += `<div style="font-size:13px;color:var(--gray);text-align:center;padding:12px 0">Sin productos · <span onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)" style="color:var(--yellow);cursor:pointer">Agregar →</span></div>`;
+    }
+
+    html += `<button onclick="openProductoModal()" style="width:100%;margin-top:12px;background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.2);color:var(--yellow);border-radius:9px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase">+ Agregar producto</button>`;
+    el.innerHTML = html;
+  };
+
+  if (_productos.length) { render(_productos); }
+  else { api('GET', '/products').then(p => { _productos = p; render(p); }).catch(() => render([])); }
+}
+
+function renderProductosCfg() {
+  const el = document.getElementById('productos-list-cfg');
+  if (!el) return;
+  const q   = (document.getElementById('prod-search')?.value||'').toLowerCase();
+  const cat = document.getElementById('prod-filter-cat')?.value||'';
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const catIcon = { cuidado:'💆', barba:'🪒', piel:'🧴', accesorios:'✂️', otros:'📦' };
+  const lista = _productos.filter(p => (!q||p.nombre.toLowerCase().includes(q)) && (!cat||p.categoria===cat));
+  if (!lista.length) { el.innerHTML=`<div style="text-align:center;padding:28px 0;color:var(--gray);font-size:13px">Sin productos${q||cat?' — probá otra búsqueda':''}</div>`; return; }
+  el.innerHTML = lista.map(p => {
+    const stock=parseInt(p.stock||0), sm=parseInt(p.stock_min||0);
+    const sinS=stock<=0, bajo=stock>0&&stock<=sm;
+    const col=sinS?'var(--red)':bajo?'var(--orange)':'var(--green)';
+    const borde=sinS?'rgba(255,67,67,.18)':bajo?'rgba(255,145,0,.18)':'rgba(255,255,255,.07)';
+    const margen=p.precio_costo>0?Math.round((p.precio_venta-p.precio_costo)/p.precio_costo*100):null;
+    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 13px;background:rgba(255,255,255,.03);border:1px solid ${borde};border-radius:9px;margin-bottom:7px">
+      <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${catIcon[p.categoria]||'📦'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">${p.nombre}
+          ${sinS?'<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(255,67,67,.15);color:var(--red)">SIN STOCK</span>':''}
+          ${bajo&&!sinS?'<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(255,145,0,.15);color:var(--orange)">BAJO</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
+          <span>Costo: ${fmt(p.precio_costo)}</span>
+          <span>Venta: <strong style="color:#fff">${fmt(p.precio_venta)}</strong></span>
+          ${margen!==null?`<span>Margen: <strong style="color:var(--yellow)">${margen}%</strong></span>`:''}
+        </div>
+      </div>
+      <div style="text-align:center;min-width:46px;flex-shrink:0">
+        <div style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:${col}">${stock}</div>
+        <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\'")}',${p.precio_venta},${stock})"
+          style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Vender</button>
+        <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\'")}')"
+          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">📦 Stock</button>
+        <button onclick="openProductoModal(${p.id})"
+          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer">✏️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderVentasCfg() {
+  const el = document.getElementById('prod-ventas-list-cfg');
+  if (!el) return;
+  if (!_ventasProductos.length) { el.innerHTML='<div style="color:var(--gray);font-size:13px;padding:6px 0">Sin ventas aún</div>'; return; }
+  const fmt=v=>'$'+parseFloat(v||0).toLocaleString('es-AR');
+  const mIcon={cash:'💵',debit:'💳',credit:'💳',transfer:'📲'};
+  el.innerHTML=_ventasProductos.map(v=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:7px;margin-bottom:5px">
+      <span style="font-size:14px">${mIcon[v.payment_method]||'💰'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${v.product_name||'—'}</div>
+        <div style="font-size:10px;color:var(--gray)">${v.client_name||'Sin nombre'} · ${v.quantity} u. · ${new Date(v.sold_at).toLocaleDateString('es-AR')}</div>
+      </div>
+      <div style="font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
+    </div>`).join('');
+}
+
+function openProductoModal(id) {
+  const p = id ? _productos.find(x => x.id === id) : null;
+  document.getElementById('modal-producto-title').textContent = p ? '✏️ Editar producto' : '+ Nuevo producto';
+  document.getElementById('prod-edit-id').value     = p?.id || '';
+  document.getElementById('prod-nombre').value      = p?.nombre || '';
+  document.getElementById('prod-categoria').value   = p?.categoria || 'cuidado';
+  document.getElementById('prod-unidad').value      = p?.unidad || 'unidad';
+  document.getElementById('prod-costo').value       = p?.precio_costo || '';
+  document.getElementById('prod-precio').value      = p?.precio_venta || '';
+  document.getElementById('prod-stock').value       = p?.stock ?? '0';
+  document.getElementById('prod-stock-min').value   = p?.stock_min ?? '3';
+  document.getElementById('prod-descripcion').value = p?.descripcion || '';
+  calcProdMargen();
+  openModal('modal-producto');
+}
+
+function calcProdMargen() {
+  const costo=parseFloat(document.getElementById('prod-costo')?.value||0);
+  const precio=parseFloat(document.getElementById('prod-precio')?.value||0);
+  const box=document.getElementById('prod-margen-preview'), val=document.getElementById('prod-margen-val');
+  if (!box||!val) return;
+  if (costo>0&&precio>0) { const m=Math.round((precio-costo)/costo*100); val.textContent=m+'%'; val.style.color=m<20?'var(--red)':m<50?'var(--orange)':'var(--green)'; box.style.display='block'; }
+  else box.style.display='none';
+}
+
+async function saveProducto() {
+  const id=document.getElementById('prod-edit-id').value;
+  const body={ nombre:document.getElementById('prod-nombre').value.trim(), categoria:document.getElementById('prod-categoria').value, unidad:document.getElementById('prod-unidad').value, precio_costo:parseFloat(document.getElementById('prod-costo').value||0), precio_venta:parseFloat(document.getElementById('prod-precio').value||0), stock:parseInt(document.getElementById('prod-stock').value||0), stock_min:parseInt(document.getElementById('prod-stock-min').value||3), descripcion:document.getElementById('prod-descripcion').value.trim() };
+  if (!body.nombre) return showToast('❌','Error','El nombre es obligatorio');
+  try {
+    if (id) { await api('PUT',`/products/${id}`,body); showToast('✅','Producto actualizado',''); }
+    else    { await api('POST','/products',body);      showToast('✅','Producto creado',''); }
+    closeModal('modal-producto');
+    await loadProductos();
+    if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
+  } catch(e) { showToast('❌','Error',e.message); }
+}
+
+function openVentaProducto(id, nombre, precio, stock) {
+  document.getElementById('venta-prod-id').value=id;
+  document.getElementById('venta-prod-nombre').textContent=nombre;
+  document.getElementById('venta-precio-unit').value=precio;
+  document.getElementById('venta-cantidad').value=1;
+  document.getElementById('venta-cliente').value='';
+  document.getElementById('venta-metodo').value='cash';
+  window._ventaStock=stock; ventaPreview(); openModal('modal-venta-producto');
+}
+
+function ventaPreview() {
+  const cant=parseInt(document.getElementById('venta-cantidad')?.value||1);
+  const prec=parseFloat(document.getElementById('venta-precio-unit')?.value||0);
+  const tv=document.getElementById('venta-total-val'), warn=document.getElementById('venta-stock-warn');
+  if (tv) tv.textContent='$'+(cant*prec).toLocaleString('es-AR');
+  if (warn) warn.textContent=cant>(window._ventaStock||0)?`⚠️ Stock insuficiente (disponible: ${window._ventaStock||0})`:'';
+}
+
+async function confirmarVentaProducto() {
+  const id=document.getElementById('venta-prod-id').value;
+  const cant=parseInt(document.getElementById('venta-cantidad').value||1);
+  const precio=parseFloat(document.getElementById('venta-precio-unit').value||0);
+  const metodo=document.getElementById('venta-metodo').value;
+  const cli=document.getElementById('venta-cliente').value.trim();
+  if (cant>(window._ventaStock||0)) return showToast('❌','Sin stock',`Disponible: ${window._ventaStock||0}`);
+  try {
+    await api('POST',`/products/${id}/sell`,{quantity:cant,unit_price:precio,payment_method:metodo,client_name:cli});
+    showToast('✅','Venta registrada','Stock actualizado'); closeModal('modal-venta-producto');
+    await loadProductos();
+    if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
+  } catch(e) { showToast('❌','Error',e.message); }
+}
+
+function openAjusteStock(id, nombre) {
+  document.getElementById('ajuste-prod-id').value=id;
+  document.getElementById('ajuste-prod-nombre').textContent=nombre;
+  document.getElementById('ajuste-tipo').value='entrada';
+  document.getElementById('ajuste-cantidad').value=1;
+  document.getElementById('ajuste-nota').value='';
+  openModal('modal-ajuste-stock');
+}
+
+async function confirmarAjusteStock() {
+  const id=document.getElementById('ajuste-prod-id').value;
+  const tipo=document.getElementById('ajuste-tipo').value;
+  const cant=parseInt(document.getElementById('ajuste-cantidad').value||0);
+  const nota=document.getElementById('ajuste-nota').value.trim();
+  try {
+    await api('POST',`/products/${id}/stock`,{tipo,cantidad:cant,nota});
+    showToast('✅','Stock ajustado',''); closeModal('modal-ajuste-stock');
+    await loadProductos();
+    if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
+  } catch(e) { showToast('❌','Error',e.message); }
+}
+
+function bcmLabel(b) {
+  const mode=b.commission_mode||'pct', pct=b.barber_commission_pct||0, fixed=b.commission_fixed||0;
+  if (mode==='fixed') return '$'+parseFloat(fixed).toLocaleString('es-AR')+' fijo/turno';
+  if (mode==='mixed') return pct+'% + $'+parseFloat(fixed).toLocaleString('es-AR')+' mixto';
+  return pct+'% comisión';
+}
+function bcmSelect(mode) {
+  document.querySelectorAll('.bcm-mode-btn').forEach(btn => {
+    const a=btn.dataset.mode===mode;
+    btn.style.background=a?'rgba(255,209,0,.15)':'rgba(255,255,255,.04)';
+    btn.style.borderColor=a?'rgba(255,209,0,.5)':'rgba(255,255,255,.08)';
+    btn.querySelector('div:nth-child(2)').style.color=a?'#FFD100':'rgba(255,255,255,.5)';
+    a?btn.classList.add('active'):btn.classList.remove('active');
+  });
+  const pW=document.getElementById('bcm-pct-wrap'), fW=document.getElementById('bcm-fixed-wrap');
+  if(mode==='pct'){pW.style.display='block';fW.style.display='none';}
+  if(mode==='fixed'){pW.style.display='none';fW.style.display='block';}
+  if(mode==='mixed'){pW.style.display='block';fW.style.display='block';}
+  bcmPreview();
+}
+function bcmPreview() {
+  const mode=document.querySelector('.bcm-mode-btn.active')?.dataset?.mode||'pct';
+  const pct=parseFloat(document.getElementById('bcm-pct')?.value||0);
+  const fixed=parseFloat(document.getElementById('bcm-fixed')?.value||0);
+  const cobro=mode==='pct'?12000*pct/100:mode==='fixed'?fixed:12000*pct/100+fixed;
+  const el=document.getElementById('bcm-preview-val');
+  if(el) el.textContent='$'+Math.round(cobro).toLocaleString('es-AR');
+}
+async function bcmSave(id) {
+  const mode=document.querySelector('.bcm-mode-btn.active')?.dataset?.mode||'pct';
+  const pct=parseInt(document.getElementById('bcm-pct')?.value||0);
+  const fixed=parseFloat(document.getElementById('bcm-fixed')?.value||0);
+  try {
+    await api('PUT',`/barbers/${id}`,{barber_commission_pct:pct,commission_mode:mode,commission_fixed:fixed});
+    showToast('✅','Liquidación actualizada',{pct:'Porcentaje',fixed:'Fijo',mixed:'Mixto'}[mode]);
+    document.getElementById('barber-commission-modal').remove(); loadEquipo();
+  } catch(e) { showToast('❌','Error',e.message); }
+}
+
 </script>
 
 
@@ -4944,6 +5278,140 @@ function generatePDF(data, month) {
       </div>
     </div>
   </div>
+
+
+<!-- MODAL: Producto -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title" id="modal-producto-title">+ Nuevo producto</div>
+    <div class="modal-sub">Completá los datos del producto</div>
+    <input type="hidden" id="prod-edit-id">
+    <div class="form-grid">
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Nombre</label>
+        <input type="text" id="prod-nombre" placeholder="Ej: Pomada Matte Hold">
+      </div>
+      <div class="form-field">
+        <label>Categoría</label>
+        <select id="prod-categoria">
+          <option value="cuidado">💆 Cuidado del cabello</option>
+          <option value="barba">🪒 Barba</option>
+          <option value="piel">🧴 Piel</option>
+          <option value="accesorios">✂️ Accesorios</option>
+          <option value="otros">📦 Otros</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Unidad</label>
+        <select id="prod-unidad">
+          <option value="unidad">Unidad</option>
+          <option value="ml">ml</option>
+          <option value="gr">gr</option>
+          <option value="lt">litro</option>
+          <option value="kg">kg</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Precio de costo ($)</label>
+        <input type="number" id="prod-costo" placeholder="0" min="0" step="1" oninput="calcProdMargen()">
+      </div>
+      <div class="form-field">
+        <label>Precio de venta ($)</label>
+        <input type="number" id="prod-precio" placeholder="0" min="0" step="1" oninput="calcProdMargen()">
+      </div>
+      <div class="form-field">
+        <label>Stock actual</label>
+        <input type="number" id="prod-stock" placeholder="0" min="0" step="1">
+      </div>
+      <div class="form-field">
+        <label>Stock mínimo (alerta)</label>
+        <input type="number" id="prod-stock-min" placeholder="3" min="0" step="1">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Descripción (opcional)</label>
+        <textarea id="prod-descripcion" placeholder="Notas..." rows="2" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div id="prod-margen-preview" style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;font-size:12px;color:var(--gray);display:none">
+      Margen: <strong id="prod-margen-val" style="color:var(--yellow)">—</strong>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="saveProducto()">💾 Guardar</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Venta de producto -->
+<div class="modal-overlay" id="modal-venta-producto">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">💰 Registrar venta</div>
+    <div class="modal-sub" id="venta-prod-nombre" style="color:var(--yellow)"></div>
+    <input type="hidden" id="venta-prod-id">
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
+      <div class="form-field" style="margin-bottom:0">
+        <label>Cantidad</label>
+        <input type="number" id="venta-cantidad" value="1" min="1" step="1" oninput="ventaPreview()">
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Precio unitario ($)</label>
+        <input type="number" id="venta-precio-unit" min="0" step="1" oninput="ventaPreview()">
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Método de pago</label>
+        <select id="venta-metodo">
+          <option value="cash">💵 Efectivo</option>
+          <option value="debit">💳 Débito</option>
+          <option value="credit">💳 Crédito</option>
+          <option value="transfer">📲 Transferencia</option>
+        </select>
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Cliente (opcional)</label>
+        <input type="text" id="venta-cliente" placeholder="Nombre del cliente">
+      </div>
+      <div id="venta-preview-box" style="padding:10px 14px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:9px;font-size:13px">
+        Total: <strong id="venta-total-val" style="color:var(--yellow)">$0</strong>
+        <span id="venta-stock-warn" style="color:var(--red);font-size:11px;display:block;margin-top:4px"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="confirmarVentaProducto()">✅ Confirmar</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-venta-producto')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Ajuste de stock -->
+<div class="modal-overlay" id="modal-ajuste-stock">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">📦 Ajustar stock</div>
+    <div class="modal-sub" id="ajuste-prod-nombre" style="color:var(--yellow)"></div>
+    <input type="hidden" id="ajuste-prod-id">
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
+      <div class="form-field" style="margin-bottom:0">
+        <label>Tipo de ajuste</label>
+        <select id="ajuste-tipo">
+          <option value="entrada">📥 Entrada (compra/reposición)</option>
+          <option value="salida">📤 Salida (uso interno)</option>
+          <option value="ajuste">✏️ Ajuste manual (inventario)</option>
+        </select>
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Cantidad</label>
+        <input type="number" id="ajuste-cantidad" value="1" min="0" step="1">
+      </div>
+      <div class="form-field" style="margin-bottom:0">
+        <label>Nota (opcional)</label>
+        <input type="text" id="ajuste-nota" placeholder="Ej: Compra mayorista...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-primary" onclick="confirmarAjusteStock()">✅ Confirmar</button>
+      <button class="btn-modal-secondary" onclick="closeModal('modal-ajuste-stock')">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
