@@ -4105,6 +4105,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Verificar si viene de MP con ?pending=ID o desde localStorage
   const pendingParams = new URLSearchParams(window.location.search);
   const pendingId = pendingParams.get('pending') || localStorage.getItem('filo_pending_id');
+  // MP agrega ?preapproval_id=xxx al callback — es el subscription_id real
+  const preapprovalId = pendingParams.get('preapproval_id') || null;
   if (pendingId) {
     localStorage.removeItem('filo_pending_id'); // limpiar siempre
     window.history.replaceState({}, '', '/app');
@@ -4112,7 +4114,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       const res = await fetch('/api/auth/complete-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pending_id: parseInt(pendingId) })
+        body: JSON.stringify({ pending_id: parseInt(pendingId), subscription_id: preapprovalId })
       });
       const data = await res.json();
       if (res.ok && data.token) {
