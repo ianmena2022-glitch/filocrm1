@@ -150,7 +150,7 @@ router.post('/pre-register', async (req, res) => {
 
 // POST /api/auth/complete-registration — completa el registro desde pending (llamado por back_url)
 router.post('/complete-registration', async (req, res) => {
-  const { pending_id } = req.body;
+  const { pending_id, subscription_id } = req.body;
   if (!pending_id) return res.status(400).json({ error: 'pending_id requerido' });
 
   try {
@@ -190,12 +190,14 @@ router.post('/complete-registration', async (req, res) => {
       [shop.id]
     );
 
-    // Asociar el mp_plan_id al shop
-    if (p.mp_plan_id) {
+    // Asociar el subscription_id real (de la URL de callback de MP) o el plan_id como fallback
+    const mpId = subscription_id || p.mp_plan_id;
+    if (mpId) {
       await pool.query(
         "UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending' WHERE id=$2",
-        [p.mp_plan_id, shop.id]
+        [mpId, shop.id]
       );
+      if (subscription_id) console.log(`[REGISTRO] subscription_id real capturado: ${subscription_id}`);
     }
 
     // Eliminar el pending
