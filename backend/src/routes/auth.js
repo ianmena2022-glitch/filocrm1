@@ -123,7 +123,6 @@ router.post('/pre-register', async (req, res) => {
             transaction_amount: planConfig.price, currency_id: 'ARS',
             free_trial: { frequency: 7, frequency_type: 'days' }
           },
-          payment_methods_allowed: { payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }] },
           back_url: `${appUrl}/app?pending=${pendingId}`,
           notification_url: `${appUrl}/api/payments/webhook-filo`
         })

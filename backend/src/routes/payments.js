@@ -39,9 +39,6 @@ router.post('/subscription', auth, async (req, res) => {
         transaction_amount: parseFloat(price_monthly),
         currency_id: 'ARS'
       },
-      payment_methods_allowed: {
-        payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
-      },
       back_url: `${appUrl}/app`,
       notification_url: `${appUrl}/api/payments/webhook`
     });
@@ -236,9 +233,6 @@ router.get('/setup-plans', async (req, res) => {
           currency_id: 'ARS',
           free_trial: { frequency: 7, frequency_type: 'days' }
         },
-        payment_methods_allowed: {
-          payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }]
-        },
         back_url: appUrl + '/app',
         notification_url: appUrl + '/api/payments/webhook-filo'
       });
@@ -297,7 +291,6 @@ router.post('/filo-subscription', auth, async (req, res) => {
           transaction_amount: planConfig.price, currency_id: 'ARS',
           free_trial: { frequency: 7, frequency_type: 'days' }
         },
-        payment_methods_allowed: { payment_types: [{ id: 'credit_card' }, { id: 'debit_card' }] },
         back_url: appUrl + '/app',
         notification_url: appUrl + '/api/payments/webhook-filo'
       });
