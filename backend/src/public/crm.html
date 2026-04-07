@@ -933,11 +933,8 @@ body {
           <div id="dash-chart-30" style="height:120px;display:flex;align-items:flex-end;gap:3px"></div>
         </div>
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase">📦 Ventas de productos</div>
-            <button onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)" style="background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.2);color:var(--yellow);border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Gestionar →</button>
-          </div>
-          <div id="dash-product-sales"></div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">✂️ Servicios más vendidos</div>
+          <div id="dash-top-services"></div>
         </div>
       </div>
 
@@ -2311,11 +2308,11 @@ let _dashCalOffset = 0; // semanas desde hoy
 
 async function loadDashboard() {
   try {
-    const [today, month, chart, topProdSales, topClients] = await Promise.all([
+    const [today, month, chart, topSvcs, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
       api('GET', '/dashboard/month'),
       api('GET', '/dashboard/chart'),
-      api('GET', '/products/ventas?limit=5'),
+      api('GET', '/dashboard/top-services'),
       api('GET', '/dashboard/top-clients'),
     ]);
 
@@ -2360,27 +2357,22 @@ async function loadDashboard() {
     // Gráfico 30 días
     renderChart30(chart);
 
-    // Ventas de productos recientes
-    const prodSalesEl = document.getElementById('dash-product-sales');
-    if (prodSalesEl) {
-      if (!topProdSales.length) {
-        prodSalesEl.innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin ventas de productos hoy</div>`;
-      } else {
-        const mIcon = { cash:'💵', debit:'💳', credit:'💳', transfer:'📲' };
-        const fmt   = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-        const totalVentas = topProdSales.reduce((s,v) => s + parseFloat(v.total_price||0), 0);
-        prodSalesEl.innerHTML =
-          `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Últimas ${topProdSales.length} ventas · <strong style="color:var(--yellow)">${fmt(totalVentas)} total</strong></div>` +
-          topProdSales.map(v => `
-            <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-              <span style="font-size:13px">${mIcon[v.payment_method]||'💰'}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.product_name||'—'}</div>
-                <div style="font-size:10px;color:var(--gray)">${v.quantity} u. · ${v.client_name||'Sin nombre'}</div>
-              </div>
-              <div style="font-size:13px;font-weight:700;color:var(--yellow);flex-shrink:0">${fmt(v.total_price)}</div>
-            </div>`).join('');
-      }
+    // Servicios top
+    const svcsEl = document.getElementById('dash-top-services');
+    if (!topSvcs.length) {
+      svcsEl.innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin datos este mes</div>`;
+    } else {
+      const maxCount = Math.max(...topSvcs.map(s => parseInt(s.count)));
+      svcsEl.innerHTML = topSvcs.map(s => `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span>${s.name}</span>
+            <span style="color:var(--yellow);font-weight:700">${s.count} turnos</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px">
+            <div style="background:var(--yellow);border-radius:4px;height:6px;width:${Math.max(5,(parseInt(s.count)/maxCount)*100)}%"></div>
+          </div>
+        </div>`).join('');
     }
 
     // Top clientes
@@ -4030,10 +4022,11 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async function() {
-  // Verificar si viene de MP con ?pending=ID para completar el registro
+  // Verificar si viene de MP con ?pending=ID o desde localStorage
   const pendingParams = new URLSearchParams(window.location.search);
-  const pendingId = pendingParams.get('pending');
+  const pendingId = pendingParams.get('pending') || localStorage.getItem('filo_pending_id');
   if (pendingId) {
+    localStorage.removeItem('filo_pending_id'); // limpiar siempre
     window.history.replaceState({}, '', '/app');
     try {
       const res = await fetch('/api/auth/complete-registration', {

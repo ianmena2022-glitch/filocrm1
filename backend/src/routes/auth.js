@@ -92,35 +92,20 @@ router.post('/pre-register', async (req, res) => {
     let mpPlanId;
 
     if (fixedPlanId) {
-      // Obtener el init_point del plan fijo (ya tiene el trial y back_url incorporados)
-      // Como el plan fijo tiene una back_url genérica, necesitamos crear una suscripción
-      // con el pending_id en la external_reference para identificar al usuario
-      const mpRes = await fetch(`https://api.mercadopago.com/preapproval`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${MP_TOKEN}`,
-          'Content-Type': 'application/json',
-          'X-Idempotency-Key': `pre-reg-${pendingId}-${Date.now()}`
-        },
-        body: JSON.stringify({
-          preapproval_plan_id: fixedPlanId,
-          reason: planConfig.name,
-          external_reference: `pending:${pendingId}`,
-          payer_email: email,
-          back_url: `${appUrl}/app?pending=${pendingId}`,
-          auto_recurring: {
-            frequency: 1,
-            frequency_type: 'months',
-            transaction_amount: planConfig.price,
-            currency_id: 'ARS',
-            free_trial: { frequency: 7, frequency_type: 'days' }
-          }
-        })
+      // Usar el init_point del plan fijo directamente.
+      // MP maneja la tarjeta del usuario — NO crear preapproval server-side
+      // (requiere card_token_id que solo el browser puede generar).
+      const mpRes = await fetch(`https://api.mercadopago.com/preapproval_plan/${fixedPlanId}`, {
+        headers: { 'Authorization': `Bearer ${MP_TOKEN}` }
       });
       const mpData = await mpRes.json();
-      if (!mpRes.ok) throw new Error(mpData.message || 'Error MP');
-      paymentUrl = mpData.init_point;
-      mpPlanId = mpData.id;
+      if (!mpRes.ok) throw new Error(mpData.message || 'Error al obtener plan MP');
+
+      // Agregar pending_id como query param en el back_url para identificar al usuario
+      // cuando MP nos redirige de vuelta
+      const baseInitPoint = mpData.init_point;
+      paymentUrl = baseInitPoint + (baseInitPoint.includes('?') ? '&' : '?') + `external_reference=pending:${pendingId}`;
+      mpPlanId = fixedPlanId;
     } else {
       // Fallback: crear plan nuevo
       console.warn(`[PRE-REG] Plan fijo no configurado para ${filoPlan}, creando uno nuevo...`);
