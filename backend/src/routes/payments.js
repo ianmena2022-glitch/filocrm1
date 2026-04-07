@@ -328,21 +328,22 @@ router.post('/webhook-filo', async (req, res) => {
 
       const subscription = await mpFetch('GET', `/preapproval/${subId}`);
       const status = subscription.status;
-      console.log(`[FILO Webhook] suscripción ${subId} → ${status}`);
+      const planId = subscription.preapproval_plan_id;
+      console.log(`[FILO Webhook] suscripción ${subId} → ${status} · plan_id=${planId}`);
 
-      // 1. Intentar actualizar shop existente
+      // 1. Intentar actualizar shop existente (match por subscription_id o plan_id almacenado)
       const updated = await pool.query(
-        `UPDATE shops SET mp_shop_status=$1, subscription_status=$2
-         WHERE mp_shop_subscription_id=$3 RETURNING id`,
-        [status, status === 'authorized' ? 'active' : 'expired', subId]
+        `UPDATE shops SET mp_shop_status=$1, subscription_status=$2, mp_shop_subscription_id=$3
+         WHERE mp_shop_subscription_id=$3 OR mp_shop_subscription_id=$4 RETURNING id`,
+        [status, status === 'authorized' ? 'active' : 'expired', subId, planId]
       );
 
       // 2. Si no hay shop, buscar en pending_registrations y crear la cuenta
       if (!updated.rows.length && status === 'authorized') {
         const bcrypt = require('bcryptjs');
         const pending = await pool.query(
-          'SELECT * FROM pending_registrations WHERE mp_plan_id=$1 AND expires_at > NOW()',
-          [subId]
+          'SELECT * FROM pending_registrations WHERE (mp_plan_id=$1 OR mp_plan_id=$2) AND expires_at > NOW()',
+          [subId, planId]
         );
         if (pending.rows.length) {
           const p = pending.rows[0];
