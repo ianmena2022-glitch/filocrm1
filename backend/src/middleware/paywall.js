@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/api/auth/status',
   '/api/auth/me',           // necesario para el polling de verificación de pago
   '/api/auth/complete-registration',
+  '/api/payments/filo-subscription', // necesario para que cuentas expiradas puedan re-suscribirse
   '/api/auth/setup-test',
   '/api/payments/webhook',
   '/api/booking',
