@@ -162,22 +162,41 @@ router.post('/complete-registration', async (req, res) => {
     const p = pending.rows[0];
 
     // Verificar que no exista cuenta ya creada
-    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [p.email]);
+    const exists = await pool.query(
+      'SELECT id, trial_ends_at, mp_shop_subscription_id FROM shops WHERE email=$1',
+      [p.email]
+    );
     if (exists.rows.length) {
       const shopId = exists.rows[0].id;
-      // Si viene con nuevo subscription_id (re-suscripción), actualizar la cuenta
       const mpId = subscription_id || p.mp_plan_id;
       if (mpId) {
-        const newTrialEnds = new Date();
-        newTrialEnds.setDate(newTrialEnds.getDate() + 7);
-        await pool.query(
-          `UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending',
-           subscription_status='trial', trial_ends_at=$2 WHERE id=$3`,
-          [mpId, newTrialEnds.toISOString(), shopId]
-        );
-        console.log(`[REGISTRO] Re-suscripción de ${p.email} con nuevo ID: ${mpId}`);
+        // Determinar si el trial ya fue usado:
+        // - trial_ends_at en el pasado → ya usó el trial
+        // - mp_shop_subscription_id previo → ya se suscribió antes (puede haber pagado)
+        const trialAlreadyUsed =
+          (exists.rows[0].trial_ends_at && new Date(exists.rows[0].trial_ends_at) < new Date()) ||
+          !!exists.rows[0].mp_shop_subscription_id;
+
+        if (trialAlreadyUsed) {
+          // Re-suscripción sin trial: acceso sólo cuando MP confirme el pago vía webhook
+          await pool.query(
+            `UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending',
+             subscription_status='expired' WHERE id=$2`,
+            [mpId, shopId]
+          );
+          console.log(`[REGISTRO] Re-suscripción SIN trial de ${p.email} (trial ya usado)`);
+        } else {
+          // Primera suscripción real: otorgar 7 días de trial
+          const newTrialEnds = new Date();
+          newTrialEnds.setDate(newTrialEnds.getDate() + 7);
+          await pool.query(
+            `UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending',
+             subscription_status='trial', trial_ends_at=$2 WHERE id=$3`,
+            [mpId, newTrialEnds.toISOString(), shopId]
+          );
+          console.log(`[REGISTRO] Re-suscripción CON trial de ${p.email}`);
+        }
       }
-      // Fetch completo (no solo id) para devolver todos los campos al frontend
       const fullShop = (await pool.query('SELECT * FROM shops WHERE id=$1', [shopId])).rows[0];
       return res.json({ token: makeToken(fullShop), shop: shopPayload(fullShop), already_exists: true });
     }
