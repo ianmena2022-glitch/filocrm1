@@ -1,6 +1,18 @@
 const pool = require('./db/pool');
 const wpp  = require('./services/whatsapp');
 
+const MP_BASE  = 'https://api.mercadopago.com';
+const MP_TOKEN = () => process.env.MP_ACCESS_TOKEN;
+
+async function mpGet(path) {
+  const res = await fetch(`${MP_BASE}${path}`, {
+    headers: { 'Authorization': `Bearer ${MP_TOKEN()}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error MP');
+  return data;
+}
+
 // Corre cada hora y envía recordatorios de turnos que son en ~12hs
 async function sendReminders() {
   try {
@@ -126,13 +138,47 @@ async function closeCashRegisters() {
   }
 }
 
+// Verifica cada shop activo contra MP y revoca acceso si la suscripción no está 'authorized'
+async function syncSubscriptions() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, mp_shop_subscription_id
+       FROM shops
+       WHERE subscription_status = 'active'
+         AND mp_shop_subscription_id IS NOT NULL
+         AND (is_test = FALSE OR is_test IS NULL)`
+    );
+    if (!rows.length) return;
+    console.log(`[CRON] Verificando ${rows.length} suscripción(es) activa(s)`);
+
+    for (const shop of rows) {
+      try {
+        const sub = await mpGet(`/preapproval/${shop.mp_shop_subscription_id}`);
+        if (sub.status !== 'authorized') {
+          await pool.query(
+            "UPDATE shops SET subscription_status='expired', mp_shop_status=$1 WHERE id=$2",
+            [sub.status, shop.id]
+          );
+          console.log(`[CRON] ${shop.email} → MP status=${sub.status} → acceso revocado`);
+        }
+      } catch (e) {
+        // No revocar acceso por error de red/MP — fail-safe
+        console.error(`[CRON] Error verificando suscripción de ${shop.email}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[CRON] Error en syncSubscriptions:', e.message);
+  }
+}
+
 async function runHourlyTasks() {
   await sendReminders();
   await closeCashRegisters();
+  await syncSubscriptions();
 }
 
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
 }
