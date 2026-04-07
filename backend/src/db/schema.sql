@@ -274,3 +274,55 @@ CREATE TABLE IF NOT EXISTS client_debts (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_debts_shop ON client_debts(shop_id, paid);
+
+-- ── PRODUCTOS & STOCK ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS products (
+  id            SERIAL PRIMARY KEY,
+  shop_id       INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  nombre        VARCHAR(255) NOT NULL,
+  categoria     VARCHAR(50)  DEFAULT 'otros'
+                CHECK (categoria IN ('cuidado','barba','piel','accesorios','otros')),
+  unidad        VARCHAR(20)  DEFAULT 'unidad',
+  precio_costo  NUMERIC(10,2) DEFAULT 0,
+  precio_venta  NUMERIC(10,2) DEFAULT 0,
+  stock         INT DEFAULT 0,
+  stock_min     INT DEFAULT 3,
+  descripcion   TEXT,
+  active        BOOLEAN DEFAULT TRUE,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS product_sales (
+  id             SERIAL PRIMARY KEY,
+  shop_id        INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  product_id     INT REFERENCES products(id) ON DELETE SET NULL,
+  product_name   VARCHAR(255),
+  quantity       INT NOT NULL DEFAULT 1,
+  unit_price     NUMERIC(10,2) NOT NULL,
+  total_price    NUMERIC(10,2) NOT NULL,
+  payment_method VARCHAR(20) DEFAULT 'cash',
+  client_name    VARCHAR(255),
+  sold_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS product_stock_movements (
+  id            SERIAL PRIMARY KEY,
+  shop_id       INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  product_id    INT REFERENCES products(id) ON DELETE CASCADE,
+  tipo          VARCHAR(20) CHECK (tipo IN ('entrada','salida','ajuste','venta')),
+  cantidad      INT NOT NULL,
+  stock_antes   INT,
+  stock_despues INT,
+  nota          TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_products_shop       ON products(shop_id, active);
+CREATE INDEX IF NOT EXISTS idx_product_sales_shop  ON product_sales(shop_id, sold_at);
+CREATE INDEX IF NOT EXISTS idx_stock_movements     ON product_stock_movements(shop_id, product_id);
+
+-- Modos de liquidación para barberos
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 'pct'
+  CHECK (commission_mode IN ('pct','fixed','mixed'));
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
