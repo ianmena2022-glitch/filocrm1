@@ -329,13 +329,15 @@ router.post('/webhook-filo', async (req, res) => {
       const subscription = await mpFetch('GET', `/preapproval/${subId}`);
       const status = subscription.status;
       const planId = subscription.preapproval_plan_id;
-      console.log(`[FILO Webhook] suscripción ${subId} → ${status} · plan_id=${planId}`);
+      const payerEmail = subscription.payer_email || subscription.payer?.email || null;
+      console.log(`[FILO Webhook] suscripción ${subId} → ${status} · plan_id=${planId} · payer=${payerEmail}`);
 
       // 1. Intentar actualizar shop existente (match por subscription_id o plan_id almacenado)
       const updated = await pool.query(
-        `UPDATE shops SET mp_shop_status=$1, subscription_status=$2, mp_shop_subscription_id=$3
+        `UPDATE shops SET mp_shop_status=$1, subscription_status=$2, mp_shop_subscription_id=$3,
+           mp_payer_email=COALESCE($5, mp_payer_email)
          WHERE mp_shop_subscription_id=$3 OR mp_shop_subscription_id=$4 RETURNING id`,
-        [status, status === 'authorized' ? 'active' : 'expired', subId, planId]
+        [status, status === 'authorized' ? 'active' : 'expired', subId, planId, payerEmail]
       );
 
       // 2. Si no hay shop, buscar en pending_registrations y crear la cuenta
@@ -381,7 +383,7 @@ router.post('/webhook-filo', async (req, res) => {
 router.post('/filo-cancel', auth, async (req, res) => {
   try {
     const shopData = await pool.query(
-      'SELECT mp_shop_subscription_id, email FROM shops WHERE id=$1',
+      'SELECT mp_shop_subscription_id, mp_payer_email, email FROM shops WHERE id=$1',
       [req.shopId]
     );
     const shop = shopData.rows[0];
@@ -393,10 +395,12 @@ router.post('/filo-cancel', auth, async (req, res) => {
         await mpFetch('PUT', `/preapproval/${storedId}`, { status: 'cancelled' });
         console.log(`[FILO cancel] Suscripción ${storedId} cancelada en MP`);
       } catch (mpErr) {
-        // Si falló, probablemente tenemos el plan_id — buscar la suscripción real del usuario
-        console.warn(`[FILO cancel] PUT directo falló (${mpErr.message}), buscando por plan_id...`);
+        // Si falló, probablemente tenemos el plan_id — buscar la suscripción real del usuario.
+        // Usar mp_payer_email (email real de MP) si está disponible; si no, el email de FILO.
+        const searchEmail = shop.mp_payer_email || shop.email;
+        console.warn(`[FILO cancel] PUT directo falló (${mpErr.message}), buscando por plan_id + email=${searchEmail}...`);
         try {
-          const search = await mpFetch('GET', `/preapproval/search?preapproval_plan_id=${storedId}&payer_email=${encodeURIComponent(shop.email)}`);
+          const search = await mpFetch('GET', `/preapproval/search?preapproval_plan_id=${storedId}&payer_email=${encodeURIComponent(searchEmail)}`);
           const realSub = search?.results?.[0];
           if (realSub?.id) {
             await mpFetch('PUT', `/preapproval/${realSub.id}`, { status: 'cancelled' });
