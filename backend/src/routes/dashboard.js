@@ -8,18 +8,27 @@ router.get('/today', auth, async (req, res) => {
   const today  = new Date().toISOString().split('T')[0];
 
   try {
-    // Métricas del día
-    const metricsQ = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)          AS revenue,
-         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
-         COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
-         COUNT(CASE WHEN status='pending' OR status='confirmed' THEN 1 END)             AS pending,
-         COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
-       FROM appointments
-       WHERE shop_id = $1 AND date = $2`,
-      [shopId, today]
-    );
+    // Métricas del día (turnos + ventas de productos)
+    const [metricsQ, prodRevenueQ] = await Promise.all([
+      pool.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)          AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
+           COUNT(CASE WHEN status='pending' OR status='confirmed' THEN 1 END)             AS pending,
+           COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
+         FROM appointments
+         WHERE shop_id = $1 AND date = $2`,
+        [shopId, today]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
+         FROM product_sales
+         WHERE shop_id=$1 AND sold_at::date = $2`,
+        [shopId, today]
+      ),
+    ]);
+    const prodRevToday = parseFloat(prodRevenueQ.rows[0].prod_revenue);
 
     // Turnos del día completos con info del cliente
     const apptsQ = await pool.query(
@@ -62,11 +71,12 @@ router.get('/today', auth, async (req, res) => {
     const m = metricsQ.rows[0];
     res.json({
       metrics: {
-        revenue:     parseFloat(m.revenue),
-        net_profit:  parseFloat(m.net_profit),
-        completed:   parseInt(m.completed),
-        pending:     parseInt(m.pending),
-        noshows:     parseInt(m.noshows),
+        revenue:      parseFloat(m.revenue) + prodRevToday,
+        net_profit:   parseFloat(m.net_profit) + prodRevToday,
+        completed:    parseInt(m.completed),
+        pending:      parseInt(m.pending),
+        noshows:      parseInt(m.noshows),
+        prod_revenue: prodRevToday,
       },
       appointments: apptsQ.rows,
       week:         weekQ.rows,
@@ -84,19 +94,29 @@ module.exports = router;
 router.get('/month', auth, async (req, res) => {
   const shopId = req.shopId;
   try {
-    const monthQ = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)        AS revenue,
-         COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
-         COUNT(CASE WHEN status='completed' THEN 1 END)                               AS completed,
-         COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
-         COUNT(*)                                                                      AS total
-       FROM appointments
-       WHERE shop_id=$1
-         AND date >= date_trunc('month', CURRENT_DATE)
-         AND date <= CURRENT_DATE`,
-      [shopId]
-    );
+    const [monthQ, prodRevMonthQ] = await Promise.all([
+      pool.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)        AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COUNT(CASE WHEN status='completed' THEN 1 END)                               AS completed,
+           COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
+           COUNT(*)                                                                      AS total
+         FROM appointments
+         WHERE shop_id=$1
+           AND date >= date_trunc('month', CURRENT_DATE)
+           AND date <= CURRENT_DATE`,
+        [shopId]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
+         FROM product_sales
+         WHERE shop_id=$1
+           AND sold_at >= date_trunc('month', CURRENT_DATE)`,
+        [shopId]
+      ),
+    ]);
+    const prodRevMonth = parseFloat(prodRevMonthQ.rows[0].prod_revenue);
 
     // Mes anterior para comparar
     const prevQ = await pool.query(
@@ -147,8 +167,9 @@ router.get('/month', auth, async (req, res) => {
       : 0;
 
     res.json({
-      revenue:      parseFloat(m.revenue),
-      net_profit:   parseFloat(m.net_profit),
+      revenue:      parseFloat(m.revenue) + prodRevMonth,
+      net_profit:   parseFloat(m.net_profit) + prodRevMonth,
+      prod_revenue: prodRevMonth,
       completed:    parseInt(m.completed),
       noshows:      parseInt(m.noshows),
       noshow_rate,
@@ -403,44 +424,11 @@ router.get('/debts', auth, async (req, res) => {
 
 // PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada
 router.put('/debts/:id/pay', auth, async (req, res) => {
-  const { payment_method } = req.body;
-  const validMethods = ['cash','debit','credit','transfer'];
-  const method = validMethods.includes(payment_method) ? payment_method : 'cash';
   try {
-    // 1. Obtener la deuda para saber el appointment_id o client_id
-    const debtRes = await pool.query(
-      `SELECT * FROM client_debts WHERE id=$1 AND shop_id=$2`,
-      [req.params.id, req.shopId]
-    );
-    if (!debtRes.rows.length) return res.status(404).json({ error: 'Deuda no encontrada' });
-    const debt = debtRes.rows[0];
-
-    // 2. Marcar deuda como pagada
     await pool.query(
       `UPDATE client_debts SET paid=TRUE, paid_at=NOW() WHERE id=$1 AND shop_id=$2`,
       [req.params.id, req.shopId]
     );
-
-    // 3. Actualizar el payment_method del appointment original (si existe)
-    if (debt.appointment_id) {
-      await pool.query(
-        `UPDATE appointments SET payment_method=$1 WHERE id=$2 AND shop_id=$3`,
-        [method, debt.appointment_id, req.shopId]
-      );
-    } else if (debt.client_id) {
-      // Fallback: actualizar el turno más reciente del cliente que esté como 'debt'
-      await pool.query(
-        `UPDATE appointments SET payment_method=$1
-         WHERE id = (
-           SELECT id FROM appointments
-           WHERE shop_id=$2 AND client_id=$3 AND payment_method='debt' AND status='completed'
-           ORDER BY date DESC, time_start DESC
-           LIMIT 1
-         )`,
-        [method, req.shopId, debt.client_id]
-      );
-    }
-
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

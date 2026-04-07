@@ -933,8 +933,11 @@ body {
           <div id="dash-chart-30" style="height:120px;display:flex;align-items:flex-end;gap:3px"></div>
         </div>
         <div class="card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">✂️ Servicios más vendidos</div>
-          <div id="dash-top-services"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase">📦 Ventas de productos</div>
+            <button onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)" style="background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.2);color:var(--yellow);border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Gestionar →</button>
+          </div>
+          <div id="dash-product-sales"></div>
         </div>
       </div>
 
@@ -1399,37 +1402,6 @@ body {
             <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Premios disponibles</div>
             <div id="store-items-list" style="margin-bottom:14px"></div>
             <button class="btn-motor secondary" onclick="openModal('modal-store-item')">+ Agregar premio</button>
-          </div>
-        </div>
-
-        <!-- Productos & Stock — acordeón -->
-        <div class="settings-section" style="padding:0;overflow:hidden">
-          <div onclick="toggleTpl('cfg-productos-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
-            <div class="settings-section-title" style="margin-bottom:0">📦 Productos & Stock</div>
-            <span class="tpl-arrow" id="arrow-cfg-productos-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
-          </div>
-          <div id="cfg-productos-body" style="display:none;padding:0 22px 20px">
-            <div style="font-size:13px;color:var(--gray);margin-bottom:18px;line-height:1.6">Administrá el stock de productos. Registrá ventas, entradas y ajustes.</div>
-            <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-              <input id="prod-search" type="text" placeholder="Buscar producto..." oninput="renderProductos()"
-                style="flex:1;min-width:160px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 13px;color:#fff;font-size:13px;outline:none">
-              <select id="prod-filter-cat" onchange="renderProductos()"
-                style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 13px;color:#fff;font-size:13px;outline:none">
-                <option value="">Todas las categorías</option>
-                <option value="cuidado">💆 Cuidado del cabello</option>
-                <option value="barba">🪒 Barba</option>
-                <option value="piel">🧴 Piel</option>
-                <option value="accesorios">✂️ Accesorios</option>
-                <option value="otros">📦 Otros</option>
-              </select>
-              <button class="btn-add" onclick="openProductoModal()" style="padding:9px 16px;font-size:13px">+ Producto</button>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px" id="prod-stats"></div>
-            <div id="productos-list"></div>
-            <div style="margin-top:18px">
-              <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Últimas ventas</div>
-              <div id="prod-ventas-list"></div>
-            </div>
           </div>
         </div>
 
@@ -2330,7 +2302,7 @@ function showSection(name) {
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') loadSubscriptionStatus();
-  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
+  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); }
   if (name === 'equipo') loadEquipo();
 }
 
@@ -2339,11 +2311,11 @@ let _dashCalOffset = 0; // semanas desde hoy
 
 async function loadDashboard() {
   try {
-    const [today, month, chart, topSvcs, topClients] = await Promise.all([
+    const [today, month, chart, topProdSales, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
       api('GET', '/dashboard/month'),
       api('GET', '/dashboard/chart'),
-      api('GET', '/dashboard/top-services'),
+      api('GET', '/products/ventas?limit=5'),
       api('GET', '/dashboard/top-clients'),
     ]);
 
@@ -2388,22 +2360,27 @@ async function loadDashboard() {
     // Gráfico 30 días
     renderChart30(chart);
 
-    // Servicios top
-    const svcsEl = document.getElementById('dash-top-services');
-    if (!topSvcs.length) {
-      svcsEl.innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin datos este mes</div>`;
-    } else {
-      const maxCount = Math.max(...topSvcs.map(s => parseInt(s.count)));
-      svcsEl.innerHTML = topSvcs.map(s => `
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-            <span>${s.name}</span>
-            <span style="color:var(--yellow);font-weight:700">${s.count} turnos</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px">
-            <div style="background:var(--yellow);border-radius:4px;height:6px;width:${Math.max(5,(parseInt(s.count)/maxCount)*100)}%"></div>
-          </div>
-        </div>`).join('');
+    // Ventas de productos recientes
+    const prodSalesEl = document.getElementById('dash-product-sales');
+    if (prodSalesEl) {
+      if (!topProdSales.length) {
+        prodSalesEl.innerHTML = `<div style="font-size:13px;color:var(--gray)">Sin ventas de productos hoy</div>`;
+      } else {
+        const mIcon = { cash:'💵', debit:'💳', credit:'💳', transfer:'📲' };
+        const fmt   = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+        const totalVentas = topProdSales.reduce((s,v) => s + parseFloat(v.total_price||0), 0);
+        prodSalesEl.innerHTML =
+          `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Últimas ${topProdSales.length} ventas · <strong style="color:var(--yellow)">${fmt(totalVentas)} total</strong></div>` +
+          topProdSales.map(v => `
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+              <span style="font-size:13px">${mIcon[v.payment_method]||'💰'}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.product_name||'—'}</div>
+                <div style="font-size:10px;color:var(--gray)">${v.quantity} u. · ${v.client_name||'Sin nombre'}</div>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:var(--yellow);flex-shrink:0">${fmt(v.total_price)}</div>
+            </div>`).join('');
+      }
     }
 
     // Top clientes
@@ -3934,7 +3911,6 @@ async function loadEquipo() {
       return;
     }
 
-    window._barbersList = barbers;
     el.innerHTML = barbers.map(b => {
       const stat = stats.find(s => s.id === b.id) || {};
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
@@ -3945,7 +3921,7 @@ async function loadEquipo() {
             <span>📅 ${b.turnos_hoy || 0} turnos hoy</span>
             <span>✅ ${stat.completados_mes || 0} completados este mes</span>
             <span>💰 $${parseFloat(stat.facturado_mes || 0).toLocaleString('es-AR')} facturado</span>
-            <span style="color:var(--yellow)">🤝 ${bcmLabel(b)}</span>
+            <span style="color:var(--yellow)">🤝 ${b.barber_commission_pct}% comisión</span>
           </div>
         </div>
         <div style="display:flex;gap:8px">
@@ -4024,113 +4000,16 @@ async function toggleCommission() {
   }
 }
 
-function bcmLabel(b) {
-  const mode  = b.commission_mode  || 'pct';
-  const pct   = b.barber_commission_pct || 0;
-  const fixed = b.commission_fixed || 0;
-  if (mode === 'fixed') return '$' + parseFloat(fixed).toLocaleString('es-AR') + ' fijo/turno';
-  if (mode === 'mixed') return pct + '% + $' + parseFloat(fixed).toLocaleString('es-AR') + ' mixto';
-  return pct + '% comisión';
-}
-
-function editBarber(id, name, commission) {
-  const barberData = window._barbersList?.find(b => b.id === id) || {};
-  const mode  = barberData.commission_mode  || 'pct';
-  const fixed = barberData.commission_fixed || 0;
-
-  const existing = document.getElementById('barber-commission-modal');
-  if (existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'barber-commission-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-
-  modal.innerHTML = `
-    <div style="background:#0a1828;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:28px;width:100%;max-width:420px">
-      <div style="font-size:17px;font-weight:700;margin-bottom:4px">✂️ Liquidación — ${name}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:22px">Elegí el modo de liquidación para este barbero</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
-        ${['pct','fixed','mixed'].map(m => {
-          const labels = {pct:'%', fixed:'$', mixed:'%+$'};
-          const names  = {pct:'Porcentaje', fixed:'Fijo', mixed:'Mixto'};
-          const descs  = {pct:'% de cada turno', fixed:'Monto fijo/turno', mixed:'% más monto fijo'};
-          const active = m === mode;
-          return `<div class="bcm-mode-btn ${active?'active':''}" onclick="bcmSelect('${m}')" data-mode="${m}"
-            style="background:${active?'rgba(255,209,0,.15)':'rgba(255,255,255,.04)'};border:1px solid ${active?'rgba(255,209,0,.5)':'rgba(255,255,255,.08)'};border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .2s">
-            <div style="font-size:20px;margin-bottom:6px">${labels[m]}</div>
-            <div style="font-size:11px;font-weight:700;color:${active?'#FFD100':'rgba(255,255,255,.5)'}">${names[m]}</div>
-            <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:3px">${descs[m]}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
-        <div id="bcm-pct-wrap" style="display:${mode!=='fixed'?'block':'none'}">
-          <label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4);display:block;margin-bottom:7px">Porcentaje (%)</label>
-          <input id="bcm-pct" type="number" min="0" max="100" value="${commission}"
-            style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;outline:none"
-            oninput="bcmPreview()" onfocus="this.style.borderColor='#FFD100'" onblur="this.style.borderColor='rgba(255,255,255,.08)'">
-        </div>
-        <div id="bcm-fixed-wrap" style="display:${mode!=='pct'?'block':'none'}">
-          <label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4);display:block;margin-bottom:7px">Monto fijo por turno ($)</label>
-          <input id="bcm-fixed" type="number" min="0" value="${fixed}"
-            style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;outline:none"
-            oninput="bcmPreview()" onfocus="this.style.borderColor='#FFD100'" onblur="this.style.borderColor='rgba(255,255,255,.08)'">
-        </div>
-      </div>
-      <div id="bcm-preview" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:12px 14px;margin-bottom:20px;font-size:12px;color:rgba(255,255,255,.5)">
-        Turno de <strong style="color:#fff">$12.000</strong>: barbero cobra <strong id="bcm-preview-val" style="color:#FFD100">—</strong>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button onclick="bcmSave(${id})" style="flex:1;background:#FFD100;color:#050d18;border:none;border-radius:9px;padding:13px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Guardar</button>
-        <button onclick="document.getElementById('barber-commission-modal').remove()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);border-radius:9px;padding:13px 18px;font-size:13px;cursor:pointer">Cancelar</button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  bcmPreview();
-}
-
-function bcmSelect(mode) {
-  document.querySelectorAll('.bcm-mode-btn').forEach(btn => {
-    const active = btn.dataset.mode === mode;
-    btn.style.background   = active ? 'rgba(255,209,0,.15)' : 'rgba(255,255,255,.04)';
-    btn.style.borderColor  = active ? 'rgba(255,209,0,.5)'  : 'rgba(255,255,255,.08)';
-    btn.querySelector('div:nth-child(2)').style.color = active ? '#FFD100' : 'rgba(255,255,255,.5)';
-    active ? btn.classList.add('active') : btn.classList.remove('active');
-  });
-  const pW = document.getElementById('bcm-pct-wrap');
-  const fW = document.getElementById('bcm-fixed-wrap');
-  if (mode === 'pct')   { pW.style.display='block'; fW.style.display='none'; }
-  if (mode === 'fixed') { pW.style.display='none';  fW.style.display='block'; }
-  if (mode === 'mixed') { pW.style.display='block'; fW.style.display='block'; }
-  bcmPreview();
-}
-
-function bcmPreview() {
-  const mode  = document.querySelector('.bcm-mode-btn.active')?.dataset?.mode || 'pct';
-  const pct   = parseFloat(document.getElementById('bcm-pct')?.value  || 0);
-  const fixed = parseFloat(document.getElementById('bcm-fixed')?.value || 0);
-  const sample = 12000;
-  let cobro = 0;
-  if (mode === 'pct')   cobro = sample * pct / 100;
-  if (mode === 'fixed') cobro = fixed;
-  if (mode === 'mixed') cobro = sample * pct / 100 + fixed;
-  const el = document.getElementById('bcm-preview-val');
-  if (el) el.textContent = '$' + Math.round(cobro).toLocaleString('es-AR');
-}
-
-async function bcmSave(id) {
-  const mode  = document.querySelector('.bcm-mode-btn.active')?.dataset?.mode || 'pct';
-  const pct   = parseInt(document.getElementById('bcm-pct')?.value   || 0);
-  const fixed = parseFloat(document.getElementById('bcm-fixed')?.value || 0);
+async function editBarber(id, name, commission) {
+  const newPct = prompt(`Comisión para ${name} (%):`, commission);
+  if (!newPct || isNaN(newPct)) return;
   try {
-    await api('PUT', `/barbers/${id}`, { barber_commission_pct: pct, commission_mode: mode, commission_fixed: fixed });
-    const modeLabel = { pct:'Porcentaje', fixed:'Fijo', mixed:'Mixto' }[mode];
-    showToast('✅', 'Liquidación actualizada', 'Modo: ' + modeLabel);
-    document.getElementById('barber-commission-modal').remove();
+    await api('PUT', `/barbers/${id}`, { barber_commission_pct: parseInt(newPct) });
+    showToast('✅', 'Comisión actualizada', `${name}: ${newPct}%`);
     loadEquipo();
-  } catch(e) { showToast('❌', 'Error', e.message); }
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
 }
 
 async function removeBarber(id, name) {
@@ -4954,229 +4833,6 @@ function generatePDF(data, month) {
   setTimeout(() => { win.focus(); win.print(); }, 500);
 }
 
-
-// ═══════════════════════════════════════
-// MÓDULO: PRODUCTOS & STOCK
-// ═══════════════════════════════════════
-let _productos = [];
-let _ventasProductos = [];
-
-async function loadProductos() {
-  try {
-    [_productos, _ventasProductos] = await Promise.all([
-      api('GET', '/products'),
-      api('GET', '/products/ventas?limit=10'),
-    ]);
-    renderProdStats();
-    renderProductos();
-    renderVentasProductos();
-  } catch(e) { console.error('loadProductos:', e); }
-}
-
-function renderProdStats() {
-  const el = document.getElementById('prod-stats');
-  if (!el) return;
-  const sinStock = _productos.filter(p => parseInt(p.stock||0) <= 0).length;
-  const alertas  = _productos.filter(p => parseInt(p.stock||0) > 0 && parseInt(p.stock||0) <= parseInt(p.stock_min||0)).length;
-  const valor    = _productos.reduce((s,p) => s + parseFloat(p.precio_costo||0)*parseInt(p.stock||0), 0);
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-  const card = (label, val, color='#fff', warn=false) =>
-    `<div style="background:${warn?'rgba(255,145,0,.08)':'rgba(255,255,255,.04)'};border:1px solid ${warn?'rgba(255,145,0,.25)':'rgba(255,255,255,.07)'};border-radius:9px;padding:11px 13px">
-       <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--gray);margin-bottom:5px">${label}</div>
-       <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:${color}">${val}</div>
-     </div>`;
-  el.innerHTML =
-    card('Productos', _productos.length) +
-    card('Stock bajo', alertas + sinStock, alertas+sinStock > 0 ? 'var(--orange)' : '#fff', alertas+sinStock > 0) +
-    card('Valor stock', fmt(valor), 'var(--yellow)');
-}
-
-function renderProductos() {
-  const el     = document.getElementById('productos-list');
-  if (!el) return;
-  const q   = (document.getElementById('prod-search')?.value || '').toLowerCase();
-  const cat = document.getElementById('prod-filter-cat')?.value || '';
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-  const catIcon = { cuidado:'💆', barba:'🪒', piel:'🧴', accesorios:'✂️', otros:'📦' };
-
-  const lista = _productos.filter(p =>
-    (!q   || p.nombre.toLowerCase().includes(q)) &&
-    (!cat || p.categoria === cat)
-  );
-
-  if (!lista.length) {
-    el.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--gray);font-size:13px">Sin productos${q||cat?' — probá otra búsqueda':''}</div>`;
-    return;
-  }
-
-  el.innerHTML = lista.map(p => {
-    const stock    = parseInt(p.stock||0);
-    const stockMin = parseInt(p.stock_min||0);
-    const sinStock = stock <= 0;
-    const bajo     = stock > 0 && stock <= stockMin;
-    const col      = sinStock ? 'var(--red)' : bajo ? 'var(--orange)' : 'var(--green)';
-    const borde    = sinStock ? 'rgba(255,67,67,.18)' : bajo ? 'rgba(255,145,0,.18)' : 'rgba(255,255,255,.07)';
-    const margen   = p.precio_costo > 0 ? Math.round((p.precio_venta - p.precio_costo) / p.precio_costo * 100) : null;
-
-    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 13px;background:rgba(255,255,255,.03);border:1px solid ${borde};border-radius:9px;margin-bottom:7px">
-      <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${catIcon[p.categoria]||'📦'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-          ${p.nombre}
-          ${sinStock?'<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(255,67,67,.15);color:var(--red)">SIN STOCK</span>':''}
-          ${bajo&&!sinStock?'<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(255,145,0,.15);color:var(--orange)">BAJO</span>':''}
-        </div>
-        <div style="font-size:11px;color:var(--gray);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
-          <span>Costo: ${fmt(p.precio_costo)}</span>
-          <span>Venta: <strong style="color:#fff">${fmt(p.precio_venta)}</strong></span>
-          ${margen!==null?`<span>Margen: <strong style="color:var(--yellow)">${margen}%</strong></span>`:''}
-        </div>
-      </div>
-      <div style="text-align:center;min-width:46px;flex-shrink:0">
-        <div style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:${col}">${stock}</div>
-        <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-        <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\'")}',${p.precio_venta},${stock})"
-          style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Vender</button>
-        <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\'")}')"
-          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">📦 Stock</button>
-        <button onclick="openProductoModal(${p.id})"
-          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer">✏️</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderVentasProductos() {
-  const el = document.getElementById('prod-ventas-list');
-  if (!el) return;
-  if (!_ventasProductos.length) {
-    el.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:6px 0">Sin ventas registradas aún</div>';
-    return;
-  }
-  const fmt  = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-  const mIcon = { cash:'💵', debit:'💳', credit:'💳', transfer:'📲' };
-  el.innerHTML = _ventasProductos.map(v => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:7px;margin-bottom:5px">
-      <span style="font-size:14px">${mIcon[v.payment_method]||'💰'}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600">${v.product_name||'—'}</div>
-        <div style="font-size:10px;color:var(--gray)">${v.client_name||'Sin nombre'} · ${v.quantity} u. · ${new Date(v.sold_at).toLocaleDateString('es-AR')}</div>
-      </div>
-      <div style="font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
-    </div>`).join('');
-}
-
-function openProductoModal(id) {
-  const p = id ? _productos.find(p => p.id === id) : null;
-  document.getElementById('modal-producto-title').textContent = p ? '✏️ Editar producto' : '+ Nuevo producto';
-  document.getElementById('prod-edit-id').value     = p?.id || '';
-  document.getElementById('prod-nombre').value      = p?.nombre || '';
-  document.getElementById('prod-categoria').value   = p?.categoria || 'cuidado';
-  document.getElementById('prod-unidad').value      = p?.unidad || 'unidad';
-  document.getElementById('prod-costo').value       = p?.precio_costo || '';
-  document.getElementById('prod-precio').value      = p?.precio_venta || '';
-  document.getElementById('prod-stock').value       = p?.stock ?? '0';
-  document.getElementById('prod-stock-min').value   = p?.stock_min ?? '3';
-  document.getElementById('prod-descripcion').value = p?.descripcion || '';
-  calcProdMargen();
-  openModal('modal-producto');
-}
-
-function calcProdMargen() {
-  const costo  = parseFloat(document.getElementById('prod-costo')?.value  || 0);
-  const precio = parseFloat(document.getElementById('prod-precio')?.value || 0);
-  const box = document.getElementById('prod-margen-preview');
-  const val = document.getElementById('prod-margen-val');
-  if (!box || !val) return;
-  if (costo > 0 && precio > 0) {
-    const m = Math.round((precio - costo) / costo * 100);
-    val.textContent = m + '%';
-    val.style.color = m < 20 ? 'var(--red)' : m < 50 ? 'var(--orange)' : 'var(--green)';
-    box.style.display = 'block';
-  } else { box.style.display = 'none'; }
-}
-
-async function saveProducto() {
-  const id = document.getElementById('prod-edit-id').value;
-  const body = {
-    nombre:       document.getElementById('prod-nombre').value.trim(),
-    categoria:    document.getElementById('prod-categoria').value,
-    unidad:       document.getElementById('prod-unidad').value,
-    precio_costo: parseFloat(document.getElementById('prod-costo').value  || 0),
-    precio_venta: parseFloat(document.getElementById('prod-precio').value || 0),
-    stock:        parseInt(document.getElementById('prod-stock').value     || 0),
-    stock_min:    parseInt(document.getElementById('prod-stock-min').value || 3),
-    descripcion:  document.getElementById('prod-descripcion').value.trim(),
-  };
-  if (!body.nombre) return showToast('❌','Error','El nombre es obligatorio');
-  try {
-    if (id) { await api('PUT', `/products/${id}`, body); showToast('✅','Producto actualizado',''); }
-    else    { await api('POST', '/products', body);      showToast('✅','Producto creado',''); }
-    closeModal('modal-producto');
-    loadProductos();
-  } catch(e) { showToast('❌','Error',e.message); }
-}
-
-function openVentaProducto(id, nombre, precio, stock) {
-  document.getElementById('venta-prod-id').value         = id;
-  document.getElementById('venta-prod-nombre').textContent = nombre;
-  document.getElementById('venta-precio-unit').value     = precio;
-  document.getElementById('venta-cantidad').value        = 1;
-  document.getElementById('venta-cliente').value         = '';
-  document.getElementById('venta-metodo').value          = 'cash';
-  window._ventaStock = stock;
-  ventaPreview();
-  openModal('modal-venta-producto');
-}
-
-function ventaPreview() {
-  const cant  = parseInt(document.getElementById('venta-cantidad')?.value  || 1);
-  const prec  = parseFloat(document.getElementById('venta-precio-unit')?.value || 0);
-  const tv    = document.getElementById('venta-total-val');
-  const warn  = document.getElementById('venta-stock-warn');
-  if (tv) tv.textContent = '$' + (cant * prec).toLocaleString('es-AR');
-  if (warn) warn.textContent = cant > (window._ventaStock||0) ? `⚠️ Stock insuficiente (disponible: ${window._ventaStock||0})` : '';
-}
-
-async function confirmarVentaProducto() {
-  const id     = document.getElementById('venta-prod-id').value;
-  const cant   = parseInt(document.getElementById('venta-cantidad').value  || 1);
-  const precio = parseFloat(document.getElementById('venta-precio-unit').value || 0);
-  const metodo = document.getElementById('venta-metodo').value;
-  const cli    = document.getElementById('venta-cliente').value.trim();
-  if (cant > (window._ventaStock||0)) return showToast('❌','Sin stock',`Disponible: ${window._ventaStock||0}`);
-  try {
-    await api('POST', `/products/${id}/sell`, { quantity: cant, unit_price: precio, payment_method: metodo, client_name: cli });
-    showToast('✅','Venta registrada','Stock actualizado');
-    closeModal('modal-venta-producto');
-    loadProductos();
-  } catch(e) { showToast('❌','Error',e.message); }
-}
-
-function openAjusteStock(id, nombre) {
-  document.getElementById('ajuste-prod-id').value       = id;
-  document.getElementById('ajuste-prod-nombre').textContent = nombre;
-  document.getElementById('ajuste-tipo').value          = 'entrada';
-  document.getElementById('ajuste-cantidad').value      = 1;
-  document.getElementById('ajuste-nota').value          = '';
-  openModal('modal-ajuste-stock');
-}
-
-async function confirmarAjusteStock() {
-  const id   = document.getElementById('ajuste-prod-id').value;
-  const tipo = document.getElementById('ajuste-tipo').value;
-  const cant = parseInt(document.getElementById('ajuste-cantidad').value || 0);
-  const nota = document.getElementById('ajuste-nota').value.trim();
-  try {
-    await api('POST', `/products/${id}/stock`, { tipo, cantidad: cant, nota });
-    showToast('✅','Stock ajustado','');
-    closeModal('modal-ajuste-stock');
-    loadProductos();
-  } catch(e) { showToast('❌','Error',e.message); }
-}
-
 </script>
 
 
@@ -5295,140 +4951,6 @@ async function confirmarAjusteStock() {
       </div>
     </div>
   </div>
-
-
-<!-- ── MODAL: Producto ─────────────────────────── -->
-<div class="modal-overlay" id="modal-producto">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-title" id="modal-producto-title">+ Nuevo producto</div>
-    <div class="modal-sub">Completá los datos del producto</div>
-    <input type="hidden" id="prod-edit-id">
-    <div class="form-grid">
-      <div class="form-field" style="grid-column:1/-1">
-        <label>Nombre</label>
-        <input type="text" id="prod-nombre" placeholder="Ej: Pomada Matte Hold">
-      </div>
-      <div class="form-field">
-        <label>Categoría</label>
-        <select id="prod-categoria">
-          <option value="cuidado">💆 Cuidado del cabello</option>
-          <option value="barba">🪒 Barba</option>
-          <option value="piel">🧴 Piel</option>
-          <option value="accesorios">✂️ Accesorios</option>
-          <option value="otros">📦 Otros</option>
-        </select>
-      </div>
-      <div class="form-field">
-        <label>Unidad</label>
-        <select id="prod-unidad">
-          <option value="unidad">Unidad</option>
-          <option value="ml">ml</option>
-          <option value="gr">gr</option>
-          <option value="lt">litro</option>
-          <option value="kg">kg</option>
-        </select>
-      </div>
-      <div class="form-field">
-        <label>Precio de costo ($)</label>
-        <input type="number" id="prod-costo" placeholder="0" min="0" step="1" oninput="calcProdMargen()">
-      </div>
-      <div class="form-field">
-        <label>Precio de venta ($)</label>
-        <input type="number" id="prod-precio" placeholder="0" min="0" step="1" oninput="calcProdMargen()">
-      </div>
-      <div class="form-field">
-        <label>Stock actual</label>
-        <input type="number" id="prod-stock" placeholder="0" min="0" step="1">
-      </div>
-      <div class="form-field">
-        <label>Stock mínimo (alerta)</label>
-        <input type="number" id="prod-stock-min" placeholder="3" min="0" step="1">
-      </div>
-      <div class="form-field" style="grid-column:1/-1">
-        <label>Descripción (opcional)</label>
-        <textarea id="prod-descripcion" placeholder="Notas sobre el producto..." rows="2" style="resize:vertical"></textarea>
-      </div>
-    </div>
-    <div id="prod-margen-preview" style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;font-size:12px;color:var(--gray);display:none">
-      Margen: <strong id="prod-margen-val" style="color:var(--yellow)">—</strong>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-primary" onclick="saveProducto()">💾 Guardar</button>
-      <button class="btn-modal-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL: Venta de producto ─────────────────── -->
-<div class="modal-overlay" id="modal-venta-producto">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-title">💰 Registrar venta</div>
-    <div class="modal-sub" id="venta-prod-nombre" style="color:var(--yellow)"></div>
-    <input type="hidden" id="venta-prod-id">
-    <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
-      <div class="form-field" style="margin-bottom:0">
-        <label>Cantidad</label>
-        <input type="number" id="venta-cantidad" value="1" min="1" step="1" oninput="ventaPreview()">
-      </div>
-      <div class="form-field" style="margin-bottom:0">
-        <label>Precio unitario ($)</label>
-        <input type="number" id="venta-precio-unit" min="0" step="1" oninput="ventaPreview()">
-      </div>
-      <div class="form-field" style="margin-bottom:0">
-        <label>Método de pago</label>
-        <select id="venta-metodo">
-          <option value="cash">💵 Efectivo</option>
-          <option value="debit">💳 Débito</option>
-          <option value="credit">💳 Crédito</option>
-          <option value="transfer">📲 Transferencia</option>
-        </select>
-      </div>
-      <div class="form-field" style="margin-bottom:0">
-        <label>Cliente (opcional)</label>
-        <input type="text" id="venta-cliente" placeholder="Nombre del cliente">
-      </div>
-      <div id="venta-preview-box" style="padding:10px 14px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:9px;font-size:13px">
-        Total: <strong id="venta-total-val" style="color:var(--yellow)">$0</strong>
-        <span id="venta-stock-warn" style="color:var(--red);font-size:11px;display:block;margin-top:4px"></span>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-primary" onclick="confirmarVentaProducto()">✅ Confirmar venta</button>
-      <button class="btn-modal-secondary" onclick="closeModal('modal-venta-producto')">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL: Ajuste de stock ───────────────────── -->
-<div class="modal-overlay" id="modal-ajuste-stock">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-title">📦 Ajustar stock</div>
-    <div class="modal-sub" id="ajuste-prod-nombre" style="color:var(--yellow)"></div>
-    <input type="hidden" id="ajuste-prod-id">
-    <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
-      <div class="form-field" style="margin-bottom:0">
-        <label>Tipo de ajuste</label>
-        <select id="ajuste-tipo">
-          <option value="entrada">📥 Entrada (compra/reposición)</option>
-          <option value="salida">📤 Salida (uso interno)</option>
-          <option value="ajuste">✏️ Ajuste manual (inventario)</option>
-        </select>
-      </div>
-      <div class="form-field" style="margin-bottom:0">
-        <label>Cantidad</label>
-        <input type="number" id="ajuste-cantidad" value="1" min="0" step="1">
-      </div>
-      <div class="form-field" style="margin-bottom:0">
-        <label>Nota (opcional)</label>
-        <input type="text" id="ajuste-nota" placeholder="Ej: Compra mayorista, rotura...">
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-primary" onclick="confirmarAjusteStock()">✅ Confirmar</button>
-      <button class="btn-modal-secondary" onclick="closeModal('modal-ajuste-stock')">Cancelar</button>
-    </div>
-  </div>
-</div>
 
 </body>
 </html>
