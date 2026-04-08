@@ -153,9 +153,9 @@ nav.scrolled{background:rgba(5,13,24,.92);backdrop-filter:blur(20px);-webkit-bac
 
 /* ── FEATURES — HORIZONTAL SCROLL ── */
 #features{overflow:hidden;background:var(--n)}
-#features-sticky{height:100vh;display:flex;flex-direction:column;justify-content:center;overflow:hidden;position:relative}
-#features-sticky .f-header{padding:0 6%;max-width:1240px;margin:0 auto;width:100%;flex-shrink:0;margin-bottom:32px}
-#f-track{display:flex;gap:20px;padding:0 6%;width:max-content;will-change:transform;align-items:stretch}
+#features-sticky{height:100vh;display:flex;flex-direction:column;justify-content:center;overflow:hidden;position:relative;padding:0}
+#features-sticky .f-header{padding:0 6%;max-width:1240px;margin:0 auto;width:100%;flex-shrink:0;margin-bottom:28px}
+#f-track{display:flex;gap:20px;padding:0 6vw;width:max-content;will-change:transform;align-items:stretch}
 .f-panel{width:min(420px,78vw);flex-shrink:0;background:var(--nm);border:1px solid var(--border);border-radius:20px;padding:36px;display:flex;flex-direction:column;justify-content:space-between;transition:border-color .3s,box-shadow .3s;will-change:transform}
 .f-panel:hover{border-color:var(--border-y);box-shadow:0 20px 40px rgba(0,0,0,.3)}
 .f-num{font-family:'Oswald',sans-serif;font-size:72px;font-weight:700;color:rgba(255,209,0,.05);line-height:1;letter-spacing:-2px;margin-bottom:-12px}
@@ -297,6 +297,26 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   .stats{padding:48px 5%}
   .cta-sec{padding:88px 5%}
   footer,nav{padding-left:5%;padding-right:5%}
+
+  /* Ocultar badges flotantes en mobile (desbordan) */
+  .mock-float{display:none}
+
+  /* Features: deshabilitar pin horizontal, mostrar en columna */
+  #features{overflow:visible}
+  #features-sticky{height:auto;padding:72px 5%}
+  #features-sticky .f-header{padding:0;margin-bottom:28px}
+  #f-track{flex-direction:column;width:100%;padding:0;gap:16px}
+  .f-panel{width:100%}
+  .f-dots{display:none}
+
+  /* WhatsApp AI: reducir gap en mobile */
+  .wai-inner{gap:36px}
+
+  /* Stats: texto más chico en mobile */
+  .stat-num{font-size:36px}
+
+  /* How timeline: más espacio */
+  .how-step{padding:0 16px}
 }
 </style>
 </head>
@@ -721,117 +741,90 @@ window.addEventListener('scroll',()=>{
   mTimer=setTimeout(()=>{ mtrack.style.animationDuration='28s'; },350);
 },{passive:true});
 
+const isMobile=()=>window.innerWidth<=768;
+
+/* ── helper: fade-in genérico ── */
+function fadeIn(targets,opts={}){
+  const defaults={opacity:0,y:isMobile()?24:opts.y||36,duration:.65,stagger:opts.stagger||0,ease:'power2.out',
+    scrollTrigger:{trigger:typeof targets==='string'?targets:targets[0],start:'top 92%',once:true}};
+  gsap.from(targets,{...defaults,...opts,scrollTrigger:{...defaults.scrollTrigger,...(opts.scrollTrigger||{})}});
+}
+
 /* ── STATS SECTION ── */
-gsap.from(['#si1','#si2','#si3'],{
-  opacity:0,y:40,scale:.9,duration:.7,stagger:.12,ease:'back.out(1.4)',
-  scrollTrigger:{trigger:'#stats',start:'top 82%',toggleActions:'play none none reverse'}
-});
+fadeIn(['#si1','#si2','#si3'],{scale:.9,y:40,stagger:.12,ease:'back.out(1.4)',scrollTrigger:{trigger:'#stats',start:'top 92%',once:true}});
 
 /* ── PAIN POINTS ── */
-gsap.from('#pains-hd',{
-  opacity:0,y:40,duration:.7,ease:'power2.out',
-  scrollTrigger:{trigger:'#pains-hd',start:'top 85%',toggleActions:'play none none reverse'}
-});
-gsap.from('#pains-grid .pain-card',{
-  opacity:0,y:60,duration:.65,stagger:.1,ease:'power2.out',
-  scrollTrigger:{trigger:'#pains-grid',start:'top 80%',toggleActions:'play none none reverse'}
-});
+fadeIn('#pains-hd',{y:40,scrollTrigger:{trigger:'#pains-hd',start:'top 90%',once:true}});
+fadeIn('#pains-grid .pain-card',{y:60,stagger:.1,scrollTrigger:{trigger:'#pains-grid',start:'top 88%',once:true}});
 
 /* ── HOW IT WORKS ── */
-gsap.from('#how-hd',{
-  opacity:0,y:36,duration:.7,
-  scrollTrigger:{trigger:'#how-hd',start:'top 85%',toggleActions:'play none none reverse'}
-});
-gsap.from(['#hs1','#hs2','#hs3'],{
-  opacity:0,y:50,duration:.7,stagger:.18,ease:'power2.out',
-  scrollTrigger:{trigger:'#how-timeline',start:'top 80%',toggleActions:'play none none reverse'}
-});
-/* Line draw — tied to scroll (scrub) */
-gsap.to('#how-line',{
-  scaleX:1,ease:'none',
-  scrollTrigger:{
-    trigger:'#how-timeline',start:'top 75%',end:'bottom 55%',scrub:1
-  }
-});
+fadeIn('#how-hd',{scrollTrigger:{trigger:'#how-hd',start:'top 90%',once:true}});
+fadeIn(['#hs1','#hs2','#hs3'],{y:50,stagger:.18,scrollTrigger:{trigger:'#how-timeline',start:'top 88%',once:true}});
+/* Line draw — scrub sólo en desktop */
+if(!isMobile()){
+  gsap.to('#how-line',{scaleX:1,ease:'none',
+    scrollTrigger:{trigger:'#how-timeline',start:'top 75%',end:'bottom 55%',scrub:1}
+  });
+}
 
-/* ── FEATURES — HORIZONTAL SCROLL PINNED (true scroll-driven) ── */
+/* ── FEATURES — HORIZONTAL SCROLL PINNED sólo en desktop ── */
 const fTrack=document.getElementById('f-track');
 const fDots=document.querySelectorAll('.f-dot');
 const fPanels=fTrack.querySelectorAll('.f-panel');
 
-ScrollTrigger.create({
-  trigger:'#features',
-  pin:'#features-sticky',
-  start:'top top',
-  end:()=>'+='+(fTrack.scrollWidth-window.innerWidth+fTrack.offsetLeft),
-  scrub:1,
-  invalidateOnRefresh:true,
-  animation: gsap.to(fTrack,{
-    x:()=>-(fTrack.scrollWidth-window.innerWidth+fTrack.offsetLeft),
-    ease:'none'
-  }),
-  onUpdate(self){
-    const idx=Math.min(Math.round(self.progress*(fPanels.length-1)),fPanels.length-1);
-    fDots.forEach((d,i)=>d.classList.toggle('on',i===idx));
-  }
-});
+if(!isMobile()){
+  const getScrollDist=()=>fTrack.scrollWidth-window.innerWidth;
+  const fAnim=gsap.to(fTrack,{x:()=>-getScrollDist(),ease:'none'});
+  ScrollTrigger.create({
+    trigger:'#features',
+    pin:'#features-sticky',
+    start:'top top',
+    end:()=>'+='+ getScrollDist(),
+    scrub:1.2,
+    invalidateOnRefresh:true,
+    animation:fAnim,
+    onUpdate(self){
+      const idx=Math.min(Math.round(self.progress*(fPanels.length-1)),fPanels.length-1);
+      fDots.forEach((d,i)=>d.classList.toggle('on',i===idx));
+    }
+  });
+} else {
+  /* Mobile: fade-in vertical simple */
+  fadeIn('#f-track .f-panel',{y:40,stagger:.08,scrollTrigger:{trigger:'#f-track',start:'top 90%',once:true}});
+}
 
 /* ── WHATSAPP AI ── */
-gsap.from('#wai-text',{
-  opacity:0,x:-56,duration:.9,ease:'power3.out',
-  scrollTrigger:{trigger:'#whatsapp',start:'top 75%',toggleActions:'play none none reverse'}
-});
-gsap.from('#wai-chat-wrap',{
-  opacity:0,x:56,duration:.9,ease:'power3.out',
-  scrollTrigger:{trigger:'#whatsapp',start:'top 75%',toggleActions:'play none none reverse'}
-});
-gsap.from('.wai-feat',{
-  opacity:0,x:30,duration:.55,stagger:.12,ease:'power2.out',
-  scrollTrigger:{trigger:'.wai-feats',start:'top 82%',toggleActions:'play none none reverse'}
-});
+if(!isMobile()){
+  gsap.from('#wai-text',{opacity:0,x:-56,duration:.9,ease:'power3.out',
+    scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
+  gsap.from('#wai-chat-wrap',{opacity:0,x:56,duration:.9,ease:'power3.out',
+    scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
+} else {
+  fadeIn(['#wai-text','#wai-chat-wrap'],{stagger:.15,scrollTrigger:{trigger:'#whatsapp',start:'top 90%',once:true}});
+}
+fadeIn('.wai-feat',{y:24,stagger:.1,scrollTrigger:{trigger:'.wai-feats',start:'top 90%',once:true}});
 
 /* ── TESTIMONIALS ── */
-gsap.from('#proof-hd',{
-  opacity:0,y:36,duration:.7,
-  scrollTrigger:{trigger:'#proof-hd',start:'top 85%',toggleActions:'play none none reverse'}
-});
-gsap.from('#proof-grid .proof-card',{
-  opacity:0,y:60,scale:.96,duration:.65,stagger:.14,ease:'back.out(1.2)',
-  scrollTrigger:{trigger:'#proof-grid',start:'top 80%',toggleActions:'play none none reverse'}
-});
+fadeIn('#proof-hd',{scrollTrigger:{trigger:'#proof-hd',start:'top 90%',once:true}});
+fadeIn('#proof-grid .proof-card',{y:60,scale:.96,stagger:.14,ease:'back.out(1.2)',scrollTrigger:{trigger:'#proof-grid',start:'top 88%',once:true}});
 
 /* ── PRICING ── */
-gsap.from('#pricing-hd',{
-  opacity:0,y:36,duration:.7,
-  scrollTrigger:{trigger:'#pricing-hd',start:'top 85%',toggleActions:'play none none reverse'}
-});
-gsap.from('#pricing-grid .plan',{
-  opacity:0,y:70,duration:.7,stagger:.14,ease:'power3.out',
-  scrollTrigger:{trigger:'#pricing-grid',start:'top 78%',toggleActions:'play none none reverse'}
-});
+fadeIn('#pricing-hd',{scrollTrigger:{trigger:'#pricing-hd',start:'top 90%',once:true}});
+fadeIn('#pricing-grid .plan',{y:70,stagger:.14,ease:'power3.out',scrollTrigger:{trigger:'#pricing-grid',start:'top 88%',once:true}});
 
 /* ── FAQ ── */
-gsap.from('#faq-hd',{
-  opacity:0,y:36,duration:.7,
-  scrollTrigger:{trigger:'#faq-hd',start:'top 85%',toggleActions:'play none none reverse'}
-});
-gsap.from('#faq-list .faq-item',{
-  opacity:0,x:-30,duration:.5,stagger:.07,ease:'power2.out',
-  scrollTrigger:{trigger:'#faq-list',start:'top 82%',toggleActions:'play none none reverse'}
-});
+fadeIn('#faq-hd',{scrollTrigger:{trigger:'#faq-hd',start:'top 90%',once:true}});
+fadeIn('#faq-list .faq-item',{y:0,x:-24,stagger:.07,scrollTrigger:{trigger:'#faq-list',start:'top 90%',once:true}});
 
-/* ── FINAL CTA — scroll-driven scale (scrub) ── */
-gsap.from('#cta-title',{
-  scale:.75,opacity:0,ease:'none',
-  scrollTrigger:{trigger:'#cta',start:'top 80%',end:'top 30%',scrub:1.5}
-});
-gsap.from('#cta-eyebrow',{opacity:0,y:16,duration:.6,
-  scrollTrigger:{trigger:'#cta',start:'top 78%',toggleActions:'play none none reverse'}
-});
-gsap.from(['#cta-sub','#cta-btn','#cta-badges'],{
-  opacity:0,y:30,duration:.6,stagger:.12,ease:'power2.out',
-  scrollTrigger:{trigger:'#cta',start:'top 65%',toggleActions:'play none none reverse'}
-});
+/* ── FINAL CTA ── */
+if(!isMobile()){
+  gsap.from('#cta-title',{scale:.75,opacity:0,ease:'none',
+    scrollTrigger:{trigger:'#cta',start:'top 80%',end:'top 30%',scrub:1.5}});
+} else {
+  fadeIn('#cta-title',{y:32,scrollTrigger:{trigger:'#cta',start:'top 90%',once:true}});
+}
+fadeIn('#cta-eyebrow',{y:16,scrollTrigger:{trigger:'#cta',start:'top 92%',once:true}});
+fadeIn(['#cta-sub','#cta-btn','#cta-badges'],{y:28,stagger:.12,scrollTrigger:{trigger:'#cta',start:'top 88%',once:true}});
 
 /* ── FAQ ACCORDION ── */
 document.querySelectorAll('.faq-q').forEach(q=>{
