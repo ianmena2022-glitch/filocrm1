@@ -52,7 +52,7 @@ module.exports = async function paywall(req, res, next) {
     if (shop.subscription_status === 'trial') {
       if (shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
         // Trial expirado
-        await pool.query("UPDATE shops SET subscription_status='expired' WHERE id=$1", [shopId]);
+        await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
         return res.status(402).json({
           error: 'Tu período de prueba ha vencido',
           code: 'TRIAL_EXPIRED',

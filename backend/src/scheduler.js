@@ -157,7 +157,7 @@ async function syncSubscriptions() {
         const sub = await mpGet(`/preapproval/${shop.mp_shop_subscription_id}`);
         if (sub.status !== 'authorized') {
           await pool.query(
-            "UPDATE shops SET subscription_status='expired', mp_shop_status=$1 WHERE id=$2",
+            "UPDATE shops SET subscription_status='expired', mp_shop_status=$1, expired_at=COALESCE(expired_at, NOW()) WHERE id=$2",
             [sub.status, shop.id]
           );
           console.log(`[CRON] ${shop.email} → MP status=${sub.status} → acceso revocado`);
@@ -167,7 +167,7 @@ async function syncSubscriptions() {
         // sin que el webhook actualizara el ID. Verificar por mp_shop_status en BD.
         if (shop.mp_shop_status === 'cancelled') {
           await pool.query(
-            "UPDATE shops SET subscription_status='expired' WHERE id=$1",
+            "UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1",
             [shop.id]
           );
           console.log(`[CRON] ${shop.email} → cancelado manualmente (sin sub_id válido) → acceso revocado`);
@@ -182,14 +182,34 @@ async function syncSubscriptions() {
   }
 }
 
+// Elimina cuentas con subscription_status expirado/cancelado por más de 15 días
+async function deleteExpiredAccounts() {
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM shops
+       WHERE subscription_status IN ('expired','cancelled')
+         AND expired_at IS NOT NULL
+         AND expired_at < NOW() - INTERVAL '15 days'
+         AND (is_test = FALSE OR is_test IS NULL)
+       RETURNING email`
+    );
+    if (rows.length) {
+      console.log(`[CRON] ${rows.length} cuenta(s) eliminadas por inactividad: ${rows.map(r => r.email).join(', ')}`);
+    }
+  } catch (e) {
+    console.error('[CRON] Error en deleteExpiredAccounts:', e.message);
+  }
+}
+
 async function runHourlyTasks() {
   await sendReminders();
   await closeCashRegisters();
   await syncSubscriptions();
+  await deleteExpiredAccounts();
 }
 
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
 }

@@ -328,7 +328,8 @@ router.post('/webhook-filo', async (req, res) => {
       // 1. Intentar actualizar shop existente (match por subscription_id o plan_id almacenado)
       const updated = await pool.query(
         `UPDATE shops SET mp_shop_status=$1, subscription_status=$2, mp_shop_subscription_id=$3,
-           mp_payer_email=COALESCE($5, mp_payer_email)
+           mp_payer_email=COALESCE($5, mp_payer_email),
+           expired_at=CASE WHEN $2='expired' THEN COALESCE(expired_at, NOW()) ELSE NULL END
          WHERE mp_shop_subscription_id=$3 OR mp_shop_subscription_id=$4 RETURNING id`,
         [status, status === 'authorized' ? 'active' : 'expired', subId, planId, payerEmail]
       );

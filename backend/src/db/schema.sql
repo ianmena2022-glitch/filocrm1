@@ -183,6 +183,7 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_shop_status VARCHAR(50);
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_shop_payment_url TEXT;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS filo_plan VARCHAR(20) DEFAULT 'starter' CHECK (filo_plan IN ('starter','staff','enterprise'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS mp_payer_email VARCHAR(255);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS expired_at TIMESTAMPTZ;
 
 -- Actualizar plan en el CHECK constraint para incluir enterprise
 -- (ya existe el CHECK en el ALTER anterior, este extiende el enum)
