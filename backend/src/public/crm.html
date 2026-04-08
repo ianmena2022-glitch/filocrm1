@@ -458,7 +458,7 @@ body {
 
 /* ─── TOAST ─── */
 .toast {
-  position: fixed; bottom: 90px; right: 20px;
+  position: fixed; bottom: 100px; right: 20px;
   background: var(--navy-light);
   border: 1px solid var(--navy-border);
   border-radius: var(--radius);
@@ -623,20 +623,21 @@ body {
 
   .sidebar {
     position: fixed; left: 0; right: 0;
-    top: auto; bottom: 0; width: 100%; height: 60px;
-    flex-direction: row; padding: 0 8px;
-    border-right: none; border-top: 1px solid rgba(255,255,255,0.05);
+    top: auto; bottom: 0; width: 100%; height: 72px;
+    flex-direction: row; padding: 0 6px;
+    border-right: none; border-top: 1px solid rgba(255,255,255,0.07);
+    background: #060e1a;
   }
 
   .sidebar-logo { display: none; }
 
-  .nav-items { flex-direction: row; gap: 0; flex: 1; justify-content: space-around; }
-  .nav-item { width: 42px; height: 42px; }
+  .nav-items { flex-direction: row; gap: 0; flex: 1; justify-content: space-around; align-items: center; }
+  .nav-item { width: 52px; height: 52px; border-radius: 14px; font-size: 20px; }
 
   .sidebar-bottom { flex-direction: row; gap: 4px; align-items: center; }
-  .avatar { width: 32px; height: 32px; font-size: 11px; }
+  .avatar { width: 38px; height: 38px; font-size: 13px; }
 
-  .main { margin-left: 0; padding: 16px 14px 76px; }
+  .main { margin-left: 0; padding: 16px 14px 88px; }
 
   .topbar { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
   .topbar-left h1 { font-size: 20px; }
@@ -4326,7 +4327,7 @@ async function saveEditStoreItem() {
 
 <!-- ── FILO COPILOT ──────────────────────────────────────── -->
 <style>
-#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}@media(max-width:768px){#copilot-widget{bottom:80px}#copilot-panel{width:calc(100vw - 32px);height:420px}}
+#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}@media(max-width:768px){#copilot-widget{bottom:90px}#copilot-panel{width:calc(100vw - 32px);height:420px}}
 #copilot-pill{display:flex;align-items:center;gap:10px;background:#0a1828;border:1px solid rgba(255,209,0,.3);border-radius:40px;padding:10px 18px 10px 12px;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5);transition:all .2s;user-select:none}
 #copilot-pill:hover{border-color:rgba(255,209,0,.6);transform:translateY(-1px)}
 .cp-avatar{width:32px;height:32px;background:#FFD100;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
