@@ -173,7 +173,7 @@ nav.scrolled{background:rgba(5,13,24,.92);backdrop-filter:blur(20px);-webkit-bac
 /* ── WHATSAPP AI ── */
 .wai-bg{background:var(--nm);position:relative;overflow:hidden}
 .wai-bg::before{content:'';position:absolute;top:-30%;left:-10%;width:50%;height:80%;background:radial-gradient(ellipse,rgba(0,200,117,.04) 0%,transparent 65%);pointer-events:none}
-.wai-inner{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center}
+.wai-inner{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
 @media(max-width:900px){.wai-inner{grid-template-columns:1fr}}
 .wai-chat{background:#030b14;border:1px solid rgba(0,200,117,.15);border-radius:14px;overflow:hidden;box-shadow:0 32px 64px rgba(0,0,0,.5);will-change:opacity,transform}
 .wai-chat-top{padding:12px 16px;background:#020a12;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
@@ -515,7 +515,7 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
     <div class="wai-inner">
       <div id="wai-text">
         <span class="eyebrow">IA integrada</span>
-        <h2 class="sec-title">TU BARBERÍA<br>RESPONDE SOLA,<br><span style="color:var(--y)">24/7.</span></h2>
+        <h2 class="sec-title" style="font-size:clamp(28px,3.2vw,44px)">TU BARBERÍA<br>RESPONDE SOLA,<br><span style="color:var(--y)">24/7.</span></h2>
         <p class="sec-sub" style="margin-bottom:28px">FILO conecta una IA a tu WhatsApp que responde consultas de clientes y manda recordatorios automáticos — mientras vos cortás, dormís o descansás.</p>
         <div class="wai-feats">
           <div class="wai-feat"><div class="wai-feat-ico">💬</div><div><div class="wai-feat-title">Responde consultas en tiempo real</div><div class="wai-feat-desc">Un cliente te pregunta el precio de un corte o dónde estás. La IA responde al instante con tu información real — sin que toques el teléfono.</div></div></div>
