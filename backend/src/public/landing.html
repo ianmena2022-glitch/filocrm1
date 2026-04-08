@@ -42,7 +42,7 @@ nav.scrolled{background:rgba(5,13,24,.92);backdrop-filter:blur(20px);-webkit-bac
 @media(max-width:1000px){.hero-inner{grid-template-columns:1fr}.hero-right{display:none}}
 
 /* Line-reveal for hero title */
-.clip-line{overflow:hidden;display:block}
+.clip-line{overflow:hidden;display:block;padding:.18em 0 .12em;margin:-.18em 0 -.12em}
 .clip-inner{display:block;will-change:transform}
 
 .hero-eyebrow{display:inline-flex;align-items:center;gap:10px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:3px;padding:5px 13px;margin-bottom:24px;font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--y);will-change:opacity,transform}
@@ -294,6 +294,12 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
 @media(max-width:768px){
   .m-rv{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
   .m-rv.m-on{opacity:1;transform:none}
+  /* Más aire en clip-line para letras con tildes y remates */
+  .clip-line{padding:.22em 0 .16em;margin:-.22em 0 -.16em}
+  /* line-height menos comprimido en mobile */
+  .hero h1{line-height:.96}
+  .sec-title{line-height:1.02}
+  .cta-title{line-height:.96}
 }
 
 /* ── MOBILE ── */
