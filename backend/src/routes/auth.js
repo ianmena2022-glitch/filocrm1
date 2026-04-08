@@ -180,7 +180,7 @@ router.post('/complete-registration', async (req, res) => {
           // Re-suscripción sin trial: acceso sólo cuando MP confirme el pago vía webhook
           await pool.query(
             `UPDATE shops SET mp_shop_subscription_id=$1, mp_shop_status='pending',
-             subscription_status='expired' WHERE id=$2`,
+             subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$2`,
             [mpId, shopId]
           );
           console.log(`[REGISTRO] Re-suscripción SIN trial de ${p.email} (trial ya usado)`);
@@ -343,7 +343,7 @@ router.post('/login', async (req, res) => {
     // Verificar si el trial expiró y aún no tiene suscripción activa
     if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
       await pool.query(
-        "UPDATE shops SET subscription_status='expired' WHERE id=$1",
+        "UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1",
         [shop.id]
       );
       shop.subscription_status = 'expired';
@@ -376,7 +376,7 @@ router.get('/status', async (req, res) => {
 
     // Auto-expirar trial si venció
     if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
-      await pool.query("UPDATE shops SET subscription_status='expired' WHERE id=$1", [payload.shopId]);
+      await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [payload.shopId]);
       shop.subscription_status = 'expired';
     }
 
@@ -462,7 +462,7 @@ router.get('/me', async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
     const shop = result.rows[0];
     if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
-      await pool.query("UPDATE shops SET subscription_status='expired' WHERE id=$1", [payload.shopId]);
+      await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [payload.shopId]);
       shop.subscription_status = 'expired';
     }
     const shopData = shopPayload(shop);
