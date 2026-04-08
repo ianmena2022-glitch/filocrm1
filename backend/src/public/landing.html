@@ -290,6 +290,12 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
 .tyc-modal-body ul{padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .tyc-modal-body ul li{font-size:12px}
 
+/* ── MOBILE REVEAL (IntersectionObserver, sin GSAP opacity:0) ── */
+@media(max-width:768px){
+  .m-rv{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
+  .m-rv.m-on{opacity:1;transform:none}
+}
+
 /* ── MOBILE ── */
 @media(max-width:768px){
   .sec{padding:72px 5%}
@@ -741,90 +747,88 @@ window.addEventListener('scroll',()=>{
   mTimer=setTimeout(()=>{ mtrack.style.animationDuration='28s'; },350);
 },{passive:true});
 
-const isMobile=()=>window.innerWidth<=768;
+const IS_MOBILE=window.innerWidth<=768;
 
-/* ── helper: fade-in genérico ── */
-function fadeIn(targets,opts={}){
-  const defaults={opacity:0,y:isMobile()?24:opts.y||36,duration:.65,stagger:opts.stagger||0,ease:'power2.out',
-    scrollTrigger:{trigger:typeof targets==='string'?targets:targets[0],start:'top 92%',once:true}};
-  gsap.from(targets,{...defaults,...opts,scrollTrigger:{...defaults.scrollTrigger,...(opts.scrollTrigger||{})}});
-}
+/* ════════════════════════════════════════════
+   MOBILE: IntersectionObserver puro (sin GSAP opacity:0)
+   CSS maneja la visibilidad → imposible que quede invisible
+   ════════════════════════════════════════════ */
+if(IS_MOBILE){
 
-/* ── STATS SECTION ── */
-fadeIn(['#si1','#si2','#si3'],{scale:.9,y:40,stagger:.12,ease:'back.out(1.4)',scrollTrigger:{trigger:'#stats',start:'top 92%',once:true}});
-
-/* ── PAIN POINTS ── */
-fadeIn('#pains-hd',{y:40,scrollTrigger:{trigger:'#pains-hd',start:'top 90%',once:true}});
-fadeIn('#pains-grid .pain-card',{y:60,stagger:.1,scrollTrigger:{trigger:'#pains-grid',start:'top 88%',once:true}});
-
-/* ── HOW IT WORKS ── */
-fadeIn('#how-hd',{scrollTrigger:{trigger:'#how-hd',start:'top 90%',once:true}});
-fadeIn(['#hs1','#hs2','#hs3'],{y:50,stagger:.18,scrollTrigger:{trigger:'#how-timeline',start:'top 88%',once:true}});
-/* Line draw — scrub sólo en desktop */
-if(!isMobile()){
-  gsap.to('#how-line',{scaleX:1,ease:'none',
-    scrollTrigger:{trigger:'#how-timeline',start:'top 75%',end:'bottom 55%',scrub:1}
+  /* Agrega clase .rv a los elementos que queremos revelar */
+  const mobileReveal=[
+    '#si1','#si2','#si3',
+    '#pains-hd','#pains-grid .pain-card',
+    '#how-hd','#hs1','#hs2','#hs3',
+    '#f-track .f-panel',
+    '#wai-text','#wai-chat-wrap','.wai-feat',
+    '#proof-hd','#proof-grid .proof-card',
+    '#pricing-hd','#pricing-grid .plan',
+    '#faq-hd','#faq-list .faq-item',
+    '#cta-eyebrow','#cta-title','#cta-sub','#cta-btn','#cta-badges'
+  ];
+  mobileReveal.forEach(sel=>{
+    document.querySelectorAll(sel).forEach((el,i)=>{
+      el.classList.add('m-rv');
+      el.style.transitionDelay=(i*0.06)+'s';
+    });
   });
-}
 
-/* ── FEATURES — HORIZONTAL SCROLL PINNED sólo en desktop ── */
-const fTrack=document.getElementById('f-track');
-const fDots=document.querySelectorAll('.f-dot');
-const fPanels=fTrack.querySelectorAll('.f-panel');
+  const mIO=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){e.target.classList.add('m-on');mIO.unobserve(e.target);}
+    });
+  },{threshold:0.08,rootMargin:'0px 0px -30px 0px'});
+  document.querySelectorAll('.m-rv').forEach(el=>mIO.observe(el));
 
-if(!isMobile()){
+  /* Features mobile: sin pin, paneles ya en columna por CSS */
+
+} else {
+/* ════════════════════════════════════════════
+   DESKTOP: GSAP ScrollTrigger completo
+   ════════════════════════════════════════════ */
+
+  function fadeIn(targets,opts={}){
+    const st={trigger:typeof targets==='string'?targets:(Array.isArray(targets)?targets[0]:targets),start:'top 88%',once:true,...(opts.scrollTrigger||{})};
+    gsap.from(targets,{opacity:0,y:opts.y??36,x:opts.x??0,scale:opts.scale??1,duration:opts.duration||.65,stagger:opts.stagger||0,ease:opts.ease||'power2.out',scrollTrigger:st});
+  }
+
+  fadeIn(['#si1','#si2','#si3'],{scale:.9,y:40,stagger:.12,ease:'back.out(1.4)',scrollTrigger:{trigger:'#stats',start:'top 88%',once:true}});
+  fadeIn('#pains-hd',{y:40,scrollTrigger:{trigger:'#pains-hd',start:'top 86%',once:true}});
+  fadeIn('#pains-grid .pain-card',{y:60,stagger:.1,scrollTrigger:{trigger:'#pains-grid',start:'top 84%',once:true}});
+  fadeIn('#how-hd',{scrollTrigger:{trigger:'#how-hd',start:'top 86%',once:true}});
+  fadeIn(['#hs1','#hs2','#hs3'],{y:50,stagger:.18,scrollTrigger:{trigger:'#how-timeline',start:'top 84%',once:true}});
+  gsap.to('#how-line',{scaleX:1,ease:'none',scrollTrigger:{trigger:'#how-timeline',start:'top 75%',end:'bottom 55%',scrub:1}});
+
+  /* Features — horizontal scroll pinned */
+  const fTrack=document.getElementById('f-track');
+  const fDots=document.querySelectorAll('.f-dot');
+  const fPanels=fTrack.querySelectorAll('.f-panel');
   const getScrollDist=()=>fTrack.scrollWidth-window.innerWidth;
   const fAnim=gsap.to(fTrack,{x:()=>-getScrollDist(),ease:'none'});
   ScrollTrigger.create({
-    trigger:'#features',
-    pin:'#features-sticky',
-    start:'top top',
-    end:()=>'+='+ getScrollDist(),
-    scrub:1.2,
-    invalidateOnRefresh:true,
-    animation:fAnim,
+    trigger:'#features',pin:'#features-sticky',start:'top top',
+    end:()=>'+='+ getScrollDist(),scrub:1.2,invalidateOnRefresh:true,animation:fAnim,
     onUpdate(self){
       const idx=Math.min(Math.round(self.progress*(fPanels.length-1)),fPanels.length-1);
       fDots.forEach((d,i)=>d.classList.toggle('on',i===idx));
     }
   });
-} else {
-  /* Mobile: fade-in vertical simple */
-  fadeIn('#f-track .f-panel',{y:40,stagger:.08,scrollTrigger:{trigger:'#f-track',start:'top 90%',once:true}});
+
+  gsap.from('#wai-text',{opacity:0,x:-56,duration:.9,ease:'power3.out',scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
+  gsap.from('#wai-chat-wrap',{opacity:0,x:56,duration:.9,ease:'power3.out',scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
+  fadeIn('.wai-feat',{y:24,stagger:.1,scrollTrigger:{trigger:'.wai-feats',start:'top 86%',once:true}});
+  fadeIn('#proof-hd',{scrollTrigger:{trigger:'#proof-hd',start:'top 86%',once:true}});
+  fadeIn('#proof-grid .proof-card',{y:60,scale:.96,stagger:.14,ease:'back.out(1.2)',scrollTrigger:{trigger:'#proof-grid',start:'top 84%',once:true}});
+  fadeIn('#pricing-hd',{scrollTrigger:{trigger:'#pricing-hd',start:'top 86%',once:true}});
+  fadeIn('#pricing-grid .plan',{y:70,stagger:.14,ease:'power3.out',scrollTrigger:{trigger:'#pricing-grid',start:'top 84%',once:true}});
+  fadeIn('#faq-hd',{scrollTrigger:{trigger:'#faq-hd',start:'top 86%',once:true}});
+  fadeIn('#faq-list .faq-item',{y:0,x:-24,stagger:.07,scrollTrigger:{trigger:'#faq-list',start:'top 86%',once:true}});
+  gsap.from('#cta-title',{scale:.75,opacity:0,ease:'none',scrollTrigger:{trigger:'#cta',start:'top 80%',end:'top 30%',scrub:1.5}});
+  fadeIn('#cta-eyebrow',{y:16,scrollTrigger:{trigger:'#cta',start:'top 88%',once:true}});
+  fadeIn(['#cta-sub','#cta-btn','#cta-badges'],{y:28,stagger:.12,scrollTrigger:{trigger:'#cta',start:'top 84%',once:true}});
+
 }
-
-/* ── WHATSAPP AI ── */
-if(!isMobile()){
-  gsap.from('#wai-text',{opacity:0,x:-56,duration:.9,ease:'power3.out',
-    scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
-  gsap.from('#wai-chat-wrap',{opacity:0,x:56,duration:.9,ease:'power3.out',
-    scrollTrigger:{trigger:'#whatsapp',start:'top 75%',once:true}});
-} else {
-  fadeIn(['#wai-text','#wai-chat-wrap'],{stagger:.15,scrollTrigger:{trigger:'#whatsapp',start:'top 90%',once:true}});
-}
-fadeIn('.wai-feat',{y:24,stagger:.1,scrollTrigger:{trigger:'.wai-feats',start:'top 90%',once:true}});
-
-/* ── TESTIMONIALS ── */
-fadeIn('#proof-hd',{scrollTrigger:{trigger:'#proof-hd',start:'top 90%',once:true}});
-fadeIn('#proof-grid .proof-card',{y:60,scale:.96,stagger:.14,ease:'back.out(1.2)',scrollTrigger:{trigger:'#proof-grid',start:'top 88%',once:true}});
-
-/* ── PRICING ── */
-fadeIn('#pricing-hd',{scrollTrigger:{trigger:'#pricing-hd',start:'top 90%',once:true}});
-fadeIn('#pricing-grid .plan',{y:70,stagger:.14,ease:'power3.out',scrollTrigger:{trigger:'#pricing-grid',start:'top 88%',once:true}});
-
-/* ── FAQ ── */
-fadeIn('#faq-hd',{scrollTrigger:{trigger:'#faq-hd',start:'top 90%',once:true}});
-fadeIn('#faq-list .faq-item',{y:0,x:-24,stagger:.07,scrollTrigger:{trigger:'#faq-list',start:'top 90%',once:true}});
-
-/* ── FINAL CTA ── */
-if(!isMobile()){
-  gsap.from('#cta-title',{scale:.75,opacity:0,ease:'none',
-    scrollTrigger:{trigger:'#cta',start:'top 80%',end:'top 30%',scrub:1.5}});
-} else {
-  fadeIn('#cta-title',{y:32,scrollTrigger:{trigger:'#cta',start:'top 90%',once:true}});
-}
-fadeIn('#cta-eyebrow',{y:16,scrollTrigger:{trigger:'#cta',start:'top 92%',once:true}});
-fadeIn(['#cta-sub','#cta-btn','#cta-badges'],{y:28,stagger:.12,scrollTrigger:{trigger:'#cta',start:'top 88%',once:true}});
 
 /* ── FAQ ACCORDION ── */
 document.querySelectorAll('.faq-q').forEach(q=>{
