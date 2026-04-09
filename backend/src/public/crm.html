@@ -853,7 +853,7 @@ body {
 
   .sidebar {
     position: fixed; left: 0; right: 0;
-    top: auto; bottom: 0; width: 100%; height: 72px;
+    top: auto; bottom: 0; width: 100%; height: 80px;
     flex-direction: row; padding: 0 6px;
     border-right: none; border-top: 1px solid rgba(255,255,255,0.07);
     background: #060e1a;
@@ -862,12 +862,17 @@ body {
   .sidebar-logo { display: none; }
 
   .nav-items { flex-direction: row; gap: 0; flex: 1; justify-content: space-around; align-items: center; }
-  .nav-item { width: 52px; height: 52px; border-radius: 14px; font-size: 20px; }
+  .nav-item { width: 58px; height: 58px; border-radius: 16px; font-size: 20px; }
+
+  /* Botón dashboard destacado en el centro */
+  .nav-item-dashboard { width: 64px; height: 64px; border-radius: 18px; background: var(--yellow); color: #050d18; border: none; box-shadow: 0 0 0 4px rgba(255,209,0,0.15); margin-bottom: 4px; flex-shrink: 0; }
+  .nav-item-dashboard.active { background: var(--yellow); color: #050d18; }
+  .nav-item-dashboard:not(.active) { background: rgba(255,209,0,0.15); color: var(--yellow); box-shadow: none; }
 
   .sidebar-bottom { flex-direction: row; gap: 4px; align-items: center; }
   .avatar { width: 38px; height: 38px; font-size: 13px; }
 
-  .main { margin-left: 0; padding: 16px 14px 88px; }
+  .main { margin-left: 0; padding: 16px 14px 96px; }
 
   .topbar { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
   .topbar-left h1 { font-size: 20px; }
@@ -899,7 +904,7 @@ body {
   .modal-overlay.open { display: flex; }
   .form-grid { grid-template-columns: 1fr; }
 
-  .toast { bottom: 68px; right: 10px; left: 10px; max-width: 100%; }
+  .toast { bottom: 84px; right: 10px; left: 10px; max-width: 100%; }
   .week-chart { height: 56px; }
   .status-badge { font-size: 9px; padding: 3px 7px; min-width: 68px; }
   .card { padding: 14px; }
@@ -913,7 +918,7 @@ body {
 @media (max-width: 380px) {
   .main { padding: 12px 10px 72px; }
   .ganancia-value { font-size: 28px; }
-  .nav-item { width: 36px; height: 36px; }
+  .nav-item { width: 42px; height: 42px; }
 }
 
 @media (max-width: 480px) {
@@ -1045,14 +1050,14 @@ body {
   <nav class="sidebar">
     <div class="sidebar-logo" onclick="showSection('dashboard')" title="Dashboard"><img src="/logo_f.png" alt="F" style="width:100%;height:100%;object-fit:contain;padding:4px"></div>
     <div class="nav-items">
-      <div class="nav-item active" onclick="showSection('dashboard')" title="Dashboard">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      </div>
       <div class="nav-item" onclick="showSection('agenda')" title="Agenda">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
       </div>
       <div class="nav-item" onclick="showSection('clientes')" title="Clientes">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      </div>
+      <div class="nav-item nav-item-dashboard active" onclick="showSection('dashboard')" title="Dashboard">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       </div>
       <div class="nav-item" onclick="showSection('motores')" title="Motores">
         <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -2615,7 +2620,7 @@ function showSection(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name).classList.add('active');
 
-  const navMap = { dashboard: 0, agenda: 1, clientes: 2, motores: 3, membresias: 4, equipo: 5 };
+  const navMap = { agenda: 0, clientes: 1, dashboard: 2, motores: 3, membresias: 4, equipo: 5 };
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
 
