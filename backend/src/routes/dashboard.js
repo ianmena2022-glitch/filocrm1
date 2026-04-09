@@ -12,8 +12,8 @@ router.get('/today', auth, async (req, res) => {
     const [metricsQ, prodRevenueQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)          AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0)          AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
            COUNT(CASE WHEN status='pending' OR status='confirmed' THEN 1 END)             AS pending,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
@@ -97,8 +97,8 @@ router.get('/month', auth, async (req, res) => {
     const [monthQ, prodRevMonthQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0)        AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0)        AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                               AS completed,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
            COUNT(*)                                                                      AS total
@@ -304,7 +304,7 @@ router.get('/cash', auth, async (req, res) => {
          COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
          COALESCE(SUM(CASE WHEN payment_method IS NULL THEN price ELSE 0 END),0)    AS no_method_total,
          COALESCE(SUM(tip),0)                                                        AS tips_total,
-         COALESCE(SUM(price),0)                                                      AS revenue_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
          COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
        FROM appointments
        WHERE shop_id=$1 AND date=$2 AND status='completed'`,
@@ -362,8 +362,8 @@ router.post('/cash/close', auth, async (req, res) => {
          COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
          COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
          COALESCE(SUM(tip),0) AS tips_total,
-         COALESCE(SUM(price),0) AS revenue_total,
-         COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price * commission_pct / 100.0 ELSE 0 END),0) AS commissions_total,
          COUNT(*) FILTER (WHERE status='completed') AS cuts_count
        FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
       [shopId, date]
@@ -422,13 +422,28 @@ router.get('/debts', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada
+// PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada y acreditar en caja
 router.put('/debts/:id/pay', auth, async (req, res) => {
+  const { payment_method } = req.body; // método real con el que pagó el cliente
   try {
-    await pool.query(
-      `UPDATE client_debts SET paid=TRUE, paid_at=NOW() WHERE id=$1 AND shop_id=$2`,
+    // Marcar deuda como pagada y obtener el appointment_id vinculado
+    const debtQ = await pool.query(
+      `UPDATE client_debts SET paid=TRUE, paid_at=NOW()
+       WHERE id=$1 AND shop_id=$2
+       RETURNING appointment_id`,
       [req.params.id, req.shopId]
     );
+
+    // Actualizar el payment_method del turno original para que el cobro
+    // aparezca en el método correcto (débito/efectivo/etc.) y no como fiado
+    const validMethods = ['cash','debit','credit','transfer'];
+    if (debtQ.rows.length && debtQ.rows[0].appointment_id && validMethods.includes(payment_method)) {
+      await pool.query(
+        `UPDATE appointments SET payment_method=$1 WHERE id=$2 AND shop_id=$3`,
+        [payment_method, debtQ.rows[0].appointment_id, req.shopId]
+      );
+    }
+
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
