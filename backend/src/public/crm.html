@@ -329,6 +329,119 @@ body {
 .appt-btn.complete:hover{ background: rgba(0,200,117,0.15); color: var(--green); }
 .appt-btn.noshow:hover  { background: rgba(255,67,67,0.15);  color: var(--red); }
 
+/* ─── DASHBOARD PANEL C — DOS COLUMNAS ─── */
+.dash-two-col {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: calc(100vh - 150px);
+  border: 1px solid var(--navy-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.dash-sidebar-kpi {
+  background: #030b14;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 22px 18px 18px;
+  display: flex; flex-direction: column;
+}
+.dkpi-block { padding: 16px 0; }
+.dkpi-label {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--gray); margin-bottom: 6px;
+}
+.dkpi-value {
+  font-family: 'Oswald', sans-serif;
+  font-size: 24px; font-weight: 700;
+  color: var(--yellow); line-height: 1;
+}
+.dkpi-sub { font-size: 11px; color: var(--gray); margin-top: 5px; line-height: 1.4; }
+.dkpi-sep { height: 1px; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+.dkpi-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 20px; margin-top: auto; }
+.dkpi-nuevo-btn {
+  background: var(--yellow); color: #000;
+  border: none; border-radius: 10px; padding: 10px 12px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: Barlow, sans-serif; width: 100%; transition: opacity .15s;
+}
+.dkpi-nuevo-btn:hover { opacity: .85; }
+.dkpi-caja-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 10px 12px;
+  color: rgba(255,255,255,0.7);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: Barlow, sans-serif;
+  width: 100%; transition: all 0.15s;
+}
+.dkpi-caja-btn:hover { background: rgba(255,255,255,0.11); color: white; }
+.dash-appts-col {
+  background: var(--navy-mid);
+  display: flex; flex-direction: column; min-width: 0;
+}
+.dash-appts-header {
+  padding: 16px 22px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex; align-items: baseline; gap: 8px; flex-shrink: 0;
+}
+.dash-appts-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--white);
+}
+.dash-appts-sub { font-size: 10px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
+.dash-appts-list { flex: 1; overflow-y: auto; }
+.dash-appt-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 22px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.12s;
+}
+.dash-appt-row:hover { background: rgba(255,255,255,0.025); }
+.dash-appt-row.dar-done { opacity: 0.42; }
+.dar-time {
+  font-family: 'Oswald', sans-serif;
+  font-size: 15px; font-weight: 700;
+  color: var(--yellow); min-width: 44px; flex-shrink: 0;
+}
+.dar-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dar-info { flex: 1; min-width: 0; }
+.dar-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dar-service { font-size: 11px; color: var(--gray); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dar-price {
+  font-family: 'Oswald', sans-serif;
+  font-size: 15px; color: var(--white); white-space: nowrap; flex-shrink: 0;
+}
+.dar-price.dar-price-done { text-decoration: line-through; color: var(--gray); }
+.dar-check {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid rgba(0,200,117,0.4);
+  background: rgba(0,200,117,0.06);
+  color: var(--green); font-size: 13px; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.dar-check:hover { background: rgba(0,200,117,0.2); border-color: var(--green); }
+.dash-appts-footer {
+  padding: 13px 22px; flex-shrink: 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px; color: var(--gray);
+}
+.dash-appts-footer span { color: var(--yellow); cursor: pointer; font-weight: 600; }
+.dash-appts-footer span:hover { text-decoration: underline; }
+@media (max-width: 900px) {
+  .dash-two-col { grid-template-columns: 1fr; min-height: unset; }
+  .dash-sidebar-kpi {
+    border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-direction: row; flex-wrap: wrap; padding: 14px 12px 10px; gap: 0;
+  }
+  .dkpi-block { padding: 8px 12px; flex: 1; min-width: 100px; }
+  .dkpi-sep { display: none; }
+  .dkpi-value { font-size: 20px; }
+  .dkpi-actions { flex-direction: row; padding-top: 0; margin-top: 0; padding: 8px 12px; width: 100%; flex-basis: 100%; }
+  .dkpi-nuevo-btn, .dkpi-caja-btn { flex: 1; }
+}
+
 /* ─── CLIENTES ─── */
 .client-card {
   background: var(--navy-mid);
@@ -863,104 +976,70 @@ body {
         <button id="dash-tab-caja" onclick="switchDashTab('caja')" style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">💰 Caja</button>
       </div>
 
-      <!-- Panel Dashboard -->
+      <!-- Panel Dashboard — Layout dos columnas (Prototipo C) -->
       <div id="dash-panel-dashboard">
+        <div class="dash-two-col">
 
-      <!-- Hero facturación hoy -->
-      <div class="ganancia-hero" id="ganancia-hero">
-        <div>
-          <div class="ganancia-label">💰 GANANCIA NETA HOY</div>
-          <div class="ganancia-value" id="dash-profit">$0</div>
-          <div class="ganancia-sub" id="dash-revenue">Facturación: $0</div>
-        </div>
-        <div class="ganancia-badges">
-          <div class="badge-item">
-            <div class="badge-num" id="dash-completed">0</div>
-            <div class="badge-lbl">Completados</div>
+          <!-- Columna izquierda: KPIs + acciones -->
+          <div class="dash-sidebar-kpi">
+            <div class="dkpi-block">
+              <div class="dkpi-label">NETO HOY</div>
+              <div class="dkpi-value" id="dash-profit">$0</div>
+              <div class="dkpi-sub" id="dash-revenue">Facturado: $0</div>
+            </div>
+            <div class="dkpi-sep"></div>
+            <div class="dkpi-block">
+              <div class="dkpi-label">TURNOS</div>
+              <div class="dkpi-value" id="dash-turnos-val">0</div>
+              <div class="dkpi-sub" id="dash-turnos-sub">0 listos · 0 pend.</div>
+            </div>
+            <div class="dkpi-sep"></div>
+            <div class="dkpi-block">
+              <div class="dkpi-label">MES</div>
+              <div class="dkpi-value" id="dash-month-revenue">—</div>
+              <div class="dkpi-sub" id="dash-month-trend"></div>
+            </div>
+            <div class="dkpi-sep"></div>
+            <div class="dkpi-actions">
+              <button class="dkpi-nuevo-btn" onclick="openModal('modal-turno')">+ Nuevo turno</button>
+              <button class="dkpi-caja-btn" onclick="switchDashTab('caja')">💰 Ver caja</button>
+            </div>
           </div>
-          <div class="badge-item">
-            <div class="badge-num" id="dash-pending">0</div>
-            <div class="badge-lbl">Pendientes</div>
-          </div>
-          <div class="badge-item">
-            <div class="badge-num" id="dash-noshows" style="color:var(--red)">0</div>
-            <div class="badge-lbl">No vinieron</div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Métricas del mes -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px" id="dash-month-grid">
-        <div class="metric-card">
-          <div class="metric-label">FACTURADO MES</div>
-          <div class="metric-value" id="dash-month-revenue">—</div>
-          <div id="dash-month-trend" style="font-size:11px;margin-top:4px"></div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">TICKET PROMEDIO</div>
-          <div class="metric-value" id="dash-avg-ticket">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">CLIENTES NUEVOS</div>
-          <div class="metric-value" id="dash-new-clients">—</div>
-          <div style="font-size:11px;color:var(--gray);margin-top:4px">este mes</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">TASA NO-SHOW</div>
-          <div class="metric-value" id="dash-noshow-rate" style="color:var(--red)">—</div>
-          <div style="font-size:11px;color:var(--gray);margin-top:4px">del total de turnos</div>
-        </div>
-        <div class="metric-card" id="dash-mrr-card">
-          <div class="metric-label">MRR MEMBRESÍAS</div>
-          <div class="metric-value" id="dash-mrr">—</div>
-        </div>
-      </div>
-
-      <!-- Calendario semanal -->
-      <div class="card" style="margin-bottom:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase">📅 Esta semana</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button onclick="dashCalPrev()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--white);width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px">←</button>
-            <span id="dash-cal-label" style="font-size:13px;color:var(--gray);min-width:120px;text-align:center"></span>
-            <button onclick="dashCalNext()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--white);width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px">→</button>
+          <!-- Columna derecha: lista de turnos del día -->
+          <div class="dash-appts-col">
+            <div class="dash-appts-header">
+              <span class="dash-appts-title">Hoy</span>
+              <span class="dash-appts-sub">pendientes primero</span>
+            </div>
+            <div id="dash-appointments" class="dash-appts-list"></div>
+            <div id="dash-appts-footer" class="dash-appts-footer"></div>
           </div>
-        </div>
-        <div id="dash-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
-      </div>
 
-      <!-- Gráfico 30 días + Servicios top -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px" id="dash-charts-row">
-        <div class="card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">📈 Facturación últimos 30 días</div>
-          <div id="dash-chart-30" style="height:120px;display:flex;align-items:flex-end;gap:3px"></div>
         </div>
-        <div class="card" id="dash-productos-card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">📦 Productos</div>
+
+        <!-- Elementos ocultos — mantienen compatibilidad con funciones existentes -->
+        <div style="display:none">
+          <div id="dash-completed"></div>
+          <div id="dash-pending"></div>
+          <div id="dash-noshows"></div>
+          <div id="dash-avg-ticket"></div>
+          <div id="dash-new-clients"></div>
+          <div id="dash-noshow-rate"></div>
+          <div id="dash-mrr"></div>
+          <div id="dash-mrr-card"></div>
+          <div id="dash-month-grid"></div>
+          <div id="dash-calendar"></div>
+          <div id="dash-cal-label"></div>
+          <div id="dash-chart-30"></div>
           <div id="dash-product-sales"></div>
-        </div>
-      </div>
-
-      <!-- Top clientes + Comisiones (Staff/Enterprise) -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px" id="dash-bottom-row">
-        <div class="card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">⭐ Top clientes del mes</div>
           <div id="dash-top-clients"></div>
-        </div>
-        <div class="card" id="dash-splits-card">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">💰 Comisiones hoy</div>
           <div id="dash-splits"></div>
+          <div id="dash-splits-card"></div>
+          <div id="dash-charts-row"></div>
+          <div id="dash-bottom-row"></div>
+          <div id="dash-productos-card"></div>
         </div>
-      </div>
-
-      <!-- Turnos de hoy -->
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Turnos de hoy</div>
-          <button class="btn-add" style="font-size:12px;padding:8px 14px" onclick="showSection('agenda')">Ver todos →</button>
-        </div>
-        <div id="dash-appointments"></div>
-      </div>
       </div><!-- /dash-panel-dashboard -->
 
       <!-- Panel Caja (dentro del dashboard) -->
@@ -2427,6 +2506,15 @@ async function loadDashboard() {
     document.getElementById('dash-pending').textContent = m.pending;
     document.getElementById('dash-noshows').textContent = m.noshows;
 
+    // KPI Turnos (nuevo layout)
+    const totalTurnos = (m.completed || 0) + (m.pending || 0) + (m.noshows || 0);
+    const turnosVal = document.getElementById('dash-turnos-val');
+    const turnosSub = document.getElementById('dash-turnos-sub');
+    if (turnosVal) turnosVal.innerHTML = m.pending > 0
+      ? `${totalTurnos} <span style="color:#FF9100;font-size:17px;font-weight:600">· ${m.pending} pend.</span>`
+      : `${totalTurnos}`;
+    if (turnosSub) turnosSub.textContent = `${m.completed} listos · ${m.pending} pend.`;
+
     // Métricas del mes
     document.getElementById('dash-month-revenue').textContent = '$' + month.revenue.toLocaleString('es-AR');
     document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
@@ -2490,7 +2578,7 @@ async function loadDashboard() {
       if (splitsCard) splitsCard.style.display = 'none';
     }
 
-    renderDashAppointments(today.appointments.slice(0, 5));
+    renderDashAppointments(today.appointments);
   } catch (e) {
     console.error('Error dashboard:', e.message);
   }
@@ -2605,11 +2693,49 @@ function goToDate(dateStr) {
 
 function renderDashAppointments(appts) {
   const el = document.getElementById('dash-appointments');
+  const footer = document.getElementById('dash-appts-footer');
+
   if (!appts?.length) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>Sin turnos hoy</p></div>`;
+    el.innerHTML = `<div style="padding:48px 22px;text-align:center;color:var(--gray)"><div style="font-size:36px;margin-bottom:10px">📅</div><div style="font-size:13px">Sin turnos hoy</div></div>`;
+    if (footer) footer.innerHTML = '';
     return;
   }
-  el.innerHTML = appts.map(a => renderApptCard(a)).join('');
+
+  // Ordenar: pendientes/confirmados primero, completados/noshow al final
+  const order = { pending: 0, confirmed: 0, noshow: 2, cancelled: 3, completed: 4 };
+  const sorted = [...appts].sort((a, b) => {
+    const oa = order[a.status] ?? 1;
+    const ob = order[b.status] ?? 1;
+    if (oa !== ob) return oa - ob;
+    return (a.time_start || '').localeCompare(b.time_start || '');
+  });
+
+  const dotColor = { pending: '#FF9100', confirmed: '#FF9100', completed: '#00E676', noshow: '#FF4343', cancelled: '#555' };
+
+  el.innerHTML = sorted.map(a => {
+    _editApptCache[a.id] = a;
+    const time = String(a.time_start || '').slice(0, 5);
+    const isDone = a.status === 'completed' || a.status === 'noshow' || a.status === 'cancelled';
+    const dot = dotColor[a.status] || '#555';
+    return `<div class="dash-appt-row${isDone ? ' dar-done' : ''}">
+      <div class="dar-time">${time}</div>
+      <div class="dar-dot" style="background:${dot}"></div>
+      <div class="dar-info">
+        <div class="dar-name">${a.client_name || 'Sin nombre'}</div>
+        <div class="dar-service">${a.service_name || 'Sin servicio'}</div>
+      </div>
+      <div class="dar-price${isDone ? ' dar-price-done' : ''}">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+      ${!isDone
+        ? `<button class="dar-check" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>`
+        : `<div style="width:28px;flex-shrink:0"></div>`}
+    </div>`;
+  }).join('');
+
+  // Footer
+  if (footer) {
+    const completedCount = appts.filter(a => a.status === 'completed').length;
+    footer.innerHTML = `${completedCount} turno${completedCount !== 1 ? 's' : ''} completado${completedCount !== 1 ? 's' : ''} — <span onclick="showSection('agenda')">ver todos →</span>`;
+  }
 }
 
 function renderApptCard(a) {
