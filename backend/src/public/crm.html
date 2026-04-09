@@ -429,6 +429,86 @@ body {
 }
 .dash-appts-footer span { color: var(--yellow); cursor: pointer; font-weight: 600; }
 .dash-appts-footer span:hover { text-decoration: underline; }
+
+/* ─── PANEL CAJA REFACTOR ─── */
+.caja-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.caja-header-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+}
+.caja-date-input {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px; padding: 8px 12px;
+  color: white; font-size: 13px;
+}
+.caja-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.caja-export-btn {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.15);
+  color: white; border-radius: 10px; padding: 8px 14px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: Barlow, sans-serif; transition: background .15s;
+}
+.caja-export-btn:hover { background: rgba(255,255,255,.12); }
+.caja-neto-block { margin-bottom: 14px; }
+.caja-neto-val {
+  font-family: 'Oswald', sans-serif;
+  font-size: 32px; font-weight: 700;
+  color: var(--yellow); line-height: 1;
+}
+.caja-neto-sub { font-size: 12px; color: var(--gray); margin-top: 5px; }
+#cash-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px,1fr));
+  gap: 10px; margin-top: 14px;
+}
+.caja-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 0 20px;
+  background: var(--navy-mid);
+  overflow-x: auto;
+}
+.caja-tab {
+  height: 38px; padding: 0 16px; flex-shrink: 0;
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: Barlow, sans-serif;
+  color: #7a8fa8; transition: color .15s, border-color .15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.caja-tab.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+.caja-tab:hover:not(.active) { color: rgba(255,255,255,.8); }
+.ctab-badge {
+  background: #FF4343; color: white;
+  font-size: 10px; font-weight: 700;
+  border-radius: 10px; padding: 1px 5px; min-width: 16px; text-align: center;
+  font-family: Barlow, sans-serif;
+}
+.caja-tab-body { padding: 14px 20px 24px; }
+.caja-tab-panel { display: none; }
+.caja-method-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.caja-method-row:last-child { border-bottom: none; }
+.caja-method-label { font-size: 13px; }
+.caja-method-val {
+  font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700;
+}
+.caja-tab-section-lbl {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--gray); margin-bottom: 10px;
+}
+@media (max-width: 768px) {
+  #cash-summary-cards { display: none !important; }
+  .caja-neto-val { font-size: 28px; }
+}
 @media (max-width: 900px) {
   .dash-two-col { grid-template-columns: 1fr; min-height: unset; }
   .dash-sidebar-kpi {
@@ -1042,36 +1122,61 @@ body {
         </div>
       </div><!-- /dash-panel-dashboard -->
 
-      <!-- Panel Caja (dentro del dashboard) -->
+      <!-- Panel Caja — layout header fijo + tabs -->
       <div id="dash-panel-caja" style="display:none">
-        <div class="content" style="padding:0 20px 20px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-            <input type="date" id="caja-date" onchange="loadCashSummary()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 12px;color:white;font-size:13px">
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button class="btn-primary" onclick="openExpenseModal()" style="padding:8px 16px;font-size:13px">+ Gasto</button>
-              <button onclick="openExportModal()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:white;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:Barlow,sans-serif">📥 Exportar mes</button>
+
+        <!-- Header fijo: fecha, acciones, neto del día, summary cards -->
+        <div class="caja-header">
+          <div class="caja-header-top">
+            <input type="date" id="caja-date" onchange="loadCashSummary()" class="caja-date-input">
+            <div class="caja-header-actions">
+              <button class="btn-primary" onclick="openExpenseModal()" style="padding:8px 14px;font-size:13px">+ Gasto</button>
+              <button class="caja-export-btn" onclick="openExportModal()">📥 Exportar mes</button>
             </div>
           </div>
-          <div id="cash-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-title" style="margin-bottom:12px">💳 Por método de pago</div>
-            <div id="cash-methods" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px"></div>
+          <div class="caja-neto-block">
+            <div class="caja-neto-val" id="caja-neto-val">$0</div>
+            <div class="caja-neto-sub" id="caja-neto-sub">Cargando...</div>
           </div>
-          <div class="card" style="margin-bottom:14px">
+          <!-- Summary cards: visible solo en desktop -->
+          <div id="cash-summary-cards"></div>
+        </div>
+
+        <!-- Tabs horizontales -->
+        <div class="caja-tabs">
+          <button class="caja-tab active" id="ctab-pagos"    onclick="switchCajaTab('pagos')">💳 Pagos</button>
+          <button class="caja-tab"        id="ctab-gastos"   onclick="switchCajaTab('gastos')">📋 Gastos</button>
+          <button class="caja-tab"        id="ctab-deudas"   onclick="switchCajaTab('deudas')">🤝 Deudas <span id="ctab-deudas-badge"></span></button>
+          <button class="caja-tab"        id="ctab-historial" onclick="switchCajaTab('historial')">🗂 Historial</button>
+        </div>
+
+        <!-- Cuerpo de tabs -->
+        <div class="caja-tab-body">
+
+          <!-- TAB: Pagos -->
+          <div id="tab-content-pagos" class="caja-tab-panel" style="display:block">
+            <div id="cash-methods"></div>
+          </div>
+
+          <!-- TAB: Gastos -->
+          <div id="tab-content-gastos" class="caja-tab-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div class="card-title">📋 Gastos del día</div>
+              <div class="caja-tab-section-lbl">Gastos del día</div>
               <span id="expenses-total-badge" style="font-size:13px;color:#FF4343;font-weight:700"></span>
             </div>
             <div id="expenses-list"><div style="color:var(--gray);font-size:13px">Sin gastos</div></div>
           </div>
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-title" style="margin-bottom:12px">📋 Deudas pendientes</div>
+
+          <!-- TAB: Deudas -->
+          <div id="tab-content-deudas" class="caja-tab-panel">
             <div id="debts-list"><div style="color:var(--gray);font-size:13px">Sin deudas 🎉</div></div>
           </div>
-          <div class="card">
-            <div class="card-title" style="margin-bottom:12px">🗂 Historial de caja</div>
+
+          <!-- TAB: Historial -->
+          <div id="tab-content-historial" class="caja-tab-panel">
             <div id="cash-history-list"><div style="color:var(--gray);font-size:13px">Sin cierres</div></div>
           </div>
+
         </div>
       </div>
     </section>
@@ -4718,6 +4823,17 @@ async function deleteAccount() {
 
 // ── SISTEMA DE CAJA ───────────────────────────────────────────────────────────
 
+function switchCajaTab(tab) {
+  const tabs = ['pagos', 'gastos', 'deudas', 'historial'];
+  tabs.forEach(t => {
+    const btn   = document.getElementById(`ctab-${t}`);
+    const panel = document.getElementById(`tab-content-${t}`);
+    const active = t === tab;
+    if (btn)   { btn.classList.toggle('active', active); }
+    if (panel) { panel.style.display = active ? 'block' : 'none'; }
+  });
+}
+
 function switchDashTab(tab) {
   const panelDash = document.getElementById('dash-panel-dashboard');
   const panelCaja = document.getElementById('dash-panel-caja');
@@ -4730,6 +4846,7 @@ function switchDashTab(tab) {
     btnDash.style.color = 'rgba(255,255,255,.6)';
     btnCaja.style.background = 'var(--yellow)';
     btnCaja.style.color = '#000';
+    switchCajaTab('pagos');
     loadCashOnNavigation();
   } else {
     panelDash.style.display = 'block';
@@ -4762,39 +4879,51 @@ async function loadCashSummary() {
 }
 
 function renderCashSummary(c) {
-  const cards = document.getElementById('cash-summary-cards');
-  const methods = document.getElementById('cash-methods');
+  const cards    = document.getElementById('cash-summary-cards');
+  const methods  = document.getElementById('cash-methods');
   const expBadge = document.getElementById('expenses-total-badge');
-  const expList = document.getElementById('expenses-list');
-  if (!cards) return;
+  const expList  = document.getElementById('expenses-list');
 
   const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
 
-  // Cards de resumen
-  cards.innerHTML = `
+  // ── Header fijo: neto grande + sub ──
+  const netoVal = document.getElementById('caja-neto-val');
+  const netoSub = document.getElementById('caja-neto-sub');
+  if (netoVal) {
+    netoVal.textContent = fmt(c.net_total);
+    netoVal.style.color = parseFloat(c.net_total||0) >= 0 ? 'var(--yellow)' : '#FF4343';
+  }
+  if (netoSub) netoSub.textContent = `Fact. ${fmt(c.revenue_total)} · Gastos -${fmt(c.expenses_total)}`;
+
+  // ── Cards de resumen (visible solo en desktop) ──
+  if (cards) cards.innerHTML = `
     <div class="stat-card"><div class="stat-label">💵 FACTURADO</div><div class="stat-value" style="font-size:22px">${fmt(c.revenue_total)}</div></div>
-    <div class="stat-card"><div class="stat-label">💰 NETO</div><div class="stat-value" style="font-size:22px;color:${c.net_total>=0?'var(--yellow)':'#FF4343'}">${fmt(c.net_total)}</div></div>
+    <div class="stat-card"><div class="stat-label">💰 NETO</div><div class="stat-value" style="font-size:22px;color:${parseFloat(c.net_total||0)>=0?'var(--yellow)':'#FF4343'}">${fmt(c.net_total)}</div></div>
     <div class="stat-card"><div class="stat-label">📋 GASTOS</div><div class="stat-value" style="font-size:22px;color:#FF4343">${fmt(c.expenses_total)}</div></div>
     <div class="stat-card"><div class="stat-label">🎁 PROPINAS</div><div class="stat-value" style="font-size:22px;color:#4CAF50">${fmt(c.tips_total)}</div></div>
     <div class="stat-card"><div class="stat-label">✂️ CORTES</div><div class="stat-value" style="font-size:22px">${c.cuts_count}</div></div>
   `;
 
-  // Métodos de pago
+  // ── Métodos de pago — formato filas ──
   const payMethods = [
-    { key:'cash_total',     label:'💵 Efectivo',     color:'#4CAF50' },
-    { key:'debit_total',    label:'💳 Débito',       color:'#2196F3' },
-    { key:'credit_total',   label:'💳 Crédito',      color:'#9C27B0' },
-    { key:'transfer_total', label:'📲 Transferencia', color:'#FF9800' },
-    { key:'debt_total',     label:'📋 Fiado',         color:'#FF4343' },
+    { key:'cash_total',     label:'💵 Efectivo',      color:'#4CAF50' },
+    { key:'debit_total',    label:'💳 Débito',         color:'#2196F3' },
+    { key:'credit_total',   label:'💳 Crédito',        color:'#9C27B0' },
+    { key:'transfer_total', label:'📲 Transferencia',  color:'#FF9800' },
+    { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343' },
   ];
-  methods.innerHTML = payMethods.map(m => `
-    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px">
-      <div style="font-size:11px;color:var(--gray);margin-bottom:4px">${m.label}</div>
-      <div style="font-size:16px;font-weight:700;color:${m.color}">${fmt(c[m.key])}</div>
-    </div>`).join('');
+  if (methods) methods.innerHTML = payMethods.map(m => {
+    const val = parseFloat(c[m.key] || 0);
+    const isDebt = m.key === 'debt_total';
+    const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
+    return `<div class="caja-method-row">
+      <div class="caja-method-label">${m.label}</div>
+      <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
+    </div>`;
+  }).join('');
 
-  // Gastos
-  if (expBadge) expBadge.textContent = c.expenses_total > 0 ? `-${fmt(c.expenses_total)}` : '';
+  // ── Gastos ──
+  if (expBadge) expBadge.textContent = parseFloat(c.expenses_total||0) > 0 ? `-${fmt(c.expenses_total)}` : '';
   if (expList) {
     if (!c.expenses_items || c.expenses_items.length === 0) {
       expList.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin gastos registrados hoy</div>';
@@ -4818,6 +4947,12 @@ function renderCashSummary(c) {
 function renderDebts(debts) {
   const el = document.getElementById('debts-list');
   if (!el) return;
+  // Badge en el tab de deudas
+  const badge = document.getElementById('ctab-deudas-badge');
+  if (badge) {
+    badge.textContent = debts.length > 0 ? debts.length : '';
+    badge.className   = debts.length > 0 ? 'ctab-badge' : '';
+  }
   if (!debts.length) {
     el.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin deudas pendientes 🎉</div>';
     return;
