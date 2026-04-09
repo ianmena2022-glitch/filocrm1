@@ -175,11 +175,13 @@ router.post('/:id/stock', auth, async (req, res) => {
 
   try {
     const prod = await pool.query(
-      'SELECT stock FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
+      'SELECT stock, nombre, precio_costo FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
       [req.params.id, req.shopId]
     );
     if (!prod.rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
     const stockAntes = parseInt(prod.rows[0].stock);
+    const prodNombre = prod.rows[0].nombre;
+    const precioCosto = parseFloat(prod.rows[0].precio_costo) || 0;
 
     let stockDespues;
     if (tipo === 'entrada') stockDespues = stockAntes + qty;
@@ -205,7 +207,22 @@ router.post('/:id/stock', auth, async (req, res) => {
        stockAntes, stockDespues, nota||null]
     );
 
-    res.json({ ok: true, stock_antes: stockAntes, stock_despues: stockDespues });
+    // Auto-registrar gasto en caja cuando es una entrada de stock
+    let gastoRegistrado = false;
+    if (tipo === 'entrada' && precioCosto > 0) {
+      const montoGasto = precioCosto * qty;
+      const descGasto = nota
+        ? `Stock ${prodNombre} x${qty} — ${nota}`
+        : `Stock ${prodNombre} x${qty}`;
+      await pool.query(
+        `INSERT INTO expenses (shop_id, amount, category, description, date)
+         VALUES ($1, $2, 'insumos', $3, CURRENT_DATE)`,
+        [req.shopId, montoGasto, descGasto]
+      );
+      gastoRegistrado = true;
+    }
+
+    res.json({ ok: true, stock_antes: stockAntes, stock_despues: stockDespues, gasto_registrado: gastoRegistrado });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -35,6 +35,42 @@ router.get('/:slug', async (req, res) => {
   }
 });
 
+// GET /api/booking/:slug/member-verify?phone=XXX — verifica membresía activa
+router.get('/:slug/member-verify', async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.status(400).json({ error: 'Teléfono requerido' });
+
+  try {
+    const shop = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
+    if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    const shopId = shop.rows[0].id;
+
+    const client = await pool.query(
+      'SELECT id, name, phone FROM clients WHERE shop_id=$1 AND phone=$2',
+      [shopId, phone]
+    );
+    if (!client.rows.length) return res.status(404).json({ error: 'No se encontró un cliente con ese número' });
+    const clientData = client.rows[0];
+
+    const memQ = await pool.query(
+      `SELECT id, plan, credits_total, credits_used, active, renews_at
+       FROM memberships WHERE shop_id=$1 AND client_id=$2 AND active=TRUE
+       ORDER BY created_at DESC LIMIT 1`,
+      [shopId, clientData.id]
+    );
+    if (!memQ.rows.length) {
+      return res.status(404).json({ error: 'No tenés una membresía activa en esta barbería' });
+    }
+    const mem = memQ.rows[0];
+
+    if (mem.plan === 'basic' && mem.credits_used >= mem.credits_total) {
+      return res.status(400).json({ error: `Ya usaste todos tus créditos de este mes (${mem.credits_used}/${mem.credits_total})` });
+    }
+
+    res.json({ client: clientData, membership: mem });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/booking/:slug/available?date=YYYY-MM-DD&service_id=X
 // Devuelve los slots disponibles para una fecha y servicio
 router.get('/:slug/available', async (req, res) => {
@@ -125,7 +161,7 @@ router.get('/:slug/available', async (req, res) => {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
-  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id } = req.body;
+  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
 
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
@@ -158,7 +194,7 @@ router.post('/:slug/reserve', async (req, res) => {
       );
       if (svc.rows.length) {
         svcName     = svc.rows[0].name;
-        svcPrice    = svc.rows[0].price;
+        svcPrice    = is_member_booking ? 0 : svc.rows[0].price; // membresía = sin cargo
         svcCost     = svc.rows[0].cost;
         duration    = svc.rows[0].duration_minutes;
       }
@@ -243,12 +279,15 @@ router.post('/:slug/reserve', async (req, res) => {
     // Crear turno
     const appt = await pool.query(
       `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13)
+         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
        svcPrice, svcCost, date, time_start, time_end, null,
-       assignedBarberId, assignedBarberCommission]
+       assignedBarberId, assignedBarberCommission,
+       is_member_booking ? true : false,
+       (is_member_booking && membership_id) ? parseInt(membership_id) : null,
+       is_member_booking ? 'membership' : null]
     );
 
     // Notificar al barbero por WhatsApp si está conectado

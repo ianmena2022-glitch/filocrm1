@@ -2903,6 +2903,9 @@ function renderApptCard(a) {
   const redeemBadge = a.redeem_info
     ? `<div style="font-size:11px;color:var(--green);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🎁</span><span>${a.redeem_info}</span></div>`
     : '';
+  const memberBadge = a.member_booking
+    ? `<div style="font-size:11px;color:var(--yellow);margin-top:3px;display:flex;align-items:center;gap:4px"><span>👑</span><span>Membresía</span></div>`
+    : '';
   return `<div class="appointment-card">
     <div>
       <div class="appt-time">${time}</div>
@@ -2913,13 +2916,16 @@ function renderApptCard(a) {
       <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
       ${(a.assigned_barber_name || a.barber_name) ? `<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--yellow)"><svg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>${a.assigned_barber_name || a.barber_name}</span></div>` : ''}
       ${redeemBadge}
+      ${memberBadge}
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
     <div class="appt-actions">
       <button class="appt-btn" onclick="editApptById(${a.id})" title="Editar">✏️</button>
-      ${a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : ''}
+      ${a.member_booking && a.membership_id && a.status !== 'completed'
+        ? `<button class="appt-btn" style="color:var(--yellow);border-color:rgba(255,209,0,.3)" onclick="memberCheckin(${a.id},${a.membership_id})" title="Check-in membresía">👑</button>`
+        : (a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : '')}
       ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
       <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>
     </div>
@@ -2982,6 +2988,17 @@ function changeAgendaDate(delta) {
 function setAgendaDate(val) {
   agendaDate = val;
   loadAgenda();
+}
+
+async function memberCheckin(apptId, membershipId) {
+  try {
+    await api('POST', `/memberships/${membershipId}/checkin`, {});
+    await api('PUT', `/appointments/${apptId}/status`, { status: 'completed', payment_method: 'membership' });
+    showToast('👑', 'Check-in membresía confirmado', '');
+    await loadAgenda();
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
 }
 
 async function updateApptStatus(id, status) {
@@ -5496,10 +5513,13 @@ async function confirmarAjusteStock() {
   const cant=parseInt(document.getElementById('ajuste-cantidad').value||0);
   const nota=document.getElementById('ajuste-nota').value.trim();
   try {
-    await api('POST',`/products/${id}/stock`,{tipo,cantidad:cant,nota});
-    showToast('✅','Stock ajustado',''); closeModal('modal-ajuste-stock');
+    const r = await api('POST',`/products/${id}/stock`,{tipo,cantidad:cant,nota});
+    const msg = (tipo === 'entrada' && r.gasto_registrado) ? 'Stock sumado · Gasto registrado en caja' : 'Stock ajustado';
+    showToast('✅', msg, '');
+    closeModal('modal-ajuste-stock');
     await loadProductos();
     if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
+    if (tipo === 'entrada' && r.gasto_registrado) loadCaja();
   } catch(e) { showToast('❌','Error',e.message); }
 }
 

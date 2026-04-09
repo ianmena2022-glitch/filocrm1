@@ -115,6 +115,17 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .prize-desc{font-size:11px;color:var(--g);margin-top:2px}
 .prize-cost{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--y);white-space:nowrap}
 .no-prizes{font-size:13px;color:var(--g);padding:8px 0}
+
+/* MEMBER FLOW */
+.member-teaser{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;margin-bottom:14px;cursor:pointer;background:transparent;border:1px dashed rgba(255,209,0,.2);border-radius:10px;width:100%;transition:all .2s;font-size:13px;color:rgba(255,255,255,.45)}
+.member-teaser:hover{background:rgba(255,209,0,.04);border-color:rgba(255,209,0,.4);color:rgba(255,255,255,.7)}
+.member-teaser b{color:var(--y)}
+.member-active-banner{background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.member-active-info{display:flex;align-items:center;gap:10px}
+.member-active-text{font-size:14px;font-weight:700;color:var(--y)}
+.member-active-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px}
+.btn-member-change{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:11px;cursor:pointer;text-decoration:underline;padding:0;white-space:nowrap;flex-shrink:0}
+.svc-price-member{font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)}
 </style>
 </head>
 <body>
@@ -147,11 +158,43 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 
     <!-- Step 1: Servicio -->
     <div id="screen-service">
+      <!-- Member teaser / banner activo -->
+      <button class="member-teaser" id="member-teaser" onclick="goToMemberLogin()">
+        👑 ¿Sos miembro? <b>Usá tu membresía →</b>
+      </button>
+      <div class="member-active-banner" id="member-active-banner" style="display:none">
+        <div class="member-active-info">
+          <span style="font-size:22px">👑</span>
+          <div>
+            <div class="member-active-text" id="member-banner-name">Membresía activa</div>
+            <div class="member-active-sub" id="member-banner-sub"></div>
+          </div>
+        </div>
+        <button class="btn-member-change" onclick="cancelMemberFlow()">✕ Cambiar</button>
+      </div>
       <div class="card">
         <div class="card-title">✂️ ¿Qué servicio querés?</div>
         <div class="service-grid" id="service-grid"></div>
       </div>
       <button class="btn-primary" id="btn-next-service" onclick="goToDate()" disabled>Elegir fecha →</button>
+    </div>
+
+    <!-- Member Login -->
+    <div id="screen-member-login" style="display:none">
+      <div class="card">
+        <div class="card-title">👑 Verificar membresía</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.55);margin-bottom:20px;line-height:1.6">
+          Ingresá tu número de WhatsApp para verificar tu membresía y reservar sin costo.
+        </div>
+        <div class="form-field">
+          <label>Tu WhatsApp</label>
+          <input type="tel" id="member-phone" placeholder="5491100000000" inputmode="numeric"
+            style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .2s">
+        </div>
+        <div id="member-verify-error" class="error-banner"></div>
+      </div>
+      <button class="btn-primary" id="btn-verify-member" onclick="verifyMember()">✅ Verificar membresía</button>
+      <button class="btn-back" onclick="showScreen('service');setStep(1)">← Volver</button>
     </div>
 
     <!-- Step 2: Fecha -->
@@ -252,6 +295,8 @@ let currentMonth = new Date();
 let clientPointsData = null;
 let selectedPrize = null;
 let storeItems = [];
+let isMemberFlow = false;
+let memberData = null;
 
 // ── INIT ──
 async function init() {
@@ -302,11 +347,73 @@ function renderServices() {
     <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}">
       <div class="svc-name">${s.name}</div>
       <div class="svc-meta">
-        <span class="svc-price">$${parseFloat(s.price).toLocaleString('es-AR')}</span>
+        ${isMemberFlow
+          ? `<span class="svc-price-member">👑 Gratis</span>`
+          : `<span class="svc-price">$${parseFloat(s.price).toLocaleString('es-AR')}</span>`}
         <span class="svc-duration">${s.duration_minutes} min</span>
       </div>
     </div>
   `).join('');
+}
+
+// ── MEMBER FLOW ──
+function goToMemberLogin() {
+  document.getElementById('member-verify-error').style.display = 'none';
+  document.getElementById('member-phone').value = '';
+  showScreen('member-login');
+  setStep(1);
+}
+
+async function verifyMember() {
+  const phone = document.getElementById('member-phone').value.trim().replace(/\D/g, '');
+  const errEl = document.getElementById('member-verify-error');
+  errEl.style.display = 'none';
+  if (phone.length < 10) {
+    errEl.textContent = 'Ingresá un número de WhatsApp válido';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('btn-verify-member');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+
+  try {
+    const res = await fetch(`${API}/member-verify?phone=${phone}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al verificar');
+
+    isMemberFlow = true;
+    memberData = { ...data.client, membership: data.membership };
+
+    // Actualizar banner
+    document.getElementById('member-teaser').style.display = 'none';
+    document.getElementById('member-active-banner').style.display = 'flex';
+    document.getElementById('member-banner-name').textContent = memberData.name;
+    const plan = data.membership.plan === 'premium'
+      ? 'Premium — turnos ilimitados'
+      : `Basic — ${data.membership.credits_total - data.membership.credits_used} crédito(s) restante(s)`;
+    document.getElementById('member-banner-sub').textContent = `👑 Membresía ${plan}`;
+
+    // Deseleccionar servicio previo
+    selectedService = null;
+    document.getElementById('btn-next-service').disabled = true;
+    renderServices();
+    showScreen('service');
+    setStep(1);
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = '✅ Verificar membresía';
+}
+
+function cancelMemberFlow() {
+  isMemberFlow = false;
+  memberData = null;
+  selectedService = null;
+  document.getElementById('btn-next-service').disabled = true;
+  document.getElementById('member-teaser').style.display = 'flex';
+  document.getElementById('member-active-banner').style.display = 'none';
+  renderServices();
 }
 
 function selectService(id) {
@@ -438,13 +545,19 @@ function goToForm() {
     <div class="summary-row"><span class="summary-label">Fecha</span><span class="summary-value">${dateFormatted}</span></div>
     <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
     ${selectedBarber ? `<div class="summary-row"><span class="summary-label">Barbero</span><span class="summary-value">✂️ ${selectedBarber.name}</span></div>` : ''}
-    <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">$${parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
+    <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">${isMemberFlow ? '👑 Membresía' : '$' + parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
   `;
+
+  // Pre-completar datos si es flujo miembro
+  if (isMemberFlow && memberData) {
+    document.getElementById('client-name').value = memberData.name || '';
+    document.getElementById('client-phone').value = memberData.phone || '';
+  }
 
   // Si ya tiene teléfono cargado (autocomplete), chequear puntos automáticamente
   setTimeout(async () => {
     const phone = document.getElementById('client-phone').value.trim().replace(/\D/g, '');
-    if (phone.length >= 8 && slug && !clientPointsData) {
+    if (phone.length >= 8 && slug && !clientPointsData && !isMemberFlow) {
       await checkPhonePoints(phone);
     }
   }, 500);
@@ -488,7 +601,9 @@ async function confirmReservation() {
         service_id: selectedService?.id || null,
         date: selectedDate,
         time_start: selectedTime,
-        redeem_item_id: selectedPrize?.id || null
+        redeem_item_id: selectedPrize?.id || null,
+        is_member_booking: isMemberFlow || false,
+        membership_id: isMemberFlow ? memberData?.membership?.id : null
       })
     });
     const data = await res.json();
@@ -516,7 +631,7 @@ async function confirmReservation() {
 
 // ── HELPERS ──
 function showScreen(name) {
-  ['service','date','time','barber','form','success'].forEach(s => {
+  ['service','member-login','date','time','barber','form','success'].forEach(s => {
     document.getElementById('screen-' + s).style.display = s === name ? 'block' : 'none';
   });
 }

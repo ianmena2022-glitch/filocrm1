@@ -328,3 +328,12 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements     ON product_stock_movements(sh
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 'pct'
   CHECK (commission_mode IN ('pct','fixed','mixed'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
+
+-- ── MEMBRESÍAS EN RESERVAS ────────────────────────────────────────────────────
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS member_booking BOOLEAN DEFAULT FALSE;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS membership_id INT REFERENCES memberships(id) ON DELETE SET NULL;
+
+-- Ampliar constraint payment_method para incluir 'membership'
+ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_payment_method_check;
+ALTER TABLE appointments ADD CONSTRAINT appointments_payment_method_check
+  CHECK (payment_method IN ('cash','debit','credit','transfer','debt','membership') OR payment_method IS NULL);
