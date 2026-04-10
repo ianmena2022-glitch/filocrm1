@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/api/auth/me',           // necesario para el polling de verificación de pago
   '/api/auth/complete-registration',
   '/api/payments/filo-subscription', // necesario para que cuentas expiradas puedan re-suscribirse
+  '/api/payments/qr-order',          // cuentas expiradas necesitan pagar
+  '/api/payments/webhook-qr',        // webhook MP (sin auth)
   '/api/auth/setup-test',
   '/api/payments/webhook',
   '/api/booking',
@@ -62,8 +64,14 @@ module.exports = async function paywall(req, res, next) {
       return next(); // Trial activo
     }
 
-    // Suscripción activa
-    if (shop.subscription_status === 'active') return next();
+    // Suscripción activa — verificar que no venció (QR paga 30 días)
+    if (shop.subscription_status === 'active') {
+      if (shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
+        await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
+        return res.status(402).json({ error: 'Tu suscripción venció', code: 'SUBSCRIPTION_EXPIRED', message: 'Renovar tu plan para continuar usando FILO' });
+      }
+      return next();
+    }
 
     // Expirado o cancelado
     return res.status(402).json({

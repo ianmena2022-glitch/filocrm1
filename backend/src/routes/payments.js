@@ -373,6 +373,97 @@ router.post('/webhook-filo', async (req, res) => {
   }
 });
 
+// ── SISTEMA QR DINÁMICO ────────────────────────────────────────────────────
+
+// POST /api/payments/qr-order — crear orden de pago único (30 días de acceso)
+router.post('/qr-order', auth, async (req, res) => {
+  const { plan } = req.body;
+  const validPlans = ['starter', 'staff', 'enterprise'];
+  if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
+
+  const QR_PLANS = {
+    starter:    { price: 40000,  label: 'FILO Starter'    },
+    staff:      { price: 80000,  label: 'FILO Staff'       },
+    enterprise: { price: 130000, label: 'FILO Enterprise'  },
+  };
+  const planCfg = QR_PLANS[plan];
+  const appUrl  = process.env.APP_URL || 'https://filocrm.com.ar';
+  const extRef  = `filo:${req.shopId}:${plan}:${Date.now()}`;
+
+  try {
+    const pref = await mpFetch('POST', '/checkout/preferences', {
+      items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: planCfg.price, currency_id: 'ARS' }],
+      external_reference: extRef,
+      notification_url: `${appUrl}/api/payments/webhook-qr`,
+      back_urls: { success: `${appUrl}/app?qr_paid=1`, failure: `${appUrl}/app` },
+      auto_return: 'approved',
+    });
+
+    await pool.query("UPDATE shops SET mp_shop_status='pending_qr' WHERE id=$1", [req.shopId]);
+
+    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id}`);
+    res.json({ ok: true, preference_id: pref.id, init_point: pref.init_point, amount: planCfg.price, plan });
+  } catch(e) {
+    console.error('[QR Order] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/payments/webhook-qr — MP notifica pago aprobado (QR / Checkout)
+router.post('/webhook-qr', async (req, res) => {
+  try {
+    const { type, data, action } = req.body;
+    console.log(`[QR Webhook] type=${type} action=${action} id=${data?.id}`);
+
+    const isPaymentEvent = type === 'payment' || action === 'payment.created' || action === 'payment.updated';
+    if (isPaymentEvent && data?.id) {
+      const payment = await mpFetch('GET', `/v1/payments/${data.id}`);
+      const { status, external_reference, transaction_amount } = payment;
+      console.log(`[QR Webhook] pago ${data.id} → ${status} · ref=${external_reference}`);
+
+      if (status === 'approved' && external_reference?.startsWith('filo:')) {
+        const parts   = external_reference.split(':');
+        const shopId  = parseInt(parts[1]);
+        const plan    = parts[2];
+        if (!shopId || isNaN(shopId)) return res.sendStatus(200);
+
+        const accessUntil = new Date();
+        accessUntil.setDate(accessUntil.getDate() + 30);
+
+        const updated = await pool.query(
+          `UPDATE shops
+           SET subscription_status='active', mp_shop_status='authorized',
+               filo_plan=$1, trial_ends_at=$2, expired_at=NULL
+           WHERE id=$3
+           RETURNING name, phone, wpp_connected`,
+          [plan, accessUntil.toISOString(), shopId]
+        );
+
+        if (updated.rows.length) {
+          const shop = updated.rows[0];
+          const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
+          console.log(`[QR Webhook] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
+
+          if (shop.wpp_connected && shop.phone) {
+            try {
+              const wpp = require('../services/whatsapp');
+              const fechaVto = accessUntil.toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
+              const msg = `🎉 *¡Plan FILO activado!*\n\n✅ Tu plan *${planLabel}* está activo.\n📅 Válido 30 días hasta el ${fechaVto}.\n\n¡Gracias por usar FILO! ✂️`;
+              await wpp.sendText(shopId, shop.phone, msg);
+            } catch(wppErr) {
+              console.error('[QR Webhook] Error WPP:', wppErr.message);
+            }
+          }
+        }
+      }
+    }
+    res.sendStatus(200);
+  } catch(e) {
+    console.error('[QR Webhook] error:', e.message);
+    res.sendStatus(200);
+  }
+});
+
 // POST /api/payments/filo-cancel — cancelar suscripción del shop a FILO
 router.post('/filo-cancel', auth, async (req, res) => {
   try {
