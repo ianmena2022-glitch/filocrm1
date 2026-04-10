@@ -552,11 +552,27 @@ body {
   font-size: 12px; color: rgba(255,255,255,.5);
   max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.trial-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,209,0,.1); border: 1px solid rgba(255,209,0,.3);
+  border-radius: 20px; padding: 4px 10px;
+  font-size: 11px; font-weight: 700; color: var(--yellow);
+  letter-spacing: .3px; white-space: nowrap; cursor: pointer;
+  transition: background .15s;
+}
+.trial-badge:hover { background: rgba(255,209,0,.18); }
+.trial-badge .trial-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--yellow); flex-shrink: 0;
+  animation: pulse 1.5s infinite;
+}
 @media (max-width: 768px) {
   .cfg-btn-text { display: none; }
   .btn-ajustes { padding: 6px 8px; }
   .tb-uname { display: none; }
   .topbar-user-group { gap: 5px; }
+  .trial-badge .trial-label { display: none; }
+  .trial-badge { padding: 4px 8px; }
 }
 
 /* ─── CLIENTES ─── */
@@ -2617,6 +2633,22 @@ function startApp() {
   const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
   document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
   document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
+
+  // Trial badge en todos los topbars
+  document.querySelectorAll('.trial-badge').forEach(el => el.remove()); // evitar duplicados
+  if (currentShop?.subscription_status === 'trial' && !currentShop.is_test && !currentShop.is_barber) {
+    const trialEnds = currentShop.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
+    const daysLeft = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / 86400000)) : 0;
+    const label = daysLeft <= 1 ? 'Trial: último día' : `Trial: ${daysLeft}d`;
+    const badgeHTML = `<div class="trial-badge" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Activá tu plan">
+      <span class="trial-dot"></span>
+      <span class="trial-label">FREE TRIAL</span>
+      <span>${label}</span>
+    </div>`;
+    document.querySelectorAll('.topbar-user-group').forEach(group => {
+      group.insertAdjacentHTML('afterbegin', badgeHTML);
+    });
+  }
 
   // Preservar flag is_test si el plan original era test
   if (currentShop?.plan === 'test') { currentShop.is_test = true; localStorage.setItem('filo_shop', JSON.stringify(currentShop)); }
