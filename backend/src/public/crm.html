@@ -1041,17 +1041,16 @@ body {
 
       <!-- Aviso explícito del trial -->
       <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.6">
-        <div style="font-weight:700;color:var(--yellow);margin-bottom:6px;font-size:13px">📋 Condiciones del período de prueba</div>
+        <div style="font-weight:700;color:var(--yellow);margin-bottom:6px;font-size:13px">📋 Período de prueba gratuito</div>
         <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px">
-          <li><strong>7 días gratis</strong> — sin cobro inmediato</li>
-          <li>Al registrarte vas a ingresar tu tarjeta en Mercado Pago</li>
-          <li>Al día 8 se cobra automáticamente el primer mes</li>
-          <li>Podés <strong>cancelar en cualquier momento</strong> desde Configuración antes de que venza el trial</li>
+          <li><strong>7 días gratis</strong> — sin tarjeta, sin cobro</li>
+          <li>Al vencer, pagás con QR desde cualquier billetera</li>
+          <li>Podés pagar en cualquier momento durante el trial</li>
         </ul>
       </div>
 
       <button class="btn-primary" onclick="register()">🚀 Empezar prueba gratuita</button>
-      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.25);margin-top:10px;letter-spacing:.5px">PAGO SEGURO VÍA MERCADO PAGO · CANCELÁ CUANDO QUIERAS</div>
+      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.25);margin-top:10px;letter-spacing:.5px">SIN TARJETA · PAGÁS CON QR CUANDO QUIERAS</div>
     </div>
 
     <!-- Registro barbero con código -->
@@ -2361,51 +2360,42 @@ async function register() {
   const phone = document.getElementById('reg-phone').value.trim();
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
   const btn = document.querySelector('#form-register .btn-primary');
-  btn.disabled = true; btn.textContent = 'Preparando tu cuenta...';
+  btn.disabled = true; btn.textContent = 'Creando tu cuenta...';
   try {
-    // Pre-registro: guarda datos y devuelve link MP SIN crear la cuenta todavía
-    const res = await fetch('/api/auth/pre-register', {
+    // Crear cuenta con trial 7 días — sin pago previo
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan })
     });
     const data = await res.json();
-    if (!res.ok) return showAuthError(data.error || 'Error al iniciar el registro');
+    if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
 
-    if (data.payment_url) {
-      btn.textContent = 'Redirigiendo a Mercado Pago...';
-      if (data.pending_id) localStorage.setItem('filo_pending_id', data.pending_id);
-      showTrialRedirect(data.payment_url);
-      return;
-    }
-    showAuthError('No se pudo obtener el link de pago');
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+
+    // Abrir el dashboard con trial activo y mostrar el modal QR para pagar
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
+    document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
+    document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
+    loadDashboard();
+    loadServices();
+    loadClients();
+    loadStoreItems();
+    initStaffUI();
+    startPolling();
+
+    // Abrir modal QR para que el usuario elija plan y pague cuando quiera
+    setTimeout(() => openQRModal(selectedRegPlan), 800);
   } catch (e) {
     showAuthError(e.message);
   } finally {
     btn.disabled = false; btn.textContent = '🚀 Empezar prueba gratuita';
   }
-}
-
-function showTrialRedirect(paymentUrl) {
-  var authBox = document.querySelector('.auth-box');
-  if (!authBox) { window.location.href = paymentUrl; return; }
-  var html = '<div style="text-align:center;padding:20px 0">';
-  html += '<div style="width:56px;height:56px;background:var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px">&#10003;</div>';
-  html += '<div style="font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:8px">Cuenta creada!</div>';
-  html += '<div style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:28px;line-height:1.6">';
-  html += 'Ahora vas a ingresar tu tarjeta en Mercado Pago.<br>';
-  html += '<strong style="color:var(--yellow)">No se te va a cobrar nada hoy.</strong><br>';
-  html += 'El primer cobro es al dia 8.</div>';
-  html += '<div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:14px;margin-bottom:24px;font-size:12px;color:rgba(255,255,255,.6);text-align:left;line-height:1.7">';
-  html += '<div style="font-weight:700;color:var(--yellow);margin-bottom:6px">Lo que va a pasar:</div>';
-  html += '&#10003; Hoy: ingresas tu tarjeta (sin cargo)<br>';
-  html += '&#10003; Dias 1-7: usas FILO gratis<br>';
-  html += '&#10003; Dia 8: se cobra el primer mes automaticamente<br>';
-  html += '&#10003; Podes cancelar desde Configuracion antes del dia 8</div>';
-  html += '<a href="' + paymentUrl + '" style="display:block;background:var(--yellow);color:#000d1f;padding:14px;border-radius:12px;font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;text-decoration:none;letter-spacing:.5px;margin-bottom:12px">Ingresar tarjeta en Mercado Pago</a>';
-
-  html += '</div>';
-  authBox.innerHTML = html;
 }
 
 
@@ -2441,10 +2431,17 @@ function openQRModal(plan) {
   document.querySelectorAll('.qr-plan-opt').forEach(el => {
     el.classList.toggle('selected', el.dataset.plan === _qrSelectedPlan);
   });
+  const btn = document.getElementById('btn-gen-qr');
+  if (btn) { btn.disabled = false; btn.textContent = 'Generar QR de pago'; }
   document.getElementById('qr-step-plan').style.display = 'block';
   document.getElementById('qr-step-scan').style.display = 'none';
   document.getElementById('qr-step-success').style.display = 'none';
-  document.getElementById('btn-qr-cancel-plan').textContent = 'Cancelar';
+  // Si está en trial, mostrar "Ahora no" en vez de "Cancelar"
+  const cancelBtn = document.getElementById('btn-qr-cancel-plan');
+  if (cancelBtn) {
+    cancelBtn.onclick = closeQRModal;
+    cancelBtn.textContent = currentShop?.subscription_status === 'trial' ? 'Ahora no, usaré el trial' : 'Cancelar';
+  }
   document.getElementById('modal-qr-payment').classList.add('show');
 }
 
