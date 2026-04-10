@@ -1544,6 +1544,28 @@ body {
           </div>
         </div>
 
+        <!-- Días no laborables -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-closed-days-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">🚫 Días no laborables</div>
+            <span class="tpl-arrow" id="arrow-cfg-closed-days-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-closed-days-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.5">
+              Programá fechas extraordinarias en que la barbería no abre — feriados, vacaciones, etc. No aparecerán disponibles en el sistema de reservas.
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+              <input type="date" id="closed-day-input"
+                style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:9px 13px;color:#fff;font-size:14px;font-family:Barlow,sans-serif;outline:none;flex:1;min-width:150px">
+              <button onclick="addClosedDay()"
+                style="background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.3);color:#ff8080;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">
+                + Agregar
+              </button>
+            </div>
+            <div id="closed-days-list" style="display:flex;flex-direction:column;gap:7px"></div>
+          </div>
+        </div>
+
         <!-- WhatsApp -->
         <div class="settings-section">
           <div class="settings-section-title">💬 WhatsApp</div>
@@ -3965,6 +3987,57 @@ function getScheduleFromUI() {
   return schedule;
 }
 
+// ── DÍAS NO LABORABLES ──────────────────────────────────────────────────────
+let _closedDays = []; // array de strings "YYYY-MM-DD"
+
+function renderClosedDays(days) {
+  _closedDays = [...(days || [])].sort();
+  const list = document.getElementById('closed-days-list');
+  if (!list) return;
+  if (!_closedDays.length) {
+    list.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,.3);padding:8px 0">Sin días no laborables programados</div>';
+    return;
+  }
+  list.innerHTML = _closedDays.map(d => {
+    const label = new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:rgba(255,67,67,.06);border:1px solid rgba(255,67,67,.15);border-radius:9px">
+      <span style="font-size:13px;font-weight:600;color:rgba(255,255,255,.75)">${label}</span>
+      <button onclick="removeClosedDay('${d}')" style="background:none;border:none;color:rgba(255,67,67,.6);font-size:16px;cursor:pointer;padding:0 4px;line-height:1" title="Eliminar">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addClosedDay() {
+  const input = document.getElementById('closed-day-input');
+  const date = input.value;
+  if (!date) return;
+  if (_closedDays.includes(date)) { showToast('⚠️','Ya existe','Esa fecha ya está en la lista'); return; }
+  const today = new Date().toISOString().split('T')[0];
+  if (date < today) { showToast('⚠️','Fecha pasada','Elegí una fecha futura'); return; }
+  _closedDays.push(date);
+  renderClosedDays(_closedDays);
+  input.value = '';
+  saveClosedDays();
+}
+
+function removeClosedDay(date) {
+  _closedDays = _closedDays.filter(d => d !== date);
+  renderClosedDays(_closedDays);
+  saveClosedDays();
+}
+
+async function saveClosedDays() {
+  try {
+    // Filtrar fechas pasadas antes de guardar
+    const today = new Date().toISOString().split('T')[0];
+    _closedDays = _closedDays.filter(d => d >= today);
+    await api('PUT', '/settings', { closed_days: JSON.stringify(_closedDays) });
+    showToast('✅', 'Días no laborables guardados', '');
+  } catch(e) {
+    showToast('❌', 'Error al guardar', e.message);
+  }
+}
+
 async function loadSettings() {
   try {
     const settings = await api('GET', '/settings');
@@ -4006,6 +4079,10 @@ async function loadSettings() {
     // Horarios
     const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
     renderSchedule(schedule);
+
+    // Días no laborables
+    const closedDays = settings.closed_days ? JSON.parse(settings.closed_days) : [];
+    renderClosedDays(closedDays);
 
     // Templates de mensajes
     const tpls = settings.msg_templates ? JSON.parse(settings.msg_templates) : {};

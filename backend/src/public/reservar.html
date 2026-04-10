@@ -460,7 +460,11 @@ function renderCalendar() {
 
     // Verificar si el día está habilitado en el horario
     const dayKey = dayKeys[date.getDay()];
-    const isClosed = schedule ? !schedule[dayKey]?.active : date.getDay() === 0;
+    const isWeeklyClosed = schedule ? !schedule[dayKey]?.active : date.getDay() === 0;
+    // Verificar si es día cerrado extraordinario
+    const closedDays = shopData?.closed_days ? JSON.parse(shopData.closed_days) : [];
+    const isExtraordinaryClosed = closedDays.includes(dateStr);
+    const isClosed = isWeeklyClosed || isExtraordinaryClosed;
     const disabled = isPast || isClosed;
 
     let cls = 'cal-day';

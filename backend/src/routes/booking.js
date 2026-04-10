@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -104,9 +104,16 @@ router.get('/:slug/available', async (req, res) => {
     );
 
     // Generar slots según horario configurado
-    const shopFull = await pool.query('SELECT schedule FROM shops WHERE id=$1', [shopId]);
+    const shopFull = await pool.query('SELECT schedule, closed_days FROM shops WHERE id=$1', [shopId]);
     const scheduleRaw = shopFull.rows[0]?.schedule;
     const schedule = scheduleRaw ? JSON.parse(scheduleRaw) : null;
+
+    // Verificar si el día es un día cerrado extraordinario
+    const closedDaysRaw = shopFull.rows[0]?.closed_days;
+    const closedDays = closedDaysRaw ? JSON.parse(closedDaysRaw) : [];
+    if (closedDays.includes(date)) {
+      return res.json({ slots: [], duration, closed: true, closed_extraordinary: true });
+    }
 
     // Día de la semana (0=domingo, 1=lunes... 6=sábado)
     const dayOfWeek = new Date(date + 'T12:00:00').getDay();
@@ -174,6 +181,14 @@ router.post('/:slug/reserve', async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+
+    // Verificar día cerrado extraordinario
+    if (shopData.closed_days) {
+      const closedDays = JSON.parse(shopData.closed_days);
+      if (closedDays.includes(date)) {
+        return res.status(400).json({ error: 'La barbería no atiende ese día (día no laborable).' });
+      }
+    }
 
     // Verificar que el día esté habilitado en el horario
     if (shopData.schedule) {

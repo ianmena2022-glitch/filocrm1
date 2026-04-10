@@ -329,6 +329,10 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 
   CHECK (commission_mode IN ('pct','fixed','mixed'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
 
+-- ── DÍAS NO LABORABLES EXTRAORDINARIOS ───────────────────────────────────────
+-- Array JSON de fechas "YYYY-MM-DD" — ej: ["2025-12-25","2026-01-01"]
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS closed_days TEXT DEFAULT NULL;
+
 -- ── MEMBRESÍAS EN RESERVAS ────────────────────────────────────────────────────
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS member_booking BOOLEAN DEFAULT FALSE;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS membership_id INT REFERENCES memberships(id) ON DELETE SET NULL;
