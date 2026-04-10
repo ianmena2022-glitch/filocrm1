@@ -427,6 +427,19 @@ router.post('/webhook-qr', async (req, res) => {
         const plan    = parts[2];
         if (!shopId || isNaN(shopId)) return res.sendStatus(200);
 
+        // Validar que el monto pagado corresponde al plan (tolerancia de $1 por redondeos)
+        const QR_PLANS = {
+          starter:    { price: 40000  },
+          staff:      { price: 80000  },
+          enterprise: { price: 130000 },
+        };
+        const expectedPrice = QR_PLANS[plan]?.price;
+        const paidAmount    = parseFloat(transaction_amount) || 0;
+        if (expectedPrice && paidAmount < expectedPrice - 1) {
+          console.warn(`[QR Webhook] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para plan ${plan} (esperado $${expectedPrice}). Ignorando.`);
+          return res.sendStatus(200);
+        }
+
         const accessUntil = new Date();
         accessUntil.setDate(accessUntil.getDate() + 30);
 
