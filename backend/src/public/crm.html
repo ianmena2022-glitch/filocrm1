@@ -2922,8 +2922,22 @@ async function checkPendingRegistration() {
   } catch(e) { return false; }
 }
 
-function startApp() {
+async function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
+
+  // Si el plan es enterprise, refrescar siempre desde DB antes de decidir el panel
+  // Evita que el caché de localStorage tenga flags incorrectos (is_enterprise_owner / is_branch)
+  if (currentShop?.filo_plan === 'enterprise' && !currentShop?.is_barber && token) {
+    try {
+      const fresh = await fetch('/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(r => r.json());
+      if (fresh?.shop) {
+        currentShop = fresh.shop;
+        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      }
+    } catch(e) { /* usar datos cacheados si falla */ }
+  }
 
   // Verificar acceso: trial activo, suscripción activa, test, barbero, enterprise o branch
   if (currentShop && !currentShop.is_test && currentShop.plan !== 'test'
@@ -2961,10 +2975,7 @@ function startApp() {
   }
 
   // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
-  // Detectar por flag DB o por filo_plan='enterprise' sin ser branch ni barbero (fallback para cuentas viejas)
-  const isEnterpriseOwner = currentShop?.is_enterprise_owner ||
-    (currentShop?.filo_plan === 'enterprise' && !currentShop?.is_branch && !currentShop?.is_barber);
-  if (isEnterpriseOwner) {
+  if (currentShop?.is_enterprise_owner) {
     document.querySelector('.sidebar').style.display = 'none';
     document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
     document.getElementById('sec-enterprise').style.display = 'block';
