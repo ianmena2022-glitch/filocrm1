@@ -474,6 +474,45 @@ router.get('/cash/history', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/dashboard/cash/day-detail?date= — detalle completo de un día cerrado
+router.get('/cash/day-detail', auth, async (req, res) => {
+  const date = req.query.date;
+  if (!date) return res.status(400).json({ error: 'Se requiere date' });
+  const shopId = req.shopId;
+  try {
+    // Resumen del cierre guardado
+    const reg = await pool.query(
+      `SELECT * FROM cash_registers WHERE shop_id=$1 AND date::date = $2::date`,
+      [shopId, date]
+    );
+    // Turnos completados del día
+    const appts = await pool.query(
+      `SELECT a.time_start, a.client_name, a.service_name, a.price, a.cost,
+              a.commission_pct, a.tip, a.payment_method,
+              ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
+              ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
+              s.name AS barber_name
+       FROM appointments a
+       LEFT JOIN shops s ON s.id = a.barber_id
+       WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+       ORDER BY a.time_start ASC`,
+      [shopId, date]
+    );
+    // Gastos e ingresos extras del día
+    const expenses = await pool.query(
+      `SELECT id, amount, category, description, is_income, source_type, payment_method, created_at
+       FROM expenses WHERE shop_id=$1 AND date=$2
+       ORDER BY created_at ASC`,
+      [shopId, date]
+    );
+    res.json({
+      register:  reg.rows[0] || null,
+      appointments: appts.rows,
+      expenses:  expenses.rows,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/dashboard/debts — deudas pendientes
 router.get('/debts', auth, async (req, res) => {
   try {

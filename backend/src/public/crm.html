@@ -1542,6 +1542,19 @@ body {
       </div>
     </div>
 
+    <!-- Modal: Detalle de cierre de caja -->
+    <div class="modal-overlay" id="modal-caja-day" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:560px;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="flex-shrink:0">
+          <h2 id="modal-caja-day-title">📅 Detalle del día</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-caja-day').style.display='none'">×</button>
+        </div>
+        <div class="modal-body" id="modal-caja-day-body" style="overflow-y:auto;flex:1;padding-bottom:20px">
+          <div style="text-align:center;padding:30px;color:var(--gray)">Cargando...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal historial de liquidaciones -->
     <div class="modal-overlay" id="modal-settlement-history" style="display:none" onclick="if(event.target===this)this.style.display='none'">
       <div class="modal" style="max-width:520px">
@@ -5670,17 +5683,157 @@ function renderCashHistory(history) {
           </tr>
         </thead>
         <tbody>
-          ${history.map(h => `
-            <tr style="border-top:1px solid rgba(255,255,255,.05)">
-              <td style="padding:10px 6px">${new Date(String(h.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
+          ${history.map(h => {
+            const d = String(h.date).substring(0,10);
+            return `
+            <tr style="border-top:1px solid rgba(255,255,255,.05);cursor:pointer;transition:background .15s"
+                onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''"
+                onclick="openCajaDayDetail('${d}')">
+              <td style="padding:10px 6px">${new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
               <td style="text-align:right;padding:10px 6px">${fmt(h.revenue_total)}</td>
               <td style="text-align:right;padding:10px 6px;color:#FF4343">${fmt(h.expenses_total)}</td>
               <td style="text-align:right;padding:10px 6px">${h.cuts_count}</td>
-              <td style="text-align:right;padding:10px 6px;font-weight:700;color:${h.net_total>=0?'var(--yellow)':'#FF4343'}">${fmt(h.net_total)}</td>
-            </tr>`).join('')}
+              <td style="text-align:right;padding:10px 6px;font-weight:700;color:${parseFloat(h.net_total)>=0?'var(--yellow)':'#FF4343'}">${fmt(h.net_total)}</td>
+            </tr>`;}).join('')}
         </tbody>
       </table>
     </div>`;
+}
+
+// ── Detalle de cierre de caja ─────────────────────────────────────────────────
+async function openCajaDayDetail(date) {
+  const modal = document.getElementById('modal-caja-day');
+  const body  = document.getElementById('modal-caja-day-body');
+  const title = document.getElementById('modal-caja-day-title');
+  const dLabel = new Date(date+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+  title.textContent = '📅 ' + dLabel.charAt(0).toUpperCase() + dLabel.slice(1);
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--gray)">Cargando...</div>';
+  modal.style.display = 'flex';
+  try {
+    const data = await api('GET', `/dashboard/cash/day-detail?date=${date}`);
+    body.innerHTML = renderCajaDayDetail(data);
+  } catch(e) {
+    body.innerHTML = `<div style="color:#FF4343;padding:20px">${e.message}</div>`;
+  }
+}
+
+function renderCajaDayDetail(data) {
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const r = data.register || {};
+  const appts = data.appointments || [];
+  const exps  = data.expenses || [];
+  const pmLabel = { cash:'💵 Efectivo', debit:'💳 Débito', credit:'💳 Crédito', transfer:'📲 Transf.', debt:'🤝 Fiado', membership:'🎫 Membresía' };
+  const catLabel = { insumos:'🧴 Insumos', alquiler:'🏠 Alquiler', servicios:'⚡ Servicios', salarios:'👤 Salarios', otros:'📦 Otros', comisiones:'🤝 Comisiones', ventas:'🛒 Ventas' };
+  const srcLabel = { debt_payment:'Cobro fiado', product_sale:'Venta producto', barber_settlement:'Liquidación barbero', stock_compra:'Compra insumo', manual:'Manual' };
+
+  // ── Resumen header ──
+  let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px">
+    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--gray);letter-spacing:.5px">FACTURADO</div>
+      <div style="font-size:18px;font-weight:700;font-family:'Oswald',sans-serif;margin-top:4px">${fmt(r.revenue_total)}</div>
+    </div>
+    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--gray);letter-spacing:.5px">GASTOS</div>
+      <div style="font-size:18px;font-weight:700;font-family:'Oswald',sans-serif;color:#FF4343;margin-top:4px">-${fmt(r.expenses_total)}</div>
+    </div>
+    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--gray);letter-spacing:.5px">NETO</div>
+      <div style="font-size:18px;font-weight:700;font-family:'Oswald',sans-serif;color:${parseFloat(r.net_total||0)>=0?'var(--yellow)':'#FF4343'};margin-top:4px">${fmt(r.net_total)}</div>
+    </div>
+  </div>`;
+
+  // ── Métodos de pago ──
+  const methods = [
+    ['cash_total','💵 Efectivo','#4CAF50'],
+    ['debit_total','💳 Débito','#2196F3'],
+    ['credit_total','💳 Crédito','#9C27B0'],
+    ['transfer_total','📲 Transferencia','#FF9800'],
+    ['debt_total','🤝 Fiado pendiente','#FF4343'],
+    ['tips_total','🎁 Propinas','#4CAF50'],
+  ].filter(([k]) => parseFloat(r[k]||0) > 0);
+
+  if (methods.length) {
+    html += `<div style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--gray);letter-spacing:.5px;margin-bottom:8px">MÉTODOS DE PAGO</div>
+      ${methods.map(([k,label,color]) => `
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+          <span style="font-size:13px">${label}</span>
+          <span style="font-size:14px;font-weight:700;color:${color}">${fmt(r[k])}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // ── Turnos del día ──
+  if (appts.length) {
+    const totalProfit = appts.reduce((s,a) => s + parseFloat(a.profit||0), 0);
+    const totalComm   = appts.reduce((s,a) => s + parseFloat(a.commission_amount||0), 0);
+    html += `<div style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--gray);letter-spacing:.5px">TURNOS (${appts.length})</div>
+        <div style="font-size:11px;color:var(--gray)">Gan. ${fmt(totalProfit)} · Com. ${fmt(totalComm)}</div>
+      </div>
+      ${appts.map(a => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <div style="font-size:12px;font-weight:600">${a.client_name||'Sin nombre'} <span style="color:var(--gray);font-weight:400">· ${(a.time_start||'').substring(0,5)}</span></div>
+            <div style="font-size:11px;color:var(--gray)">${a.service_name||''}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:1px">${a.barber_name?'✂️ '+a.barber_name+' · ':''} ${pmLabel[a.payment_method]||''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:12px">
+            <div style="font-size:13px;font-weight:700">${fmt(a.price)}</div>
+            <div style="font-size:10px;color:#4CAF50">Gan. ${fmt(a.profit)}</div>
+            ${parseFloat(a.commission_amount||0)>0?`<div style="font-size:10px;color:#FF9800">Com. ${fmt(a.commission_amount)}</div>`:''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+  } else {
+    html += `<div style="color:var(--gray);font-size:13px;margin-bottom:18px">Sin turnos completados</div>`;
+  }
+
+  // ── Gastos e ingresos extras ──
+  const egresos  = exps.filter(e => !e.is_income);
+  const ingresos = exps.filter(e => e.is_income);
+
+  if (egresos.length) {
+    html += `<div style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--gray);letter-spacing:.5px;margin-bottom:8px">GASTOS</div>
+      ${egresos.map(e => `
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <div style="font-size:12px;font-weight:600">${catLabel[e.category]||e.category}</div>
+            ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+            ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,.25)">${srcLabel[e.source_type]||e.source_type}</div>`:''}
+          </div>
+          <span style="font-size:13px;font-weight:700;color:#FF4343;flex-shrink:0;margin-left:12px">-${fmt(e.amount)}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  if (ingresos.length) {
+    html += `<div>
+      <div style="font-size:11px;color:var(--gray);letter-spacing:.5px;margin-bottom:8px">INGRESOS EXTRAS</div>
+      ${ingresos.map(e => {
+        const lbl = e.source_type==='debt_payment' ? '💳 Cobro fiado'
+                  : e.source_type==='product_sale' ? '🛒 Venta producto'
+                  : (catLabel[e.category]||e.category);
+        return `
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <div style="font-size:12px;font-weight:600">${lbl}</div>
+            ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+          </div>
+          <span style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:12px">+${fmt(e.amount)}</span>
+        </div>`;}).join('')}
+    </div>`;
+  }
+
+  if (!r.shop_id) {
+    html += `<div style="background:rgba(255,165,0,.1);border:1px solid rgba(255,165,0,.3);border-radius:8px;padding:12px;font-size:12px;color:#FF9800;margin-top:10px">
+      ⚠️ Este día no tiene cierre registrado — los datos son en tiempo real.
+    </div>`;
+  }
+
+  return html;
 }
 
 function openExpenseModal() {
