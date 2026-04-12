@@ -360,7 +360,7 @@ router.get('/cash', auth, async (req, res) => {
       debit_total:       parseFloat(a.debit_total)    + parseFloat(dc.debit_col),
       credit_total:      parseFloat(a.credit_total)   + parseFloat(dc.credit_col),
       transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col),
-      debt_total:        parseFloat(a.debt_total),
+      debt_total:        Math.max(0, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
       no_method_total:   parseFloat(a.no_method_total),
       tips_total:        tips,
       revenue_total:     revenue,
