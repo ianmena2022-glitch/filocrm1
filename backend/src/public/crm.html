@@ -1279,6 +1279,7 @@ body {
           <!-- TAB: Pagos -->
           <div id="tab-content-pagos" class="caja-tab-panel" style="display:block">
             <div id="cash-methods"></div>
+            <div id="caja-income-extras"></div>
           </div>
 
           <!-- TAB: Gastos -->
@@ -5573,28 +5574,17 @@ function renderCashSummary(c) {
     }
   }
 
-  // ── Ingresos extras (cobros fiado + ventas productos) ──
-  const incomeItems = c.income_items || [];
-  const incomeSectionId = 'caja-income-extras';
-  let incomeSection = document.getElementById(incomeSectionId);
-  if (!incomeSection) {
-    // Insertar antes del formulario de nuevo gasto si existe
-    const expListParent = expList?.parentElement;
-    if (expListParent) {
-      const div = document.createElement('div');
-      div.id = incomeSectionId;
-      expListParent.insertBefore(div, expList);
-      incomeSection = div;
-    }
-  }
+  // ── Ingresos extras — solo en tab Pagos ──
+  const incomeSection = document.getElementById('caja-income-extras');
   if (incomeSection) {
-    if (incomeItems.length === 0) {
+    const incomeItems = c.income_items || [];
+    if (!incomeItems.length) {
       incomeSection.innerHTML = '';
     } else {
       incomeSection.innerHTML = `
-        <div style="margin-bottom:14px">
+        <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.07);padding-top:14px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div class="caja-tab-section-lbl">💚 Ingresos extras del día</div>
+            <div class="caja-tab-section-lbl">💚 Ingresos extras</div>
             <span style="font-size:13px;color:#4CAF50;font-weight:700">+${fmt(c.extra_income)}</span>
           </div>
           ${incomeItems.map(e => `
@@ -5606,7 +5596,6 @@ function renderCashSummary(c) {
               </div>
               <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
             </div>`).join('')}
-          <div style="border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px"></div>
         </div>`;
     }
   }
