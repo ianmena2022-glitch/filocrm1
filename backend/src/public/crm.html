@@ -2888,7 +2888,9 @@ async function activateCardRequired() { openQRPaywall(); } // redirigir al flujo
 
 function checkPaywall() {
   if (!currentShop) return;
-  if (currentShop.is_test || currentShop.plan === 'test' || currentShop.is_barber) return;
+  if (currentShop.is_test || currentShop.plan === 'test') return;
+  if (currentShop.is_barber || currentShop.is_branch) return;
+  if (currentShop.is_enterprise_owner || currentShop.filo_plan === 'enterprise') return;
   const status = currentShop.subscription_status;
   if (status === 'expired' || status === 'cancelled') {
     document.getElementById('paywall-screen').classList.add('show');
@@ -2959,7 +2961,10 @@ function startApp() {
   }
 
   // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
-  if (currentShop?.is_enterprise_owner) {
+  // Detectar por flag DB o por filo_plan='enterprise' sin ser branch ni barbero (fallback para cuentas viejas)
+  const isEnterpriseOwner = currentShop?.is_enterprise_owner ||
+    (currentShop?.filo_plan === 'enterprise' && !currentShop?.is_branch && !currentShop?.is_barber);
+  if (isEnterpriseOwner) {
     document.querySelector('.sidebar').style.display = 'none';
     document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
     document.getElementById('sec-enterprise').style.display = 'block';
@@ -3040,12 +3045,16 @@ function initStaffUI() {
     window._maxBarbers = maxBarbers;
   }
 
-  // Mostrar switcher de plan para cuentas test
+  // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches)
   const switcher = document.getElementById('test-plan-switcher');
-  if (isTest && switcher) {
+  const isEnterprise = currentShop?.is_enterprise_owner || currentShop?.is_branch ||
+    (filoPlan === 'enterprise' && !isBarber);
+  if (isTest && !isEnterprise && switcher) {
     switcher.style.display = 'block';
     const label = document.getElementById('current-plan-label');
     if (label) label.textContent = `Plan activo: ${filoPlan}`;
+  } else if (switcher) {
+    switcher.style.display = 'none';
   }
 }
 

@@ -215,23 +215,26 @@ router.post('/complete-registration', async (req, res) => {
     // Crear la cuenta real
     const trialEnds = new Date();
     trialEnds.setDate(trialEnds.getDate() + 7);
+    const isEnterpriseOwner = p.filo_plan === 'enterprise';
 
     const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial') RETURNING *`,
-      [p.name, p.email, p.password, p.phone, p.filo_plan, trialEnds.toISOString()]
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7) RETURNING *`,
+      [p.name, p.email, p.password, p.phone, p.filo_plan, trialEnds.toISOString(), isEnterpriseOwner]
     );
     const shop = result.rows[0];
 
-    // Servicios de ejemplo
-    await pool.query(
-      `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
-       ($1, 'Corte de cabello', 3500, 200, 30),
-       ($1, 'Corte + barba', 5000, 300, 45),
-       ($1, 'Barba', 2000, 150, 20),
-       ($1, 'Corte + lavado', 4500, 250, 40)`,
-      [shop.id]
-    );
+    // Servicios de ejemplo (no para enterprise owners — no hacen reservas)
+    if (!isEnterpriseOwner) {
+      await pool.query(
+        `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
+         ($1, 'Corte de cabello', 3500, 200, 30),
+         ($1, 'Corte + barba', 5000, 300, 45),
+         ($1, 'Barba', 2000, 150, 20),
+         ($1, 'Corte + lavado', 4500, 250, 40)`,
+        [shop.id]
+      );
+    }
 
     // Asociar el subscription_id real (de la URL de callback de MP) o el plan_id como fallback
     const mpId = subscription_id || p.mp_plan_id;
@@ -277,21 +280,26 @@ router.post('/register', async (req, res) => {
     const validFiloPlans = ['starter', 'staff', 'enterprise'];
     const filoPlan = validFiloPlans.includes(filo_plan) ? filo_plan : 'starter';
 
+    const isEnterpriseOwner = filoPlan === 'enterprise';
+
     const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial') RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString()]
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7) RETURNING *`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner]
     );
     const shop = result.rows[0];
 
-    await pool.query(
-      `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
-       ($1, 'Corte de cabello', 3500, 200, 30),
-       ($1, 'Corte + barba', 5000, 300, 45),
-       ($1, 'Barba', 2000, 150, 20),
-       ($1, 'Corte + lavado', 4500, 250, 40)`,
-      [shop.id]
-    );
+    // Las cuentas enterprise owner no necesitan servicios (no hacen reservas)
+    if (!isEnterpriseOwner) {
+      await pool.query(
+        `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
+         ($1, 'Corte de cabello', 3500, 200, 30),
+         ($1, 'Corte + barba', 5000, 300, 45),
+         ($1, 'Barba', 2000, 150, 20),
+         ($1, 'Corte + lavado', 4500, 250, 40)`,
+        [shop.id]
+      );
+    }
 
     console.log(`[REGISTRO] ${email} → plan ${filoPlan} · trial hasta ${trialEnds.toDateString()}`);
     res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
