@@ -1163,10 +1163,11 @@ body {
         </div>
       </div>
 
-      <!-- Tabs Dashboard / Caja -->
+      <!-- Tabs Dashboard / Caja / Productos -->
       <div style="display:flex;gap:4px;padding:0 20px 0;margin-bottom:4px">
-        <button id="dash-tab-dash" onclick="switchDashTab('dashboard')" style="background:var(--yellow);color:#000;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">📊 Dashboard</button>
-        <button id="dash-tab-caja" onclick="switchDashTab('caja')" style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">💰 Caja</button>
+        <button id="dash-tab-dash"      onclick="switchDashTab('dashboard')" style="background:var(--yellow);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">📊 Dashboard</button>
+        <button id="dash-tab-caja"      onclick="switchDashTab('caja')"      style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">💰 Caja</button>
+        <button id="dash-tab-productos" onclick="switchDashTab('productos')"  style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🛒 Productos</button>
       </div>
 
       <!-- Panel Dashboard — Layout dos columnas (Prototipo C) -->
@@ -1300,6 +1301,31 @@ body {
           </div>
 
         </div>
+      </div>
+
+      <!-- Panel Productos -->
+      <div id="dash-panel-productos" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <!-- Barra de acciones -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:10px">
+            <input id="dash-prod-search" type="text" placeholder="Buscar..." oninput="renderDashProdPanel()"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:7px 11px;color:#fff;font-size:13px;outline:none;width:160px">
+            <select id="dash-prod-filter" onchange="renderDashProdPanel()"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;outline:none">
+              <option value="">Todas</option>
+              <option value="cuidado">💆 Cuidado</option>
+              <option value="barba">🪒 Barba</option>
+              <option value="piel">🧴 Piel</option>
+              <option value="accesorios">✂️ Accesorios</option>
+              <option value="otros">📦 Otros</option>
+            </select>
+          </div>
+          <button onclick="openProductoModal()" class="btn-add" style="font-size:12px;padding:7px 13px">+ Nuevo</button>
+        </div>
+        <!-- Stats rápidas -->
+        <div id="dash-prod-stats" style="display:flex;gap:8px;padding:10px 18px 6px;flex-shrink:0"></div>
+        <!-- Lista de productos (scroll interno) -->
+        <div id="dash-prod-list" style="flex:1;overflow-y:auto;padding:0 18px 16px"></div>
       </div>
     </section>
 
@@ -5351,26 +5377,88 @@ function switchCajaTab(tab) {
 }
 
 function switchDashTab(tab) {
-  const panelDash = document.getElementById('dash-panel-dashboard');
-  const panelCaja = document.getElementById('dash-panel-caja');
-  const btnDash = document.getElementById('dash-tab-dash');
-  const btnCaja = document.getElementById('dash-tab-caja');
-  if (tab === 'caja') {
-    panelDash.style.display = 'none';
-    panelCaja.style.display = 'block';
-    btnDash.style.background = 'rgba(255,255,255,.07)';
-    btnDash.style.color = 'rgba(255,255,255,.6)';
-    btnCaja.style.background = 'var(--yellow)';
-    btnCaja.style.color = '#000';
-    switchCajaTab('pagos');
-    loadCashOnNavigation();
+  const panels = { dashboard: 'dash-panel-dashboard', caja: 'dash-panel-caja', productos: 'dash-panel-productos' };
+  const btns   = { dashboard: 'dash-tab-dash', caja: 'dash-tab-caja', productos: 'dash-tab-productos' };
+  Object.keys(panels).forEach(t => {
+    const p = document.getElementById(panels[t]);
+    const b = document.getElementById(btns[t]);
+    const active = t === tab;
+    if (p) p.style.display = active ? (t === 'productos' ? 'flex' : 'block') : 'none';
+    if (b) { b.style.background = active ? 'var(--yellow)' : 'rgba(255,255,255,.07)'; b.style.color = active ? '#000' : 'rgba(255,255,255,.6)'; }
+  });
+  if (tab === 'caja') { switchCajaTab('pagos'); loadCashOnNavigation(); }
+  if (tab === 'productos') { renderDashProdPanel(); }
+}
+
+function renderDashProdPanel() {
+  const listEl  = document.getElementById('dash-prod-list');
+  const statsEl = document.getElementById('dash-prod-stats');
+  if (!listEl) return;
+
+  const q   = (document.getElementById('dash-prod-search')?.value || '').toLowerCase();
+  const cat = document.getElementById('dash-prod-filter')?.value || '';
+  const fmt = v => '$' + parseFloat(v || 0).toLocaleString('es-AR');
+  const catIcon = { cuidado:'💆', barba:'🪒', piel:'🧴', accesorios:'✂️', otros:'📦' };
+
+  const doRender = (prods) => {
+    // Stats
+    if (statsEl) {
+      const sinStock = prods.filter(p => parseInt(p.stock||0) <= 0).length;
+      const alertas  = prods.filter(p => parseInt(p.stock||0) > 0 && parseInt(p.stock||0) <= parseInt(p.stock_min||5)).length;
+      const warn = sinStock + alertas;
+      statsEl.innerHTML = `
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:7px;padding:6px 12px;font-size:12px">
+          <span style="color:var(--gray);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Productos </span>
+          <strong>${prods.length}</strong>
+        </div>
+        <div style="background:${warn?'rgba(255,145,0,.08)':'rgba(255,255,255,.04)'};border:1px solid ${warn?'rgba(255,145,0,.3)':'rgba(255,255,255,.07)'};border-radius:7px;padding:6px 12px;font-size:12px">
+          <span style="color:var(--gray);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Sin/Bajo stock </span>
+          <strong style="color:${warn?'var(--orange)':'#fff'}">${warn}</strong>
+        </div>`;
+    }
+
+    const lista = prods.filter(p => (!q || p.nombre.toLowerCase().includes(q)) && (!cat || p.categoria === cat));
+    if (!lista.length) {
+      listEl.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--gray);font-size:13px">${q||cat ? 'Sin resultados' : 'Sin productos — agregá el primero ↗'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = lista.map(p => {
+      const stock = parseInt(p.stock || 0), sm = parseInt(p.stock_min || 5);
+      const sinS = stock <= 0, bajo = stock > 0 && stock <= sm;
+      const col   = sinS ? 'var(--red)' : bajo ? 'var(--orange)' : 'var(--green)';
+      const borde = sinS ? 'rgba(255,67,67,.15)' : bajo ? 'rgba(255,145,0,.15)' : 'rgba(255,255,255,.06)';
+      const nombre = p.nombre.replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid ${borde};border-radius:10px;margin-bottom:6px">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${catIcon[p.categoria]||'📦'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}
+            ${sinS ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,67,67,.15);color:var(--red);margin-left:5px">SIN STOCK</span>' : ''}
+            ${bajo && !sinS ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,145,0,.15);color:var(--orange);margin-left:5px">BAJO</span>' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--gray);margin-top:2px">${fmt(p.precio_venta)} venta · ${fmt(p.precio_costo)} costo</div>
+        </div>
+        <div style="text-align:center;min-width:36px;flex-shrink:0">
+          <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:${col};line-height:1">${stock}</div>
+          <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+          <button onclick="openVentaProducto(${p.id},'${nombre}',${p.precio_venta},${stock})"
+            style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">💰 Vender</button>
+          <button onclick="openAjusteStock(${p.id},'${nombre}')"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">📦 Stock</button>
+          <button onclick="openProductoModal(${p.id})"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'Barlow',sans-serif">✏️ Editar</button>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  if (_productos.length) {
+    doRender(_productos);
   } else {
-    panelDash.style.display = 'block';
-    panelCaja.style.display = 'none';
-    btnDash.style.background = 'var(--yellow)';
-    btnDash.style.color = '#000';
-    btnCaja.style.background = 'rgba(255,255,255,.07)';
-    btnCaja.style.color = 'rgba(255,255,255,.6)';
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">Cargando...</div>';
+    api('GET', '/products').then(p => { _productos = p; doRender(p); }).catch(() => doRender([]));
   }
 }
 
@@ -5769,6 +5857,10 @@ async function loadProductos() {
     renderProdStatsCfg();
     renderProductosCfg();
     renderVentasCfg();
+    // Refrescar panel del dashboard si está visible
+    if (document.getElementById('dash-panel-productos')?.style.display !== 'none') {
+      renderDashProdPanel();
+    }
   } catch(e) { console.error('loadProductos:', e); }
 }
 
