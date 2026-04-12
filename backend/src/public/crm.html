@@ -5523,7 +5523,7 @@ function renderCashSummary(c) {
     { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343' },
   ];
   if (methods) {
-    const rows = payMethods.map(m => {
+    methods.innerHTML = payMethods.map(m => {
       const val = parseFloat(c[m.key] || 0);
       const isDebt = m.key === 'debt_total';
       const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
@@ -5532,16 +5532,6 @@ function renderCashSummary(c) {
         <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
       </div>`;
     }).join('');
-    // Ingresos extras (cobros fiado + ventas de productos)
-    const extraIncome = parseFloat(c.extra_income || 0);
-    const extraRow = extraIncome > 0 ? `
-      <div style="border-top:1px solid rgba(255,255,255,.07);margin:10px 0 4px"></div>
-      <div class="caja-tab-section-lbl" style="margin-top:10px">INGRESOS EXTRAS</div>
-      <div class="caja-method-row">
-        <div class="caja-method-label">💚 Cobros fiado + Ventas</div>
-        <div class="caja-method-val" style="color:#4CAF50">+${fmt(extraIncome)}</div>
-      </div>` : '';
-    methods.innerHTML = rows + extraRow;
   }
 
   // ── Gastos (egresos) ──
