@@ -4812,7 +4812,47 @@ async function saveEditStoreItem() {
 
 <!-- ── FILO COPILOT ──────────────────────────────────────── -->
 <style>
-#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}@media(max-width:768px){#copilot-widget{bottom:90px}#copilot-panel{width:calc(100vw - 32px);height:420px}}
+#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}
+
+/* ── MOBILE: círculo colapsado arriba a la derecha ── */
+@media(max-width:768px){
+  #copilot-widget{bottom:auto;top:72px;right:12px}
+
+  /* Pill oculta en mobile — solo el círculo */
+  #copilot-pill .cp-pill-label,
+  #copilot-pill .cp-pill-sub,
+  #copilot-pill .cp-dot { display:none }
+  #copilot-pill{
+    padding:0;width:38px;height:38px;border-radius:50%;
+    justify-content:center;background:#0a1828;
+    border:1.5px solid rgba(255,209,0,.35);
+    box-shadow:0 2px 12px rgba(0,0,0,.5);
+  }
+  /* Cuando está expandido muestra la pill completa */
+  #copilot-pill.expanded .cp-pill-label,
+  #copilot-pill.expanded .cp-pill-sub,
+  #copilot-pill.expanded .cp-dot { display:block }
+  #copilot-pill.expanded{
+    width:auto;height:auto;border-radius:40px;
+    padding:8px 16px 8px 10px;gap:9px;
+    animation:pillIn .2s ease;
+  }
+  @keyframes pillIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+
+  /* Panel como bottom sheet */
+  #copilot-panel{
+    position:fixed;bottom:0;left:0;right:0;top:auto;
+    width:100%;height:72vh;max-height:520px;
+    border-radius:18px 18px 0 0;border-bottom:none;
+    margin-bottom:0;
+    transform:translateY(100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+  }
+  #copilot-panel.open{
+    display:flex;transform:translateY(0);
+  }
+  #cp-handle-row{ display:flex !important; }
+}
 #copilot-pill{display:flex;align-items:center;gap:10px;background:#0a1828;border:1px solid rgba(255,209,0,.3);border-radius:40px;padding:10px 18px 10px 12px;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5);transition:all .2s;user-select:none}
 #copilot-pill:hover{border-color:rgba(255,209,0,.6);transform:translateY(-1px)}
 .cp-avatar{width:32px;height:32px;background:#FFD100;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -4853,8 +4893,13 @@ async function saveEditStoreItem() {
 @keyframes cpb{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
 </style>
 
+<div id="cp-overlay" onclick="toggleCopilot()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998"></div>
 <div id="copilot-widget">
   <div id="copilot-panel">
+    <!-- Handle para bottom sheet mobile -->
+    <div style="display:none;justify-content:center;padding:10px 0 4px" id="cp-handle-row">
+      <div style="width:36px;height:4px;background:rgba(255,255,255,.2);border-radius:4px"></div>
+    </div>
     <div class="cp-head">
       <div class="cp-head-l">
         <div class="cp-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
@@ -4988,10 +5033,21 @@ async function saveEditStoreItem() {
   };
 
   window.toggleCopilot = function() {
-    cpOpen = !cpOpen;
+    var isMobile = window.innerWidth <= 768;
+    var pill  = document.getElementById('copilot-pill');
     var panel = document.getElementById('copilot-panel');
+
+    // En mobile: primer tap expande la pill, segundo tap abre el panel
+    if (isMobile && !pill.classList.contains('expanded') && !cpOpen) {
+      pill.classList.add('expanded');
+      return;
+    }
+
+    var overlay = document.getElementById('cp-overlay');
+    cpOpen = !cpOpen;
     if (cpOpen) {
       panel.classList.add('open');
+      if (isMobile && overlay) overlay.style.display = 'block';
       if (!cpStarted) {
         cpStarted = true;
         setTimeout(function() {
@@ -5001,6 +5057,8 @@ async function saveEditStoreItem() {
       setTimeout(function() { document.getElementById('cp-input').focus(); }, 300);
     } else {
       panel.classList.remove('open');
+      if (overlay) overlay.style.display = 'none';
+      if (isMobile) pill.classList.remove('expanded');
     }
   };
 
