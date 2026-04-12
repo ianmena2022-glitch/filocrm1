@@ -1306,6 +1306,10 @@ body {
 
           <!-- TAB: Historial -->
           <div id="tab-content-historial" class="caja-tab-panel">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+              <div style="font-size:12px;color:var(--gray)">Últimos 30 cierres · se cierra auto al fin del día</div>
+              <button onclick="manuallyCloseCaja()" style="background:rgba(255,255,255,.07);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer">💾 Cerrar hoy</button>
+            </div>
             <div id="cash-history-list"><div style="color:var(--gray);font-size:13px">Sin cierres</div></div>
           </div>
 
@@ -5799,6 +5803,17 @@ async function confirmDebtPayment(id, method) {
   try {
     await api('PUT', `/dashboard/debts/${id}/pay`, { payment_method: method });
     showToast('✅', 'Deuda cobrada', '¡Registrado en caja!');
+    loadCashSummary();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// Cerrar caja manualmente desde el botón en el tab Historial
+async function manuallyCloseCaja() {
+  const dateInput = document.getElementById('caja-date');
+  const date = dateInput?.value || new Date().toISOString().split('T')[0];
+  try {
+    await api('POST', '/dashboard/cash/close', { date });
+    showToast('✅', 'Caja cerrada', `${new Date(date+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'short'})} guardada en historial`);
     loadCashSummary();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }

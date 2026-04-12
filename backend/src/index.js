@@ -98,6 +98,13 @@ async function start() {
       } catch(e) {
         console.error('WhatsApp reconnect error:', e.message);
       }
+      // Arrancar scheduler de tareas periódicas (cierre automático de caja, etc.)
+      try {
+        const { startScheduler } = require('./services/scheduler');
+        startScheduler();
+      } catch(e) {
+        console.error('Scheduler error:', e.message);
+      }
     });
   } catch (e) {
     console.error('❌ Error al iniciar:', e.message);

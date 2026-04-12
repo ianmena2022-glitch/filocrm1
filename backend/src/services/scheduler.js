@@ -1,0 +1,116 @@
+/**
+ * FILO CRM — Scheduler interno
+ * Corre tareas periódicas dentro del proceso Node (sin dependencias externas).
+ * Se arranca una vez desde index.js al iniciar el servidor.
+ */
+const pool = require('../db/pool');
+
+// Argentina = UTC-3
+function nowArgentina() {
+  const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return {
+    date:    d.toISOString().split('T')[0],          // "YYYY-MM-DD"
+    hours:   d.getUTCHours(),
+    minutes: d.getUTCMinutes(),
+    mins:    d.getUTCHours() * 60 + d.getUTCMinutes(),
+    day:     ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][d.getUTCDay()]
+  };
+}
+
+// ── Cierre automático de caja ─────────────────────────────────────────────────
+async function runCajaAutoClose() {
+  const now  = nowArgentina();
+  const { date, mins, day } = now;
+  let closed = 0;
+
+  try {
+    const shops = await pool.query(
+      `SELECT id, schedule FROM shops
+       WHERE (is_barber IS NULL OR is_barber = FALSE)
+         AND schedule IS NOT NULL`
+    );
+
+    for (const shop of shops.rows) {
+      try {
+        const schedule = JSON.parse(shop.schedule);
+        const daySchedule = schedule[day];
+        if (!daySchedule?.active || !daySchedule?.end) continue;
+
+        const [endH, endM] = daySchedule.end.split(':').map(Number);
+        const closeMins = endH * 60 + endM;
+
+        // Cerrar si ya pasó la hora de cierre (con al menos 30min de gracia)
+        // y no se cerró aún hoy — ON CONFLICT actualiza, es idempotente
+        if (mins < closeMins + 30) continue;
+
+        // Calcular totales del día
+        const appts = await pool.query(
+          `SELECT
+             COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
+             COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
+             COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
+             COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+             COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
+             COALESCE(SUM(tip),0)   AS tips_total,
+             COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+             COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
+             COUNT(*) FILTER (WHERE status='completed') AS cuts_count
+           FROM appointments
+           WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+          [shop.id, date]
+        );
+        const exps = await pool.query(
+          `SELECT
+             COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
+             COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS extra_income
+           FROM expenses WHERE shop_id=$1 AND date=$2`,
+          [shop.id, date]
+        );
+
+        const a = appts.rows[0];
+        const revenue    = parseFloat(a.revenue_total);
+        const expenses   = parseFloat(exps.rows[0].expenses_total);
+        const extraInc   = parseFloat(exps.rows[0].extra_income || 0);
+        const tips       = parseFloat(a.tips_total);
+        const commissions = parseFloat(a.commissions_total);
+        const net        = revenue + tips + extraInc - expenses - commissions;
+
+        await pool.query(
+          `INSERT INTO cash_registers
+             (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
+              debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           ON CONFLICT (shop_id, date) DO UPDATE SET
+             cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
+             debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
+             net_total=$11, cuts_count=$12, closed_at=NOW()`,
+          [shop.id, date,
+           a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
+           a.debt_total, tips, expenses, revenue, net, a.cuts_count]
+        );
+
+        closed++;
+        console.log(`[CAJA AUTO] ✅ Shop ${shop.id} · ${date} · net=$${net.toFixed(2)}`);
+      } catch(e) {
+        console.error(`[CAJA AUTO] ❌ Error shop ${shop.id}:`, e.message);
+      }
+    }
+
+    if (closed > 0) console.log(`[CAJA AUTO] ${closed} caja(s) cerrada(s) · ${date} ${now.hours}:${String(now.minutes).padStart(2,'0')}`);
+  } catch(e) {
+    console.error('[CAJA AUTO] Error general:', e.message);
+  }
+}
+
+// ── Arrancar scheduler ────────────────────────────────────────────────────────
+function startScheduler() {
+  console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min)');
+
+  // Primera ejecución al arrancar (por si el servidor se reinició después del cierre)
+  setTimeout(runCajaAutoClose, 10_000); // 10s después del arranque
+
+  // Cada 30 minutos
+  setInterval(runCajaAutoClose, 30 * 60 * 1000);
+}
+
+module.exports = { startScheduler };
