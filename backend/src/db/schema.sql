@@ -371,3 +371,16 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS membership_id INT REFERENCES m
 ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_payment_method_check;
 ALTER TABLE appointments ADD CONSTRAINT appointments_payment_method_check
   CHECK (payment_method IN ('cash','debit','credit','transfer','debt','membership') OR payment_method IS NULL);
+
+-- ── ENTERPRISE MULTI-BRANCH ───────────────────────────────────────────────────
+-- Cuenta madre enterprise (no reserva, solo gestión y estadísticas)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_enterprise_owner BOOLEAN DEFAULT FALSE;
+-- Sucursal creada por un enterprise owner (tiene CRM completo)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_branch BOOLEAN DEFAULT FALSE;
+-- FK al enterprise owner (NULL para shops normales y barberos)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS parent_enterprise_id INT REFERENCES shops(id) ON DELETE SET NULL;
+-- Etiqueta corta de la sucursal, ej: "Palermo", "Belgrano"
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS branch_label VARCHAR(100);
+
+CREATE INDEX IF NOT EXISTS idx_shops_parent_enterprise ON shops(parent_enterprise_id)
+  WHERE parent_enterprise_id IS NOT NULL;

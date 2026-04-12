@@ -27,6 +27,7 @@ app.use('/api/booking',      require('./routes/booking'));
 app.use('/api/points',       require('./routes/points'));
 app.use('/api/barbers',      require('./routes/barbers'));
 app.use('/api/products',     require('./routes/products'));
+app.use('/api/enterprise',   require('./routes/enterprise'));
 app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));

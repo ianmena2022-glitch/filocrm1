@@ -5,7 +5,15 @@ const pool    = require('../db/pool');
 
 function makeToken(shop) {
   return jwt.sign(
-    { shopId: shop.id, email: shop.email, isBarber: shop.is_barber || false, parentShopId: shop.parent_shop_id || null },
+    {
+      shopId:             shop.id,
+      email:              shop.email,
+      isBarber:           shop.is_barber            || false,
+      parentShopId:       shop.parent_shop_id        || null,
+      isEnterpriseOwner:  shop.is_enterprise_owner   || false,
+      isBranch:           shop.is_branch             || false,
+      parentEnterpriseId: shop.parent_enterprise_id  || null,
+    },
     process.env.JWT_SECRET,
     { expiresIn: '30d' }
   );
@@ -33,6 +41,10 @@ function shopPayload(shop) {
     mp_shop_payment_url:     shop.mp_shop_payment_url || null,
     mp_shop_subscription_id: shop.mp_shop_subscription_id || null,
     mp_shop_status:          shop.mp_shop_status || null,
+    is_enterprise_owner:  shop.is_enterprise_owner  || false,
+    is_branch:            shop.is_branch            || false,
+    parent_enterprise_id: shop.parent_enterprise_id || null,
+    branch_label:         shop.branch_label         || null,
   };
 }
 
@@ -286,6 +298,35 @@ router.post('/register', async (req, res) => {
   } catch (e) {
     console.error('Register error:', e.message);
     res.status(500).json({ error: 'Error al crear la cuenta' });
+  }
+});
+
+// POST /api/auth/register-enterprise — cuenta madre enterprise (solo gestión)
+router.post('/register-enterprise', async (req, res) => {
+  const { name, email, password, phone } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
+  if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+
+  try {
+    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [email.toLowerCase()]);
+    if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
+
+    const hash = await bcrypt.hash(password, 12);
+
+    const result = await pool.query(
+      `INSERT INTO shops
+         (name, email, password, phone, plan, filo_plan,
+          subscription_status, trial_ends_at, is_enterprise_owner)
+       VALUES ($1,$2,$3,$4,'staff','enterprise','active','2099-12-31',TRUE)
+       RETURNING *`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null]
+    );
+    const shop = result.rows[0];
+    console.log(`[ENTERPRISE] Cuenta madre creada: ${email}`);
+    res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
+  } catch(e) {
+    console.error('Register enterprise error:', e.message);
+    res.status(500).json({ error: 'Error al crear la cuenta enterprise' });
   }
 });
 

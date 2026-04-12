@@ -5,6 +5,7 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
   '/api/auth/register-barber',
+  '/api/auth/register-enterprise',
   '/api/auth/status',
   '/api/auth/me',           // necesario para el polling de verificación de pago
   '/api/auth/complete-registration',
@@ -49,6 +50,10 @@ module.exports = async function paywall(req, res, next) {
 
     // Barberos heredan el acceso del dueño
     if (payload.isBarber) return next();
+
+    // Enterprise owners y branches: su suscripción se gestiona aparte
+    if (payload.isEnterpriseOwner) return next();
+    if (payload.isBranch) return next();
 
     // Verificar trial
     if (shop.subscription_status === 'trial') {

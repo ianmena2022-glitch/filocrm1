@@ -518,6 +518,61 @@ body {
   padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.05);
 }
 .caja-method-row:last-child { border-bottom: none; }
+/* ── Enterprise ─────────────────────── */
+.branch-badge {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  color: var(--yellow); letter-spacing: .5px;
+  background: rgba(255,209,0,.1); border: 1px solid rgba(255,209,0,.2);
+  border-radius: 20px; padding: 2px 10px; margin-left: 10px; vertical-align: middle;
+}
+.ent-section { padding: 0 20px 40px; }
+.ent-kpi-strip {
+  display: flex; gap: 10px; padding: 0 20px 16px; flex-wrap: wrap;
+}
+.ent-kpi-block {
+  flex: 1; min-width: 110px; background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 14px 16px;
+}
+.ent-kpi-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--gray); margin-bottom: 6px; }
+.ent-kpi-value { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; }
+.ent-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px; padding: 0 20px;
+}
+.ent-branch-card {
+  background: var(--navy-light); border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px; padding: 18px; position: relative;
+}
+.ent-branch-card.inactive { opacity: .5; }
+.ent-branch-name { font-size: 16px; font-weight: 700; }
+.ent-branch-lbl {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .8px;
+  color: var(--yellow); background: rgba(255,209,0,.1); border-radius: 20px;
+  padding: 2px 8px; margin-top: 4px;
+}
+.ent-branch-stat { font-size: 12px; color: var(--gray); margin-top: 6px; }
+.ent-branch-stat b { color: #fff; font-weight: 600; }
+.ent-branch-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.ent-branch-actions button {
+  flex: 1; padding: 7px 10px; border-radius: 8px; border: none;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.ent-btn-edit { background: rgba(255,255,255,.08); color: #fff; }
+.ent-btn-del  { background: rgba(255,67,67,.12); color: #FF4343; }
+.ent-status-dot {
+  position: absolute; top: 18px; right: 18px;
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.ent-wpp-badge {
+  position: absolute; top: 14px; right: 32px;
+  font-size: 14px; cursor: default;
+}
+@media (max-width: 768px) {
+  .ent-grid { grid-template-columns: 1fr; }
+  .ent-kpi-strip { gap: 8px; }
+  .ent-kpi-block { min-width: calc(50% - 8px); }
+}
+/* ── end Enterprise ─────────────────── */
 .caja-method-expandable { cursor: pointer; transition: background .15s; border-radius: 6px; padding: 11px 6px; margin: 0 -6px; }
 .caja-method-expandable:hover { background: rgba(255,255,255,.04); }
 .caja-method-expandable:active { background: rgba(255,255,255,.07); }
@@ -1542,6 +1597,72 @@ body {
       </div>
     </div>
 
+    <!-- Modal: Crear sucursal -->
+    <div class="modal-overlay" id="modal-create-branch" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:460px">
+        <div class="modal-header">
+          <h2>🏪 Nueva sucursal</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-create-branch').style.display='none'">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Nombre de la sucursal</label>
+            <input class="form-input" id="branch-name" placeholder="Ej: FILO Palermo" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Etiqueta corta (opcional)</label>
+            <input class="form-input" id="branch-label" placeholder="Ej: Palermo" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email de acceso</label>
+            <input class="form-input" id="branch-email" type="email" placeholder="sucursal@miempresa.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña de acceso</label>
+            <input class="form-input" id="branch-password" type="text" placeholder="Mínimo 6 caracteres" />
+            <div style="font-size:11px;color:var(--gray);margin-top:4px">Guardá esta contraseña para compartírsela al encargado de la sucursal</div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal-create-branch').style.display='none'">Cancelar</button>
+          <button class="btn-primary" onclick="createBranch()">Crear sucursal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Editar sucursal -->
+    <div class="modal-overlay" id="modal-edit-branch" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <h2>✏️ Editar sucursal</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-edit-branch').style.display='none'">×</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="edit-branch-id" />
+          <div class="form-group">
+            <label class="form-label">Nombre</label>
+            <input class="form-input" id="edit-branch-name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Etiqueta corta</label>
+            <input class="form-input" id="edit-branch-label" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ciudad</label>
+            <input class="form-input" id="edit-branch-city" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dirección</label>
+            <input class="form-input" id="edit-branch-address" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal-edit-branch').style.display='none'">Cancelar</button>
+          <button class="btn-primary" onclick="saveBranchEdit()">Guardar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Detalle de cierre de caja -->
     <div class="modal-overlay" id="modal-caja-day" style="display:none" onclick="if(event.target===this)this.style.display='none'">
       <div class="modal" style="max-width:560px;max-height:90vh;display:flex;flex-direction:column">
@@ -1567,6 +1688,57 @@ body {
         </div>
       </div>
     </div>
+
+    <!-- ─── ENTERPRISE ─── -->
+    <section id="sec-enterprise" class="section" style="display:none">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>🏢 Panel Enterprise</h1>
+        </div>
+        <div class="topbar-right">
+          <button class="btn-add" onclick="openCreateBranchModal()">+ Nueva sucursal</button>
+          <div class="topbar-user-group">
+            <div class="tb-logout-wrap" onclick="logout()">
+              <div class="tb-avatar">?</div>
+              <span class="tb-uname"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs totales -->
+      <div class="ent-kpi-strip" id="ent-kpis">
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">FACTURADO HOY</div>
+          <div class="ent-kpi-value" id="ent-revenue-today">$0</div>
+        </div>
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">CORTES HOY</div>
+          <div class="ent-kpi-value" id="ent-cuts-today">0</div>
+        </div>
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">FACTURADO MES</div>
+          <div class="ent-kpi-value" id="ent-revenue-month">$0</div>
+        </div>
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">GANANCIA MES</div>
+          <div class="ent-kpi-value" id="ent-profit-month" style="color:var(--yellow)">$0</div>
+        </div>
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">BARBEROS</div>
+          <div class="ent-kpi-value" id="ent-barber-count">0</div>
+        </div>
+        <div class="ent-kpi-block">
+          <div class="ent-kpi-label">CLIENTES</div>
+          <div class="ent-kpi-value" id="ent-client-count">0</div>
+        </div>
+      </div>
+
+      <!-- Grid de sucursales -->
+      <div class="ent-grid" id="ent-branches-grid">
+        <div style="color:var(--gray);font-size:13px;padding:20px">Cargando sucursales...</div>
+      </div>
+    </section>
 
     <!-- ─── CONFIGURACIÓN ─── -->
     <section id="sec-configuracion" class="section">
@@ -2751,8 +2923,9 @@ async function checkPendingRegistration() {
 function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
 
-  // Verificar acceso: trial activo, suscripción activa, test o barbero
-  if (currentShop && !currentShop.is_test && currentShop.plan !== 'test' && !currentShop.is_barber) {
+  // Verificar acceso: trial activo, suscripción activa, test, barbero, enterprise o branch
+  if (currentShop && !currentShop.is_test && currentShop.plan !== 'test'
+      && !currentShop.is_barber && !currentShop.is_enterprise_owner && !currentShop.is_branch) {
     const status = currentShop.subscription_status;
     if (status !== 'trial' && status !== 'active') {
       openQRPaywall();
@@ -2769,8 +2942,9 @@ function startApp() {
   document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
 
   // Trial badge en todos los topbars
-  document.querySelectorAll('.trial-badge').forEach(el => el.remove()); // evitar duplicados
-  if (currentShop?.subscription_status === 'trial' && !currentShop.is_test && !currentShop.is_barber) {
+  document.querySelectorAll('.trial-badge').forEach(el => el.remove());
+  if (currentShop?.subscription_status === 'trial' && !currentShop.is_test && !currentShop.is_barber
+      && !currentShop.is_enterprise_owner && !currentShop.is_branch) {
     const trialEnds = currentShop.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
     const daysLeft = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / 86400000)) : 0;
     const label = daysLeft <= 1 ? 'Trial: último día' : `Trial: ${daysLeft}d`;
@@ -2784,12 +2958,31 @@ function startApp() {
     });
   }
 
+  // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
+  if (currentShop?.is_enterprise_owner) {
+    document.querySelector('.sidebar').style.display = 'none';
+    document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
+    document.getElementById('sec-enterprise').style.display = 'block';
+    document.getElementById('sec-enterprise').classList.add('active');
+    loadEnterpriseDashboard();
+    return;
+  }
+
+  // ── Branch → mostrar badge de sucursal en topbar ──────────────────────────
+  if (currentShop?.is_branch) {
+    const lbl = currentShop.branch_label || currentShop.name;
+    document.querySelectorAll('.topbar-left h1').forEach(el => {
+      if (!el.querySelector('.branch-badge'))
+        el.insertAdjacentHTML('beforeend', `<span class="branch-badge">📍 ${lbl}</span>`);
+    });
+  }
+
   // Preservar flag is_test si el plan original era test
   if (currentShop?.plan === 'test') { currentShop.is_test = true; localStorage.setItem('filo_shop', JSON.stringify(currentShop)); }
   loadDashboard();
   loadServices();
   loadClients();
-  loadStoreItems(); // precarga premios para el modal de turno
+  loadStoreItems();
   initStaffUI();
   startPolling();
 }
@@ -5959,6 +6152,122 @@ async function confirmDebtPayment(id, method) {
     loadCashSummary();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// ── ENTERPRISE DASHBOARD ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+
+async function loadEnterpriseDashboard() {
+  try {
+    const data = await api('GET', '/enterprise/stats');
+    const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+
+    // KPIs totales
+    document.getElementById('ent-revenue-today').textContent  = fmt(data.totals.revenue_today);
+    document.getElementById('ent-cuts-today').textContent     = data.totals.cuts_today;
+    document.getElementById('ent-revenue-month').textContent  = fmt(data.totals.revenue_month);
+    document.getElementById('ent-profit-month').textContent   = fmt(data.totals.profit_month);
+    document.getElementById('ent-barber-count').textContent   = data.totals.barber_count;
+    document.getElementById('ent-client-count').textContent   = data.totals.client_count;
+
+    // Grid de sucursales
+    const grid = document.getElementById('ent-branches-grid');
+    if (!data.branches.length) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray)">
+        <div style="font-size:32px;margin-bottom:10px">🏪</div>
+        <div style="font-size:14px">Aún no tenés sucursales.<br>Creá la primera con el botón "+ Nueva sucursal".</div>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = data.branches.map(b => {
+      const active = b.subscription_status === 'active';
+      const dotColor = active ? '#4CAF50' : '#FF4343';
+      const cardClass = active ? '' : ' inactive';
+      return `
+      <div class="ent-branch-card${cardClass}">
+        <div class="ent-status-dot" style="background:${dotColor}" title="${active ? 'Activa' : 'Inactiva'}"></div>
+        ${b.wpp_connected ? `<div class="ent-wpp-badge" title="WhatsApp conectado">📱</div>` : ''}
+        <div class="ent-branch-name">${b.name}</div>
+        ${b.branch_label ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
+        <div class="ent-branch-stat" style="margin-top:10px">
+          Hoy: <b>${fmt(b.revenue_today)}</b> · <b>${b.cuts_today} cortes</b>
+        </div>
+        <div class="ent-branch-stat">
+          Mes: <b>${fmt(b.revenue_month)}</b> · <b>${b.cuts_month} cortes</b>
+        </div>
+        <div class="ent-branch-stat">
+          <b>${b.barber_count}</b> barberos · <b>${b.client_count}</b> clientes
+        </div>
+        ${b.next_appt ? `<div class="ent-branch-stat">Próximo: <b>${b.next_appt.substring(0,5)}</b></div>` : ''}
+        <div class="ent-branch-actions">
+          <button class="ent-btn-edit" onclick="openEditBranchModal(${JSON.stringify(b).replace(/"/g,"'")})">✏️ Editar</button>
+          ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+function openCreateBranchModal() {
+  ['branch-name','branch-label','branch-email','branch-password'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  // Sugerir contraseña aleatoria
+  document.getElementById('branch-password').value = Math.random().toString(36).slice(-8).toUpperCase();
+  document.getElementById('modal-create-branch').style.display = 'flex';
+}
+
+async function createBranch() {
+  const name     = document.getElementById('branch-name').value.trim();
+  const label    = document.getElementById('branch-label').value.trim();
+  const email    = document.getElementById('branch-email').value.trim();
+  const password = document.getElementById('branch-password').value.trim();
+  if (!name || !email || !password) return showToast('⚠️','Completá todos los campos','');
+  if (password.length < 6) return showToast('⚠️','Contraseña muy corta','Mínimo 6 caracteres');
+  try {
+    const r = await api('POST', '/enterprise/branches', { name, branch_label: label||null, email, password });
+    document.getElementById('modal-create-branch').style.display = 'none';
+    showToast('✅', `Sucursal "${name}" creada`, `Email: ${email} · Contraseña: ${password}`);
+    loadEnterpriseDashboard();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+function openEditBranchModal(b) {
+  document.getElementById('edit-branch-id').value      = b.id;
+  document.getElementById('edit-branch-name').value    = b.name || '';
+  document.getElementById('edit-branch-label').value   = b.branch_label || '';
+  document.getElementById('edit-branch-city').value    = b.city || '';
+  document.getElementById('edit-branch-address').value = b.address || '';
+  document.getElementById('modal-edit-branch').style.display = 'flex';
+}
+
+async function saveBranchEdit() {
+  const id      = document.getElementById('edit-branch-id').value;
+  const name    = document.getElementById('edit-branch-name').value.trim();
+  const label   = document.getElementById('edit-branch-label').value.trim();
+  const city    = document.getElementById('edit-branch-city').value.trim();
+  const address = document.getElementById('edit-branch-address').value.trim();
+  try {
+    await api('PUT', `/enterprise/branches/${id}`, { name, branch_label: label, city, address });
+    document.getElementById('modal-edit-branch').style.display = 'none';
+    showToast('✅', 'Sucursal actualizada', '');
+    loadEnterpriseDashboard();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function deactivateBranch(id, name) {
+  if (!confirm(`¿Desactivar la sucursal "${name}"? Los datos se conservan.`)) return;
+  try {
+    await api('DELETE', `/enterprise/branches/${id}`);
+    showToast('🗑', 'Sucursal desactivada', '');
+    loadEnterpriseDashboard();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ── end ENTERPRISE ────────────────────────────────────────────────
 
 // Cerrar caja manualmente desde el botón en el tab Historial
 async function manuallyCloseCaja() {
