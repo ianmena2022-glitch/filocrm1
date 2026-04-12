@@ -153,13 +153,22 @@ router.post('/:id/sell', auth, async (req, res) => {
       [qty, req.params.id, req.shopId]
     );
 
-    // Movimiento
+    // Movimiento de stock
     await pool.query(
       `INSERT INTO product_stock_movements
          (shop_id, product_id, tipo, cantidad, stock_antes, stock_despues, nota)
        VALUES ($1,$2,'venta',$3,$4,$5,$6)`,
       [req.shopId, req.params.id, qty, stockAntes, stockDespues,
        `Venta a ${client_name||'cliente'}`]
+    );
+
+    // Registrar ingreso en caja
+    await pool.query(
+      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
+       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4)`,
+      [req.shopId, total,
+       `Venta ${p.nombre} x${qty}${client_name ? ' — ' + client_name : ''}`,
+       venta.rows[0].id]
     );
 
     res.json({ ok: true, venta: venta.rows[0], stock_restante: stockDespues });

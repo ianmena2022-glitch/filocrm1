@@ -5350,15 +5350,20 @@ function renderCashSummary(c) {
   // ── Header fijo: neto grande + sub ──
   const netoVal = document.getElementById('caja-neto-val');
   const netoSub = document.getElementById('caja-neto-sub');
+  const totalIngresos = parseFloat(c.revenue_total||0) + parseFloat(c.tips_total||0) + parseFloat(c.extra_income||0);
   if (netoVal) {
     netoVal.textContent = fmt(c.net_total);
     netoVal.style.color = parseFloat(c.net_total||0) >= 0 ? 'var(--yellow)' : '#FF4343';
   }
-  if (netoSub) netoSub.textContent = `Fact. ${fmt(c.revenue_total)} · Gastos -${fmt(c.expenses_total)}`;
+  if (netoSub) {
+    const extraStr = parseFloat(c.extra_income||0) > 0 ? ` + ${fmt(c.extra_income)} extras` : '';
+    netoSub.textContent = `Servicios ${fmt(c.revenue_total)}${extraStr} · Gastos -${fmt(c.expenses_total)}`;
+  }
 
   // ── Cards de resumen (visible solo en desktop) ──
   if (cards) cards.innerHTML = `
-    <div class="stat-card"><div class="stat-label">💵 FACTURADO</div><div class="stat-value" style="font-size:22px">${fmt(c.revenue_total)}</div></div>
+    <div class="stat-card"><div class="stat-label">💵 SERVICIOS</div><div class="stat-value" style="font-size:22px">${fmt(c.revenue_total)}</div></div>
+    ${parseFloat(c.extra_income||0)>0?`<div class="stat-card"><div class="stat-label">➕ INGRESOS EXTRAS</div><div class="stat-value" style="font-size:22px;color:#4CAF50">${fmt(c.extra_income)}</div></div>`:''}
     <div class="stat-card"><div class="stat-label">💰 NETO</div><div class="stat-value" style="font-size:22px;color:${parseFloat(c.net_total||0)>=0?'var(--yellow)':'#FF4343'}">${fmt(c.net_total)}</div></div>
     <div class="stat-card"><div class="stat-label">📋 GASTOS</div><div class="stat-value" style="font-size:22px;color:#FF4343">${fmt(c.expenses_total)}</div></div>
     <div class="stat-card"><div class="stat-label">🎁 PROPINAS</div><div class="stat-value" style="font-size:22px;color:#4CAF50">${fmt(c.tips_total)}</div></div>
@@ -5373,34 +5378,93 @@ function renderCashSummary(c) {
     { key:'transfer_total', label:'📲 Transferencia',  color:'#FF9800' },
     { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343' },
   ];
-  if (methods) methods.innerHTML = payMethods.map(m => {
-    const val = parseFloat(c[m.key] || 0);
-    const isDebt = m.key === 'debt_total';
-    const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
-    return `<div class="caja-method-row">
-      <div class="caja-method-label">${m.label}</div>
-      <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
-    </div>`;
-  }).join('');
+  if (methods) {
+    const rows = payMethods.map(m => {
+      const val = parseFloat(c[m.key] || 0);
+      const isDebt = m.key === 'debt_total';
+      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
+      return `<div class="caja-method-row">
+        <div class="caja-method-label">${m.label}</div>
+        <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
+      </div>`;
+    }).join('');
+    // Ingresos extras (cobros fiado + ventas de productos)
+    const extraIncome = parseFloat(c.extra_income || 0);
+    const extraRow = extraIncome > 0 ? `
+      <div style="border-top:1px solid rgba(255,255,255,.07);margin:10px 0 4px"></div>
+      <div class="caja-tab-section-lbl" style="margin-top:10px">INGRESOS EXTRAS</div>
+      <div class="caja-method-row">
+        <div class="caja-method-label">💚 Cobros fiado + Ventas</div>
+        <div class="caja-method-val" style="color:#4CAF50">+${fmt(extraIncome)}</div>
+      </div>` : '';
+    methods.innerHTML = rows + extraRow;
+  }
 
-  // ── Gastos ──
+  // ── Gastos (egresos) ──
+  const catLabel = {
+    insumos:'🧴 Insumos', alquiler:'🏠 Alquiler', servicios:'⚡ Servicios',
+    salarios:'👤 Salarios', otros:'📦 Otros',
+    comisiones:'🤝 Comisiones barberos', ventas:'🛒 Venta producto'
+  };
+  const srcLabel = {
+    manual:'Manual', stock_compra:'Compra insumo', product_sale:'Venta producto',
+    debt_payment:'Cobro fiado', barber_settlement:'Liquidación barbero'
+  };
   if (expBadge) expBadge.textContent = parseFloat(c.expenses_total||0) > 0 ? `-${fmt(c.expenses_total)}` : '';
   if (expList) {
     if (!c.expenses_items || c.expenses_items.length === 0) {
       expList.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin gastos registrados hoy</div>';
     } else {
-      const catLabel = { insumos:'🧴 Insumos', alquiler:'🏠 Alquiler', servicios:'⚡ Servicios', salarios:'👤 Salarios', otros:'📦 Otros' };
       expList.innerHTML = c.expenses_items.map(e => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
           <div>
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
             ${e.description ? `<div style="font-size:11px;color:var(--gray)">${e.description}</div>` : ''}
+            ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:14px;font-weight:700;color:#FF4343">${fmt(e.amount)}</span>
-            <button onclick="deleteExpense(${e.id})" style="background:transparent;border:none;color:var(--gray);cursor:pointer;font-size:14px">🗑</button>
+            <span style="font-size:14px;font-weight:700;color:#FF4343">-${fmt(e.amount)}</span>
+            ${!e.source_type||e.source_type==='manual'?`<button onclick="deleteExpense(${e.id})" style="background:transparent;border:none;color:var(--gray);cursor:pointer;font-size:14px">🗑</button>`:''}
           </div>
         </div>`).join('');
+    }
+  }
+
+  // ── Ingresos extras (cobros fiado + ventas productos) ──
+  const incomeItems = c.income_items || [];
+  const incomeSectionId = 'caja-income-extras';
+  let incomeSection = document.getElementById(incomeSectionId);
+  if (!incomeSection) {
+    // Insertar antes del formulario de nuevo gasto si existe
+    const expListParent = expList?.parentElement;
+    if (expListParent) {
+      const div = document.createElement('div');
+      div.id = incomeSectionId;
+      expListParent.insertBefore(div, expList);
+      incomeSection = div;
+    }
+  }
+  if (incomeSection) {
+    if (incomeItems.length === 0) {
+      incomeSection.innerHTML = '';
+    } else {
+      incomeSection.innerHTML = `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div class="caja-tab-section-lbl">💚 Ingresos extras del día</div>
+            <span style="font-size:13px;color:#4CAF50;font-weight:700">+${fmt(c.extra_income)}</span>
+          </div>
+          ${incomeItems.map(e => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+              <div>
+                <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
+                ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+                <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>
+              </div>
+              <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
+            </div>`).join('')}
+          <div style="border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px"></div>
+        </div>`;
     }
   }
 }

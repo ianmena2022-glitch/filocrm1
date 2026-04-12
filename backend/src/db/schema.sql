@@ -230,16 +230,25 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEF
   CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
 
--- Gastos/egresos
+-- Gastos/egresos e ingresos extras de caja
 CREATE TABLE IF NOT EXISTS expenses (
   id          SERIAL PRIMARY KEY,
   shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   amount      NUMERIC(10,2) NOT NULL,
-  category    VARCHAR(50) NOT NULL CHECK (category IN ('insumos','alquiler','servicios','salarios','otros')),
+  category    VARCHAR(50) NOT NULL CHECK (category IN ('insumos','alquiler','servicios','salarios','otros','comisiones','ventas')),
   description VARCHAR(255),
   date        DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+-- Campos para modelo contable completo
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_income   BOOLEAN DEFAULT FALSE;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) DEFAULT 'manual'
+  CHECK (source_type IN ('manual','stock_compra','product_sale','debt_payment','barber_settlement'));
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_id   INT;
+-- Ampliar check de categoría para instalaciones existentes
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS expenses_category_check;
+ALTER TABLE expenses ADD CONSTRAINT expenses_category_check
+  CHECK (category IN ('insumos','alquiler','servicios','salarios','otros','comisiones','ventas'));
 CREATE INDEX IF NOT EXISTS idx_expenses_shop_date ON expenses(shop_id, date);
 
 -- Caja diaria (calculada automáticamente al cierre)

@@ -310,19 +310,27 @@ router.get('/cash', auth, async (req, res) => {
        WHERE shop_id=$1 AND date=$2 AND status='completed'`,
       [shopId, date]
     );
-    // Gastos del día
+    // Gastos e ingresos extras del día (separados por is_income)
     const exps = await pool.query(
-      `SELECT COALESCE(SUM(amount),0) AS expenses_total,
-              json_agg(json_build_object('id',id,'amount',amount,'category',category,'description',description) ORDER BY created_at DESC) AS items
+      `SELECT
+         COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
+         COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS extra_income,
+         json_agg(json_build_object(
+           'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type
+         ) ORDER BY created_at DESC) FILTER (WHERE is_income IS NULL OR is_income=FALSE) AS items,
+         json_agg(json_build_object(
+           'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type
+         ) ORDER BY created_at DESC) FILTER (WHERE is_income=TRUE) AS income_items
        FROM expenses WHERE shop_id=$1 AND date=$2`,
       [shopId, date]
     );
     const a = appts.rows[0];
     const e = exps.rows[0];
-    const revenue = parseFloat(a.revenue_total);
-    const expenses = parseFloat(e.expenses_total);
-    const tips = parseFloat(a.tips_total);
-    // net = ingresos - gastos - comisiones (comisiones ya descontadas en net_profit del dashboard)
+    const revenue      = parseFloat(a.revenue_total);
+    const extraIncome  = parseFloat(e.extra_income || 0);
+    const expenses     = parseFloat(e.expenses_total);
+    const tips         = parseFloat(a.tips_total);
+    // Comisiones devengadas del día (accrual diario)
     const commissionQ = await pool.query(
       `SELECT COALESCE(SUM(price * commission_pct / 100.0),0) AS total_commission
        FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
@@ -331,19 +339,21 @@ router.get('/cash', auth, async (req, res) => {
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
     res.json({
       date,
-      cash_total:      parseFloat(a.cash_total),
-      debit_total:     parseFloat(a.debit_total),
-      credit_total:    parseFloat(a.credit_total),
-      transfer_total:  parseFloat(a.transfer_total),
-      debt_total:      parseFloat(a.debt_total),
-      no_method_total: parseFloat(a.no_method_total),
-      tips_total:      tips,
-      revenue_total:   revenue,
-      expenses_total:  expenses,
+      cash_total:        parseFloat(a.cash_total),
+      debit_total:       parseFloat(a.debit_total),
+      credit_total:      parseFloat(a.credit_total),
+      transfer_total:    parseFloat(a.transfer_total),
+      debt_total:        parseFloat(a.debt_total),
+      no_method_total:   parseFloat(a.no_method_total),
+      tips_total:        tips,
+      revenue_total:     revenue,
+      extra_income:      extraIncome,
+      expenses_total:    expenses,
       commissions_total: commissions,
-      net_total:       revenue + tips - expenses - commissions,
-      cuts_count:      parseInt(a.cuts_count),
-      expenses_items:  e.items || [],
+      net_total:         revenue + tips + extraIncome - expenses - commissions,
+      cuts_count:        parseInt(a.cuts_count),
+      expenses_items:    e.items || [],
+      income_items:      e.income_items || [],
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -424,25 +434,28 @@ router.get('/debts', auth, async (req, res) => {
 
 // PUT /api/dashboard/debts/:id/pay — marcar deuda como pagada y acreditar en caja
 router.put('/debts/:id/pay', auth, async (req, res) => {
-  const { payment_method } = req.body; // método real con el que pagó el cliente
+  const { payment_method } = req.body;
   try {
-    // Marcar deuda como pagada y obtener el appointment_id vinculado
+    // Marcar deuda como pagada y obtener datos para caja
     const debtQ = await pool.query(
       `UPDATE client_debts SET paid=TRUE, paid_at=NOW()
        WHERE id=$1 AND shop_id=$2
-       RETURNING appointment_id`,
+       RETURNING appointment_id, amount, client_name`,
       [req.params.id, req.shopId]
     );
+    if (!debtQ.rows.length) return res.status(404).json({ error: 'Deuda no encontrada' });
+    const debt = debtQ.rows[0];
 
-    // Actualizar el payment_method del turno original para que el cobro
-    // aparezca en el método correcto (débito/efectivo/etc.) y no como fiado
-    const validMethods = ['cash','debit','credit','transfer'];
-    if (debtQ.rows.length && debtQ.rows[0].appointment_id && validMethods.includes(payment_method)) {
-      await pool.query(
-        `UPDATE appointments SET payment_method=$1 WHERE id=$2 AND shop_id=$3`,
-        [payment_method, debtQ.rows[0].appointment_id, req.shopId]
-      );
-    }
+    // Registrar el cobro como INGRESO en caja del día de hoy
+    const pmLabel = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transferencia' };
+    const methodStr = payment_method && pmLabel[payment_method] ? ` (${pmLabel[payment_method]})` : '';
+    await pool.query(
+      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
+       VALUES ($1,$2,'ventas',$3,TRUE,'debt_payment',$4)`,
+      [req.shopId, parseFloat(debt.amount || 0),
+       `Cobro fiado — ${debt.client_name}${methodStr}`,
+       parseInt(req.params.id)]
+    );
 
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }

@@ -230,6 +230,15 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       [settlement.rows[0].id, apptIds]
     );
 
+    // Registrar egreso en caja
+    await pool.query(
+      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
+       VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4)`,
+      [req.shopId, commissionAmount,
+       `Comisión ${barber.name} — ${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}`,
+       settlement.rows[0].id]
+    );
+
     res.json({ ok: true, settlement: settlement.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
