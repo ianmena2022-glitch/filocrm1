@@ -22,7 +22,8 @@ router.get('/today', auth, async (req, res) => {
         [shopId, today]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
+        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue,
+                COUNT(*) AS prod_count
          FROM product_sales
          WHERE shop_id=$1 AND sold_at::date = $2`,
         [shopId, today]
@@ -77,6 +78,7 @@ router.get('/today', auth, async (req, res) => {
         pending:      parseInt(m.pending),
         noshows:      parseInt(m.noshows),
         prod_revenue: prodRevToday,
+        prod_count:   parseInt(prodRevenueQ.rows[0].prod_count || 0),
       },
       appointments: apptsQ.rows,
       week:         weekQ.rows,

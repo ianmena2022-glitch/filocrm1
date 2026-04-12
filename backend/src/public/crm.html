@@ -375,6 +375,27 @@ body {
   width: 100%; transition: all 0.15s;
 }
 .dkpi-caja-btn:hover { background: rgba(255,255,255,0.11); color: white; }
+
+/* ─── VENTAS STRIP ─── */
+#dash-ventas-strip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 18px;
+  height: 38px; flex-shrink: 0;
+  background: rgba(255,255,255,0.025);
+  border-top: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.dvs-icon { font-size: 14px; flex-shrink: 0; }
+.dvs-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gray); flex-shrink: 0; }
+.dvs-amount { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; color: #4CAF50; }
+.dvs-count { font-size: 11px; color: rgba(255,255,255,0.35); }
+.dvs-last { font-size: 11px; color: rgba(255,255,255,0.4); flex: 1; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dvs-empty .dvs-amount { color: rgba(255,255,255,0.2); font-size: 14px; font-family: inherit; font-weight: 400; }
+@media (max-width: 900px) {
+  #dash-ventas-strip { padding: 0 12px; gap: 8px; }
+  .dvs-last { display: none; }
+}
+
 .dash-appts-col {
   background: var(--navy-mid);
   display: flex; flex-direction: column; min-width: 0;
@@ -1188,6 +1209,15 @@ body {
             <div id="dash-appts-footer" class="dash-appts-footer"></div>
           </div>
 
+        </div>
+
+        <!-- Strip de ventas de productos -->
+        <div id="dash-ventas-strip" class="dvs-empty">
+          <span class="dvs-icon">🛒</span>
+          <span class="dvs-label">Ventas</span>
+          <span class="dvs-amount" id="dvs-amount">—</span>
+          <span class="dvs-count" id="dvs-count"></span>
+          <span class="dvs-last" id="dvs-last"></span>
         </div>
 
         <!-- Elementos ocultos — mantienen compatibilidad con funciones existentes -->
@@ -2862,6 +2892,31 @@ async function loadDashboard() {
 
     // Ventas de productos en dashboard
     renderDashProductos(prodVentas);
+
+    // Strip de ventas
+    const strip = document.getElementById('dash-ventas-strip');
+    const dvsAmount = document.getElementById('dvs-amount');
+    const dvsCount  = document.getElementById('dvs-count');
+    const dvsLast   = document.getElementById('dvs-last');
+    const prodRev   = parseFloat(m.prod_revenue || 0);
+    const prodCount = parseInt(m.prod_count || 0);
+    if (strip) {
+      if (prodCount === 0) {
+        strip.classList.add('dvs-empty');
+        if (dvsAmount) dvsAmount.textContent = 'Sin ventas hoy';
+        if (dvsCount)  dvsCount.textContent  = '';
+        if (dvsLast)   dvsLast.textContent   = '';
+      } else {
+        strip.classList.remove('dvs-empty');
+        if (dvsAmount) dvsAmount.textContent = '$' + prodRev.toLocaleString('es-AR', {maximumFractionDigits:0});
+        if (dvsCount)  dvsCount.textContent  = `· ${prodCount} venta${prodCount !== 1 ? 's' : ''}`;
+        // Última venta de hoy
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastToday = prodVentas.find(v => v.sold_at && v.sold_at.startsWith(todayStr));
+        if (dvsLast && lastToday) dvsLast.textContent = `último: ${lastToday.product_name}`;
+        else if (dvsLast) dvsLast.textContent = '';
+      }
+    }
 
     // Top clientes
     const clientsEl = document.getElementById('dash-top-clients');
