@@ -518,10 +518,18 @@ body {
   padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.05);
 }
 .caja-method-row:last-child { border-bottom: none; }
+.caja-method-expandable { cursor: pointer; transition: background .15s; border-radius: 6px; padding: 11px 6px; margin: 0 -6px; }
+.caja-method-expandable:hover { background: rgba(255,255,255,.04); }
+.caja-method-expandable:active { background: rgba(255,255,255,.07); }
 .caja-method-label { font-size: 13px; }
 .caja-method-val {
   font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700;
 }
+.method-detail-item {
+  padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.method-detail-item:last-child { border-bottom: none; }
 .caja-tab-section-lbl {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--gray); margin-bottom: 10px;
@@ -5489,6 +5497,14 @@ function renderCashSummary(c) {
   const expBadge = document.getElementById('expenses-total-badge');
   const expList  = document.getElementById('expenses-list');
 
+  // Cerrar detalles de método abiertos (datos pueden haber cambiado)
+  ['cash','debit','credit','transfer'].forEach(m => {
+    const d = document.getElementById(`method-detail-${m}`);
+    const chv = document.getElementById(`method-chevron-${m}`);
+    if (d) { d.style.display = 'none'; d.innerHTML = ''; }
+    if (chv) chv.style.transform = '';
+  });
+
   const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
 
   // ── Header fijo: neto grande + sub ──
@@ -5514,23 +5530,30 @@ function renderCashSummary(c) {
     <div class="stat-card"><div class="stat-label">✂️ CORTES</div><div class="stat-value" style="font-size:22px">${c.cuts_count}</div></div>
   `;
 
-  // ── Métodos de pago — formato filas ──
+  // ── Métodos de pago — formato filas expandibles ──
   const payMethods = [
-    { key:'cash_total',     label:'💵 Efectivo',      color:'#4CAF50' },
-    { key:'debit_total',    label:'💳 Débito',         color:'#2196F3' },
-    { key:'credit_total',   label:'💳 Crédito',        color:'#9C27B0' },
-    { key:'transfer_total', label:'📲 Transferencia',  color:'#FF9800' },
-    { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343' },
+    { key:'cash_total',     label:'💵 Efectivo',      color:'#4CAF50',  method:'cash'     },
+    { key:'debit_total',    label:'💳 Débito',         color:'#2196F3',  method:'debit'    },
+    { key:'credit_total',   label:'💳 Crédito',        color:'#9C27B0',  method:'credit'   },
+    { key:'transfer_total', label:'📲 Transferencia',  color:'#FF9800',  method:'transfer' },
+    { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343',  method:'debt'     },
   ];
   if (methods) {
     methods.innerHTML = payMethods.map(m => {
       const val = parseFloat(c[m.key] || 0);
       const isDebt = m.key === 'debt_total';
       const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
-      return `<div class="caja-method-row">
-        <div class="caja-method-label">${m.label}</div>
-        <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
-      </div>`;
+      const canExpand = !isDebt && val > 0;
+      return `
+        <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
+             ${canExpand ? `onclick="toggleMethodDetail('${m.method}')"` : ''}>
+          <div class="caja-method-label">${m.label}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
+            ${canExpand ? `<span id="method-chevron-${m.method}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
+          </div>
+        </div>
+        <div id="method-detail-${m.method}" style="display:none"></div>`;
     }).join('');
   }
 
@@ -5577,15 +5600,19 @@ function renderCashSummary(c) {
             <div class="caja-tab-section-lbl">💚 Ingresos extras</div>
             <span style="font-size:13px;color:#4CAF50;font-weight:700">+${fmt(c.extra_income)}</span>
           </div>
-          ${incomeItems.map(e => `
+          ${incomeItems.map(e => {
+            const iLabel = e.source_type === 'debt_payment' ? '💳 Cobro fiado'
+                         : e.source_type === 'product_sale' ? '🛒 Venta producto'
+                         : (catLabel[e.category]||e.category);
+            return `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04)">
               <div>
-                <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
+                <div style="font-size:13px;font-weight:600">${iLabel}</div>
                 ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
                 <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>
               </div>
               <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
-            </div>`).join('')}
+            </div>`;}).join('')}
         </div>`;
     }
   }
@@ -5680,6 +5707,69 @@ async function deleteExpense(id) {
     showToast('🗑','Gasto eliminado','');
     loadCashSummary();
   } catch(e) { showToast('❌','Error',e.message); }
+}
+
+// ── Detalle por método de pago ────────────────────────────────────────────────
+async function toggleMethodDetail(method) {
+  const el  = document.getElementById(`method-detail-${method}`);
+  const chv = document.getElementById(`method-chevron-${method}`);
+  if (!el) return;
+  if (el.style.display !== 'none') {
+    el.style.display = 'none';
+    if (chv) chv.style.transform = '';
+    return;
+  }
+  el.style.display = 'block';
+  if (chv) chv.style.transform = 'rotate(180deg)';
+  el.innerHTML = '<div style="padding:8px 12px;color:var(--gray);font-size:12px">Cargando...</div>';
+  try {
+    const dateInput = document.getElementById('caja-date');
+    const date = dateInput?.value || new Date().toISOString().split('T')[0];
+    const data = await api('GET', `/dashboard/cash/method-detail?date=${date}&method=${method}`);
+    renderMethodDetail(el, data);
+  } catch(e) {
+    el.innerHTML = `<div style="padding:8px 12px;color:#FF4343;font-size:12px">Error: ${e.message}</div>`;
+  }
+}
+
+function renderMethodDetail(el, data) {
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const rows = [];
+
+  (data.appointments || []).forEach(a => {
+    const profit = parseFloat(a.profit || 0);
+    const comm   = parseFloat(a.commission_amount || 0);
+    rows.push(`
+      <div class="method-detail-item">
+        <div>
+          <div style="font-size:12px;font-weight:600">${a.client_name||'Sin nombre'}<span style="color:var(--gray);font-weight:400"> · ${(a.time_start||'').substring(0,5)}</span></div>
+          <div style="font-size:11px;color:var(--gray)">${a.service_name||''}</div>
+          ${a.barber_name ? `<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">✂️ ${a.barber_name}</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div style="font-size:13px;font-weight:700">${fmt(a.price)}</div>
+          <div style="font-size:10px;color:#4CAF50">Gan. ${fmt(profit)}</div>
+          ${comm > 0 ? `<div style="font-size:10px;color:#FF9800">Com. ${fmt(comm)}</div>` : ''}
+        </div>
+      </div>`);
+  });
+
+  (data.debt_payments || []).forEach(d => {
+    rows.push(`
+      <div class="method-detail-item">
+        <div>
+          <div style="font-size:12px;font-weight:600">💳 Cobro fiado</div>
+          <div style="font-size:11px;color:var(--gray)">${d.description||''}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:10px">+${fmt(d.amount)}</div>
+      </div>`);
+  });
+
+  if (!rows.length) {
+    el.innerHTML = '<div style="padding:8px 12px;color:var(--gray);font-size:11px">Sin movimientos</div>';
+    return;
+  }
+  el.innerHTML = `<div style="background:rgba(0,0,0,.25);border-radius:8px;padding:0 12px;margin:0 0 8px">${rows.join('')}</div>`;
 }
 
 function payDebt(id) {
