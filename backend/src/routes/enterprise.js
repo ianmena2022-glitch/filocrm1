@@ -5,10 +5,27 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 // Solo enterprise owners pueden acceder
-function enterpriseOnly(req, res, next) {
-  if (!req.isEnterpriseOwner)
-    return res.status(403).json({ error: 'Solo el owner enterprise puede hacer esto' });
-  next();
+// Verifica JWT primero; si el flag no está en el token (cuenta creada antes del fix),
+// hace fallback a DB chequeando filo_plan='enterprise' y no es branch ni barbero
+async function enterpriseOnly(req, res, next) {
+  if (req.isEnterpriseOwner) return next();
+  try {
+    const r = await pool.query(
+      `SELECT filo_plan, is_branch, is_barber, is_enterprise_owner
+       FROM shops WHERE id=$1`,
+      [req.shopId]
+    );
+    const s = r.rows[0];
+    if (!s) return res.status(403).json({ error: 'Solo el owner enterprise puede hacer esto' });
+    const isOwner = s.is_enterprise_owner ||
+      (s.filo_plan === 'enterprise' && !s.is_branch && !s.is_barber);
+    if (!isOwner) return res.status(403).json({ error: 'Solo el owner enterprise puede hacer esto' });
+    // Actualizar flag en DB para que el próximo token ya lo traiga
+    if (!s.is_enterprise_owner) {
+      await pool.query('UPDATE shops SET is_enterprise_owner=TRUE WHERE id=$1', [req.shopId]);
+    }
+    next();
+  } catch(e) { res.status(500).json({ error: e.message }); }
 }
 
 // ── GET /api/enterprise/branches — listar sucursales ─────────────────────────
