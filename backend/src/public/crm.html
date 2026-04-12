@@ -5672,7 +5672,7 @@ function renderCashHistory(history) {
         <tbody>
           ${history.map(h => `
             <tr style="border-top:1px solid rgba(255,255,255,.05)">
-              <td style="padding:10px 6px">${new Date(h.date+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
+              <td style="padding:10px 6px">${new Date(String(h.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
               <td style="text-align:right;padding:10px 6px">${fmt(h.revenue_total)}</td>
               <td style="text-align:right;padding:10px 6px;color:#FF4343">${fmt(h.expenses_total)}</td>
               <td style="text-align:right;padding:10px 6px">${h.cuts_count}</td>
