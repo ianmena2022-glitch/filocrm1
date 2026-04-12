@@ -6121,7 +6121,7 @@ async function confirmarAjusteStock() {
     closeModal('modal-ajuste-stock');
     await loadProductos();
     if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
-    if (tipo === 'entrada' && r.gasto_registrado) loadCaja();
+    if (tipo === 'entrada' && r.gasto_registrado) loadCashSummary();
   } catch(e) { showToast('❌','Error',e.message); }
 }
 
