@@ -90,15 +90,17 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT s.id, s.name, s.barber_color, s.barber_commission_pct,
-         COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
-         COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
-         COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
-         COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes
-       FROM shops s
-       LEFT JOIN appointments a ON a.barber_id = s.id AND a.shop_id = $1
-       WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE
-       GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct
-       ORDER BY s.name`,
+  COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
+  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
+  COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
+  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes,
+  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0) AS pending_commission,
+  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments
+FROM shops s
+LEFT JOIN appointments a ON a.barber_id = s.id AND a.shop_id = $1
+WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE
+GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct
+ORDER BY s.name`,
       [req.shopId]
     );
     res.json(result.rows);
@@ -153,6 +155,94 @@ router.get('/parent-config', auth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/barbers/:id/pending-settlement — turnos completados sin liquidar
+router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
+  try {
+    const barberQ = await pool.query(
+      'SELECT id, name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+      [req.params.id, req.shopId]
+    );
+    if (!barberQ.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
+    const barber = barberQ.rows[0];
+
+    const appts = await pool.query(
+      `SELECT id, date, time_start, service_name, price, commission_pct
+       FROM appointments
+       WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
+         AND (commission_settled IS NULL OR commission_settled=FALSE)
+       ORDER BY date DESC`,
+      [req.shopId, barber.id]
+    );
+
+    const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
+    const commissionAmount = appts.rows.reduce((s, a) => {
+      const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
+      return s + parseFloat(a.price || 0) * pct / 100;
+    }, 0);
+
+    res.json({
+      barber,
+      appointments: appts.rows,
+      count: appts.rows.length,
+      total_price: totalPrice,
+      commission_amount: commissionAmount
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/barbers/:id/settle — crear liquidación
+router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
+  const { notes } = req.body;
+  try {
+    const barberQ = await pool.query(
+      'SELECT id, name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+      [req.params.id, req.shopId]
+    );
+    if (!barberQ.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
+    const barber = barberQ.rows[0];
+
+    const appts = await pool.query(
+      `SELECT id, price, commission_pct FROM appointments
+       WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
+         AND (commission_settled IS NULL OR commission_settled=FALSE)`,
+      [req.shopId, barber.id]
+    );
+    if (!appts.rows.length) return res.status(400).json({ error: 'No hay comisiones pendientes para liquidar' });
+
+    const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
+    const commissionAmount = appts.rows.reduce((s, a) => {
+      const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
+      return s + parseFloat(a.price || 0) * pct / 100;
+    }, 0);
+
+    const settlement = await pool.query(
+      `INSERT INTO barber_settlements (shop_id, barber_id, barber_name, appointments_count, total_price, commission_pct_avg, commission_amount, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.shopId, barber.id, barber.name, appts.rows.length, totalPrice, barber.barber_commission_pct, commissionAmount, notes || null]
+    );
+
+    const apptIds = appts.rows.map(a => a.id);
+    await pool.query(
+      `UPDATE appointments SET commission_settled=TRUE, commission_settled_at=NOW(), settlement_id=$1
+       WHERE id = ANY($2::int[])`,
+      [settlement.rows[0].id, apptIds]
+    );
+
+    res.json({ ok: true, settlement: settlement.rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/barbers/:id/settlements — historial de liquidaciones
+router.get('/:id/settlements', auth, ownerOnly, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM barber_settlements WHERE shop_id=$1 AND barber_id=$2 ORDER BY settled_at DESC`,
+      [req.shopId, req.params.id]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

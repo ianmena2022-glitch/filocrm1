@@ -329,6 +329,26 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 
   CHECK (commission_mode IN ('pct','fixed','mixed'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
 
+-- Liquidaciones de barberos
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS commission_settled BOOLEAN DEFAULT FALSE;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS commission_settled_at TIMESTAMPTZ;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS settlement_id INT;
+
+CREATE TABLE IF NOT EXISTS barber_settlements (
+  id               SERIAL PRIMARY KEY,
+  shop_id          INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  barber_id        INT REFERENCES shops(id) ON DELETE SET NULL,
+  barber_name      VARCHAR(100),
+  appointments_count INT DEFAULT 0,
+  total_price      NUMERIC(10,2) DEFAULT 0,
+  commission_pct_avg NUMERIC(5,2),
+  commission_amount NUMERIC(10,2) DEFAULT 0,
+  notes            TEXT,
+  settled_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_barber_settlements ON barber_settlements(shop_id, barber_id);
+
 -- ── DÍAS NO LABORABLES EXTRAORDINARIOS ───────────────────────────────────────
 -- Array JSON de fechas "YYYY-MM-DD" — ej: ["2025-12-25","2026-01-01"]
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS closed_days TEXT DEFAULT NULL;

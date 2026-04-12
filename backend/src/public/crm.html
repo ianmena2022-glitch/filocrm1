@@ -1456,6 +1456,36 @@ body {
       </div>
     </div>
 
+    <!-- Modal liquidación barbero -->
+    <div class="modal-overlay" id="modal-settlement" style="display:none" onclick="if(event.target===this)closeSettlementModal()">
+      <div class="modal" style="max-width:500px">
+        <div class="modal-header">
+          <h2>💸 Liquidar comisión</h2>
+          <button class="modal-close" onclick="closeSettlementModal()">×</button>
+        </div>
+        <div class="modal-body" id="settlement-preview">
+          <div style="text-align:center;padding:20px;color:var(--gray)">Cargando...</div>
+        </div>
+        <div class="modal-actions" id="settlement-actions" style="display:none">
+          <button class="btn-cancel" onclick="closeSettlementModal()">Cancelar</button>
+          <button class="btn-primary" id="btn-confirm-settlement" onclick="confirmSettlement()">✅ Confirmar liquidación</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal historial de liquidaciones -->
+    <div class="modal-overlay" id="modal-settlement-history" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+          <h2>📋 Historial de liquidaciones</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-settlement-history').style.display='none'">×</button>
+        </div>
+        <div class="modal-body" id="settlement-history-list">
+          <div style="text-align:center;padding:20px;color:var(--gray)">Cargando...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ─── CONFIGURACIÓN ─── -->
     <section id="sec-configuracion" class="section">
       <div class="topbar">
@@ -4474,6 +4504,9 @@ async function loadEquipo() {
     window._barbersList = barbers;
     el.innerHTML = barbers.map(b => {
       const stat = stats.find(s => s.id === b.id) || {};
+      const pendingComm = parseFloat(stat.pending_commission || 0);
+      const pendingAppts = parseInt(stat.pending_appointments || 0);
+      const hasPending = pendingAppts > 0;
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
         <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f">${b.name.charAt(0).toUpperCase()}</div>
         <div class="client-info">
@@ -4484,10 +4517,18 @@ async function loadEquipo() {
             <span>💰 $${parseFloat(stat.facturado_mes || 0).toLocaleString('es-AR')} facturado</span>
             <span style="color:var(--yellow)">🤝 ${bcmLabel(b)}</span>
           </div>
+          ${hasPending ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:8px;padding:4px 10px;font-size:12px">
+            <span style="color:rgba(255,209,0,0.9)">💸 Pendiente de liquidar:</span>
+            <strong style="color:#FFD100">$${pendingComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+            <span style="color:rgba(255,255,255,0.4)">(${pendingAppts} turno${pendingAppts !== 1 ? 's' : ''})</span>
+          </div>` : `<div style="margin-top:6px;font-size:12px;color:rgba(255,255,255,0.3)">✅ Todo liquidado</div>`}
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="appt-btn" onclick="editBarber(${b.id},'${b.name}',${b.barber_commission_pct})" title="Editar">✏️</button>
-          <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
+        <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end">
+          <div style="display:flex;gap:8px">
+            <button class="appt-btn" onclick="editBarber(${b.id},'${b.name}',${b.barber_commission_pct})" title="Editar">✏️</button>
+            <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
+          </div>
+          ${hasPending ? `<button class="btn-add" style="font-size:12px;padding:6px 12px;background:linear-gradient(135deg,#FFD100,#ff9800)" onclick="openSettlementModal(${b.id},'${b.name.replace(/'/g,"\\'")}')">💸 Liquidar</button>` : `<button class="appt-btn" style="font-size:11px;opacity:0.5" onclick="openSettlementHistory(${b.id},'${b.name.replace(/'/g,"\\'")}')">📋 Historial</button>`}
         </div>
       </div>`;
     }).join('');
@@ -4581,6 +4622,113 @@ async function removeBarber(id, name) {
     loadEquipo();
   } catch(e) {
     showToast('❌', 'Error', e.message);
+  }
+}
+
+// ─── LIQUIDACIÓN DE BARBEROS ───
+let _settlementBarberId = null;
+let _settlementData = null;
+
+async function openSettlementModal(barberId, barberName) {
+  _settlementBarberId = barberId;
+  _settlementData = null;
+  document.getElementById('settlement-actions').style.display = 'none';
+  document.getElementById('settlement-preview').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">Cargando comisiones pendientes...</div>';
+  document.getElementById('modal-settlement').style.display = 'flex';
+  try {
+    const data = await api('GET', `/barbers/${barberId}/pending-settlement`);
+    _settlementData = data;
+    if (!data.count) {
+      document.getElementById('settlement-preview').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">✅ No hay comisiones pendientes para este barbero.</div>';
+      return;
+    }
+    const rows = data.appointments.slice(0, 8).map(a =>
+      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${a.date} ${a.time_start || ''}</td><td style="padding:6px 4px;font-size:12px">${a.service_name || 'Servicio'}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
+    ).join('');
+    const extra = data.count > 8 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.count - 8} turno${data.count-8!==1?'s':''} más</td></tr>` : '';
+    document.getElementById('settlement-preview').innerHTML = `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:rgba(255,255,255,0.6);font-size:13px">Barbero</span>
+          <strong>${data.barber.name}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:rgba(255,255,255,0.6);font-size:13px">Turnos a liquidar</span>
+          <strong>${data.count}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:rgba(255,255,255,0.6);font-size:13px">Total facturado</span>
+          <strong>$${data.total_price.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:10px;margin:12px 0">
+          <span style="color:var(--yellow);font-size:14px;font-weight:700">💸 A pagar (${data.barber.barber_commission_pct}%)</span>
+          <strong style="color:#FFD100;font-size:20px">$${data.commission_amount.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border-radius:8px;overflow:hidden;margin-bottom:16px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:rgba(255,255,255,0.04)">
+            <th style="padding:8px 4px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">FECHA</th>
+            <th style="padding:8px 4px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">SERVICIO</th>
+            <th style="padding:8px 4px;text-align:right;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">PRECIO</th>
+          </tr></thead>
+          <tbody>${rows}${extra}</tbody>
+        </table>
+      </div>
+      <div>
+        <label style="font-size:12px;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px">Nota (opcional)</label>
+        <input id="settlement-notes" type="text" placeholder="Ej: Efectivo, transferencia..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;box-sizing:border-box">
+      </div>
+    `;
+    document.getElementById('settlement-actions').style.display = 'flex';
+  } catch(e) {
+    document.getElementById('settlement-preview').innerHTML = `<div style="color:var(--danger);padding:16px">${e.message}</div>`;
+  }
+}
+
+function closeSettlementModal() {
+  document.getElementById('modal-settlement').style.display = 'none';
+  _settlementBarberId = null;
+  _settlementData = null;
+}
+
+async function confirmSettlement() {
+  if (!_settlementBarberId || !_settlementData) return;
+  const notes = document.getElementById('settlement-notes')?.value?.trim() || null;
+  const btn = document.getElementById('btn-confirm-settlement');
+  btn.disabled = true; btn.textContent = 'Procesando...';
+  try {
+    const res = await api('POST', `/barbers/${_settlementBarberId}/settle`, { notes });
+    closeSettlementModal();
+    showToast('✅', 'Liquidación registrada', `$${parseFloat(res.settlement.commission_amount).toLocaleString('es-AR', {maximumFractionDigits:0})} liquidados para ${res.settlement.barber_name}`);
+    loadEquipo();
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+    btn.disabled = false; btn.textContent = '✅ Confirmar liquidación';
+  }
+}
+
+async function openSettlementHistory(barberId, barberName) {
+  document.getElementById('settlement-history-list').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">Cargando...</div>';
+  document.getElementById('modal-settlement-history').style.display = 'flex';
+  try {
+    const settlements = await api('GET', `/barbers/${barberId}/settlements`);
+    if (!settlements.length) {
+      document.getElementById('settlement-history-list').innerHTML = `<div style="text-align:center;padding:30px;color:var(--gray)">Sin liquidaciones registradas para ${barberName}</div>`;
+      return;
+    }
+    document.getElementById('settlement-history-list').innerHTML = settlements.map(s => `
+      <div style="padding:14px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:13px;color:rgba(255,255,255,0.6)">${new Date(s.settled_at).toLocaleDateString('es-AR', {day:'numeric',month:'long',year:'numeric'})}</span>
+          <strong style="color:#FFD100;font-size:16px">$${parseFloat(s.commission_amount).toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5)">${s.appointments_count} turnos · $${parseFloat(s.total_price).toLocaleString('es-AR', {maximumFractionDigits:0})} facturado · ${s.commission_pct_avg}%</div>
+        ${s.notes ? `<div style="font-size:12px;color:rgba(255,209,0,0.6);margin-top:4px">📝 ${s.notes}</div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('settlement-history-list').innerHTML = `<div style="color:var(--danger);padding:16px">${e.message}</div>`;
   }
 }
 
