@@ -3392,10 +3392,9 @@ function initStaffUI() {
     window._maxBarbers = maxBarbers;
   }
 
-  // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches)
+  // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches reales)
   const switcher = document.getElementById('test-plan-switcher');
-  const isEnterprise = currentShop?.is_enterprise_owner || currentShop?.is_branch ||
-    (filoPlan === 'enterprise' && !isBarber);
+  const isEnterprise = currentShop?.is_enterprise_owner || currentShop?.is_branch;
   if (isTest && !isEnterprise && switcher) {
     switcher.style.display = 'block';
     const label = document.getElementById('current-plan-label');
