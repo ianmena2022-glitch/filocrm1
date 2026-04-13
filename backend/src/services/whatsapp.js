@@ -156,7 +156,13 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   const dir = authDir(shopId);
   const { state, saveCreds } = await useMultiFileAuthState(dir);
-  const { version } = await fetchLatestBaileysVersion();
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch (e) {
+    console.warn(`[WPP] fetchLatestBaileysVersion falló, usando versión fallback: ${e.message}`);
+    version = [2, 3000, 1015901307];
+  }
 
   const sock = makeWASocket({
     version,
@@ -222,17 +228,21 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.log(`Baileys desconectado para shop ${shopId}, código: ${code}, reconectar: ${shouldReconnect}`);
+      console.log(`Baileys desconectado para shop ${shopId}, código: ${code}`);
       statuses[shopId] = 'disconnected';
 
-      if (code === DisconnectReason.loggedOut) {
-        // Sesión cerrada   limpiar
+      if (code === DisconnectReason.loggedOut || code === 403) {
+        // Sesión cerrada explícitamente — limpiar
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
-      } else if (shouldReconnect) {
-        // Reconectar automáticamente
+      } else if (code === DisconnectReason.connectionReplaced || code === 440) {
+        // Otro cliente/contenedor tomó la sesión (deploy) — no pelear, ceder
+        console.log(`[WPP] Shop ${shopId}: sesión tomada por otro cliente — no reconectar`);
+        delete sockets[shopId];
+      } else {
+        // Reconectar automáticamente por pérdida de conexión normal
+        console.log(`[WPP] Shop ${shopId}: reconectando en 5s...`);
         setTimeout(() => connect(shopId, null, null, null), 5000);
       }
     }
@@ -444,5 +454,25 @@ async function reconnectAllShops() {
     console.error('reconnectAllShops error:', e.message);
   }
 }
+
+// Guardar sesiones activas antes de que el proceso muera (deploy / SIGTERM)
+// Solo guarda las que siguen connected — no sobreescribe si otra instancia ya tomó la sesión
+async function saveAllSessionsOnShutdown() {
+  const activeShops = Object.keys(sockets).filter(id => statuses[id] === 'connected');
+  for (const shopId of activeShops) {
+    try {
+      await saveSessionToDB(shopId);
+      console.log(`[WPP] Sesión guardada antes de shutdown: shop ${shopId}`);
+    } catch (e) {
+      console.error(`[WPP] Error guardando sesión en shutdown: ${e.message}`);
+    }
+  }
+}
+
+process.on('SIGTERM', async () => {
+  console.log('[WPP] SIGTERM recibido — guardando sesiones activas...');
+  await saveAllSessionsOnShutdown();
+  process.exit(0);
+});
 
 module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes };
