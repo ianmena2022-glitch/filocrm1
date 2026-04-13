@@ -19,14 +19,20 @@ async function sendReminders() {
     const now = new Date();
 
     // Ventana: turnos que empiezan entre 11:30hs y 12:30hs desde ahora
-    const windowStart = new Date(now.getTime() + 3.5 * 60 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + 4.5 * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() + 11.5 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 12.5 * 60 * 60 * 1000);
 
-    const startDate = windowStart.toISOString().split('T')[0];
-    const endDate   = windowEnd.toISOString().split('T')[0];
+    // Los turnos están guardados en hora Argentina (UTC-3).
+    // El servidor corre en UTC → restar 3h antes de extraer fecha/hora.
+    const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
+    const wsAR = new Date(windowStart.getTime() - AR_OFFSET_MS);
+    const weAR = new Date(windowEnd.getTime()   - AR_OFFSET_MS);
 
-    const startTime = `${String(windowStart.getHours()).padStart(2,'0')}:${String(windowStart.getMinutes()).padStart(2,'0')}`;
-    const endTime   = `${String(windowEnd.getHours()).padStart(2,'0')}:${String(windowEnd.getMinutes()).padStart(2,'0')}`;
+    const startDate = wsAR.toISOString().split('T')[0];
+    const endDate   = weAR.toISOString().split('T')[0];
+
+    const startTime = `${String(wsAR.getUTCHours()).padStart(2,'0')}:${String(wsAR.getUTCMinutes()).padStart(2,'0')}`;
+    const endTime   = `${String(weAR.getUTCHours()).padStart(2,'0')}:${String(weAR.getUTCMinutes()).padStart(2,'0')}`;
 
     // Buscar turnos en esa ventana con cliente con teléfono, en shops con WPP conectado
     let query, params;
