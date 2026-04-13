@@ -69,6 +69,14 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .slot-btn.selected{background:var(--y);border-color:var(--y);color:var(--nk)}
 .no-slots{text-align:center;padding:32px;color:var(--g);font-size:14px}
 
+/* BRANCH SELECTION */
+.branch-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 16px;cursor:pointer;transition:all .2s;text-align:left;width:100%;margin-bottom:10px;display:block}
+.branch-btn:hover{border-color:rgba(255,209,0,.35);background:rgba(255,209,0,.06);transform:translateY(-1px)}
+.branch-btn:active{transform:translateY(0)}
+.branch-name{font-family:'Oswald',sans-serif;font-size:17px;font-weight:700;letter-spacing:.5px;margin-bottom:4px}
+.branch-label-tag{display:inline-block;background:rgba(255,209,0,.12);color:var(--y);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:6px;letter-spacing:.5px}
+.branch-meta{font-size:12px;color:var(--g);margin-top:4px}
+
 /* FORM */
 .form-field{margin-bottom:16px}
 .form-field label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
@@ -147,6 +155,7 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
   <div class="container">
     <!-- Steps -->
     <div class="steps" id="steps">
+      <div class="step" id="step-0" style="display:none"><div class="step-dot">📍</div><div class="step-lbl">Sucursal</div></div>
       <div class="step active" id="step-1"><div class="step-dot">1</div><div class="step-lbl">Servicio</div></div>
       <div class="step" id="step-2"><div class="step-dot">2</div><div class="step-lbl">Fecha</div></div>
       <div class="step" id="step-3"><div class="step-dot">3</div><div class="step-lbl">Hora</div></div>
@@ -155,6 +164,14 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
     </div>
 
     <div id="error-banner" class="error-banner"></div>
+
+    <!-- Step 0: Sucursal (solo enterprise con WPP compartido) -->
+    <div id="screen-branch" style="display:none">
+      <div class="card">
+        <div class="card-title">📍 ¿A qué sucursal querés ir?</div>
+        <div id="branch-grid"></div>
+      </div>
+    </div>
 
     <!-- Step 1: Servicio -->
     <div id="screen-service">
@@ -177,6 +194,7 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         <div class="service-grid" id="service-grid"></div>
       </div>
       <button class="btn-primary" id="btn-next-service" onclick="goToDate()" disabled>Elegir fecha →</button>
+      <button class="btn-back" id="btn-back-to-branch" onclick="goBackToBranch()" style="display:none">← Cambiar sucursal</button>
     </div>
 
     <!-- Member Login -->
@@ -282,7 +300,8 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 
 <script>
 const slug = window.location.pathname.split('/reservar/')[1]?.split('/')[0];
-const API = window.location.origin + '/api/booking/' + slug;
+let API = window.location.origin + '/api/booking/' + slug;
+let currentBranchSlug = null; // slug de la sucursal elegida (solo modo enterprise)
 
 let shopData = null;
 let services = [];
@@ -297,6 +316,8 @@ let selectedPrize = null;
 let storeItems = [];
 let isMemberFlow = false;
 let memberData = null;
+let isEnterpriseFlow = false;
+let enterpriseName = '';
 
 // ── INIT ──
 async function init() {
@@ -309,31 +330,115 @@ async function init() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    shopData = data.shop;
-    services = data.services;
-    barbers = data.barbers || [];
-    // Mostrar step de barbero si aplica
-    const step4El = document.getElementById('step-4');
-    if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
-    // Mostrar campo domicilio si el shop tiene servicios a domicilio
-    if (shopData.home_service) {
-      const af = document.getElementById('client-address-field');
-      if (af) af.style.display = 'block';
+    // ── Modo Enterprise: mostrar selección de sucursal primero ──
+    if (data.is_enterprise) {
+      isEnterpriseFlow = true;
+      enterpriseName   = data.enterprise?.name || 'Grupo';
+      document.getElementById('shop-name').textContent = enterpriseName;
+      document.getElementById('shop-logo').textContent = enterpriseName.charAt(0).toUpperCase();
+      document.title = `Reservar turno — ${enterpriseName}`;
+      document.getElementById('step-0').style.display = 'flex';
+      renderBranches(data.branches || []);
+      showScreen('branch');
+      setStep(0);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      return;
     }
 
-    document.getElementById('shop-name').textContent = shopData.name;
-    document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
-    document.title = `Reservar turno — ${shopData.name}`;
-    if (shopData.city || shopData.address) {
-      document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
-    }
-
+    // ── Modo normal ──
+    loadShopData(data);
     renderServices();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display = 'block';
   } catch (e) {
     document.getElementById('loading').innerHTML = `<div class="loading">No se encontró la barbería.<br><small>${e.message}</small></div>`;
   }
+}
+
+function loadShopData(data) {
+  shopData = data.shop;
+  services = data.services;
+  barbers  = data.barbers || [];
+  const step4El = document.getElementById('step-4');
+  if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
+  if (shopData.home_service) {
+    const af = document.getElementById('client-address-field');
+    if (af) af.style.display = 'block';
+  }
+  document.getElementById('shop-name').textContent = shopData.name;
+  document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+  document.title = `Reservar turno — ${shopData.name}`;
+  if (shopData.city || shopData.address) {
+    document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
+  }
+}
+
+// ── BRANCH SELECTION (solo enterprise) ──
+function renderBranches(branches) {
+  const grid = document.getElementById('branch-grid');
+  if (!branches.length) {
+    grid.innerHTML = '<div style="color:var(--g);font-size:13px;padding:16px 0">No hay sucursales disponibles.</div>';
+    return;
+  }
+  grid.innerHTML = branches.map(b => {
+    const label    = b.branch_label || b.name;
+    const showFull = b.branch_label && b.branch_label !== b.name;
+    const meta     = [b.address, b.city].filter(Boolean).join(' · ');
+    return `
+      <button class="branch-btn" onclick="selectBranch('${b.booking_slug}', this)" ${!b.booking_slug ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>
+        ${b.branch_label ? `<div class="branch-label-tag">📍 ${b.branch_label}</div>` : ''}
+        <div class="branch-name">${b.name}</div>
+        ${meta ? `<div class="branch-meta">📍 ${meta}</div>` : ''}
+      </button>`;
+  }).join('');
+}
+
+async function selectBranch(branchSlug, btnEl) {
+  if (!branchSlug) return;
+  // feedback visual
+  document.querySelectorAll('.branch-btn').forEach(b => b.style.opacity = '0.5');
+  if (btnEl) { btnEl.style.opacity = '1'; btnEl.style.borderColor = 'var(--y)'; }
+
+  try {
+    const res  = await fetch(window.location.origin + '/api/booking/' + branchSlug);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Actualizar API y slug activo
+    API              = window.location.origin + '/api/booking/' + branchSlug;
+    currentBranchSlug = branchSlug;
+
+    loadShopData(data);
+    renderServices();
+
+    // Marcar step-0 como done
+    const s0 = document.getElementById('step-0');
+    if (s0) { s0.classList.remove('active'); s0.classList.add('done'); }
+
+    // Mostrar botón "← Cambiar sucursal"
+    const backBtn = document.getElementById('btn-back-to-branch');
+    if (backBtn) backBtn.style.display = 'block';
+
+    showScreen('service');
+    setStep(1);
+  } catch(e) {
+    document.querySelectorAll('.branch-btn').forEach(b => b.style.opacity = '1');
+    alert('Error al cargar la sucursal: ' + e.message);
+  }
+}
+
+function goBackToBranch() {
+  // Volver a la selección de sucursal
+  document.querySelectorAll('.branch-btn').forEach(b => {
+    b.style.opacity = '1'; b.style.borderColor = '';
+  });
+  const backBtn = document.getElementById('btn-back-to-branch');
+  if (backBtn) backBtn.style.display = 'none';
+  const s0 = document.getElementById('step-0');
+  if (s0) { s0.classList.remove('done'); s0.classList.add('active'); }
+  showScreen('branch');
+  setStep(0);
 }
 
 // ── SERVICES ──
@@ -569,7 +674,8 @@ function goToForm() {
 
 async function checkPhonePoints(phone) {
   try {
-    const res = await fetch(`${window.location.origin}/api/points/client/phone/${slug}/${phone}`);
+    const activeSlug = currentBranchSlug || slug;
+    const res = await fetch(`${window.location.origin}/api/points/client/phone/${activeSlug}/${phone}`);
     const data = await res.json();
     if (data.client && data.client.points > 0) {
       clientPointsData = data.client;
@@ -635,14 +741,16 @@ async function confirmReservation() {
 
 // ── HELPERS ──
 function showScreen(name) {
-  ['service','member-login','date','time','barber','form','success'].forEach(s => {
-    document.getElementById('screen-' + s).style.display = s === name ? 'block' : 'none';
+  ['branch','service','member-login','date','time','barber','form','success'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.style.display = s === name ? 'block' : 'none';
   });
 }
 
 function setStep(n) {
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 0; i <= 5; i++) {
     const el = document.getElementById('step-' + i);
+    if (!el) continue;
     el.classList.remove('active','done');
     if (i < n) el.classList.add('done');
     if (i === n) el.classList.add('active');
@@ -707,7 +815,8 @@ function goBackFromForm() {
 document.getElementById('client-phone')?.addEventListener('blur'
 , async function() {
   const phone = this.value.trim().replace(/\D/g, '');
-  if (phone.length < 8 || !slug) return;
+  const activeSlug = currentBranchSlug || slug;
+  if (phone.length < 8 || !activeSlug) return;
   clientPointsData = null;
   await checkPhonePoints(phone);
 });

@@ -193,7 +193,7 @@ router.get('/config', auth, enterpriseOnly, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT name, email, phone, city, enterprise_currency, enterprise_timezone,
-              enterprise_logo_url, enterprise_notes
+              enterprise_logo_url, enterprise_notes, enterprise_shared_wpp, booking_slug
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -203,8 +203,10 @@ router.get('/config', auth, enterpriseOnly, async (req, res) => {
 
 // ── PUT /api/enterprise/config — guardar configuración ───────────────────────
 router.put('/config', auth, enterpriseOnly, async (req, res) => {
-  const { name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes } = req.body;
+  const { name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes, enterprise_shared_wpp } = req.body;
   try {
+    // Para booleans, null = no tocar; true/false = actualizar
+    const sharedWpp = typeof enterprise_shared_wpp === 'boolean' ? enterprise_shared_wpp : null;
     const r = await pool.query(
       `UPDATE shops SET
          name                  = COALESCE($1, name),
@@ -212,14 +214,26 @@ router.put('/config', auth, enterpriseOnly, async (req, res) => {
          city                  = COALESCE($3, city),
          enterprise_currency   = COALESCE($4, enterprise_currency),
          enterprise_timezone   = COALESCE($5, enterprise_timezone),
-         enterprise_notes      = COALESCE($6, enterprise_notes)
-       WHERE id=$7
-       RETURNING name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes`,
+         enterprise_notes      = COALESCE($6, enterprise_notes),
+         enterprise_shared_wpp = CASE WHEN $7::boolean IS NOT NULL THEN $7::boolean ELSE enterprise_shared_wpp END
+       WHERE id=$8
+       RETURNING name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes, enterprise_shared_wpp`,
       [name||null, phone||null, city||null,
        enterprise_currency||null, enterprise_timezone||null, enterprise_notes||null,
-       req.shopId]
+       sharedWpp, req.shopId]
     );
     res.json(r.rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/shared-wpp — para sucursales: saber si el owner usa WPP compartido ──
+router.get('/shared-wpp', auth, async (req, res) => {
+  try {
+    const shop = await pool.query('SELECT parent_enterprise_id, is_branch FROM shops WHERE id=$1', [req.shopId]);
+    const s = shop.rows[0];
+    if (!s?.is_branch || !s?.parent_enterprise_id) return res.json({ shared_wpp: false });
+    const parent = await pool.query('SELECT enterprise_shared_wpp FROM shops WHERE id=$1', [s.parent_enterprise_id]);
+    res.json({ shared_wpp: parent.rows[0]?.enterprise_shared_wpp || false });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

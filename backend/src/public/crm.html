@@ -1767,6 +1767,25 @@ select.form-input { padding-right: 32px; }
             </select>
           </div>
 
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">WHATSAPP</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px">
+            <div style="flex:1;min-width:0;margin-right:16px">
+              <div style="font-size:14px;font-weight:600">WhatsApp compartido</div>
+              <div style="font-size:12px;color:var(--gray);margin-top:3px;line-height:1.5">Un número de WPP para todas las sucursales. Los clientes eligen la sucursal al reservar.</div>
+            </div>
+            <div id="ent-shared-wpp-toggle" onclick="toggleEntSharedWpp()" style="width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.1);cursor:pointer;position:relative;flex-shrink:0;transition:background .2s">
+              <div id="ent-shared-wpp-knob" style="width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;pointer-events:none"></div>
+            </div>
+          </div>
+          <div id="ent-shared-wpp-link-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(255,209,0,0.05);border:1px solid rgba(255,209,0,0.2);border-radius:10px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:8px">🔗 Link de reservas del grupo</div>
+            <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Compartí este link en tu WhatsApp. El cliente elige la sucursal antes de reservar.</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="form-input" id="ent-shared-wpp-link" readonly style="flex:1;font-size:12px;cursor:pointer;color:var(--yellow)" onclick="this.select()"/>
+              <button onclick="copyEntSharedWppLink()" style="background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.3);color:var(--yellow);padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:Barlow,sans-serif">📋 Copiar</button>
+            </div>
+          </div>
+
           <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">NOTAS INTERNAS</div>
           <div class="form-group">
             <label class="form-label">Notas del grupo (solo visible para vos)</label>
@@ -2189,6 +2208,11 @@ select.form-input { padding-right: 32px; }
         <!-- WhatsApp -->
         <div class="settings-section">
           <div class="settings-section-title">💬 WhatsApp</div>
+          <!-- Banner para sucursales cuando el enterprise usa WPP compartido -->
+          <div id="wpp-shared-enterprise-info" style="display:none;padding:14px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:12px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:6px">📱 WhatsApp compartido activo</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.6">Tu empresa usa un único WhatsApp para todas las sucursales. El número lo gestiona la cuenta central — no necesitás conectar uno acá.</div>
+          </div>
           <div class="wpp-status">
             <div class="wpp-dot" id="wpp-dot"></div>
             <div>
@@ -4794,6 +4818,23 @@ async function loadSettings() {
       txt.textContent = 'WhatsApp no conectado';
     }
 
+    // Si es sucursal, verificar si el enterprise usa WPP compartido
+    if (currentShop?.is_branch) {
+      try {
+        const sharedRes = await api('GET', '/enterprise/shared-wpp');
+        const banner = document.getElementById('wpp-shared-enterprise-info');
+        const connectBtn = document.getElementById('wpp-connect-btn');
+        const qrContainer = document.getElementById('wpp-qr-container');
+        if (sharedRes.shared_wpp) {
+          if (banner)     banner.style.display = 'block';
+          if (connectBtn) connectBtn.style.display = 'none';
+          if (qrContainer) qrContainer.style.display = 'none';
+        } else {
+          if (banner) banner.style.display = 'none';
+        }
+      } catch(e) { /* ignorar si falla */ }
+    }
+
     // Si no hay slug, generarlo automáticamente
     if (!settings.booking_slug) {
       try {
@@ -6683,6 +6724,38 @@ function openBranchDetail(encoded) {
   document.getElementById('modal-ent-branch-detail').style.display = 'flex';
 }
 
+let _entSharedWpp = false;
+let _entBookingSlug = null;
+
+function toggleEntSharedWpp() {
+  _entSharedWpp = !_entSharedWpp;
+  updateEntSharedWppUI();
+  // Si se activa y no hay slug, generarlo automáticamente
+  if (_entSharedWpp && !_entBookingSlug) {
+    api('POST', '/settings/generate-slug').then(r => {
+      if (r.slug) {
+        _entBookingSlug = r.slug;
+        document.getElementById('ent-shared-wpp-link').value = window.location.origin + '/reservar/' + r.slug;
+      }
+    }).catch(() => {});
+  }
+}
+
+function updateEntSharedWppUI() {
+  const toggle  = document.getElementById('ent-shared-wpp-toggle');
+  const knob    = document.getElementById('ent-shared-wpp-knob');
+  const linkWrap = document.getElementById('ent-shared-wpp-link-wrap');
+  if (toggle)   toggle.style.background   = _entSharedWpp ? 'var(--yellow)' : 'rgba(255,255,255,0.1)';
+  if (knob)     knob.style.transform      = _entSharedWpp ? 'translateX(20px)' : 'translateX(0)';
+  if (linkWrap) linkWrap.style.display    = _entSharedWpp ? 'block' : 'none';
+}
+
+function copyEntSharedWppLink() {
+  const val = document.getElementById('ent-shared-wpp-link')?.value;
+  if (!val) return;
+  navigator.clipboard.writeText(val).then(() => showToast('📋','Link copiado',''));
+}
+
 async function openEnterpriseConfig() {
   try {
     const cfg = await api('GET', '/enterprise/config');
@@ -6694,18 +6767,26 @@ async function openEnterpriseConfig() {
     const tz  = document.getElementById('ent-cfg-timezone');
     if (cfg.enterprise_currency) cur.value = cfg.enterprise_currency;
     if (cfg.enterprise_timezone) tz.value  = cfg.enterprise_timezone;
+    // WhatsApp compartido
+    _entSharedWpp    = cfg.enterprise_shared_wpp || false;
+    _entBookingSlug  = cfg.booking_slug || null;
+    if (_entBookingSlug) {
+      document.getElementById('ent-shared-wpp-link').value = window.location.origin + '/reservar/' + _entBookingSlug;
+    }
+    updateEntSharedWppUI();
     document.getElementById('modal-ent-config').style.display = 'flex';
   } catch(e) { showToast('❌','Error',e.message); }
 }
 
 async function saveEnterpriseConfig() {
   const body = {
-    name:                 document.getElementById('ent-cfg-name').value.trim(),
-    phone:                document.getElementById('ent-cfg-phone').value.trim(),
-    city:                 document.getElementById('ent-cfg-city').value.trim(),
-    enterprise_currency:  document.getElementById('ent-cfg-currency').value,
-    enterprise_timezone:  document.getElementById('ent-cfg-timezone').value,
-    enterprise_notes:     document.getElementById('ent-cfg-notes').value.trim(),
+    name:                  document.getElementById('ent-cfg-name').value.trim(),
+    phone:                 document.getElementById('ent-cfg-phone').value.trim(),
+    city:                  document.getElementById('ent-cfg-city').value.trim(),
+    enterprise_currency:   document.getElementById('ent-cfg-currency').value,
+    enterprise_timezone:   document.getElementById('ent-cfg-timezone').value,
+    enterprise_notes:      document.getElementById('ent-cfg-notes').value.trim(),
+    enterprise_shared_wpp: _entSharedWpp,
   };
   try {
     await api('PUT', '/enterprise/config', body);

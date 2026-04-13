@@ -6,12 +6,27 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+
+    // Si es enterprise owner con WPP compartido → devolver lista de sucursales para que el cliente elija
+    if (shopData.is_enterprise_owner && shopData.enterprise_shared_wpp) {
+      const branches = await pool.query(
+        `SELECT id, name, branch_label, city, address, booking_slug
+         FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE
+         ORDER BY name`,
+        [shopData.id]
+      );
+      return res.json({
+        is_enterprise: true,
+        enterprise: { name: shopData.name },
+        branches: branches.rows
+      });
+    }
 
     const services = await pool.query(
       `SELECT id, name, price, duration_minutes

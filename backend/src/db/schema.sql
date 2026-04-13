@@ -390,3 +390,5 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_currency   VARCHAR(10)  DE
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_timezone   VARCHAR(50)  DEFAULT 'America/Argentina/Buenos_Aires';
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_logo_url   TEXT;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_notes      TEXT;
+-- WhatsApp compartido: un solo número para todas las sucursales
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_shared_wpp BOOLEAN DEFAULT FALSE;
