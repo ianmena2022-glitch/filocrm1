@@ -3261,6 +3261,12 @@ async function checkPendingRegistration() {
 async function startApp() {
   document.getElementById('auth-screen').style.display = 'none';
 
+  // Limpiar estado residual de sesiones anteriores (enterprise deja sidebar oculto y sec-enterprise visible)
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) sidebar.style.display = '';
+  const secEnt = document.getElementById('sec-enterprise');
+  if (secEnt) { secEnt.style.display = 'none'; secEnt.classList.remove('active'); }
+
   // Si el plan es enterprise, refrescar siempre desde DB antes de decidir el panel
   // Evita que el caché de localStorage tenga flags incorrectos (is_enterprise_owner / is_branch)
   if (currentShop?.filo_plan === 'enterprise' && !currentShop?.is_barber && token) {
