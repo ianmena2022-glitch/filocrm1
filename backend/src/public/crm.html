@@ -1994,6 +1994,17 @@ select.form-input { padding-right: 32px; }
         </div>
       </div>
 
+      <!-- Switcher de plan para cuentas test (solo visible cuando is_test=true) -->
+      <div id="ent-test-plan-switcher" style="display:none;margin:0 20px 16px;padding:14px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:10px">🧪 CUENTA DE TESTING</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
+          <button onclick="switchPlan('staff')"   class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
+          <button onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
+        </div>
+        <div id="ent-current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
+      </div>
+
       <!-- Tabs -->
       <div style="display:flex;gap:0;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:16px">
         <button class="ent-tab active" id="etab-overview" onclick="switchEntTab('overview')">📊 Resumen</button>
@@ -3341,12 +3352,24 @@ async function startApp() {
   }
 
   // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
-  // Las cuentas test siempre van al CRM normal para poder usar el switcher de plan
-  if (currentShop?.is_enterprise_owner && !currentShop?.is_test) {
+  // Mostrar panel enterprise si:
+  //   - es enterprise owner real (no test), O
+  //   - es cuenta test con filo_plan='enterprise' (para previsualizar la UX enterprise)
+  const isTestEnterprise = currentShop?.is_test && currentShop?.filo_plan === 'enterprise';
+  if (currentShop?.is_enterprise_owner && (!currentShop?.is_test || isTestEnterprise)) {
     document.querySelector('.sidebar').style.display = 'none';
     document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
     document.getElementById('sec-enterprise').style.display = 'block';
     document.getElementById('sec-enterprise').classList.add('active');
+    // Para cuentas test en enterprise: mostrar el switcher dentro del panel
+    if (currentShop?.is_test) {
+      const ts = document.getElementById('ent-test-plan-switcher');
+      if (ts) {
+        ts.style.display = 'block';
+        const lbl = document.getElementById('ent-current-plan-label');
+        if (lbl) lbl.textContent = 'Plan activo: enterprise';
+      }
+    }
     loadEnterpriseDashboard();
     return;
   }
