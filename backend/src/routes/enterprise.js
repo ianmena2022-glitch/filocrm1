@@ -248,4 +248,197 @@ router.get('/stats/history', auth, enterpriseOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Helper: verificar que la sucursal pertenece al enterprise owner ────────────
+async function verifyBranch(req, res) {
+  const r = await pool.query(
+    'SELECT id FROM shops WHERE id=$1 AND parent_enterprise_id=$2 AND is_branch=TRUE',
+    [req.params.id, req.shopId]
+  );
+  if (!r.rows.length) { res.status(404).json({ error: 'Sucursal no encontrada' }); return null; }
+  return req.params.id;
+}
+
+// ── GET /api/enterprise/branches/:id/cash?date= ───────────────────────────────
+router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
+  const branchId = await verifyBranch(req, res);
+  if (!branchId) return;
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  try {
+    const appts = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
+         COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
+         COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
+         COALESCE(SUM(CASE WHEN payment_method IS NULL THEN price ELSE 0 END),0)    AS no_method_total,
+         COALESCE(SUM(tip),0) AS tips_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+         COUNT(*) FILTER (WHERE status='completed') AS cuts_count
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      [branchId, date]
+    );
+    const exps = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
+         COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS all_income,
+         COALESCE(SUM(CASE WHEN is_income=TRUE AND (source_type IS DISTINCT FROM 'debt_payment') THEN amount ELSE 0 END),0) AS extra_income,
+         json_agg(json_build_object('id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method) ORDER BY created_at DESC)
+           FILTER (WHERE is_income IS NULL OR is_income=FALSE) AS items,
+         json_agg(json_build_object('id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method) ORDER BY created_at DESC)
+           FILTER (WHERE is_income=TRUE AND source_type IS DISTINCT FROM 'debt_payment') AS income_items
+       FROM expenses WHERE shop_id=$1 AND date=$2`,
+      [branchId, date]
+    );
+    const dc = (await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN amount ELSE 0 END),0) AS cash_col,
+         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN amount ELSE 0 END),0) AS debit_col,
+         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN amount ELSE 0 END),0) AS credit_col,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN amount ELSE 0 END),0) AS transfer_col,
+         COALESCE(SUM(amount),0) AS total_col
+       FROM expenses WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment'`,
+      [branchId, date]
+    )).rows[0];
+    const commQ = await pool.query(
+      `SELECT COALESCE(SUM(price * commission_pct / 100.0),0) AS total_commission
+       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      [branchId, date]
+    );
+    const a = appts.rows[0]; const e = exps.rows[0];
+    const revenue = parseFloat(a.revenue_total);
+    const allIncome = parseFloat(e.all_income || 0);
+    const extraIncome = parseFloat(e.extra_income || 0);
+    const expenses = parseFloat(e.expenses_total);
+    const tips = parseFloat(a.tips_total);
+    const commissions = parseFloat(commQ.rows[0].total_commission);
+    res.json({
+      date,
+      cash_total:        parseFloat(a.cash_total)     + parseFloat(dc.cash_col),
+      debit_total:       parseFloat(a.debit_total)    + parseFloat(dc.debit_col),
+      credit_total:      parseFloat(a.credit_total)   + parseFloat(dc.credit_col),
+      transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col),
+      debt_total:        Math.max(0, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
+      no_method_total:   parseFloat(a.no_method_total),
+      tips_total:        tips,
+      revenue_total:     revenue,
+      extra_income:      extraIncome,
+      expenses_total:    expenses,
+      commissions_total: commissions,
+      net_total:         revenue + tips + allIncome - expenses - commissions,
+      cuts_count:        parseInt(a.cuts_count),
+      expenses_items:    e.items || [],
+      income_items:      e.income_items || [],
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/branches/:id/cash/method-detail?date=&method= ─────────
+router.get('/branches/:id/cash/method-detail', auth, enterpriseOnly, async (req, res) => {
+  const branchId = await verifyBranch(req, res);
+  if (!branchId) return;
+  const { method } = req.query;
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  if (!method) return res.status(400).json({ error: 'Se requiere method' });
+  try {
+    const appts = await pool.query(
+      `SELECT a.id, a.client_name, a.service_name, a.price, a.cost, a.commission_pct,
+              a.tip, a.time_start,
+              ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
+              ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
+              s.name AS barber_name
+       FROM appointments a
+       LEFT JOIN shops s ON s.id = a.barber_id
+       WHERE a.shop_id=$1 AND a.date=$2 AND a.payment_method=$3 AND a.status='completed'
+       ORDER BY a.time_start ASC`,
+      [branchId, date, method]
+    );
+    const debts = await pool.query(
+      `SELECT id, description, amount, created_at
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment' AND payment_method=$3
+       ORDER BY created_at ASC`,
+      [branchId, date, method]
+    );
+    const apptTotal = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
+    const debtTotal = debts.rows.reduce((s, d) => s + parseFloat(d.amount || 0), 0);
+    res.json({
+      method, date,
+      appointments:       appts.rows,
+      debt_payments:      debts.rows,
+      appointments_total: apptTotal,
+      debt_total:         debtTotal,
+      grand_total:        apptTotal + debtTotal,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/branches/:id/cash/history ─────────────────────────────
+router.get('/branches/:id/cash/history', auth, enterpriseOnly, async (req, res) => {
+  const branchId = await verifyBranch(req, res);
+  if (!branchId) return;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM cash_registers WHERE shop_id=$1 ORDER BY date DESC LIMIT 30`,
+      [branchId]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/branches/:id/cash/day-detail?date= ───────────────────
+router.get('/branches/:id/cash/day-detail', auth, enterpriseOnly, async (req, res) => {
+  const branchId = await verifyBranch(req, res);
+  if (!branchId) return;
+  const date = req.query.date;
+  if (!date) return res.status(400).json({ error: 'Se requiere date' });
+  try {
+    const reg = await pool.query(
+      `SELECT * FROM cash_registers WHERE shop_id=$1 AND date::date = $2::date`,
+      [branchId, date]
+    );
+    const appts = await pool.query(
+      `SELECT a.time_start, a.client_name, a.service_name, a.price, a.cost,
+              a.commission_pct, a.tip, a.payment_method,
+              ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
+              ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
+              s.name AS barber_name
+       FROM appointments a
+       LEFT JOIN shops s ON s.id = a.barber_id
+       WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+       ORDER BY a.time_start ASC`,
+      [branchId, date]
+    );
+    const expenses = await pool.query(
+      `SELECT id, amount, category, description, is_income, source_type, payment_method, created_at
+       FROM expenses WHERE shop_id=$1 AND date=$2
+       ORDER BY created_at ASC`,
+      [branchId, date]
+    );
+    res.json({
+      register:     reg.rows[0] || null,
+      appointments: appts.rows,
+      expenses:     expenses.rows,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/branches/:id/debts ────────────────────────────────────
+router.get('/branches/:id/debts', auth, enterpriseOnly, async (req, res) => {
+  const branchId = await verifyBranch(req, res);
+  if (!branchId) return;
+  try {
+    const result = await pool.query(
+      `SELECT d.*, c.phone AS client_phone
+       FROM client_debts d
+       LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.shop_id=$1 AND d.paid=FALSE
+       ORDER BY d.created_at DESC`,
+      [branchId]
+    );
+    res.json(result.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
