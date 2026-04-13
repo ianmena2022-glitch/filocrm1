@@ -18,9 +18,9 @@ async function sendReminders() {
   try {
     const now = new Date();
 
-    // Ventana: turnos que empiezan entre 11:30hs y 12:30hs desde ahora
-    const windowStart = new Date(now.getTime() + 11.5 * 60 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + 12.5 * 60 * 60 * 1000);
+    // Ventana: turnos que empiezan entre 1:30hs y 2:30hs desde ahora
+    const windowStart = new Date(now.getTime() + 1.5 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
 
     // Los turnos están guardados en hora Argentina (UTC-3).
     // El servidor corre en UTC → restar 3h antes de extraer fecha/hora.
