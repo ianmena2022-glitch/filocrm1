@@ -118,64 +118,108 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT
-         s.id,
-         s.name,
-         s.branch_label,
-         s.wpp_connected,
-         s.subscription_status,
-         s.created_at,
+         s.id, s.name, s.branch_label, s.wpp_connected, s.subscription_status,
+         s.city, s.address, s.created_at,
          -- Hoy
-         COUNT(a.id) FILTER (
-           WHERE a.date = CURRENT_DATE AND a.status = 'completed'
-         ) AS cuts_today,
-         COALESCE(SUM(a.price) FILTER (
-           WHERE a.date = CURRENT_DATE AND a.status = 'completed'
-         ), 0) AS revenue_today,
+         COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status='completed') AS cuts_today,
+         COALESCE(SUM(a.price) FILTER (WHERE a.date = CURRENT_DATE AND a.status='completed'), 0) AS revenue_today,
          -- Este mes
          COUNT(a.id) FILTER (
-           WHERE date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())
-           AND a.status = 'completed'
+           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
          ) AS cuts_month,
          COALESCE(SUM(a.price) FILTER (
-           WHERE date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())
-           AND a.status = 'completed'
+           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
          ), 0) AS revenue_month,
-         -- Comisiones mes (ganancia real del dueño = revenue - comisiones)
+         -- Comisiones mes
          COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (
-           WHERE date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())
-           AND a.status = 'completed'
+           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
          ), 0) AS commissions_month,
+         -- Gastos mes (egresos reales)
+         COALESCE((SELECT SUM(e.amount) FROM expenses e
+           WHERE e.shop_id=s.id AND (e.is_income IS NULL OR e.is_income=FALSE)
+             AND date_trunc('month',e.date::timestamptz)=date_trunc('month',NOW())
+         ), 0) AS expenses_month,
+         -- Última semana (7 días)
+         COUNT(a.id) FILTER (WHERE a.date >= CURRENT_DATE-6 AND a.status='completed') AS cuts_week,
+         COALESCE(SUM(a.price) FILTER (WHERE a.date >= CURRENT_DATE-6 AND a.status='completed'), 0) AS revenue_week,
+         -- Ticket promedio del mes
+         COALESCE(AVG(a.price) FILTER (
+           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
+         ), 0) AS avg_ticket_month,
          -- Barberos activos
-         (SELECT COUNT(*) FROM shops b
-          WHERE b.parent_shop_id = s.id AND b.is_barber = TRUE) AS barber_count,
-         -- Clientes totales
-         (SELECT COUNT(*) FROM clients c WHERE c.shop_id = s.id) AS client_count,
+         (SELECT COUNT(*) FROM shops b WHERE b.parent_shop_id=s.id AND b.is_barber=TRUE) AS barber_count,
+         -- Clientes totales y nuevos este mes
+         (SELECT COUNT(*) FROM clients c WHERE c.shop_id=s.id) AS client_count,
+         (SELECT COUNT(*) FROM clients c WHERE c.shop_id=s.id
+           AND date_trunc('month',c.created_at)=date_trunc('month',NOW())) AS new_clients_month,
+         -- Turnos pendientes hoy
+         (SELECT COUNT(*) FROM appointments a2 WHERE a2.shop_id=s.id AND a2.date=CURRENT_DATE
+           AND a2.status IN ('pending','confirmed')) AS pending_today,
          -- Turno próximo
-         (SELECT MIN(a2.time_start::text)
-          FROM appointments a2
-          WHERE a2.shop_id = s.id AND a2.date = CURRENT_DATE
-            AND a2.status IN ('pending','confirmed')) AS next_appt
+         (SELECT MIN(a2.time_start::text) FROM appointments a2
+           WHERE a2.shop_id=s.id AND a2.date=CURRENT_DATE AND a2.status IN ('pending','confirmed')) AS next_appt
        FROM shops s
-       LEFT JOIN appointments a ON a.shop_id = s.id
-       WHERE s.parent_enterprise_id = $1 AND s.is_branch = TRUE
-       GROUP BY s.id, s.name, s.branch_label, s.wpp_connected, s.subscription_status, s.created_at
-       ORDER BY s.name`,
+       LEFT JOIN appointments a ON a.shop_id=s.id
+       WHERE s.parent_enterprise_id=$1 AND s.is_branch=TRUE
+       GROUP BY s.id,s.name,s.branch_label,s.wpp_connected,s.subscription_status,s.city,s.address,s.created_at
+       ORDER BY revenue_month DESC`,
       [req.shopId]
     );
 
     const branches = result.rows;
     const totals = {
-      revenue_today:    branches.reduce((s,b) => s + parseFloat(b.revenue_today||0), 0),
-      revenue_month:    branches.reduce((s,b) => s + parseFloat(b.revenue_month||0), 0),
-      cuts_today:       branches.reduce((s,b) => s + parseInt(b.cuts_today||0), 0),
-      cuts_month:       branches.reduce((s,b) => s + parseInt(b.cuts_month||0), 0),
-      barber_count:     branches.reduce((s,b) => s + parseInt(b.barber_count||0), 0),
-      client_count:     branches.reduce((s,b) => s + parseInt(b.client_count||0), 0),
+      revenue_today:     branches.reduce((s,b) => s + parseFloat(b.revenue_today||0), 0),
+      revenue_week:      branches.reduce((s,b) => s + parseFloat(b.revenue_week||0), 0),
+      revenue_month:     branches.reduce((s,b) => s + parseFloat(b.revenue_month||0), 0),
+      cuts_today:        branches.reduce((s,b) => s + parseInt(b.cuts_today||0), 0),
+      cuts_week:         branches.reduce((s,b) => s + parseInt(b.cuts_week||0), 0),
+      cuts_month:        branches.reduce((s,b) => s + parseInt(b.cuts_month||0), 0),
+      barber_count:      branches.reduce((s,b) => s + parseInt(b.barber_count||0), 0),
+      client_count:      branches.reduce((s,b) => s + parseInt(b.client_count||0), 0),
+      new_clients_month: branches.reduce((s,b) => s + parseInt(b.new_clients_month||0), 0),
       commissions_month: branches.reduce((s,b) => s + parseFloat(b.commissions_month||0), 0),
+      expenses_month:    branches.reduce((s,b) => s + parseFloat(b.expenses_month||0), 0),
+      pending_today:     branches.reduce((s,b) => s + parseInt(b.pending_today||0), 0),
     };
-    totals.profit_month = totals.revenue_month - totals.commissions_month;
+    totals.profit_month = totals.revenue_month - totals.commissions_month - totals.expenses_month;
+    totals.avg_ticket   = totals.cuts_month > 0 ? totals.revenue_month / totals.cuts_month : 0;
 
     res.json({ branches, totals });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/enterprise/config — configuración del owner ─────────────────────
+router.get('/config', auth, enterpriseOnly, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT name, email, phone, city, enterprise_currency, enterprise_timezone,
+              enterprise_logo_url, enterprise_notes
+       FROM shops WHERE id=$1`,
+      [req.shopId]
+    );
+    res.json(r.rows[0] || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/enterprise/config — guardar configuración ───────────────────────
+router.put('/config', auth, enterpriseOnly, async (req, res) => {
+  const { name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes } = req.body;
+  try {
+    const r = await pool.query(
+      `UPDATE shops SET
+         name                  = COALESCE($1, name),
+         phone                 = COALESCE($2, phone),
+         city                  = COALESCE($3, city),
+         enterprise_currency   = COALESCE($4, enterprise_currency),
+         enterprise_timezone   = COALESCE($5, enterprise_timezone),
+         enterprise_notes      = COALESCE($6, enterprise_notes)
+       WHERE id=$7
+       RETURNING name, phone, city, enterprise_currency, enterprise_timezone, enterprise_notes`,
+      [name||null, phone||null, city||null,
+       enterprise_currency||null, enterprise_timezone||null, enterprise_notes||null,
+       req.shopId]
+    );
+    res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

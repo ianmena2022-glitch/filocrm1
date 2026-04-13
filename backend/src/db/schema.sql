@@ -384,3 +384,9 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS branch_label VARCHAR(100);
 
 CREATE INDEX IF NOT EXISTS idx_shops_parent_enterprise ON shops(parent_enterprise_id)
   WHERE parent_enterprise_id IS NOT NULL;
+
+-- Configuración extra del enterprise owner
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_currency   VARCHAR(10)  DEFAULT 'ARS';
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_timezone   VARCHAR(50)  DEFAULT 'America/Argentina/Buenos_Aires';
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_logo_url   TEXT;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_notes      TEXT;

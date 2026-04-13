@@ -572,6 +572,14 @@ body {
   .ent-kpi-strip { gap: 8px; }
   .ent-kpi-block { min-width: calc(50% - 8px); }
 }
+.ent-tab {
+  background: none; border: none; color: var(--gray);
+  font-size: 13px; font-weight: 600; padding: 10px 18px;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.ent-tab.active { color: #fff; border-bottom-color: var(--yellow); }
+.ent-tab:hover:not(.active) { color: rgba(255,255,255,.7); }
 /* ── end Enterprise ─────────────────── */
 .caja-method-expandable { cursor: pointer; transition: background .15s; border-radius: 6px; padding: 11px 6px; margin: 0 -6px; }
 .caja-method-expandable:hover { background: rgba(255,255,255,.04); }
@@ -1597,6 +1605,77 @@ body {
       </div>
     </div>
 
+    <!-- Modal: Configuración Enterprise -->
+    <div class="modal-overlay" id="modal-ent-config" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <h2>⚙️ Configuración Enterprise</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-ent-config').style.display='none'">×</button>
+        </div>
+        <div class="modal-body">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin-bottom:14px">CUENTA</div>
+          <div class="form-group">
+            <label class="form-label">Nombre de la empresa</label>
+            <input class="form-input" id="ent-cfg-name" placeholder="Ej: FILO Barbers Group" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono de contacto</label>
+            <input class="form-input" id="ent-cfg-phone" placeholder="+54 9 11 ..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ciudad principal</label>
+            <input class="form-input" id="ent-cfg-city" placeholder="Buenos Aires" />
+          </div>
+
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">PREFERENCIAS</div>
+          <div class="form-group">
+            <label class="form-label">Moneda</label>
+            <select class="form-input" id="ent-cfg-currency">
+              <option value="ARS">ARS — Peso argentino ($)</option>
+              <option value="USD">USD — Dólar (US$)</option>
+              <option value="CLP">CLP — Peso chileno</option>
+              <option value="UYU">UYU — Peso uruguayo</option>
+              <option value="MXN">MXN — Peso mexicano</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Zona horaria</label>
+            <select class="form-input" id="ent-cfg-timezone">
+              <option value="America/Argentina/Buenos_Aires">Argentina (UTC-3)</option>
+              <option value="America/Santiago">Chile (UTC-4/-3)</option>
+              <option value="America/Montevideo">Uruguay (UTC-3)</option>
+              <option value="America/Mexico_City">México Centro (UTC-6)</option>
+              <option value="America/Bogota">Colombia (UTC-5)</option>
+              <option value="America/Lima">Perú (UTC-5)</option>
+            </select>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">NOTAS INTERNAS</div>
+          <div class="form-group">
+            <label class="form-label">Notas del grupo (solo visible para vos)</label>
+            <textarea class="form-input" id="ent-cfg-notes" rows="3" placeholder="Recordatorios, metas, objetivos..."></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal-ent-config').style.display='none'">Cancelar</button>
+          <button class="btn-primary" onclick="saveEnterpriseConfig()">💾 Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Detalle sucursal enterprise -->
+    <div class="modal-overlay" id="modal-ent-branch-detail" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:520px;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="flex-shrink:0">
+          <h2 id="modal-ent-branch-title">📊 Detalle sucursal</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-ent-branch-detail').style.display='none'">×</button>
+        </div>
+        <div class="modal-body" id="modal-ent-branch-body" style="overflow-y:auto;flex:1">
+          <div style="text-align:center;padding:30px;color:var(--gray)">Cargando...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Crear sucursal -->
     <div class="modal-overlay" id="modal-create-branch" style="display:none" onclick="if(event.target===this)this.style.display='none'">
       <div class="modal" style="max-width:460px">
@@ -1693,10 +1772,12 @@ body {
     <section id="sec-enterprise" class="section" style="display:none">
       <div class="topbar">
         <div class="topbar-left">
-          <h1>🏢 Panel Enterprise</h1>
+          <h1 id="ent-title-name">🏢 Panel Enterprise</h1>
         </div>
-        <div class="topbar-right">
-          <button class="btn-add" onclick="openCreateBranchModal()">+ Nueva sucursal</button>
+        <div class="topbar-right" style="display:flex;align-items:center;gap:10px">
+          <button class="btn-add" onclick="openCreateBranchModal()">+ Sucursal</button>
+          <button onclick="openEnterpriseConfig()" style="background:rgba(255,255,255,.07);border:none;color:#fff;padding:8px 14px;border-radius:10px;font-size:13px;cursor:pointer;font-weight:600">⚙️ Config</button>
+          <button onclick="loadEnterpriseDashboard()" style="background:rgba(255,255,255,.05);border:none;color:var(--gray);padding:8px 10px;border-radius:10px;font-size:13px;cursor:pointer" title="Refrescar">↻</button>
           <div class="topbar-user-group">
             <div class="tb-logout-wrap" onclick="logout()">
               <div class="tb-avatar">?</div>
@@ -1706,37 +1787,104 @@ body {
         </div>
       </div>
 
-      <!-- KPIs totales -->
-      <div class="ent-kpi-strip" id="ent-kpis">
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">FACTURADO HOY</div>
-          <div class="ent-kpi-value" id="ent-revenue-today">$0</div>
+      <!-- Tabs -->
+      <div style="display:flex;gap:0;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:16px">
+        <button class="ent-tab active" id="etab-overview" onclick="switchEntTab('overview')">📊 Resumen</button>
+        <button class="ent-tab" id="etab-branches" onclick="switchEntTab('branches')">🏪 Sucursales</button>
+        <button class="ent-tab" id="etab-ranking" onclick="switchEntTab('ranking')">🏆 Ranking</button>
+      </div>
+
+      <!-- TAB: Resumen -->
+      <div id="ent-tab-overview">
+        <!-- KPIs HOY -->
+        <div style="padding:0 20px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gray)">HOY</div>
+        <div class="ent-kpi-strip" style="margin-bottom:4px">
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">FACTURADO</div>
+            <div class="ent-kpi-value" id="ent-revenue-today">$0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">CORTES</div>
+            <div class="ent-kpi-value" id="ent-cuts-today">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">PENDIENTES</div>
+            <div class="ent-kpi-value" id="ent-pending-today" style="color:#FF9800">0</div>
+          </div>
         </div>
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">CORTES HOY</div>
-          <div class="ent-kpi-value" id="ent-cuts-today">0</div>
+
+        <!-- KPIs SEMANA -->
+        <div style="padding:0 20px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gray)">ÚLTIMOS 7 DÍAS</div>
+        <div class="ent-kpi-strip" style="margin-bottom:4px">
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">FACTURADO</div>
+            <div class="ent-kpi-value" id="ent-revenue-week">$0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">CORTES</div>
+            <div class="ent-kpi-value" id="ent-cuts-week">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">TICKET PROM.</div>
+            <div class="ent-kpi-value" id="ent-avg-ticket" style="color:var(--gray);font-size:16px">$0</div>
+          </div>
         </div>
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">FACTURADO MES</div>
-          <div class="ent-kpi-value" id="ent-revenue-month">$0</div>
+
+        <!-- KPIs MES -->
+        <div style="padding:0 20px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gray)">ESTE MES</div>
+        <div class="ent-kpi-strip" style="margin-bottom:4px">
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">FACTURADO</div>
+            <div class="ent-kpi-value" id="ent-revenue-month">$0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">CORTES</div>
+            <div class="ent-kpi-value" id="ent-cuts-month">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">GASTOS</div>
+            <div class="ent-kpi-value" id="ent-expenses-month" style="color:#FF4343">$0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">GANANCIA NETA</div>
+            <div class="ent-kpi-value" id="ent-profit-month" style="color:var(--yellow)">$0</div>
+          </div>
         </div>
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">GANANCIA MES</div>
-          <div class="ent-kpi-value" id="ent-profit-month" style="color:var(--yellow)">$0</div>
-        </div>
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">BARBEROS</div>
-          <div class="ent-kpi-value" id="ent-barber-count">0</div>
-        </div>
-        <div class="ent-kpi-block">
-          <div class="ent-kpi-label">CLIENTES</div>
-          <div class="ent-kpi-value" id="ent-client-count">0</div>
+
+        <!-- KPIs EQUIPO -->
+        <div style="padding:0 20px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gray)">EQUIPO</div>
+        <div class="ent-kpi-strip" style="margin-bottom:20px">
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">SUCURSALES</div>
+            <div class="ent-kpi-value" id="ent-branch-count">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">BARBEROS</div>
+            <div class="ent-kpi-value" id="ent-barber-count">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">CLIENTES TOTALES</div>
+            <div class="ent-kpi-value" id="ent-client-count">0</div>
+          </div>
+          <div class="ent-kpi-block">
+            <div class="ent-kpi-label">CLIENTES NUEVOS MES</div>
+            <div class="ent-kpi-value" id="ent-new-clients" style="color:#4CAF50">0</div>
+          </div>
         </div>
       </div>
 
-      <!-- Grid de sucursales -->
-      <div class="ent-grid" id="ent-branches-grid">
-        <div style="color:var(--gray);font-size:13px;padding:20px">Cargando sucursales...</div>
+      <!-- TAB: Sucursales -->
+      <div id="ent-tab-branches" style="display:none">
+        <div class="ent-grid" id="ent-branches-grid">
+          <div style="color:var(--gray);font-size:13px;padding:20px">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- TAB: Ranking -->
+      <div id="ent-tab-ranking" style="display:none;padding:0 20px">
+        <div id="ent-ranking-list">
+          <div style="color:var(--gray);font-size:13px;padding:20px 0">Cargando...</div>
+        </div>
       </div>
     </section>
 
@@ -6177,65 +6325,211 @@ async function confirmDebtPayment(id, method) {
 // ── ENTERPRISE DASHBOARD ──────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
 
+let _entData = null; // cache de la última carga
+
+function switchEntTab(tab) {
+  ['overview','branches','ranking'].forEach(t => {
+    document.getElementById(`ent-tab-${t}`).style.display = t === tab ? '' : 'none';
+    document.getElementById(`etab-${t}`)?.classList.toggle('active', t === tab);
+  });
+  if (tab === 'branches' && _entData) renderEntBranches(_entData.branches);
+  if (tab === 'ranking'  && _entData) renderEntRanking(_entData.branches);
+}
+
 async function loadEnterpriseDashboard() {
   try {
     const data = await api('GET', '/enterprise/stats');
+    _entData = data;
     const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+    const t = data.totals;
 
-    // KPIs totales
-    document.getElementById('ent-revenue-today').textContent  = fmt(data.totals.revenue_today);
-    document.getElementById('ent-cuts-today').textContent     = data.totals.cuts_today;
-    document.getElementById('ent-revenue-month').textContent  = fmt(data.totals.revenue_month);
-    document.getElementById('ent-profit-month').textContent   = fmt(data.totals.profit_month);
-    document.getElementById('ent-barber-count').textContent   = data.totals.barber_count;
-    document.getElementById('ent-client-count').textContent   = data.totals.client_count;
+    // Nombre en topbar
+    const titleEl = document.getElementById('ent-title-name');
+    if (titleEl) titleEl.textContent = '🏢 ' + (currentShop?.name || 'Panel Enterprise');
 
-    // Grid de sucursales
-    const grid = document.getElementById('ent-branches-grid');
-    if (!data.branches.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray)">
-        <div style="font-size:32px;margin-bottom:10px">🏪</div>
-        <div style="font-size:14px">Aún no tenés sucursales.<br>Creá la primera con el botón "+ Nueva sucursal".</div>
-      </div>`;
-      return;
-    }
+    // KPIs HOY
+    document.getElementById('ent-revenue-today').textContent  = fmt(t.revenue_today);
+    document.getElementById('ent-cuts-today').textContent     = t.cuts_today;
+    document.getElementById('ent-pending-today').textContent  = t.pending_today;
+    // KPIs SEMANA
+    document.getElementById('ent-revenue-week').textContent   = fmt(t.revenue_week);
+    document.getElementById('ent-cuts-week').textContent      = t.cuts_week;
+    document.getElementById('ent-avg-ticket').textContent     = fmt(t.avg_ticket);
+    // KPIs MES
+    document.getElementById('ent-revenue-month').textContent  = fmt(t.revenue_month);
+    document.getElementById('ent-cuts-month').textContent     = t.cuts_month;
+    document.getElementById('ent-expenses-month').textContent = fmt(t.expenses_month);
+    document.getElementById('ent-profit-month').textContent   = fmt(t.profit_month);
+    // KPIs EQUIPO
+    document.getElementById('ent-branch-count').textContent   = data.branches.length;
+    document.getElementById('ent-barber-count').textContent   = t.barber_count;
+    document.getElementById('ent-client-count').textContent   = t.client_count;
+    document.getElementById('ent-new-clients').textContent    = '+' + t.new_clients_month;
 
-    grid.innerHTML = data.branches.map(b => {
-      const active = b.subscription_status === 'active';
-      const dotColor = active ? '#4CAF50' : '#FF4343';
-      const cardClass = active ? '' : ' inactive';
-      return `
-      <div class="ent-branch-card${cardClass}">
-        <div class="ent-status-dot" style="background:${dotColor}" title="${active ? 'Activa' : 'Inactiva'}"></div>
-        ${b.wpp_connected ? `<div class="ent-wpp-badge" title="WhatsApp conectado">📱</div>` : ''}
-        <div class="ent-branch-name">${b.name}</div>
-        ${b.branch_label ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
-        <div class="ent-branch-stat" style="margin-top:10px">
-          Hoy: <b>${fmt(b.revenue_today)}</b> · <b>${b.cuts_today} cortes</b>
-        </div>
-        <div class="ent-branch-stat">
-          Mes: <b>${fmt(b.revenue_month)}</b> · <b>${b.cuts_month} cortes</b>
-        </div>
-        <div class="ent-branch-stat">
-          <b>${b.barber_count}</b> barberos · <b>${b.client_count}</b> clientes
-        </div>
-        ${b.next_appt ? `<div class="ent-branch-stat">Próximo: <b>${b.next_appt.substring(0,5)}</b></div>` : ''}
-        <div class="ent-branch-actions">
-          <button class="ent-btn-edit" onclick="openEditBranchModal(${JSON.stringify(b).replace(/"/g,"'")})">✏️ Editar</button>
-          ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    showToast('❌', 'Error', e.message);
+    // Renderizar el tab activo
+    const activeTab = document.querySelector('.ent-tab.active')?.id?.replace('etab-','') || 'overview';
+    if (activeTab === 'branches') renderEntBranches(data.branches);
+    if (activeTab === 'ranking')  renderEntRanking(data.branches);
+
+  } catch(e) { showToast('❌', 'Error cargando enterprise', e.message); }
+}
+
+function renderEntBranches(branches) {
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const grid = document.getElementById('ent-branches-grid');
+  if (!branches.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--gray)">
+      <div style="font-size:36px;margin-bottom:12px">🏪</div>
+      <div style="font-size:14px">Sin sucursales todavía.<br>Usá "+ Sucursal" para crear la primera.</div>
+    </div>`;
+    return;
   }
+  grid.innerHTML = branches.map(b => {
+    const active   = b.subscription_status === 'active';
+    const dotColor = active ? '#4CAF50' : '#FF4343';
+    const bJson    = encodeURIComponent(JSON.stringify(b));
+    return `
+    <div class="ent-branch-card${active ? '' : ' inactive'}" style="cursor:pointer" onclick="openBranchDetail('${bJson}')">
+      <div class="ent-status-dot" style="background:${dotColor}" title="${active ? 'Activa' : 'Inactiva'}"></div>
+      ${b.wpp_connected ? `<div class="ent-wpp-badge" title="WhatsApp conectado">📱</div>` : ''}
+      <div class="ent-branch-name">${b.name}</div>
+      ${b.branch_label ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
+      ${b.city ? `<div class="ent-branch-stat" style="margin-top:4px;font-size:11px">📍 ${b.city}</div>` : ''}
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--gray);letter-spacing:.5px">HOY</div>
+          <div style="font-size:15px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(b.revenue_today)}</div>
+          <div style="font-size:10px;color:var(--gray)">${b.cuts_today} cortes</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--gray);letter-spacing:.5px">MES</div>
+          <div style="font-size:15px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(b.revenue_month)}</div>
+          <div style="font-size:10px;color:var(--gray)">${b.cuts_month} cortes</div>
+        </div>
+      </div>
+      <div class="ent-branch-stat" style="margin-top:10px">
+        ✂️ <b>${b.barber_count}</b> barberos · 👥 <b>${b.client_count}</b> clientes
+      </div>
+      ${b.pending_today > 0 ? `<div class="ent-branch-stat" style="color:#FF9800">⏳ ${b.pending_today} turno${b.pending_today>1?'s':''} pendiente${b.pending_today>1?'s':''} hoy</div>` : ''}
+      ${b.next_appt ? `<div class="ent-branch-stat">Próximo: <b>${b.next_appt.substring(0,5)}</b></div>` : ''}
+      <div class="ent-branch-actions" onclick="event.stopPropagation()">
+        <button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
+        ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderEntRanking(branches) {
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const el = document.getElementById('ent-ranking-list');
+  const sorted = [...branches].sort((a,b) => parseFloat(b.revenue_month||0) - parseFloat(a.revenue_month||0));
+  const maxRev = parseFloat(sorted[0]?.revenue_month || 1);
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--gray);font-weight:700;letter-spacing:1px;margin-bottom:12px">RANKING MES — POR FACTURACIÓN</div>
+    ${sorted.map((b, i) => {
+      const pct = Math.round(parseFloat(b.revenue_month||0) / maxRev * 100);
+      const avgTicket = b.cuts_month > 0 ? parseFloat(b.revenue_month) / b.cuts_month : 0;
+      return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">${medals[i] || '#' + (i+1)}</span>
+            <div>
+              <div style="font-size:13px;font-weight:700">${b.name}${b.branch_label ? ` <span style="font-size:10px;color:var(--yellow);font-weight:400">${b.branch_label}</span>` : ''}</div>
+              <div style="font-size:11px;color:var(--gray)">${b.cuts_month} cortes · Ticket prom. ${fmt(avgTicket)}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:16px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(b.revenue_month)}</div>
+            <div style="font-size:10px;color:var(--gray)">${b.new_clients_month} clientes nuevos</div>
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,.06);border-radius:4px;height:4px;overflow:hidden">
+          <div style="background:${i===0?'var(--yellow)':i===1?'#C0C0C0':'#CD7F32'};height:100%;width:${pct}%;border-radius:4px;transition:width .5s"></div>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+function openBranchDetail(encoded) {
+  const b = JSON.parse(decodeURIComponent(encoded));
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  document.getElementById('modal-ent-branch-title').textContent = '🏪 ' + b.name;
+  const body = document.getElementById('modal-ent-branch-body');
+  const profit = parseFloat(b.revenue_month||0) - parseFloat(b.commissions_month||0) - parseFloat(b.expenses_month||0);
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+      ${[
+        ['HOY',           fmt(b.revenue_today),  '#fff'],
+        ['CORTES HOY',    b.cuts_today,           '#fff'],
+        ['MES',           fmt(b.revenue_month),   '#fff'],
+        ['CORTES MES',    b.cuts_month,           '#fff'],
+        ['SEMANA',        fmt(b.revenue_week),    '#fff'],
+        ['TICKET PROM.',  fmt(b.avg_ticket_month||0), 'var(--gray)'],
+        ['COMISIONES MES',fmt(b.commissions_month),'#FF9800'],
+        ['GASTOS MES',    fmt(b.expenses_month),  '#FF4343'],
+        ['GANANCIA NETA', fmt(profit),             profit>=0?'var(--yellow)':'#FF4343'],
+        ['CLIENTES TOTAL',b.client_count,         '#4CAF50'],
+        ['CLIENTES NUEVOS',b.new_clients_month,   '#4CAF50'],
+        ['BARBEROS',      b.barber_count,          '#fff'],
+      ].map(([lbl,val,color]) => `
+        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px">
+          <div style="font-size:9px;color:var(--gray);letter-spacing:.8px;margin-bottom:4px">${lbl}</div>
+          <div style="font-size:17px;font-weight:700;font-family:'Oswald',sans-serif;color:${color}">${val}</div>
+        </div>`).join('')}
+    </div>
+    ${b.city || b.address ? `<div style="font-size:12px;color:var(--gray);margin-bottom:12px">📍 ${[b.city,b.address].filter(Boolean).join(' · ')}</div>` : ''}
+    ${b.next_appt ? `<div style="font-size:12px;color:#4CAF50;margin-bottom:12px">⏰ Próximo turno hoy: ${b.next_appt.substring(0,5)}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="ent-btn-edit" style="flex:1;padding:10px" onclick="document.getElementById('modal-ent-branch-detail').style.display='none';openEditBranchModal(decodeURIComponent('${encoded}'))">✏️ Editar sucursal</button>
+    </div>`;
+  document.getElementById('modal-ent-branch-detail').style.display = 'flex';
+}
+
+async function openEnterpriseConfig() {
+  try {
+    const cfg = await api('GET', '/enterprise/config');
+    document.getElementById('ent-cfg-name').value     = cfg.name     || '';
+    document.getElementById('ent-cfg-phone').value    = cfg.phone    || '';
+    document.getElementById('ent-cfg-city').value     = cfg.city     || '';
+    document.getElementById('ent-cfg-notes').value    = cfg.enterprise_notes    || '';
+    const cur = document.getElementById('ent-cfg-currency');
+    const tz  = document.getElementById('ent-cfg-timezone');
+    if (cfg.enterprise_currency) cur.value = cfg.enterprise_currency;
+    if (cfg.enterprise_timezone) tz.value  = cfg.enterprise_timezone;
+    document.getElementById('modal-ent-config').style.display = 'flex';
+  } catch(e) { showToast('❌','Error',e.message); }
+}
+
+async function saveEnterpriseConfig() {
+  const body = {
+    name:                 document.getElementById('ent-cfg-name').value.trim(),
+    phone:                document.getElementById('ent-cfg-phone').value.trim(),
+    city:                 document.getElementById('ent-cfg-city').value.trim(),
+    enterprise_currency:  document.getElementById('ent-cfg-currency').value,
+    enterprise_timezone:  document.getElementById('ent-cfg-timezone').value,
+    enterprise_notes:     document.getElementById('ent-cfg-notes').value.trim(),
+  };
+  try {
+    await api('PUT', '/enterprise/config', body);
+    document.getElementById('modal-ent-config').style.display = 'none';
+    // Actualizar nombre en header y localStorage
+    if (body.name) {
+      currentShop.name = body.name;
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      document.getElementById('ent-title-name').textContent = '🏢 ' + body.name;
+      document.querySelectorAll('.tb-uname').forEach(el => el.textContent = body.name);
+    }
+    showToast('✅','Configuración guardada','');
+  } catch(e) { showToast('❌','Error',e.message); }
 }
 
 function openCreateBranchModal() {
   ['branch-name','branch-label','branch-email','branch-password'].forEach(id => {
     document.getElementById(id).value = '';
   });
-  // Sugerir contraseña aleatoria
   document.getElementById('branch-password').value = Math.random().toString(36).slice(-8).toUpperCase();
   document.getElementById('modal-create-branch').style.display = 'flex';
 }
@@ -6248,19 +6542,20 @@ async function createBranch() {
   if (!name || !email || !password) return showToast('⚠️','Completá todos los campos','');
   if (password.length < 6) return showToast('⚠️','Contraseña muy corta','Mínimo 6 caracteres');
   try {
-    const r = await api('POST', '/enterprise/branches', { name, branch_label: label||null, email, password });
+    await api('POST', '/enterprise/branches', { name, branch_label: label||null, email, password });
     document.getElementById('modal-create-branch').style.display = 'none';
-    showToast('✅', `Sucursal "${name}" creada`, `Email: ${email} · Contraseña: ${password}`);
+    showToast('✅', `Sucursal "${name}" creada`, `Email: ${email} · Pass: ${password}`);
     loadEnterpriseDashboard();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
-function openEditBranchModal(b) {
+function openEditBranchModal(input) {
+  const b = typeof input === 'string' ? JSON.parse(input) : input;
   document.getElementById('edit-branch-id').value      = b.id;
-  document.getElementById('edit-branch-name').value    = b.name || '';
+  document.getElementById('edit-branch-name').value    = b.name         || '';
   document.getElementById('edit-branch-label').value   = b.branch_label || '';
-  document.getElementById('edit-branch-city').value    = b.city || '';
-  document.getElementById('edit-branch-address').value = b.address || '';
+  document.getElementById('edit-branch-city').value    = b.city         || '';
+  document.getElementById('edit-branch-address').value = b.address      || '';
   document.getElementById('modal-edit-branch').style.display = 'flex';
 }
 
