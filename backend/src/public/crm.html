@@ -1777,12 +1777,32 @@ select.form-input { padding-right: 32px; }
               <div id="ent-shared-wpp-knob" style="width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;pointer-events:none"></div>
             </div>
           </div>
-          <div id="ent-shared-wpp-link-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(255,209,0,0.05);border:1px solid rgba(255,209,0,0.2);border-radius:10px">
-            <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:8px">🔗 Link de reservas del grupo</div>
-            <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Compartí este link en tu WhatsApp. El cliente elige la sucursal antes de reservar.</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input class="form-input" id="ent-shared-wpp-link" readonly style="flex:1;font-size:12px;cursor:pointer;color:var(--yellow)" onclick="this.select()"/>
-              <button onclick="copyEntSharedWppLink()" style="background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.3);color:var(--yellow);padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:Barlow,sans-serif">📋 Copiar</button>
+          <div id="ent-shared-wpp-link-wrap" style="display:none;margin-bottom:14px">
+            <!-- Link de reservas -->
+            <div style="padding:12px 14px;background:rgba(255,209,0,0.05);border:1px solid rgba(255,209,0,0.2);border-radius:10px;margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:8px">🔗 Link de reservas del grupo</div>
+              <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Compartí este link en tu WhatsApp. El cliente elige la sucursal antes de reservar.</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input class="form-input" id="ent-shared-wpp-link" readonly style="flex:1;font-size:12px;cursor:pointer;color:var(--yellow)" onclick="this.select()"/>
+                <button onclick="copyEntSharedWppLink()" style="background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.3);color:var(--yellow);padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:Barlow,sans-serif">📋 Copiar</button>
+              </div>
+            </div>
+            <!-- Conexión WhatsApp -->
+            <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:12px">📱 Número de WhatsApp</div>
+              <div class="wpp-status" style="margin-bottom:12px">
+                <div class="wpp-dot" id="ent-wpp-dot"></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600" id="ent-wpp-status-text">Verificando...</div>
+                  <div style="font-size:12px;color:var(--gray)" id="ent-wpp-phone-display"></div>
+                </div>
+              </div>
+              <button class="btn-motor" id="ent-wpp-connect-btn" onclick="connectEntWpp()" style="width:100%;margin-bottom:10px">📱 Conectar WhatsApp</button>
+              <div id="ent-wpp-qr-container" style="display:none;margin-bottom:12px">
+                <div style="font-size:12px;color:var(--gray);margin-bottom:8px">Escaneá el QR con WhatsApp → Dispositivos vinculados:</div>
+                <canvas id="ent-wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
+              </div>
+              <button onclick="resetEntWpp()" style="width:100%;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#FF9100;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🔄 Reconexión limpia</button>
             </div>
           </div>
 
@@ -5022,6 +5042,86 @@ async function resetWhatsapp() {
   }
 }
 
+// ── WPP desde panel Enterprise ────────────────────────────────────────────────
+function onEntWppConnected() {
+  const dot = document.getElementById('ent-wpp-dot');
+  const txt = document.getElementById('ent-wpp-status-text');
+  const qr  = document.getElementById('ent-wpp-qr-container');
+  if (dot) dot.className = 'wpp-dot connected';
+  if (txt) txt.textContent = 'WhatsApp conectado ✅';
+  if (qr)  qr.style.display = 'none';
+  showToast('✅', 'WhatsApp conectado', 'Ya podés recibir mensajes de clientes');
+}
+
+async function renderEntQR(qrData) {
+  const container = document.getElementById('ent-wpp-qr-container');
+  const canvas    = document.getElementById('ent-wpp-qr-canvas');
+  if (!container || !canvas) return;
+  container.style.display = 'block';
+  canvas.style.display = 'none';
+
+  // Crear img tag para el QR
+  let img = container.querySelector('img.ent-qr-img');
+  if (!img) {
+    img = document.createElement('img');
+    img.className = 'ent-qr-img';
+    img.style.cssText = 'width:220px;border-radius:8px;background:#fff;padding:8px;display:block';
+    container.appendChild(img);
+  }
+  if (qrData.startsWith('data:image')) {
+    img.src = qrData;
+  } else {
+    try {
+      const div = document.createElement('div');
+      div.style.display = 'none';
+      document.body.appendChild(div);
+      new QRCode(div, { text: qrData, width: 220, height: 220, colorDark: '#000', colorLight: '#fff' });
+      setTimeout(() => {
+        const qrImg = div.querySelector('img');
+        if (qrImg) img.src = qrImg.src;
+        document.body.removeChild(div);
+      }, 200);
+    } catch(e) { console.error('QRCode error:', e); }
+  }
+}
+
+async function connectEntWpp() {
+  const btn = document.getElementById('ent-wpp-connect-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
+  try {
+    const res = await api('POST', '/settings/whatsapp/connect');
+    if (res.qr) {
+      await renderEntQR(res.qr);
+      showToast('📱', 'Escaneá el QR', 'Abrí WhatsApp → Dispositivos vinculados');
+      const check = setInterval(async () => {
+        try {
+          const status = await api('GET', '/settings/whatsapp/status');
+          if (status.connected) { clearInterval(check); onEntWppConnected(); }
+        } catch { clearInterval(check); }
+      }, 5000);
+    } else if (res.connected) {
+      onEntWppConnected();
+    } else {
+      showToast('❌', 'Error', res.error || 'No se pudo conectar');
+    }
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp'; }
+  }
+}
+
+async function resetEntWpp() {
+  if (!confirm('¿Reconexión limpia? Se borra la sesión y tenés que escanear el QR de nuevo.')) return;
+  try {
+    showToast('🔄', 'Limpiando sesión...', '');
+    await api('POST', '/settings/whatsapp/reset');
+    await new Promise(r => setTimeout(r, 2000));
+    showToast('✅', 'Sesión limpiada', 'Escaneá el QR para reconectar');
+    connectEntWpp();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
 
 
 
@@ -6798,6 +6898,14 @@ async function openEnterpriseConfig() {
       document.getElementById('ent-shared-wpp-link').value = window.location.origin + '/reservar/' + _entBookingSlug;
     }
     updateEntSharedWppUI();
+    // Cargar status de WPP para mostrar si está conectado o no
+    try {
+      const wppStatus = await api('GET', '/settings/whatsapp/status');
+      const dot = document.getElementById('ent-wpp-dot');
+      const txt = document.getElementById('ent-wpp-status-text');
+      if (dot) dot.className = wppStatus.connected ? 'wpp-dot connected' : 'wpp-dot disconnected';
+      if (txt) txt.textContent = wppStatus.connected ? 'WhatsApp conectado ✅' : 'WhatsApp no conectado';
+    } catch(e) { /* ignorar si falla */ }
     document.getElementById('modal-ent-config').style.display = 'flex';
   } catch(e) { showToast('❌','Error',e.message); }
 }
