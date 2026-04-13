@@ -330,8 +330,11 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const reply = await getAIResponse(shopId, phone, text);
 
         if (reply) {
-          console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
-          await sock.sendMessage(msg.key.remoteJid, { text: reply });
+          // Para @lid JIDs usar senderPn como destino — las sesiones Signal
+          // están registradas bajo @s.whatsapp.net, no bajo @lid
+          const sendJid = (jid.endsWith('@lid') && msg.senderPn) ? msg.senderPn : msg.key.remoteJid;
+          console.log(`[WPP] Respondiendo a ${phone} (jid=${sendJid}): "${reply}"`);
+          await sock.sendMessage(sendJid, { text: reply });
         } else {
           console.log(`[WPP] AI no respondió (ignorado por clasificador o sin contexto)`);
         }
