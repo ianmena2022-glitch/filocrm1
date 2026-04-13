@@ -1075,6 +1075,123 @@ body {
   .auth-logo { margin-bottom: 22px; }
   .auth-logo-text h1 { font-size: 22px; }
 }
+
+/* ═══════════════════════════════════════════
+   FILO — Estilos globales faltantes
+   ═══════════════════════════════════════════ */
+
+/* ─── SCROLLBAR GLOBAL (FILO style) ─── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.13); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.13) transparent; }
+
+/* ─── OCULTAR FLECHAS DE INPUT NUMBER ─── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ─── SELECT — remover estilo nativo, flecha FILO ─── */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a8fa8' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ─── MODAL HEADER / BODY / CLOSE ─── */
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 18px; flex-shrink: 0;
+}
+.modal-header h2 {
+  font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700;
+  letter-spacing: 0.5px; margin: 0; color: var(--white);
+}
+.modal-body { padding: 0; }
+.modal-close {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--gray);
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  font-size: 17px; line-height: 1;
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: 'Barlow', sans-serif;
+}
+.modal-close:hover {
+  background: rgba(255,67,67,0.15);
+  color: #FF4343;
+  border-color: rgba(255,67,67,0.3);
+}
+
+/* ─── BTN-CANCEL (botón secundario en modales) ─── */
+.btn-cancel {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  color: var(--gray);
+  padding: 12px 18px;
+  border-radius: 9px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-cancel:hover { background: rgba(255,255,255,0.09); color: var(--white); }
+
+/* ─── BTN-PRIMARY en modal context ─── */
+.modal-actions .btn-primary {
+  flex: 1; width: auto; margin-top: 0;
+}
+
+/* ─── FORM-INPUT y FORM-LABEL (usados en modales enterprise y nuevos) ─── */
+.form-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--navy-mid);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 9px; padding: 11px 13px;
+  color: var(--white); font-size: 14px;
+  font-family: 'Barlow', sans-serif;
+  outline: none; transition: border-color 0.2s;
+}
+.form-input:focus { border-color: var(--yellow); background: rgba(255,209,0,0.03); }
+.form-input::placeholder { color: rgba(255,255,255,0.2); }
+select.form-input { padding-right: 32px; }
+
+.form-label {
+  display: block; font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--gray); margin-bottom: 7px;
+}
+.form-group .form-label { margin-bottom: 7px; }
+
+/* ─── MODAL-INPUT (modales legacy) ─── */
+.modal-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--navy-mid) !important;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 9px; padding: 11px 13px;
+  color: var(--white) !important; font-size: 14px;
+  font-family: 'Barlow', sans-serif;
+  outline: none; transition: border-color 0.2s;
+}
+.modal-input:focus { border-color: var(--yellow); }
+.modal-input::placeholder { color: rgba(255,255,255,0.2); }
+
+/* ─── ENT BUTTONS hover ─── */
+.ent-btn-edit { transition: background 0.15s; }
+.ent-btn-edit:hover { background: rgba(255,255,255,0.15) !important; }
+.ent-btn-del  { transition: background 0.15s; }
+.ent-btn-del:hover  { background: rgba(255,67,67,0.22) !important; }
 </style>
 </head>
 <body>
@@ -7522,7 +7639,7 @@ async function bcmSave(id) {
       <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
         <div>
           <label class="input-label">MES A EXPORTAR</label>
-          <input type="month" id="export-month" class="modal-input" style="width:100%;box-sizing:border-box;background:#0d1f38;color:white">
+          <input type="month" id="export-month" class="modal-input" style="width:100%;box-sizing:border-box">
         </div>
         <div style="font-size:12px;color:var(--gray)">Se exporta un PDF con todos los turnos, gastos, método de pago y neto del mes.</div>
       </div>
@@ -7544,7 +7661,7 @@ async function bcmSave(id) {
         </div>
         <div>
           <label class="input-label">CATEGORÍA</label>
-          <select id="gasto-category" class="modal-input" style="width:100%;box-sizing:border-box;background:#0d1f38;color:white">
+          <select id="gasto-category" class="modal-input" style="width:100%;box-sizing:border-box">
             <option value="insumos">🧴 Insumos</option>
             <option value="alquiler">🏠 Alquiler</option>
             <option value="servicios">⚡ Servicios (luz, agua, etc)</option>
