@@ -3317,7 +3317,8 @@ async function startApp() {
   }
 
   // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
-  if (currentShop?.is_enterprise_owner) {
+  // Las cuentas test siempre van al CRM normal para poder usar el switcher de plan
+  if (currentShop?.is_enterprise_owner && !currentShop?.is_test) {
     document.querySelector('.sidebar').style.display = 'none';
     document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
     document.getElementById('sec-enterprise').style.display = 'block';
