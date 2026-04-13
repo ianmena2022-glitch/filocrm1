@@ -156,9 +156,10 @@ router.post('/', auth, async (req, res) => {
 
     console.log(`[APPT] Auto-asignando barber_id=${assignedBarberId} para shop=${shopId} fecha=${date}`);
 
-    // Obtener comision real del barbero asignado
-    let realCommissionPct = 50;
+    // Obtener comision real del barbero asignado (0 si no hay barbero asignado)
+    let realCommissionPct = 0;
     if (assignedBarberId) {
+      realCommissionPct = 50; // default si hay barbero pero sin % configurado
       const barberData = await pool.query(
         'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
       );

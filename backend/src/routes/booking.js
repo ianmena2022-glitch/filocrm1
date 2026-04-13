@@ -271,7 +271,7 @@ router.post('/:slug/reserve', async (req, res) => {
 
     // Asignar barbero: elegido por el cliente o auto-asignado por menos turnos
     let assignedBarberId = null;
-    let assignedBarberCommission = 50;
+    let assignedBarberCommission = 0; // 0 si no hay barbero asignado
     try {
       if (chosen_barber_id && shopData.allow_barber_choice) {
         // Usar el barbero elegido por el cliente
@@ -297,6 +297,7 @@ router.post('/:slug/reserve', async (req, res) => {
         }
       }
       if (assignedBarberId) {
+        assignedBarberCommission = 50; // default si hay barbero pero sin % configurado
         const barberData = await pool.query(
           'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
         );
