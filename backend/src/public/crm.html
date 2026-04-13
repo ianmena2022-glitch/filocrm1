@@ -3424,8 +3424,9 @@ function initStaffUI() {
   }
 
   // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches reales)
+  // Nota: is_test tiene prioridad — una cuenta test puede tener is_enterprise_owner=true en DB
   const switcher = document.getElementById('test-plan-switcher');
-  const isEnterprise = currentShop?.is_enterprise_owner || currentShop?.is_branch;
+  const isEnterprise = (currentShop?.is_enterprise_owner || currentShop?.is_branch) && !isTest;
   if (isTest && !isEnterprise && switcher) {
     switcher.style.display = 'block';
     const label = document.getElementById('current-plan-label');
