@@ -1688,6 +1688,7 @@ body {
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
             <input type="date" id="ent-caja-date" onchange="loadBranchCajaSummary()" class="caja-date-input">
             <button onclick="loadBranchCajaSummary()" style="background:rgba(255,255,255,.07);border:none;color:#fff;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer">↻</button>
+            <button onclick="openBranchExportModal()" class="caja-export-btn">📥 Exportar mes</button>
           </div>
           <div class="caja-neto-block" style="margin-bottom:10px">
             <div class="caja-neto-val" id="ent-caja-neto-val">$0</div>
@@ -1721,6 +1722,27 @@ body {
             <div style="font-size:12px;color:var(--gray);margin-bottom:14px">Últimos 30 cierres</div>
             <div id="ent-caja-history-list"><div style="color:var(--gray);font-size:13px">Sin cierres</div></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Exportar mes de sucursal (enterprise) -->
+    <div class="modal-overlay" id="modal-ent-branch-export" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="modal" style="max-width:380px">
+        <div class="modal-header">
+          <h2>📥 Exportar resumen mensual</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-ent-branch-export').style.display='none'">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Mes a exportar</label>
+            <input type="month" id="ent-export-month" class="form-input">
+          </div>
+          <div style="font-size:12px;color:var(--gray)">Se genera un PDF con todos los turnos, gastos, métodos de pago y neto del mes seleccionado.</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal-ent-branch-export').style.display='none'">Cancelar</button>
+          <button class="btn-primary" onclick="exportBranchMonthReport()">📥 Descargar PDF</button>
         </div>
       </div>
     </div>
@@ -6862,6 +6884,96 @@ async function openBranchCajaDayDetail(date) {
   } catch(e) {
     body.innerHTML = `<div style="color:#FF4343;padding:20px">${e.message}</div>`;
   }
+}
+
+function openBranchExportModal() {
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('ent-export-month').value = month;
+  document.getElementById('modal-ent-branch-export').style.display = 'flex';
+}
+
+async function exportBranchMonthReport() {
+  if (!_entCajaBranchId) return;
+  const month = document.getElementById('ent-export-month').value;
+  if (!month) return showToast('⚠️','Seleccioná un mes','');
+  document.getElementById('modal-ent-branch-export').style.display = 'none';
+  showToast('⏳','Generando PDF...','Puede tardar unos segundos');
+  try {
+    const [year, mon] = month.split('-');
+    const data = await api('GET', `/enterprise/branches/${_entCajaBranchId}/month-report?year=${year}&month=${mon}`);
+    generateBranchPDF(data, month, _entCajaBranchName);
+  } catch(e) { showToast('❌','Error al exportar', e.message); }
+}
+
+function generateBranchPDF(data, month, branchName) {
+  const [year, mon] = month.split('-');
+  const monthName = new Date(parseInt(year), parseInt(mon)-1, 1)
+    .toLocaleDateString('es-AR', { month:'long', year:'numeric' });
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const payLabels = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transferencia', debt:'Fiado' };
+  const catLabels = { insumos:'Insumos', alquiler:'Alquiler', servicios:'Servicios', salarios:'Salarios', otros:'Otros' };
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 30px; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    h2 { font-size: 15px; margin: 20px 0 8px; border-bottom: 2px solid #FFD100; padding-bottom: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+    .card { background: #f5f5f5; border-radius: 8px; padding: 12px; }
+    .card-label { font-size: 11px; color: #666; margin-bottom: 4px; text-transform: uppercase; }
+    .card-value { font-size: 18px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #FFD100; padding: 8px; text-align: left; font-size: 12px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .total-row td { font-weight: bold; background: #f0f0f0; }
+    .neg { color: #c00; } .pos { color: #080; }
+    footer { margin-top: 30px; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 10px; }
+  </style></head><body>
+  <h1>💈 FILO CRM — Resumen de ${monthName}</h1>
+  <p style="color:#666">Sucursal: <strong>${branchName}</strong></p>
+
+  <h2>📊 Resumen general</h2>
+  <div class="grid">
+    <div class="card"><div class="card-label">Facturado</div><div class="card-value">${fmt(data.revenue)}</div></div>
+    <div class="card"><div class="card-label">Gastos</div><div class="card-value neg">${fmt(data.expenses_total)}</div></div>
+    <div class="card"><div class="card-label">Neto</div><div class="card-value ${data.net_total>=0?'pos':'neg'}">${fmt(data.net_total)}</div></div>
+    <div class="card"><div class="card-label">Turnos completados</div><div class="card-value">${data.completed}</div></div>
+    <div class="card"><div class="card-label">Propinas</div><div class="card-value pos">${fmt(data.tips_total)}</div></div>
+    <div class="card"><div class="card-label">Comisiones</div><div class="card-value neg">${fmt(data.commissions_total)}</div></div>
+  </div>
+
+  <h2>💳 Por método de pago</h2>
+  <table><thead><tr><th>Método</th><th>Total</th></tr></thead><tbody>
+    ${Object.entries(data.by_payment||{}).map(([k,v])=>`<tr><td>${payLabels[k]||k}</td><td>${fmt(v)}</td></tr>`).join('')}
+  </tbody></table>
+
+  <h2>📋 Gastos del mes</h2>
+  ${data.expenses?.length ? `
+  <table><thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th></tr></thead><tbody>
+    ${data.expenses.map(e=>`<tr><td>${new Date(String(e.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR')}</td><td>${catLabels[e.category]||e.category}</td><td>${e.description||'-'}</td><td class="neg">${fmt(e.amount)}</td></tr>`).join('')}
+    <tr class="total-row"><td colspan="3">TOTAL GASTOS</td><td class="neg">${fmt(data.expenses_total)}</td></tr>
+  </tbody></table>` : '<p style="color:#999">Sin gastos registrados</p>'}
+
+  <h2>🗂 Cierres diarios</h2>
+  ${data.cash_registers?.length ? `
+  <table><thead><tr><th>Fecha</th><th>Cortes</th><th>Facturado</th><th>Gastos</th><th>Neto</th></tr></thead><tbody>
+    ${data.cash_registers.map(c=>`<tr>
+      <td>${new Date(String(c.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
+      <td>${c.cuts_count}</td><td>${fmt(c.revenue_total)}</td>
+      <td class="neg">${fmt(c.expenses_total)}</td>
+      <td class="${c.net_total>=0?'pos':'neg'}">${fmt(c.net_total)}</td>
+    </tr>`).join('')}
+  </tbody></table>` : '<p style="color:#999">Sin cierres registrados</p>'}
+
+  <footer>Generado por FILO CRM · ${new Date().toLocaleDateString('es-AR')} · filocrm.com.ar</footer>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 500);
 }
 
 // ── end ENTERPRISE CAJA ───────────────────────────────────────────
