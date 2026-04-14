@@ -109,6 +109,17 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 .spinner{width:20px;height:20px;border:2px solid rgba(255,209,0,.2);border-top-color:var(--y);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-row td{text-align:center;padding:32px}
+
+/* ACCORDION TREE */
+.row-level-1{background:rgba(0,12,28,.35)}
+.row-level-2{background:rgba(0,0,0,.25)}
+.row-indent{display:flex;align-items:center;gap:7px}
+.toggle-btn{background:transparent;border:1px solid rgba(255,255,255,.12);color:var(--g);border-radius:4px;width:20px;height:20px;cursor:pointer;font-size:9px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;font-family:monospace}
+.toggle-btn:hover{border-color:var(--y);color:var(--y)}
+.toggle-placeholder{width:20px;display:inline-block;flex-shrink:0}
+.child-line{color:rgba(122,139,168,.5);font-size:13px;flex-shrink:0;line-height:1}
+.badge.branch{background:rgba(56,178,172,.12);color:#38b2ac}
+.badge.barber-badge{background:rgba(160,174,192,.1);color:#a0aec0}
 </style>
 </head>
 <body>
@@ -341,7 +352,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 <script>
 const PLAN_PRICES = { starter: 40000, staff: 80000, enterprise: 130000 };
 let adminToken = null;
-let allAccounts = [];
+let allAccounts = [];  // flat list de TODOS los shops
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 async function doLogin() {
@@ -405,80 +416,167 @@ async function loadAll() {
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
 function renderStats() {
-  const active   = allAccounts.filter(a => a.subscription_status === 'active');
-  const trial    = allAccounts.filter(a => a.subscription_status === 'trial');
-  const expired  = allAccounts.filter(a => ['expired','cancelled'].includes(a.subscription_status));
-
+  // Solo cuentas raíz (no barberos ni sucursales hijo)
+  const roots  = allAccounts.filter(a => !a.is_barber && !a.is_branch);
+  const active = roots.filter(a => a.subscription_status === 'active');
+  const trial  = roots.filter(a => a.subscription_status === 'trial');
+  const expired = roots.filter(a => ['expired','cancelled'].includes(a.subscription_status));
   const mrr = active.reduce((sum, a) => sum + (PLAN_PRICES[a.filo_plan] || 0), 0);
 
-  document.getElementById('stat-mrr').textContent    = '$' + mrr.toLocaleString('es-AR');
-  document.getElementById('stat-active').textContent = active.length;
-  document.getElementById('stat-trial').textContent  = trial.length;
+  document.getElementById('stat-mrr').textContent     = '$' + mrr.toLocaleString('es-AR');
+  document.getElementById('stat-active').textContent  = active.length;
+  document.getElementById('stat-trial').textContent   = trial.length;
   document.getElementById('stat-expired').textContent = expired.length;
-  document.getElementById('stat-total').textContent  = allAccounts.length;
+  document.getElementById('stat-total').textContent   = roots.length;
+}
+
+// ── ÁRBOL JERÁRQUICO ──────────────────────────────────────────────────────────
+function buildTree(flatList) {
+  const map = {};
+  flatList.forEach(a => { map[a.id] = { ...a, children: [] }; });
+
+  const roots = [];
+  flatList.forEach(a => {
+    if (a.is_barber && a.parent_shop_id && map[a.parent_shop_id]) {
+      map[a.parent_shop_id].children.push(map[a.id]);
+    } else if (a.is_branch && a.parent_enterprise_id && map[a.parent_enterprise_id]) {
+      map[a.parent_enterprise_id].children.push(map[a.id]);
+    } else if (!a.is_barber && !a.is_branch) {
+      roots.push(map[a.id]);
+    }
+  });
+  return roots;
+}
+
+function toggleChildren(id) {
+  const childRows  = document.querySelectorAll(`.children-of-${id}`);
+  const btn        = document.getElementById(`toggle-${id}`);
+  if (!btn) return;
+  const isExpanded = btn.dataset.expanded === '1';
+
+  childRows.forEach(row => {
+    row.style.display = isExpanded ? 'none' : '';
+    // Colapsar nietos al cerrar padre
+    if (isExpanded) {
+      const childId = row.dataset.id;
+      document.querySelectorAll(`.children-of-${childId}`).forEach(r => r.style.display = 'none');
+      const childBtn = document.getElementById(`toggle-${childId}`);
+      if (childBtn) { childBtn.dataset.expanded = '0'; childBtn.textContent = '▶'; }
+    }
+  });
+
+  btn.dataset.expanded = isExpanded ? '0' : '1';
+  btn.textContent = isExpanded ? '▶' : '▼';
+}
+
+function renderTreeRow(a, depth, parentId) {
+  const isBranch   = !!a.is_branch;
+  const isBarber   = !!a.is_barber;
+  const hasKids    = a.children && a.children.length > 0;
+  const childClass = parentId ? `children-of-${parentId}` : '';
+
+  // Plan badge
+  let planBadge;
+  if (isBarber)       planBadge = `<span class="badge barber-badge">BARBERO</span>`;
+  else if (isBranch)  planBadge = `<span class="badge branch">SUCURSAL</span>`;
+  else                planBadge = `<span class="badge ${a.filo_plan}">${(a.filo_plan||'').toUpperCase()}</span>`;
+
+  // Status badge
+  const statusBadge = (isBarber || !a.subscription_status)
+    ? `<span style="color:var(--g);font-size:12px">—</span>`
+    : `<span class="badge ${a.subscription_status}"><span class="dot"></span>${labelStatus(a.subscription_status)}</span>`;
+
+  // Fecha
+  const dateInfo = (isBarber || isBranch)
+    ? '—'
+    : a.subscription_status === 'trial'
+      ? `<div style="font-size:12px;color:var(--or)">Trial: ${daysUntil(a.trial_ends_at)} días</div>`
+      : a.created_at ? `<div style="font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</div>` : '—';
+
+  // Barberos count
+  const showBarberCount = !isBarber && (a.filo_plan === 'staff' || a.filo_plan === 'enterprise' || isBranch);
+  const barberCount = showBarberCount
+    ? `<span style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)">${a.barber_count || 0}</span>`
+    : `<span style="color:var(--g);font-size:12px">—</span>`;
+
+  // WPP
+  const wppDot = a.wpp_connected
+    ? `<span style="color:var(--gr)">● Conectado</span>`
+    : `<span style="color:var(--g)">○ Sin conectar</span>`;
+
+  // Nombre con indentación
+  const toggleEl = hasKids
+    ? `<button class="toggle-btn" id="toggle-${a.id}" data-expanded="0" onclick="toggleChildren(${a.id})">▶</button>`
+    : `<span class="toggle-placeholder"></span>`;
+  const connector = depth === 1 ? `<span class="child-line">└</span>` : depth === 2 ? `<span class="child-line">└</span>` : '';
+  const indentPad = depth === 1 ? 'padding-left:20px' : depth === 2 ? 'padding-left:42px' : '';
+
+  let nameHtml;
+  if (isBarber) {
+    nameHtml = `<div style="font-weight:500;color:var(--w)">${esc(a.name)}</div><div style="font-size:10px;color:var(--g)">Barbero #${a.id}${a.barber_commission_pct ? ` · ${a.barber_commission_pct}%` : ''}</div>`;
+  } else if (isBranch) {
+    nameHtml = `<div style="font-weight:600">${esc(a.name)}</div><div style="font-size:10px;color:#38b2ac">Sucursal #${a.id}</div>`;
+  } else {
+    const testTag = a.is_test ? ` <span style="font-size:9px;font-weight:700;color:var(--or);letter-spacing:.5px">TEST</span>` : '';
+    const entTag  = a.is_enterprise_owner ? ` <span style="font-size:9px;color:#9f7aea">ENT</span>` : '';
+    nameHtml = `<div style="font-weight:600">${esc(a.name)}${testTag}${entTag}</div><div style="font-size:10px;color:var(--g)">#${a.id}</div>`;
+  }
+
+  return `<tr data-id="${a.id}" class="row-level-${depth} ${childClass}" style="${depth > 0 ? 'display:none' : ''}">
+    <td style="${indentPad}"><div class="row-indent">${connector}${toggleEl}${nameHtml}</div></td>
+    <td style="color:var(--g);font-size:12px">${esc(a.email||'')}</td>
+    <td>${planBadge}</td>
+    <td>${statusBadge}</td>
+    <td>${dateInfo}</td>
+    <td>${barberCount}</td>
+    <td style="font-size:12px">${wppDot}</td>
+    <td style="display:flex;gap:6px">
+      <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
+      <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
+    </td>
+  </tr>`;
 }
 
 // ── TABLA CUENTAS ─────────────────────────────────────────────────────────────
 function filterAccounts() {
-  const q       = document.getElementById('search-input').value.toLowerCase();
-  const status  = document.getElementById('filter-status').value;
-  const plan    = document.getElementById('filter-plan').value;
+  const q      = document.getElementById('search-input').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const plan   = document.getElementById('filter-plan').value;
 
-  let filtered = allAccounts.filter(a => {
-    const matchQ = !q || a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q);
+  // Construir árbol completo, filtrar solo raíces
+  const tree     = buildTree(allAccounts);
+  const filtered = tree.filter(a => {
+    const matchQ = !q || a.name.toLowerCase().includes(q) || (a.email||'').toLowerCase().includes(q);
     const matchS = !status || a.subscription_status === status;
-    const matchP = !plan || a.filo_plan === plan;
+    const matchP = !plan   || a.filo_plan === plan;
     return matchQ && matchS && matchP;
   });
 
   renderAccountsTable(filtered);
 }
 
-function renderAccountsTable(accounts) {
+function renderAccountsTable(treeRoots) {
   const tbody = document.getElementById('accounts-tbody');
 
-  if (!accounts.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Sin resultados</div></td></tr>`;
+  if (!treeRoots.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Sin resultados</div></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = accounts.map(a => {
-    const statusBadge = `<span class="badge ${a.subscription_status}"><span class="dot"></span>${labelStatus(a.subscription_status)}</span>`;
-    const planBadge   = `<span class="badge ${a.filo_plan}">${a.filo_plan.toUpperCase()}</span>`;
-    const wppDot      = a.wpp_connected
-      ? `<span style="color:var(--gr)">● Conectado</span>`
-      : `<span style="color:var(--g)">○ Sin conectar</span>`;
-
-    const barberCount = ['staff','enterprise'].includes(a.filo_plan)
-      ? `<span style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)">${a.barber_count || 0}</span><span style="font-size:11px;color:var(--g)"> / ${a.filo_plan === 'staff' ? '10' : '20'}</span>`
-      : `<span style="color:var(--g);font-size:12px">—</span>`;
-
-    const dateInfo = a.subscription_status === 'trial'
-      ? `<div style="font-size:12px;color:var(--or)">Trial: ${daysUntil(a.trial_ends_at)} días</div>`
-      : a.created_at
-        ? `<div style="font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</div>`
-        : '—';
-
-    return `<tr>
-      <td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:11px;color:var(--g)">#${a.id}</div></td>
-      <td style="color:var(--g);font-size:12px">${esc(a.email)}</td>
-      <td>${planBadge}</td>
-      <td>${statusBadge}</td>
-      <td>${dateInfo}</td>
-      <td>${barberCount}</td>
-      <td style="font-size:12px">${wppDot}</td>
-      <td style="display:flex;gap:6px">
-        <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
-        <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
-      </td>
-    </tr>`;
-  }).join('');
+  const rows = [];
+  function walk(node, depth, parentId) {
+    rows.push(renderTreeRow(node, depth, parentId));
+    (node.children || []).forEach(child => walk(child, depth + 1, node.id));
+  }
+  treeRoots.forEach(root => walk(root, 0, null));
+  tbody.innerHTML = rows.join('');
 }
 
 // ── TABLA LIQUIDACIONES ───────────────────────────────────────────────────────
 function filterBilling() {
   const plan = document.getElementById('billing-filter').value;
   const active = allAccounts.filter(a =>
+    !a.is_barber && !a.is_branch &&
     a.subscription_status === 'active' && (!plan || a.filo_plan === plan)
   );
   renderBillingTable(active);

@@ -29,7 +29,7 @@ router.post('/login', async (req, res) => {
   res.json({ token });
 });
 
-// GET /api/admin/accounts — listar todas las cuentas (sin barberos)
+// GET /api/admin/accounts — listar todas las cuentas con jerarquía (sucursales y barberos)
 router.get('/accounts', adminAuth, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -40,10 +40,14 @@ router.get('/accounts', adminAuth, async (req, res) => {
         s.wpp_connected,
         s.mp_shop_subscription_id, s.mp_shop_status,
         s.is_test,
-        COUNT(b.id) FILTER (WHERE b.is_barber = TRUE) AS barber_count
+        s.is_barber, s.is_branch, s.is_enterprise_owner,
+        s.parent_shop_id, s.parent_enterprise_id,
+        s.barber_commission_pct,
+        COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
+        COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s
-      LEFT JOIN shops b ON b.parent_shop_id = s.id AND b.is_barber = TRUE
-      WHERE s.is_barber = FALSE OR s.is_barber IS NULL
+      LEFT JOIN shops b  ON b.parent_shop_id       = s.id AND b.is_barber = TRUE
+      LEFT JOIN shops br ON br.parent_enterprise_id = s.id AND br.is_branch = TRUE
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `);
