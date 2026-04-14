@@ -1,8 +1,8 @@
 const pool = require('../db/pool');
 
 // Historial de conversaciones en memoria
-const conversations = {};
-const lastActivity = {};
+const conversations  = {};
+const lastActivity   = {};
 const CONVERSATION_TIMEOUT_MS = 1 * 60 * 1000; // 1 minuto
 
 function hasActiveConversation(shopId, phone) {
@@ -16,32 +16,48 @@ function hasActiveConversation(shopId, phone) {
   return true;
 }
 
-// Clasificación contextual con IA — reemplaza el sistema de keywords
+// [D] fetch con timeout vía AbortController
+async function fetchWithTimeout(url, options, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`Timeout Groq (>${timeoutMs / 1000}s)`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Clasificación contextual con IA
 async function isBarberiaRelated(text, apiKey) {
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido tiene una intención clara relacionada con servicios de barbería: pedir turno, consultar precios, preguntar horarios, consultar ubicación, preguntar por servicios, cancelar o modificar un turno, preguntar por puntos o premios, o cualquier consulta específica que una persona le haría a una barbería.
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido tiene una intención clara relacionada con servicios de barbería: pedir turno, consultar precios, preguntar horarios, consultar ubicación, preguntar por servicios, cancelar o modificar un turno, preguntar por puntos o premios, o cualquier consulta específica que una persona le haría a una barbería.
 
 NO clasificar como relacionado: saludos solos ("hola", "buenas", "hey"), mensajes genéricos sin contexto, conversación casual, mensajes que no tienen nada que ver con una barbería.
 
 Respondé ÚNICAMENTE con "true" o "false", sin ninguna otra palabra ni explicación.`
-          },
-          {
-            role: 'user',
-            content: `Mensaje: "${text}"`
-          }
-        ],
-        max_tokens: 5,
-        temperature: 0,
-      })
-    });
+            },
+            { role: 'user', content: `Mensaje: "${text}"` }
+          ],
+          max_tokens: 5,
+          temperature: 0,
+        })
+      },
+      8000 // 8s timeout para clasificación
+    );
     if (!response.ok) return false;
     const data = await response.json();
     const answer = data.choices?.[0]?.message?.content?.trim().toLowerCase();
@@ -68,7 +84,7 @@ async function getShopContext(shopId) {
       .join('\n');
     const baseUrl = process.env.APP_URL || 'https://filocrm1-production.up.railway.app';
     const reservasLink = shopData.booking_slug ? `${baseUrl}/reservar/${shopData.booking_slug}` : null;
-    const tiendaLink = shopData.booking_slug ? `${baseUrl}/tienda/${shopData.booking_slug}` : null;
+    const tiendaLink   = shopData.booking_slug ? `${baseUrl}/tienda/${shopData.booking_slug}`   : null;
     return { shopData, servicesList, reservasLink, tiendaLink };
   } catch (e) {
     console.error('getShopContext error:', e.message);
@@ -113,7 +129,6 @@ async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
-  // Si no hay conversación activa, clasificar el mensaje con IA antes de responder
   if (!hasActiveConversation(shopId, phone)) {
     const related = await isBarberiaRelated(userMessage, apiKey);
     if (!related) {
@@ -133,20 +148,24 @@ async function getAIResponse(shopId, phone, userMessage) {
   if (conversations[key].length > 10) conversations[key] = conversations[key].slice(-10);
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'system', content: context }, ...conversations[key]],
-        max_tokens: 200,
-        temperature: 0.7,
-      })
-    });
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'system', content: context }, ...conversations[key]],
+          max_tokens: 200,
+          temperature: 0.7,
+        })
+      },
+      12000 // 12s timeout para respuesta principal
+    );
 
     if (!response.ok) { console.error('Groq error:', await response.text()); return null; }
 
-    const data = await response.json();
+    const data  = await response.json();
     const reply = data.choices?.[0]?.message?.content?.trim();
     if (reply) conversations[key].push({ role: 'assistant', content: reply });
     console.log(`[AI] ${client ? client.name : phone} → "${reply}"`);
@@ -162,29 +181,30 @@ async function generateMessage(shopId, type, context) {
   if (!apiKey) return null;
 
   const prompts = {
-    sillon_libre: `Escribí un mensaje de WhatsApp corto y amigable para avisarle a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}. ${context.incentivo ? `Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-
-    rescate: `Escribí un mensaje de WhatsApp corto y amigable para ${context.clientName}, un cliente que no visita ${context.shopName} hace ${context.daysSince} días. El objetivo es que vuelva a reservar un turno. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-
-    turno_completado: `Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-
-    recordatorio: `Escribí un mensaje de WhatsApp corto y amigable para recordarle a ${context.clientName} que tiene un turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
+    sillon_libre:    `Escribí un mensaje de WhatsApp corto y amigable para avisarle a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}. ${context.incentivo ? `Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+    rescate:         `Escribí un mensaje de WhatsApp corto y amigable para ${context.clientName}, un cliente que no visita ${context.shopName} hace ${context.daysSince} días. El objetivo es que vuelva a reservar un turno. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+    turno_completado:`Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
+    recordatorio:    `Escribí un mensaje de WhatsApp corto y amigable para recordarle a ${context.clientName} que tiene un turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
   };
 
   const prompt = prompts[type];
   if (!prompt) return null;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 150,
-        temperature: 0.8,
-      })
-    });
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+          temperature: 0.8,
+        })
+      },
+      10000 // 10s timeout para generación de mensajes
+    );
     if (!response.ok) return null;
     const data = await response.json();
     return data.choices?.[0]?.message?.content?.trim() || null;

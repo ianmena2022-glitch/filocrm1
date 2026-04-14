@@ -4,13 +4,35 @@ const pool = require('../db/pool');
 const fs   = require('fs');
 const path = require('path');
 
-// Mapa de sockets activos por shopId
-const sockets  = {};
-const qrCodes  = {};
-const statuses = {};
-const decryptErrors = {}; // contador de errores de descifrado por shopId
+// ── Estado por shop ───────────────────────────────────────────────────────────
+const sockets        = {};   // socket activo
+const qrCodes        = {};   // QR pendiente
+const statuses       = {};   // 'connecting' | 'qr' | 'connected' | 'disconnected'
+const decryptErrors  = {};   // contador errores descifrado
+const reconnectAttempts = {}; // [A] intentos de reconexión por shop
+const reconnecting   = {};   // [A] mutex: true si ya hay reconexión en curso
+const saveDebounceTimers = {}; // [C] timers de debounce para saveSessionToDB
 
-// Limpiar sesión completamente (tmp + DB)
+// ── [A] Backoff exponencial ───────────────────────────────────────────────────
+const MAX_RECONNECT_ATTEMPTS = 10;
+function getReconnectDelay(attempts) {
+  // 5s → 10s → 20s → 40s → ... → 300s (máx)
+  return Math.min(5000 * Math.pow(2, attempts), 300000);
+}
+
+// ── [B] Handler global de errores — registrado UNA SOLA VEZ ──────────────────
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message || '';
+  if (
+    msg.includes('Connection Closed') ||
+    msg.includes('Socket connection timeout') ||
+    reason?.output?.statusCode === 428
+  ) {
+    console.log(`[WPP] Error de conexión capturado (no fatal): ${msg}`);
+  }
+});
+
+// ── Helpers de sesión ─────────────────────────────────────────────────────────
 async function clearSession(shopId) {
   try {
     const dir = path.join('/tmp', `baileys_${shopId}`);
@@ -23,12 +45,13 @@ async function clearSession(shopId) {
     delete sockets[shopId];
     delete statuses[shopId];
     delete decryptErrors[shopId];
+    delete reconnectAttempts[shopId];
+    delete reconnecting[shopId];
   } catch (e) {
     console.error('clearSession error:', e.message);
   }
 }
 
-// Limpiar solo las session keys de Signal (no las credenciales principales)
 async function clearSignalKeys(shopId) {
   try {
     const dir = path.join('/tmp', `baileys_${shopId}`);
@@ -48,26 +71,20 @@ async function clearSignalKeys(shopId) {
   }
 }
 
-
 function authDir(shopId) {
   const dir = path.join('/tmp', `baileys_${shopId}`);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-// Restaurar sesión desde PostgreSQL — todos los archivos de auth
 async function restoreSessionFromDB(shopId) {
   try {
-    const result = await pool.query(
-      'SELECT wpp_session FROM shops WHERE id=$1',
-      [shopId]
-    );
+    const result = await pool.query('SELECT wpp_session FROM shops WHERE id=$1', [shopId]);
     const sessionData = result.rows[0]?.wpp_session;
     if (!sessionData) return false;
 
     const dir = authDir(shopId);
     const parsed = JSON.parse(sessionData);
-
     for (const [filename, content] of Object.entries(parsed)) {
       fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
     }
@@ -79,12 +96,11 @@ async function restoreSessionFromDB(shopId) {
   }
 }
 
-// Guardar sesión en PostgreSQL — todos los archivos de auth
-async function saveSessionToDB(shopId) {
+// [C] Versión interna (real) del guardado
+async function _doSaveSessionToDB(shopId) {
   try {
     const dir = authDir(shopId);
     if (!fs.existsSync(dir)) return;
-
     const credsPath = path.join(dir, 'creds.json');
     if (!fs.existsSync(credsPath)) return;
 
@@ -94,68 +110,59 @@ async function saveSessionToDB(shopId) {
       try {
         const raw = fs.readFileSync(path.join(dir, file), 'utf8');
         sessionData[file] = JSON.parse(raw);
-      } catch(e) {
-        // ignorar archivos no JSON
-      }
+      } catch(e) { /* ignorar archivos no JSON */ }
     }
-
-    await pool.query(
-      'UPDATE shops SET wpp_session=$1 WHERE id=$2',
-      [JSON.stringify(sessionData), shopId]
-    );
+    await pool.query('UPDATE shops SET wpp_session=$1 WHERE id=$2', [JSON.stringify(sessionData), shopId]);
     console.log(`Baileys: sesion guardada en DB para shop ${shopId} (${Object.keys(sessionData).length} archivos)`);
   } catch (e) {
     console.error('Error guardando sesion:', e.message);
   }
 }
 
+// [C] Versión debounced — para creds.update (puede dispararse decenas de veces/min)
+function saveSessionToDB(shopId) {
+  if (saveDebounceTimers[shopId]) clearTimeout(saveDebounceTimers[shopId]);
+  saveDebounceTimers[shopId] = setTimeout(async () => {
+    delete saveDebounceTimers[shopId];
+    await _doSaveSessionToDB(shopId);
+  }, 4000);
+}
 
-// Extraer texto de cualquier tipo de mensaje de Baileys
+// Versión inmediata — para on('open') y shutdown
+async function saveSessionToDBNow(shopId) {
+  if (saveDebounceTimers[shopId]) {
+    clearTimeout(saveDebounceTimers[shopId]);
+    delete saveDebounceTimers[shopId];
+  }
+  await _doSaveSessionToDB(shopId);
+}
+
+// ── Extracción de texto ───────────────────────────────────────────────────────
 function extractTextFromMessage(msgContent) {
   if (!msgContent) return null;
-
-  // Tipos directos
   if (msgContent.conversation) return msgContent.conversation;
   if (msgContent.extendedTextMessage?.text) return msgContent.extendedTextMessage.text;
-
-  // Mensajes con contexto (viewOnce, ephemeral, etc.)
-  if (msgContent.ephemeralMessage?.message) {
-    return extractTextFromMessage(msgContent.ephemeralMessage.message);
-  }
-  if (msgContent.viewOnceMessage?.message) {
-    return extractTextFromMessage(msgContent.viewOnceMessage.message);
-  }
-  if (msgContent.viewOnceMessageV2?.message) {
-    return extractTextFromMessage(msgContent.viewOnceMessageV2.message);
-  }
-  if (msgContent.documentWithCaptionMessage?.message) {
-    return extractTextFromMessage(msgContent.documentWithCaptionMessage.message);
-  }
-  if (msgContent.editedMessage?.message) {
-    return extractTextFromMessage(msgContent.editedMessage.message);
-  }
-
-  // Mensajes con caption (imágenes, videos, docs con texto)
-  if (msgContent.imageMessage?.caption) return msgContent.imageMessage.caption;
-  if (msgContent.videoMessage?.caption) return msgContent.videoMessage.caption;
+  if (msgContent.ephemeralMessage?.message)        return extractTextFromMessage(msgContent.ephemeralMessage.message);
+  if (msgContent.viewOnceMessage?.message)         return extractTextFromMessage(msgContent.viewOnceMessage.message);
+  if (msgContent.viewOnceMessageV2?.message)       return extractTextFromMessage(msgContent.viewOnceMessageV2.message);
+  if (msgContent.documentWithCaptionMessage?.message) return extractTextFromMessage(msgContent.documentWithCaptionMessage.message);
+  if (msgContent.editedMessage?.message)           return extractTextFromMessage(msgContent.editedMessage.message);
+  if (msgContent.imageMessage?.caption)    return msgContent.imageMessage.caption;
+  if (msgContent.videoMessage?.caption)    return msgContent.videoMessage.caption;
   if (msgContent.documentMessage?.caption) return msgContent.documentMessage.caption;
-
-  // Botones y listas
-  if (msgContent.buttonsResponseMessage?.selectedDisplayText) return msgContent.buttonsResponseMessage.selectedDisplayText;
-  if (msgContent.listResponseMessage?.title) return msgContent.listResponseMessage.title;
+  if (msgContent.buttonsResponseMessage?.selectedDisplayText)     return msgContent.buttonsResponseMessage.selectedDisplayText;
+  if (msgContent.listResponseMessage?.title)                      return msgContent.listResponseMessage.title;
   if (msgContent.templateButtonReplyMessage?.selectedDisplayText) return msgContent.templateButtonReplyMessage.selectedDisplayText;
-
   return null;
 }
 
-// Conectar o reconectar WhatsApp
+// ── Conectar / reconectar ─────────────────────────────────────────────────────
 async function connect(shopId, onQR, onConnected, onDisconnected) {
-  // Restaurar sesión previa si existe
   await restoreSessionFromDB(shopId);
-
 
   const dir = authDir(shopId);
   const { state, saveCreds } = await useMultiFileAuthState(dir);
+
   let version;
   try {
     ({ version } = await fetchLatestBaileysVersion());
@@ -174,18 +181,20 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     keepAliveIntervalMs: 15000,
     syncFullHistory: false,
     markOnlineOnConnect: false,
-    retryRequestDelayMs: 0,      // No reintentar mensajes fallidos
-    maxMsgRetryCount: 0,         // Sin reintentos   evita el sendRetryRequest que crashea
-    fireInitQueries: false,      // No hacer queries iniciales innecesarias
-    logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
-    getMessage: async (key) => {
-      return { conversation: '' };
+    retryRequestDelayMs: 0,
+    maxMsgRetryCount: 0,
+    fireInitQueries: false,
+    logger: {
+      level: 'silent', log: () => {}, info: () => {}, warn: () => {},
+      error: () => {}, debug: () => {}, trace: () => {},
+      child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {},
+                      error: () => {}, debug: () => {}, trace: () => {} })
     },
+    getMessage: async () => ({ conversation: '' }),
     shouldIgnoreJid: (jid) => {
-      // Ignorar status broadcast, newsletters y cualquier JID no individual
       if (jid === 'status@broadcast') return true;
       if (jid.endsWith('@newsletter')) return true;
-      if (jid.endsWith('@broadcast')) return true;
+      if (jid.endsWith('@broadcast'))  return true;
       return false;
     },
     cachedGroupMetadata: async () => null,
@@ -194,17 +203,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   sockets[shopId]  = sock;
   statuses[shopId] = 'connecting';
 
-  // Capturar errores no manejados del socket para evitar crash de Node
-  sock.ev.on('CB:receipt', () => {}); // ignorar receipts
-  process.on('unhandledRejection', (reason) => {
-    if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
-      console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
-    }
-  });
+  sock.ev.on('CB:receipt', () => {});
 
+  // [C] Debounce en creds.update
   sock.ev.on('creds.update', async () => {
     await saveCreds();
-    await saveSessionToDB(shopId);
+    saveSessionToDB(shopId); // debounced
   });
 
   sock.ev.on('connection.update', async (update) => {
@@ -221,8 +225,11 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       console.log(`Baileys conectado para shop ${shopId}`);
       statuses[shopId] = 'connected';
       qrCodes[shopId]  = null;
+      // [A] Reset intentos al conectar exitosamente
+      reconnectAttempts[shopId] = 0;
+      reconnecting[shopId]      = false;
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
-      await saveSessionToDB(shopId);
+      await saveSessionToDBNow(shopId); // inmediato al conectar
       if (onConnected) onConnected();
     }
 
@@ -232,32 +239,54 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       statuses[shopId] = 'disconnected';
 
       if (code === DisconnectReason.loggedOut || code === 403) {
-        // Sesión cerrada explícitamente — limpiar
+        // Sesión cerrada explícitamente
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
+        reconnectAttempts[shopId] = 0;
+        reconnecting[shopId]      = false;
         if (onDisconnected) onDisconnected();
+
       } else if (code === DisconnectReason.connectionReplaced || code === 440) {
-        // Otro cliente/contenedor tomó la sesión (deploy) — no pelear, ceder
+        // Otro cliente tomó la sesión (deploy) — no pelear
         console.log(`[WPP] Shop ${shopId}: sesión tomada por otro cliente — no reconectar`);
         delete sockets[shopId];
+        reconnecting[shopId] = false;
+
       } else {
-        // Reconectar automáticamente por pérdida de conexión normal
-        console.log(`[WPP] Shop ${shopId}: reconectando en 5s...`);
-        setTimeout(() => connect(shopId, null, null, null), 5000);
+        // [A] Reconexión con backoff + mutex
+        if (reconnecting[shopId]) {
+          console.log(`[WPP] Shop ${shopId}: ya hay reconexión en curso, ignorando duplicado`);
+          return;
+        }
+        const attempts = reconnectAttempts[shopId] || 0;
+        if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+          console.log(`[WPP] Shop ${shopId}: alcanzó el máximo de intentos (${MAX_RECONNECT_ATTEMPTS}) — abortando`);
+          await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);
+          delete sockets[shopId];
+          reconnectAttempts[shopId] = 0;
+          return;
+        }
+        const delay = getReconnectDelay(attempts);
+        reconnectAttempts[shopId] = attempts + 1;
+        reconnecting[shopId]      = true;
+        console.log(`[WPP] Shop ${shopId}: reconectando en ${delay / 1000}s (intento ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
+        setTimeout(async () => {
+          reconnecting[shopId] = false;
+          connect(shopId, null, null, null).catch(e =>
+            console.error(`[WPP] Error en reconexión shop ${shopId}:`, e.message)
+          );
+        }, delay);
       }
     }
   });
 
-  // Manejar fallos de descifrado   ocurre cuando la sesión Signal está desincronizada
+  // Errores de descifrado Signal
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    console.log(`[WPP] Error de descifrado para shop ${shopId}   ${failedMessages?.length || 0} mensajes fallidos`);
+    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
     decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
-
-    // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
     if (decryptErrors[shopId] >= 3) {
       console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
       try {
-        // Limpiar solo los archivos de session keys (no las creds principales)
         const dir = authDir(shopId);
         const files = fs.readdirSync(dir);
         for (const f of files) {
@@ -273,51 +302,39 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
-  // Escuchar mensajes entrantes
+  // Mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     const firstJid = messages[0]?.key?.remoteJid || 'unknown';
-    const fromMe = messages[0]?.key?.fromMe;
+    const fromMe   = messages[0]?.key?.fromMe;
     console.log(`[WPP] upsert type=${type} count=${messages.length} fromMe=${fromMe} jid=${firstJid}`);
     if (type !== 'notify') return;
 
     for (const msg of messages) {
       try {
-        // Ignorar mensajes propios
         if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
-
-        // Solo responder a contactos individuales (@s.whatsapp.net o @lid)
-        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
         const isIndividual = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
         if (!isIndividual) continue;
 
-        // Extraer el número/id del JID
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
-        // Si es @lid, usar senderPn como número real
         const phone = (jid.endsWith('@lid') && msg.senderPn)
           ? msg.senderPn.replace('@s.whatsapp.net', '')
           : phoneRaw;
 
-        // Detectar error de PreKey (mensaje no descifrable) — limpiar keys Signal
         if (msg.messageStubParameters?.includes('Invalid PreKey ID')) {
           console.log(`[WPP] Invalid PreKey ID para shop ${shopId} — limpiando keys Signal...`);
           await clearSignalKeys(shopId);
-          console.log(`[WPP] Keys limpiadas, proximos mensajes deberan descifrar correctamente`);
           continue;
         }
 
         const msgContent = msg.message;
-
-        // Log de diagnostico
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
         console.log(`[WPP] Mensaje de ${phone} - keys: ${msgKeys.join(', ')}`);
 
-        // Extraer texto usando handler multi-tipo
         const text = extractTextFromMessage(msgContent);
-
         if (!text || !text.trim()) {
           console.log(`[WPP] Mensaje sin texto de ${phone} (tipo no soportado o media sin caption)`);
           continue;
@@ -325,13 +342,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         console.log(`[WPP] Texto extraído de ${phone}: "${text}"`);
 
-        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
         const reply = await getAIResponse(shopId, phone, text);
 
         if (reply) {
-          // Para @lid JIDs usar senderPn como destino — las sesiones Signal
-          // están registradas bajo @s.whatsapp.net, no bajo @lid
           const sendJid = (jid.endsWith('@lid') && msg.senderPn) ? msg.senderPn : msg.key.remoteJid;
           console.log(`[WPP] Respondiendo a ${phone} (jid=${sendJid}): "${reply}"`);
           await sock.sendMessage(sendJid, { text: reply });
@@ -347,9 +361,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   return sock;
 }
 
-// Iniciar sesión (devuelve QR como base64 o status connected)
+// ── API pública ───────────────────────────────────────────────────────────────
 async function startSession(shopId) {
-  // Limpiar sesión anterior para reconectar desde cero
   await clearSession(shopId);
   if (sockets[shopId]) {
     try { sockets[shopId].end(); } catch(e) {}
@@ -364,16 +377,8 @@ async function startSession(shopId) {
     try {
       await connect(
         shopId,
-        (qr) => {
-          // QR generado   convertir a base64 image para el frontend
-          clearTimeout(timeout);
-          // qr es el string raw del QR   el frontend lo mostrará con qrcode lib
-          resolve({ qrcode: qr, type: 'raw' });
-        },
-        () => {
-          clearTimeout(timeout);
-          resolve({ status: 'CONNECTED' });
-        },
+        (qr) => { clearTimeout(timeout); resolve({ qrcode: qr, type: 'raw' }); },
+        ()   => { clearTimeout(timeout); resolve({ status: 'CONNECTED' }); },
         null
       );
     } catch (e) {
@@ -383,24 +388,23 @@ async function startSession(shopId) {
   });
 }
 
-// Verificar estado
 async function getStatus(shopId) {
   const status = statuses[shopId];
-  const connected = status === 'connected';
-  return { connected, status: status || 'disconnected' };
+  return { connected: status === 'connected', status: status || 'disconnected' };
 }
 
-// Enviar mensaje de texto
 async function sendText(shopId, phone, message) {
   let sock = sockets[shopId];
 
-  // Si no hay socket activo, intentar reconectar con sesión guardada
   if (!sock || statuses[shopId] !== 'connected') {
+    // [A] Respetar mutex antes de reconectar
+    if (reconnecting[shopId]) {
+      throw new Error('WhatsApp está reconectando, intentá en unos segundos.');
+    }
     console.log(`Baileys: no hay socket activo para shop ${shopId}, intentando restaurar...`);
     const restored = await restoreSessionFromDB(shopId);
     if (!restored) throw new Error('WhatsApp no está conectado. Conectalo desde Configuración.');
 
-    // Reconectar con sesión restaurada
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Timeout reconectando WhatsApp')), 30000);
       connect(
@@ -417,15 +421,12 @@ async function sendText(shopId, phone, message) {
 
   const phoneClean = phone.replace(/\D/g, '');
   const jid = `${phoneClean}@s.whatsapp.net`;
-
   console.log(`Baileys sendText → ${jid}`);
-
   const result = await sock.sendMessage(jid, { text: message });
   console.log(`Baileys sendText OK → ${result?.key?.id}`);
   return result;
 }
 
-// Cerrar sesión
 async function closeSession(shopId) {
   try {
     const sock = sockets[shopId];
@@ -434,6 +435,8 @@ async function closeSession(shopId) {
       delete sockets[shopId];
     }
     await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
+    reconnectAttempts[shopId] = 0;
+    reconnecting[shopId]      = false;
     return true;
   } catch (e) {
     console.error('closeSession error:', e.message);
@@ -441,30 +444,64 @@ async function closeSession(shopId) {
   }
 }
 
-// Al iniciar el servidor, reconectar shops que tenían WhatsApp conectado
+// [F] Reconectar shops escalonados al arrancar (500ms entre cada uno)
 async function reconnectAllShops() {
   try {
     const result = await pool.query(
       'SELECT id FROM shops WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL'
     );
-    for (const shop of result.rows) {
-      console.log(`Baileys: reconectando shop ${shop.id}...`);
-      connect(shop.id, null, null, null).catch(e =>
-        console.error(`Error reconectando shop ${shop.id}:`, e.message)
-      );
-    }
+    result.rows.forEach((shop, i) => {
+      setTimeout(() => {
+        console.log(`Baileys: reconectando shop ${shop.id}...`);
+        connect(shop.id, null, null, null).catch(e =>
+          console.error(`Error reconectando shop ${shop.id}:`, e.message)
+        );
+      }, i * 500);
+    });
   } catch (e) {
     console.error('reconnectAllShops error:', e.message);
   }
 }
 
-// Guardar sesiones activas antes de que el proceso muera (deploy / SIGTERM)
-// Solo guarda las que siguen connected — no sobreescribe si otra instancia ya tomó la sesión
+// [G] Watchdog — verifica cada 5 min que los sockets sigan vivos
+function startWatchdog() {
+  setInterval(async () => {
+    const shopIds = Object.keys(sockets).filter(id => statuses[id] === 'connected');
+    if (!shopIds.length) return;
+    console.log(`[WPP Watchdog] Verificando ${shopIds.length} shop(s) conectado(s)...`);
+
+    for (const shopId of shopIds) {
+      try {
+        const sock = sockets[shopId];
+        const wsState = sock?.ws?.readyState;
+        // WebSocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+        const isAlive = wsState === undefined || wsState === 1; // undefined = lib maneja internamente
+        if (!isAlive) {
+          console.log(`[WPP Watchdog] Shop ${shopId} socket muerto (state=${wsState}) — reconectando...`);
+          statuses[shopId] = 'disconnected';
+          delete sockets[shopId];
+          if (!reconnecting[shopId]) {
+            reconnectAttempts[shopId] = 0; // reiniciar conteo para reconexión watchdog
+            connect(shopId, null, null, null).catch(e =>
+              console.error(`[WPP Watchdog] Error reconectando shop ${shopId}:`, e.message)
+            );
+          }
+        } else {
+          console.log(`[WPP Watchdog] Shop ${shopId} OK`);
+        }
+      } catch (e) {
+        console.error(`[WPP Watchdog] Error verificando shop ${shopId}:`, e.message);
+      }
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Guardar sesiones activas antes de shutdown
 async function saveAllSessionsOnShutdown() {
   const activeShops = Object.keys(sockets).filter(id => statuses[id] === 'connected');
   for (const shopId of activeShops) {
     try {
-      await saveSessionToDB(shopId);
+      await saveSessionToDBNow(shopId);
       console.log(`[WPP] Sesión guardada antes de shutdown: shop ${shopId}`);
     } catch (e) {
       console.error(`[WPP] Error guardando sesión en shutdown: ${e.message}`);
@@ -477,5 +514,8 @@ process.on('SIGTERM', async () => {
   await saveAllSessionsOnShutdown();
   process.exit(0);
 });
+
+// Iniciar watchdog al cargar el módulo
+startWatchdog();
 
 module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes };
