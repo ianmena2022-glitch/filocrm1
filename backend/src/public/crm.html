@@ -525,6 +525,17 @@ body {
   background: rgba(255,209,0,.1); border: 1px solid rgba(255,209,0,.2);
   border-radius: 20px; padding: 2px 10px; margin-left: 10px; vertical-align: middle;
 }
+/* ── WPP Alert Banner ── */
+#wpp-alert-banner { display:none; background:linear-gradient(90deg,#5c1a0a,#7c2a12); border-bottom:2px solid #c04a20; padding:11px 20px; align-items:flex-start; gap:12px; font-family:'Barlow',sans-serif; font-size:13px; position:sticky; top:0; z-index:200; width:100%; }
+#wpp-alert-banner.visible { display:flex; }
+.wpp-alert-icon { font-size:20px; flex-shrink:0; margin-top:1px; line-height:1; }
+.wpp-alert-body { flex:1; min-width:0; }
+.wpp-alert-title { font-weight:700; color:#ffb89a; margin-bottom:3px; font-family:'Barlow Condensed',sans-serif; font-size:15px; letter-spacing:.3px; text-transform:uppercase; }
+.wpp-alert-msg { color:rgba(255,215,195,.85); line-height:1.5; }
+.wpp-alert-msg a { color:#ffd0b0; text-decoration:underline; cursor:pointer; }
+.wpp-alert-msg a:hover { color:#fff; }
+.wpp-alert-close { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.7); border-radius:4px; width:24px; height:24px; cursor:pointer; font-size:16px; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; line-height:1; }
+.wpp-alert-close:hover { background:rgba(255,255,255,.22); color:#fff; }
 .ent-section { padding: 0 20px 40px; }
 .ent-kpi-strip {
   display: flex; gap: 10px; padding: 0 20px 16px; flex-wrap: wrap;
@@ -1336,6 +1347,16 @@ select.form-input { padding-right: 32px; }
   </nav>
 
   <main class="main">
+
+    <!-- ── WPP Alert Banner ── -->
+    <div id="wpp-alert-banner">
+      <span class="wpp-alert-icon">⚠️</span>
+      <div class="wpp-alert-body">
+        <div class="wpp-alert-title">Problema con WhatsApp</div>
+        <div class="wpp-alert-msg" id="wpp-alert-msg"></div>
+      </div>
+      <button class="wpp-alert-close" onclick="dismissWppBanner()" title="Cerrar">×</button>
+    </div>
 
     <!-- ─── DASHBOARD ─── -->
     <section id="sec-dashboard" class="section active">
@@ -3288,6 +3309,67 @@ function checkPaywall() {
   }
 }
 
+// ── WPP Alert Banner ─────────────────────────────────────────────────────────
+function showWppBanner(htmlMsg) {
+  const banner = document.getElementById('wpp-alert-banner');
+  const msgEl  = document.getElementById('wpp-alert-msg');
+  if (!banner || !msgEl) return;
+  msgEl.innerHTML = htmlMsg;
+  banner.classList.add('visible');
+}
+
+function dismissWppBanner() {
+  const banner = document.getElementById('wpp-alert-banner');
+  if (banner) banner.classList.remove('visible');
+  sessionStorage.setItem('wpp_banner_dismissed', '1');
+}
+
+async function checkWppStatus() {
+  if (!currentShop) return;
+  if (currentShop.is_barber) return; // nunca para barberos
+  if (sessionStorage.getItem('wpp_banner_dismissed') === '1') return;
+
+  const isEntOwner = currentShop.is_enterprise_owner && !currentShop.is_test;
+
+  if (isEntOwner) {
+    // Enterprise owner: verificar estado WPP del owner y de sus sucursales
+    try {
+      const data = await api('GET', '/enterprise/branches-wpp-status');
+      const messages = [];
+
+      if (data.shared_wpp) {
+        // WPP compartido del owner — verificar al owner
+        if (!data.owner_connected && data.owner_had_session) {
+          messages.push(`El WhatsApp compartido de enterprise está desconectado y el bot no responde. <a onclick="showSection('configuracion')">Reconectar →</a>`);
+        }
+      } else {
+        // WPP independiente — verificar cada sucursal
+        const failing = (data.branches || []).filter(b => !b.wpp_connected && b.wpp_had_session);
+        if (failing.length > 0) {
+          const names = failing.map(b => `<strong>${esc(b.name)}</strong>`).join(', ');
+          const plural = failing.length === 1 ? 'la sucursal' : 'las sucursales';
+          messages.push(`El bot de WhatsApp de ${plural} ${names} se desconectó. Pedile al admin de ${failing.length === 1 ? 'esa sucursal' : 'esas sucursales'} que lo reconecte desde su panel de Configuración.`);
+        }
+      }
+
+      if (messages.length > 0) showWppBanner(messages.join('<br>'));
+    } catch(e) { /* no bloquear si falla */ }
+
+  } else {
+    // Cuenta normal (starter/staff) o sucursal con WPP propio
+    if (!currentShop.wpp_connected && currentShop.wpp_had_session) {
+      // Verificar si es sucursal usando WPP compartido (no mostrar en ese caso)
+      if (currentShop.is_branch) {
+        try {
+          const sharedRes = await api('GET', '/enterprise/shared-wpp');
+          if (sharedRes.shared_wpp) return; // usa WPP del owner, no es problema de esta sucursal
+        } catch(e) { /* continuar */ }
+      }
+      showWppBanner(`El bot de WhatsApp se desconectó y no pudo reconectarse automáticamente. <a onclick="showSection('configuracion')">Ir a Configuración para reconectar →</a>`);
+    }
+  }
+}
+
 // Escuchar respuesta 402 de la API (trial expirado)
 const _originalApi = window.api;
 
@@ -3348,6 +3430,7 @@ async function startApp() {
 
   document.getElementById('app').style.display = 'block';
   checkPaywall();
+  checkWppStatus(); // banner de alerta si el bot de WPP tiene problemas
 
   // Avatar + nombre en todos los topbars
   const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
@@ -5000,6 +5083,9 @@ function onWppConnected() {
   document.getElementById('wpp-status-text').textContent = 'WhatsApp conectado ✅';
   document.getElementById('wpp-qr-container').style.display = 'none';
   showToast('✅', 'WhatsApp conectado', 'Ya podés enviar mensajes desde FILO');
+  // Cerrar banner de alerta si había uno
+  dismissWppBanner();
+  sessionStorage.removeItem('wpp_banner_dismissed'); // permitir que reaparezca si se cae de nuevo
 }
 
 async function connectWhatsapp() {
@@ -5051,6 +5137,9 @@ function onEntWppConnected() {
   if (txt) txt.textContent = 'WhatsApp conectado ✅';
   if (qr)  qr.style.display = 'none';
   showToast('✅', 'WhatsApp conectado', 'Ya podés recibir mensajes de clientes');
+  // Cerrar banner de alerta
+  dismissWppBanner();
+  sessionStorage.removeItem('wpp_banner_dismissed');
 }
 
 async function renderEntQR(qrData) {

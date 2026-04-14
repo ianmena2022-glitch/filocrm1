@@ -28,6 +28,7 @@ function shopPayload(shop) {
     city:                 shop.city,
     address:              shop.address,
     wpp_connected:        shop.wpp_connected,
+    wpp_had_session:      !!(shop.wpp_session), // true = tuvo WPP pero puede estar caído
     plan:                 shop.plan || 'starter',
     filo_plan:            shop.filo_plan || 'starter',
     is_test:              shop.is_test || shop.plan === 'test',

@@ -237,6 +237,29 @@ router.get('/shared-wpp', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /api/enterprise/branches-wpp-status — estado WPP del owner y sus sucursales ──
+router.get('/branches-wpp-status', auth, enterpriseOnly, async (req, res) => {
+  try {
+    const ownerQ = await pool.query(
+      'SELECT enterprise_shared_wpp, wpp_connected, (wpp_session IS NOT NULL) AS wpp_had_session FROM shops WHERE id=$1',
+      [req.shopId]
+    );
+    const owner = ownerQ.rows[0] || {};
+
+    const branchQ = await pool.query(
+      `SELECT id, name, wpp_connected, (wpp_session IS NOT NULL) AS wpp_had_session
+       FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE ORDER BY name`,
+      [req.shopId]
+    );
+    res.json({
+      shared_wpp:      owner.enterprise_shared_wpp || false,
+      owner_connected: owner.wpp_connected || false,
+      owner_had_session: owner.wpp_had_session || false,
+      branches:        branchQ.rows
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/enterprise/stats/history?days=30 — serie temporal por sucursal ──
 router.get('/stats/history', auth, enterpriseOnly, async (req, res) => {
   const days = Math.min(parseInt(req.query.days) || 30, 90);
