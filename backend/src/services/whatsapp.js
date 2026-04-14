@@ -9,9 +9,12 @@ const sockets        = {};   // socket activo
 const qrCodes        = {};   // QR pendiente
 const statuses       = {};   // 'connecting' | 'qr' | 'connected' | 'disconnected'
 const decryptErrors  = {};   // contador errores descifrado
-const reconnectAttempts = {}; // [A] intentos de reconexión por shop
-const reconnecting   = {};   // [A] mutex: true si ya hay reconexión en curso
+const reconnectAttempts  = {}; // [A] intentos de reconexión por shop
+const reconnecting       = {}; // [A] mutex: true si ya hay reconexión en curso
 const saveDebounceTimers = {}; // [C] timers de debounce para saveSessionToDB
+const lastIncomingEvent  = {}; // [H] timestamp del último evento recibido de WA (cualquiera)
+
+const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 horas sin ningún evento = falla silenciosa
 
 // ── [A] Backoff exponencial ───────────────────────────────────────────────────
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -203,7 +206,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   sockets[shopId]  = sock;
   statuses[shopId] = 'connecting';
 
-  sock.ev.on('CB:receipt', () => {});
+  // [H] Cualquier evento entrante de WA actualiza el timestamp de actividad
+  sock.ev.on('CB:receipt', () => { lastIncomingEvent[shopId] = Date.now(); });
 
   // [C] Debounce en creds.update
   sock.ev.on('creds.update', async () => {
@@ -228,6 +232,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       // [A] Reset intentos al conectar exitosamente
       reconnectAttempts[shopId] = 0;
       reconnecting[shopId]      = false;
+      // [H] Inicializar timestamp de actividad al conectar
+      lastIncomingEvent[shopId] = Date.now();
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
       await saveSessionToDBNow(shopId); // inmediato al conectar
       if (onConnected) onConnected();
@@ -282,6 +288,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Errores de descifrado Signal
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
+    lastIncomingEvent[shopId] = Date.now(); // [H] WA nos entregó algo, aunque no pudimos descifrarlo
     console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
     decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
     if (decryptErrors[shopId] >= 3) {
@@ -304,6 +311,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    lastIncomingEvent[shopId] = Date.now(); // [H] WA nos está entregando mensajes
     const firstJid = messages[0]?.key?.remoteJid || 'unknown';
     const fromMe   = messages[0]?.key?.fromMe;
     console.log(`[WPP] upsert type=${type} count=${messages.length} fromMe=${fromMe} jid=${firstJid}`);
@@ -472,23 +480,48 @@ function startWatchdog() {
 
     for (const shopId of shopIds) {
       try {
-        const sock = sockets[shopId];
+        const sock    = sockets[shopId];
         const wsState = sock?.ws?.readyState;
         // WebSocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
-        const isAlive = wsState === undefined || wsState === 1; // undefined = lib maneja internamente
+        const isAlive = wsState === undefined || wsState === 1;
+
         if (!isAlive) {
+          // [G] Socket muerto — reconectar
           console.log(`[WPP Watchdog] Shop ${shopId} socket muerto (state=${wsState}) — reconectando...`);
           statuses[shopId] = 'disconnected';
           delete sockets[shopId];
           if (!reconnecting[shopId]) {
-            reconnectAttempts[shopId] = 0; // reiniciar conteo para reconexión watchdog
+            reconnectAttempts[shopId] = 0;
+            connect(shopId, null, null, null).catch(e =>
+              console.error(`[WPP Watchdog] Error reconectando shop ${shopId}:`, e.message)
+            );
+          }
+          continue;
+        }
+
+        // [H] Detectar falla silenciosa: socket vivo pero WA no entrega eventos hace 2h+
+        const lastEvent   = lastIncomingEvent[shopId] || 0;
+        const silenceMs   = Date.now() - lastEvent;
+        const silenceMin  = Math.round(silenceMs / 60000);
+
+        if (lastEvent > 0 && silenceMs > SILENCE_THRESHOLD_MS) {
+          console.log(`[WPP Watchdog] Shop ${shopId} lleva ${silenceMin} min sin recibir ningún evento de WA — falla silenciosa, reconectando...`);
+          statuses[shopId] = 'disconnected';
+          delete sockets[shopId];
+          delete lastIncomingEvent[shopId];
+          // Marcar como desconectado en DB para que el banner aparezca en el frontend
+          await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId])
+            .catch(e => console.error(`[WPP Watchdog] Error actualizando DB shop ${shopId}:`, e.message));
+          if (!reconnecting[shopId]) {
+            reconnectAttempts[shopId] = 0;
             connect(shopId, null, null, null).catch(e =>
               console.error(`[WPP Watchdog] Error reconectando shop ${shopId}:`, e.message)
             );
           }
         } else {
-          console.log(`[WPP Watchdog] Shop ${shopId} OK`);
+          console.log(`[WPP Watchdog] Shop ${shopId} OK (último evento hace ${silenceMin} min)`);
         }
+
       } catch (e) {
         console.error(`[WPP Watchdog] Error verificando shop ${shopId}:`, e.message);
       }
