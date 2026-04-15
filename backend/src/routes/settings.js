@@ -8,7 +8,8 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, phone, city, address, calendly_url,
-              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice, closed_days
+              service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
+              sena_enabled, sena_pct, sena_alias
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -21,7 +22,7 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days, sena_enabled, sena_pct, sena_alias } = req.body;
 
   try {
     // Auto-generar booking_slug si no existe
@@ -53,17 +54,24 @@ router.put('/', auth, async (req, res) => {
          schedule=COALESCE($12, schedule),
          home_service=COALESCE($13, home_service),
          allow_barber_choice=COALESCE($14, allow_barber_choice),
-         closed_days=COALESCE($15, closed_days)
+         closed_days=COALESCE($15, closed_days),
+         sena_enabled=COALESCE($17, sena_enabled),
+         sena_pct=COALESCE($18, sena_pct),
+         sena_alias=COALESCE($19, sena_alias)
        WHERE id=$16
        RETURNING id, name, email, phone, city, address,
-                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled, membership_plans, schedule, home_service, allow_barber_choice, closed_days`,
+                 service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
+                 sena_enabled, sena_pct, sena_alias`,
       [name||null, phone||null, city||null, address||null,
        service_radius_km||null, churn_days||null, msg_templates||null,
        slug, commission_enabled !== undefined ? commission_enabled : null,
        membership_plans||null, filo_plan||null, schedule||null,
        home_service !== undefined ? home_service : null,
        allow_barber_choice !== undefined ? allow_barber_choice : null,
-       closed_days !== undefined ? closed_days : null, req.shopId]
+       closed_days !== undefined ? closed_days : null, req.shopId,
+       sena_enabled !== undefined ? sena_enabled : null,
+       sena_pct !== undefined ? parseInt(sena_pct) : null,
+       sena_alias !== undefined ? (sena_alias || null) : null]
     );
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {

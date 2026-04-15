@@ -403,3 +403,18 @@ CREATE TABLE IF NOT EXISTS vendors (
 );
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id      INTEGER REFERENCES vendors(id) ON DELETE SET NULL;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS referral_code  VARCHAR(50);
+
+-- ── SISTEMA DE SEÑAS (DEPÓSITOS PREVIOS) ──────────────────────────────────────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_pct     INT DEFAULT 30;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_alias   VARCHAR(100);
+
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_amount     NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_status     VARCHAR(20)
+  CHECK (sena_status IN ('pending','confirmed','lost') OR sena_status IS NULL);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_expires_at TIMESTAMPTZ;
+
+-- Ampliar constraint de status para incluir 'waiting_sena'
+ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check;
+ALTER TABLE appointments ADD CONSTRAINT appointments_status_check
+  CHECK (status IN ('pending','confirmed','completed','noshow','cancelled','waiting_sena'));

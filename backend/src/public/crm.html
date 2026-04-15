@@ -311,11 +311,12 @@ body {
   text-transform: uppercase; min-width: 84px; text-align: center;
 }
 
-.status-pending  { background: rgba(255,145,0,0.12);  color: var(--orange); }
-.status-confirmed{ background: rgba(100,170,255,0.12); color: #7ab8ff; }
-.status-completed{ background: rgba(0,200,117,0.12);  color: var(--green); }
-.status-noshow   { background: rgba(255,67,67,0.1);   color: #ff8080; }
-.status-cancelled{ background: rgba(255,255,255,0.05); color: var(--gray); }
+.status-pending      { background: rgba(255,145,0,0.12);  color: var(--orange); }
+.status-confirmed    { background: rgba(100,170,255,0.12); color: #7ab8ff; }
+.status-completed    { background: rgba(0,200,117,0.12);  color: var(--green); }
+.status-noshow       { background: rgba(255,67,67,0.1);   color: #ff8080; }
+.status-cancelled    { background: rgba(255,255,255,0.05); color: var(--gray); }
+.status-waiting_sena { background: rgba(168,85,247,0.15); color: #c084fc; }
 
 .appt-actions { display: flex; gap: 5px; }
 .appt-btn {
@@ -2229,6 +2230,41 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        <!-- Señas -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-sena-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">💸 Sistema de señas</div>
+            <span class="tpl-arrow" id="arrow-cfg-sena-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-sena-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.5">
+              Exigí una seña antes de confirmar un turno online. El cliente recibe las instrucciones de pago por WhatsApp y tiene 60 minutos para transferir.
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:12px">
+              <div>
+                <div style="font-size:13px;font-weight:700">Activar señas</div>
+                <div style="font-size:11px;color:var(--gray);margin-top:3px">Los turnos online quedan en "Esperando seña" hasta que confirmás la transferencia</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+                <input type="checkbox" id="toggle-sena" onchange="toggleSenaEnabled()" style="opacity:0;width:0;height:0;position:absolute">
+                <span id="sena-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:28px;transition:.3s;border:1px solid rgba(255,255,255,0.1)">
+                  <span id="sena-thumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#8a9ab5;border-radius:50%;transition:.3s"></span>
+                </span>
+              </label>
+            </div>
+            <div id="sena-config-fields" style="display:none;display:flex;flex-direction:column;gap:10px">
+              <div class="form-field" style="margin-bottom:0">
+                <label>Alias / CVU de cobro</label>
+                <input type="text" id="cfg-sena-alias" placeholder="mi.alias.mercadopago" style="font-family:monospace">
+              </div>
+              <div class="form-field" style="margin-bottom:0">
+                <label>Porcentaje de seña (% del servicio)</label>
+                <input type="number" id="cfg-sena-pct" placeholder="30" min="5" max="100" style="max-width:120px">
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Horarios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-schedule-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3876,7 +3912,7 @@ function renderDashAppointments(appts) {
 
 function renderApptCard(a) {
   _editApptCache[a.id] = a; // cachear para edición
-  const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado' };
+  const statusLabel = { pending:'Pendiente', confirmed:'Confirmado', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', waiting_sena:'⏳ Esperando seña' };
   const time = String(a.time_start || '').slice(0,5);
   const redeemBadge = a.redeem_info
     ? `<div style="font-size:11px;color:var(--green);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🎁</span><span>${a.redeem_info}</span></div>`
@@ -3884,6 +3920,10 @@ function renderApptCard(a) {
   const memberBadge = a.member_booking
     ? `<div style="font-size:11px;color:var(--yellow);margin-top:3px;display:flex;align-items:center;gap:4px"><span>👑</span><span>Membresía</span></div>`
     : '';
+  const senaBadge = a.status === 'waiting_sena' && a.sena_amount > 0
+    ? `<div style="font-size:11px;color:#c084fc;margin-top:3px;display:flex;align-items:center;gap:4px"><span>💸</span><span>Seña: $${parseFloat(a.sena_amount).toLocaleString('es-AR')}</span></div>`
+    : '';
+  const isSena = a.status === 'waiting_sena';
   return `<div class="appointment-card">
     <div>
       <div class="appt-time">${time}</div>
@@ -3895,17 +3935,21 @@ function renderApptCard(a) {
       ${(a.assigned_barber_name || a.barber_name) ? `<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--yellow)"><svg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>${a.assigned_barber_name || a.barber_name}</span></div>` : ''}
       ${redeemBadge}
       ${memberBadge}
+      ${senaBadge}
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
     <div class="appt-actions">
-      <button class="appt-btn" onclick="editApptById(${a.id})" title="Editar">✏️</button>
-      ${a.member_booking && a.membership_id && a.status !== 'completed'
-        ? `<button class="appt-btn" style="color:var(--yellow);border-color:rgba(255,209,0,.3)" onclick="memberCheckin(${a.id},${a.membership_id})" title="Check-in membresía">👑</button>`
-        : (a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : '')}
-      ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
-      <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>
+      ${isSena
+        ? `<button class="appt-btn" style="color:#4ade80;border-color:rgba(74,222,128,.3);font-size:11px;width:auto;padding:0 8px" onclick="confirmSena(${a.id})" title="Seña recibida">✓ Seña</button>
+           <button class="appt-btn noshow" style="font-size:11px;width:auto;padding:0 8px" onclick="cancelSena(${a.id})" title="Seña no recibida">✗ Perdida</button>`
+        : `<button class="appt-btn" onclick="editApptById(${a.id})" title="Editar">✏️</button>
+           ${a.member_booking && a.membership_id && a.status !== 'completed'
+             ? `<button class="appt-btn" style="color:var(--yellow);border-color:rgba(255,209,0,.3)" onclick="memberCheckin(${a.id},${a.membership_id})" title="Check-in membresía">👑</button>`
+             : (a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : '')}
+           ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
+           <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>`}
     </div>
   </div>`;
 }
@@ -4039,6 +4083,24 @@ async function updateApptStatus(id, status) {
     showToast('❌', 'Error', e.message);
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   }
+}
+
+async function confirmSena(id) {
+  if (!confirm('¿Recibiste la seña? El turno pasará a estado Pendiente.')) return;
+  try {
+    await api('PUT', `/appointments/${id}/sena`, { action: 'confirm' });
+    showToast('✅', 'Seña confirmada', 'El turno está pendiente');
+    loadAgenda();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function cancelSena(id) {
+  if (!confirm('¿Marcar la seña como perdida? El turno se cancelará.')) return;
+  try {
+    await api('PUT', `/appointments/${id}/sena`, { action: 'lost' });
+    showToast('⚠️', 'Seña perdida', 'Turno cancelado');
+    loadAgenda();
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 // Popup método de pago al completar turno
@@ -4925,6 +4987,23 @@ async function loadSettings() {
       else { bcs.style.background = 'rgba(255,255,255,0.12)'; bct.style.left = '3px'; bct.style.background = '#8a9ab5'; }
     }
 
+    // Señas
+    const senaEnabled = settings.sena_enabled || false;
+    const senaToggle = document.getElementById('toggle-sena');
+    const senaSlider = document.getElementById('sena-slider');
+    const senaThumb  = document.getElementById('sena-thumb');
+    const senaFields = document.getElementById('sena-config-fields');
+    if (senaToggle) senaToggle.checked = senaEnabled;
+    if (senaSlider && senaThumb) {
+      if (senaEnabled) { senaSlider.style.background = 'var(--yellow)'; senaThumb.style.left = '29px'; senaThumb.style.background = 'var(--dark)'; }
+      else { senaSlider.style.background = 'rgba(255,255,255,0.12)'; senaThumb.style.left = '3px'; senaThumb.style.background = '#8a9ab5'; }
+    }
+    if (senaFields) senaFields.style.display = senaEnabled ? 'flex' : 'none';
+    const aliasEl = document.getElementById('cfg-sena-alias');
+    const pctEl   = document.getElementById('cfg-sena-pct');
+    if (aliasEl) aliasEl.value = settings.sena_alias || '';
+    if (pctEl)   pctEl.value   = settings.sena_pct   || 30;
+
     // Horarios
     const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
     renderSchedule(schedule);
@@ -4996,7 +5075,10 @@ async function saveSettings() {
       recordatorio: document.getElementById('tpl-recordatorio').value.trim(),
       completado:   document.getElementById('tpl-completado').value.trim()
     }),
-    home_service: document.getElementById('toggle-home-service').checked
+    home_service: document.getElementById('toggle-home-service').checked,
+    sena_enabled: document.getElementById('toggle-sena')?.checked || false,
+    sena_pct:     parseInt(document.getElementById('cfg-sena-pct')?.value) || 30,
+    sena_alias:   document.getElementById('cfg-sena-alias')?.value.trim() || null
   };
   try {
     const res = await api('PUT', '/settings', body);
@@ -5025,6 +5107,21 @@ async function toggleHomeService() {
     await api('PUT', '/settings', { home_service: enabled });
     if (currentShop) currentShop.home_service = enabled;
     showToast(enabled ? '🏠' : '✂️', enabled ? 'Servicio a domicilio activado' : 'Servicio a domicilio desactivado', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+async function toggleSenaEnabled() {
+  const enabled = document.getElementById('toggle-sena').checked;
+  const slider = document.getElementById('sena-slider');
+  const thumb  = document.getElementById('sena-thumb');
+  const fields = document.getElementById('sena-config-fields');
+  if (enabled) { slider.style.background = 'var(--yellow)'; thumb.style.left = '29px'; thumb.style.background = 'var(--dark)'; }
+  else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
+  if (fields) fields.style.display = enabled ? 'flex' : 'none';
+  try {
+    await api('PUT', '/settings', { sena_enabled: enabled });
+    if (currentShop) currentShop.sena_enabled = enabled;
+    showToast(enabled ? '💸' : '✂️', enabled ? 'Señas activadas' : 'Señas desactivadas', '');
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 

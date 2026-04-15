@@ -218,7 +218,7 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id/status', auth, async (req, res) => {
   const { status, payment_method, tip } = req.body;
   const shopId = realShopId(req);
-  const validStatuses = ['pending','confirmed','completed','noshow','cancelled'];
+  const validStatuses = ['pending','confirmed','completed','noshow','cancelled','waiting_sena'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
@@ -323,6 +323,35 @@ router.put('/:id', auth, async (req, res) => {
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
     res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/appointments/:id/sena — confirmar o marcar como perdida la seña
+router.put('/:id/sena', auth, async (req, res) => {
+  const { action } = req.body; // 'confirm' | 'lost'
+  if (!['confirm', 'lost'].includes(action)) return res.status(400).json({ error: 'Acción inválida' });
+  const shopId = realShopId(req);
+
+  try {
+    let newStatus, newSenaStatus;
+    if (action === 'confirm') {
+      newStatus = 'pending';
+      newSenaStatus = 'confirmed';
+    } else {
+      newStatus = 'cancelled';
+      newSenaStatus = 'lost';
+    }
+
+    const result = await pool.query(
+      `UPDATE appointments SET status=$1, sena_status=$2
+       WHERE id=$3 AND shop_id=$4 AND status='waiting_sena'
+       RETURNING *`,
+      [newStatus, newSenaStatus, req.params.id, shopId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado o ya fue procesado' });
+    res.json({ ok: true, appointment: result.rows[0] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

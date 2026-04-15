@@ -207,15 +207,47 @@ async function deleteExpiredAccounts() {
   }
 }
 
+// Cancela turnos 'waiting_sena' cuya seña no llegó en 60 minutos
+async function expirePendingSenas() {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE appointments
+       SET status='cancelled', sena_status='lost'
+       WHERE status='waiting_sena' AND sena_expires_at < NOW()
+       RETURNING id, shop_id, client_name, client_id, date, time_start, sena_amount`
+    );
+    if (!rows.length) return;
+    console.log(`[CRON] ${rows.length} seña(s) vencida(s) — turnos cancelados`);
+
+    // Notificar al cliente por WhatsApp
+    for (const appt of rows) {
+      try {
+        const shopQ = await pool.query('SELECT wpp_connected FROM shops WHERE id=$1', [appt.shop_id]);
+        if (!shopQ.rows[0]?.wpp_connected) continue;
+        const clientQ = await pool.query('SELECT phone FROM clients WHERE id=$1', [appt.client_id]);
+        const phone = clientQ.rows[0]?.phone;
+        if (!phone) continue;
+        const fecha = new Date(appt.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+        const hora = String(appt.time_start).slice(0, 5);
+        const msg = `⚠️ Tu turno del ${fecha} a las *${hora}* fue *cancelado* porque no se recibió la seña de $${parseFloat(appt.sena_amount).toLocaleString('es-AR')}. Si querés reservar de nuevo, ingresá al sistema de turnos.`;
+        await wpp.sendText(appt.shop_id, phone, msg);
+      } catch(e) { console.error('[CRON] Error notificando seña vencida:', e.message); }
+    }
+  } catch(e) {
+    console.error('[CRON] Error en expirePendingSenas:', e.message);
+  }
+}
+
 async function runHourlyTasks() {
   await sendReminders();
   await closeCashRegisters();
   await syncSubscriptions();
   await deleteExpiredAccounts();
+  await expirePendingSenas();
 }
 
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + señas)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
 }

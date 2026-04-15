@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -307,28 +307,39 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     } catch(e) { console.error('autoAssign booking error:', e.message); }
 
+    // Determinar si se requiere seña
+    const requiresSena = !is_member_booking && shopData.sena_enabled && svcPrice > 0 && shopData.sena_alias;
+    const senaAmount = requiresSena ? Math.ceil(svcPrice * (shopData.sena_pct || 30) / 100) : 0;
+    const senaExpiresAt = requiresSena ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null;
+    const apptStatus = requiresSena ? 'waiting_sena' : 'pending';
+
     // Crear turno
     const appt = await pool.query(
       `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,$14,$15,$16)
+         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING *`,
       [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
-       svcPrice, svcCost, date, time_start, time_end, null,
+       svcPrice, svcCost, date, time_start, time_end, apptStatus, null,
        assignedBarberId, assignedBarberCommission,
        is_member_booking ? true : false,
        (is_member_booking && membership_id) ? parseInt(membership_id) : null,
-       is_member_booking ? 'membership' : null]
+       is_member_booking ? 'membership' : null,
+       senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
     );
 
-    // Notificar al barbero por WhatsApp si está conectado
-    if (shopData.wpp_connected && shopData.phone) {
+    // Notificar por WhatsApp
+    if (shopData.wpp_connected) {
       const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-      const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
-      try {
-        await wpp.sendText(shopData.id, shopData.phone, msg);
-      } catch (e) {
-        console.error('Error notificando al barbero:', e.message);
+      if (requiresSena) {
+        // Mensaje al cliente con instrucciones de seña
+        if (client_phone) {
+          const msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar el turno, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al alias:\n\n📲 *${shopData.sena_alias}*\n\n⏰ Tenés *60 minutos* para realizar la transferencia. Si no se recibe, el turno se cancela automáticamente.`;
+          try { await wpp.sendText(shopData.id, client_phone, msgCliente); } catch(e) { console.error('WPP seña cliente:', e.message); }
+        }
+      } else if (shopData.phone) {
+        const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
+        try { await wpp.sendText(shopData.id, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
       }
     }
 
@@ -362,10 +373,16 @@ router.post('/:slug/reserve', async (req, res) => {
       } catch(e) { console.error('Redeem error:', e.message); }
     }
 
+    const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
     res.status(201).json({
       ok: true,
       redeem: redeemInfo,
-      message: `¡Turno confirmado! Te esperamos el ${new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' })} a las ${time_start} en ${shopData.name}.`,
+      requires_sena: requiresSena,
+      sena_amount: requiresSena ? senaAmount : null,
+      sena_alias: requiresSena ? shopData.sena_alias : null,
+      message: requiresSena
+        ? `Tu reserva fue recibida. Para confirmarla, enviá una seña de $${senaAmount.toLocaleString('es-AR')} al alias ${shopData.sena_alias} en los próximos 60 minutos.`
+        : `¡Turno confirmado! Te esperamos el ${dateLabel} a las ${time_start} en ${shopData.name}.`,
       appointment: appt.rows[0]
     });
   } catch (e) {
