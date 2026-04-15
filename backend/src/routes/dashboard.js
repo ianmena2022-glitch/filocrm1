@@ -307,20 +307,25 @@ router.get('/cash', auth, async (req, res) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
   const shopId = req.shopId;
   try {
-    // Ingresos por método de pago
+    // Ingresos por método de pago (descontando sena_amount para no doble-contar con el income de seña)
     const appts = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
-         COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
-         COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-         COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
-         COALESCE(SUM(CASE WHEN payment_method IS NULL THEN price ELSE 0 END),0)    AS no_method_total,
-         COALESCE(SUM(tip),0)                                                        AS tips_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
-         COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
-       FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+      `WITH adj AS (
+         SELECT *,
+           price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END AS adj_price
+         FROM appointments
+         WHERE shop_id=$1 AND date=$2 AND status='completed'
+       )
+       SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN adj_price ELSE 0 END),0) AS cash_total,
+         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN adj_price ELSE 0 END),0) AS debit_total,
+         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN adj_price ELSE 0 END),0) AS credit_total,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN adj_price ELSE 0 END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN adj_price ELSE 0 END),0) AS debt_total,
+         COALESCE(SUM(CASE WHEN payment_method IS NULL    THEN adj_price ELSE 0 END),0) AS no_method_total,
+         COALESCE(SUM(tip),0)                                                            AS tips_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN adj_price ELSE 0 END),0) AS revenue_total,
+         COUNT(*)                                                                         AS cuts_count
+       FROM adj`,
       [shopId, date]
     );
     // Gastos e ingresos extras del día (separados por is_income y tipo)
@@ -365,12 +370,21 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
+
+    // Señas confirmadas del día (siempre transfer; se restan del ingreso del turno para no doble-contar)
+    const senaQ = await pool.query(
+      `SELECT COALESCE(SUM(amount),0) AS sena_total
+       FROM expenses WHERE shop_id=$1 AND date=$2 AND source_type='sena'`,
+      [shopId, date]
+    );
+    const sena_total = parseFloat(senaQ.rows[0].sena_total);
+
     res.json({
       date,
       cash_total:        parseFloat(a.cash_total)     + parseFloat(dc.cash_col),
       debit_total:       parseFloat(a.debit_total)    + parseFloat(dc.debit_col),
       credit_total:      parseFloat(a.credit_total)   + parseFloat(dc.credit_col),
-      transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col),
+      transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col) + sena_total,
       debt_total:        Math.max(0, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
       no_method_total:   parseFloat(a.no_method_total),
       tips_total:        tips,

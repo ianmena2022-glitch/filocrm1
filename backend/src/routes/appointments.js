@@ -377,7 +377,22 @@ router.put('/:id/sena', auth, async (req, res) => {
       [newStatus, newSenaStatus, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado o ya fue procesado' });
-    res.json({ ok: true, appointment: result.rows[0] });
+
+    const appt = result.rows[0];
+
+    // Al confirmar seña → registrar como ingreso en caja (transfer del día)
+    if (action === 'confirm' && appt.sena_amount > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      await pool.query(
+        `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+         VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')`,
+        [appt.shop_id, parseFloat(appt.sena_amount),
+         `Seña - ${appt.client_name || 'Sin nombre'}`,
+         today, appt.id]
+      );
+    }
+
+    res.json({ ok: true, appointment: appt });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

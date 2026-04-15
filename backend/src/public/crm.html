@@ -3929,8 +3929,9 @@ function renderApptCard(a) {
   const memberBadge = a.member_booking
     ? `<div style="font-size:11px;color:var(--yellow);margin-top:3px;display:flex;align-items:center;gap:4px"><span>👑</span><span>Membresía</span></div>`
     : '';
-  const senaBadge = a.status === 'waiting_sena' && a.sena_amount > 0
-    ? `<div style="font-size:11px;color:#c084fc;margin-top:3px;display:flex;align-items:center;gap:4px"><span>💸</span><span>Seña: $${parseFloat(a.sena_amount).toLocaleString('es-AR')}</span></div>`
+  const senaAmt = parseFloat(a.sena_amount || 0);
+  const senaBadge = senaAmt > 0 && (a.status === 'waiting_sena' || a.sena_status === 'confirmed')
+    ? `<div style="font-size:11px;color:#c084fc;margin-top:3px;display:flex;align-items:center;gap:4px"><span>💸</span><span>${a.sena_status === 'confirmed' ? `Seña cobrada: $${senaAmt.toLocaleString('es-AR')}` : `Seña: $${senaAmt.toLocaleString('es-AR')}`}</span></div>`
     : '';
   const branchBadge = a.branch_name && currentShop?.is_enterprise_owner
     ? `<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🏪</span><span>${a.branch_name}</span></div>`
@@ -3951,7 +3952,10 @@ function renderApptCard(a) {
       ${branchBadge}
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
-    <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+    <div class="appt-price">${a.sena_status === 'confirmed' && senaAmt > 0
+      ? `<span style="font-size:11px;color:#c084fc;display:block;line-height:1.2">$${parseFloat(a.price||0).toLocaleString('es-AR')}</span><span style="color:var(--yellow)">$${(parseFloat(a.price||0)-senaAmt).toLocaleString('es-AR')}</span>`
+      : `$${parseFloat(a.price||0).toLocaleString('es-AR')}`
+    }</div>
     <div class="status-badge status-${a.status}">${statusLabel[a.status] || a.status}</div>
     <div class="appt-actions">
       ${isSena
@@ -4121,13 +4125,25 @@ function showPaymentPopup(apptId) {
   const existing = document.getElementById('payment-popup');
   if (existing) existing.remove();
 
+  const appt = _editApptCache[apptId] || {};
+  const senaAmt = parseFloat(appt.sena_amount || 0);
+  const hasSena = senaAmt > 0 && appt.sena_status === 'confirmed';
+  const remaining = parseFloat(appt.price || 0) - senaAmt;
+  const senaNote = hasSena
+    ? `<div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:16px">
+        💸 Seña cobrada: <strong>$${senaAmt.toLocaleString('es-AR')}</strong> (transfer)<br>
+        <span style="color:var(--yellow);font-weight:700">Cobrar ahora: $${remaining.toLocaleString('es-AR')}</span>
+       </div>`
+    : '';
+
   const popup = document.createElement('div');
   popup.id = 'payment-popup';
   popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   popup.innerHTML = `
     <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:360px">
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo pagó el cliente?</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:20px">Elegí el método de pago para registrar en caja</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">Elegí el método de pago para registrar en caja</div>
+      ${senaNote}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
         <button class="pay-btn" onclick="selectPayMethod('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600;transition:.2s">
           💵 Efectivo

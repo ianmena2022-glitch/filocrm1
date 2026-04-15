@@ -242,8 +242,10 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 -- Campos para modelo contable completo
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_income       BOOLEAN DEFAULT FALSE;
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type     VARCHAR(50) DEFAULT 'manual'
-  CHECK (source_type IN ('manual','stock_compra','product_sale','debt_payment','barber_settlement'));
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type     VARCHAR(50) DEFAULT 'manual';
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS expenses_source_type_check;
+ALTER TABLE expenses ADD CONSTRAINT expenses_source_type_check
+  CHECK (source_type IN ('manual','stock_compra','product_sale','debt_payment','barber_settlement','sena'));
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_id       INT;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method  VARCHAR(20);
 -- Ampliar check de categoría para instalaciones existentes
