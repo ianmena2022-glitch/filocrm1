@@ -58,6 +58,79 @@ router.get('/accounts', adminAuth, async (req, res) => {
   }
 });
 
+// ── VENDEDORES / REFERIDOS ────────────────────────────────────────────────────
+
+// GET /api/admin/vendors
+router.get('/vendors', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT v.id, v.name, v.email, v.code, v.created_at,
+             COUNT(s.id)::int AS referred_count
+      FROM vendors v
+      LEFT JOIN shops s ON s.vendor_id = v.id
+      GROUP BY v.id
+      ORDER BY v.created_at DESC
+    `);
+    res.json({ vendors: result.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/vendors/:id/accounts — cuentas referidas por un vendedor
+router.get('/vendors/:id/accounts', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, filo_plan, subscription_status, created_at
+       FROM shops WHERE vendor_id=$1 AND (is_barber IS NULL OR is_barber=FALSE) AND (is_branch IS NULL OR is_branch=FALSE)
+       ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ accounts: result.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/vendors
+router.post('/vendors', adminAuth, async (req, res) => {
+  const { name, email, code } = req.body;
+  if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
+  const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
+  try {
+    const exists = await pool.query('SELECT id FROM vendors WHERE code=$1', [codeNorm]);
+    if (exists.rows.length) return res.status(400).json({ error: 'Ya existe un vendedor con ese código' });
+    const result = await pool.query(
+      'INSERT INTO vendors (name, email, code) VALUES ($1,$2,$3) RETURNING *',
+      [name.trim(), email?.trim() || null, codeNorm]
+    );
+    res.json({ vendor: result.rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/admin/vendors/:id
+router.put('/vendors/:id', adminAuth, async (req, res) => {
+  const { name, email, code } = req.body;
+  if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
+  const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
+  try {
+    // Verificar que el código no esté usado por otro vendedor
+    const conflict = await pool.query('SELECT id FROM vendors WHERE code=$1 AND id<>$2', [codeNorm, req.params.id]);
+    if (conflict.rows.length) return res.status(400).json({ error: 'Ese código ya está en uso por otro vendedor' });
+    const result = await pool.query(
+      'UPDATE vendors SET name=$1, email=$2, code=$3 WHERE id=$4 RETURNING *',
+      [name.trim(), email?.trim() || null, codeNorm, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Vendedor no encontrado' });
+    res.json({ vendor: result.rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/admin/vendors/:id
+router.delete('/vendors/:id', adminAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE shops SET vendor_id=NULL WHERE vendor_id=$1', [req.params.id]);
+    await pool.query('DELETE FROM vendors WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/admin/accounts — crear cuenta nueva
 router.post('/accounts', adminAuth, async (req, res) => {
   const { name, email, phone, password, filo_plan, subscription_status } = req.body;

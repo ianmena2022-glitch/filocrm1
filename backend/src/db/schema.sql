@@ -392,3 +392,14 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_logo_url   TEXT;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_notes      TEXT;
 -- WhatsApp compartido: un solo número para todas las sucursales
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_shared_wpp BOOLEAN DEFAULT FALSE;
+
+-- ── Sistema de referidos ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS vendors (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL,
+  email      VARCHAR(255),
+  code       VARCHAR(50)  UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ  DEFAULT NOW()
+);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id      INTEGER REFERENCES vendors(id) ON DELETE SET NULL;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS referral_code  VARCHAR(50);

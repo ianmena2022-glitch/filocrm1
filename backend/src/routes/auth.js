@@ -263,7 +263,7 @@ router.post('/complete-registration', async (req, res) => {
 
 // POST /api/auth/register — cuenta normal
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
@@ -283,10 +283,18 @@ router.post('/register', async (req, res) => {
 
     const isEnterpriseOwner = filoPlan === 'enterprise';
 
+    // Resolver vendor por código de referido (opcional)
+    let vendorId = null;
+    const codeNorm = referral_code ? referral_code.trim().toUpperCase() : null;
+    if (codeNorm) {
+      const vendorQ = await pool.query('SELECT id FROM vendors WHERE code=$1', [codeNorm]);
+      if (vendorQ.rows.length) vendorId = vendorQ.rows[0].id;
+    }
+
     const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7) RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner]
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9) RETURNING *`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm]
     );
     const shop = result.rows[0];
 
@@ -302,7 +310,8 @@ router.post('/register', async (req, res) => {
       );
     }
 
-    console.log(`[REGISTRO] ${email} → plan ${filoPlan} · trial hasta ${trialEnds.toDateString()}`);
+    const refLog = vendorId ? ` · ref=${codeNorm} (vendor #${vendorId})` : '';
+    console.log(`[REGISTRO] ${email} → plan ${filoPlan} · trial hasta ${trialEnds.toDateString()}${refLog}`);
     res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
   } catch (e) {
     console.error('Register error:', e.message);

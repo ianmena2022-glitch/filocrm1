@@ -1253,6 +1253,11 @@ select.form-input { padding-right: 32px; }
         <input type="tel" id="reg-phone" value="+54" placeholder="+54 9113425876">
       </div>
 
+      <div class="form-group" id="reg-referral-group">
+        <label>Código de referido (opcional)</label>
+        <input type="text" id="reg-referral" placeholder="Ej: JUAN2026" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')">
+      </div>
+
       <!-- Selector de plan -->
       <div style="margin-bottom:16px">
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Elegí tu plan</label>
@@ -3088,10 +3093,11 @@ function selectRegPlan(plan) {
 }
 
 async function register() {
-  const name = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  const phone = document.getElementById('reg-phone').value.trim();
+  const name     = document.getElementById('reg-name').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const pass     = document.getElementById('reg-pass').value;
+  const phone    = document.getElementById('reg-phone').value.trim();
+  const referral = document.getElementById('reg-referral').value.trim().toUpperCase() || null;
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
   const btn = document.querySelector('#form-register .btn-primary');
   btn.disabled = true; btn.textContent = 'Creando tu cuenta...';
@@ -3100,7 +3106,7 @@ async function register() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan })
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral })
     });
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
@@ -5712,6 +5718,17 @@ document.addEventListener('DOMContentLoaded', async function() {
   } else {
     // No hay sesión — mostrar pantalla de login
     document.getElementById('auth-screen').style.display = 'flex';
+  }
+
+  // Leer ?ref=CODIGO de la URL y pre-rellenar el campo de referido en el registro
+  const refCode = new URLSearchParams(window.location.search).get('ref');
+  if (refCode) {
+    const refInput = document.getElementById('reg-referral');
+    const refGroup = document.getElementById('reg-referral-group');
+    if (refInput) refInput.value = refCode.toUpperCase();
+    if (refGroup) refGroup.style.display = 'block';
+    // Limpiar el param de la URL sin recargar
+    window.history.replaceState({}, '', window.location.pathname);
   }
 // ─── EDITAR CLIENTE ───
 });
