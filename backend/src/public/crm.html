@@ -3923,6 +3923,9 @@ function renderApptCard(a) {
   const senaBadge = a.status === 'waiting_sena' && a.sena_amount > 0
     ? `<div style="font-size:11px;color:#c084fc;margin-top:3px;display:flex;align-items:center;gap:4px"><span>💸</span><span>Seña: $${parseFloat(a.sena_amount).toLocaleString('es-AR')}</span></div>`
     : '';
+  const branchBadge = a.branch_name && currentShop?.is_enterprise_owner
+    ? `<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🏪</span><span>${a.branch_name}</span></div>`
+    : '';
   const isSena = a.status === 'waiting_sena';
   return `<div class="appointment-card">
     <div>
@@ -3936,6 +3939,7 @@ function renderApptCard(a) {
       ${redeemBadge}
       ${memberBadge}
       ${senaBadge}
+      ${branchBadge}
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>

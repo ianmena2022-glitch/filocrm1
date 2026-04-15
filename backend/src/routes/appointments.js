@@ -69,8 +69,25 @@ router.get('/', auth, async (req, res) => {
          ORDER BY a.time_start`,
         [shopId, d, req.shopId]
       );
+    } else if (req.isEnterpriseOwner) {
+      // Enterprise owner ve sus turnos + los de todas sus sucursales
+      result = await pool.query(
+        `SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.address AS client_address,
+                b.name AS assigned_barber_name,
+                s.name AS branch_name
+         FROM appointments a
+         LEFT JOIN clients c ON c.id = a.client_id
+         LEFT JOIN shops b ON b.id = a.barber_id
+         LEFT JOIN shops s ON s.id = a.shop_id
+         WHERE a.date = $2
+           AND (a.shop_id = $1 OR a.shop_id IN (
+             SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE
+           ))
+         ORDER BY a.time_start`,
+        [shopId, d]
+      );
     } else {
-      // Dueño ve todos los turnos
+      // Dueño/sucursal ve todos sus turnos
       result = await pool.query(
         `SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.address AS client_address,
                 b.name AS assigned_barber_name

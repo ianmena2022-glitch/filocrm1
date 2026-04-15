@@ -6,6 +6,15 @@ const auth   = require('../middleware/auth');
 router.get('/today', auth, async (req, res) => {
   const shopId = req.shopId;
   const today  = new Date().toISOString().split('T')[0];
+  const isEnterpriseOwner = req.isEnterpriseOwner || false;
+
+  // Filtro de shop_id: enterprise owner incluye sus sucursales
+  const shopFilter = isEnterpriseOwner
+    ? `(a.shop_id = $1 OR a.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
+    : `a.shop_id = $1`;
+  const shopFilterPlain = isEnterpriseOwner
+    ? `(shop_id = $1 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
+    : `shop_id = $1`;
 
   try {
     // Métricas del día (turnos + ventas de productos)
@@ -15,10 +24,10 @@ router.get('/today', auth, async (req, res) => {
            COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0)          AS revenue,
            COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
-           COUNT(CASE WHEN status='pending' OR status='confirmed' THEN 1 END)             AS pending,
+           COUNT(CASE WHEN status='pending' OR status='confirmed' OR status='waiting_sena' THEN 1 END) AS pending,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
          FROM appointments
-         WHERE shop_id = $1 AND date = $2`,
+         WHERE ${shopFilterPlain} AND date = $2`,
         [shopId, today]
       ),
       pool.query(
@@ -33,10 +42,12 @@ router.get('/today', auth, async (req, res) => {
 
     // Turnos del día completos con info del cliente
     const apptsQ = await pool.query(
-      `SELECT a.*, c.name AS client_name, c.phone AS client_phone
+      `SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+              s.name AS branch_name
        FROM appointments a
        LEFT JOIN clients c ON c.id = a.client_id
-       WHERE a.shop_id = $1 AND a.date = $2
+       LEFT JOIN shops s ON s.id = a.shop_id
+       WHERE ${shopFilter} AND a.date = $2
        ORDER BY a.time_start`,
       [shopId, today]
     );
