@@ -226,8 +226,39 @@ router.put('/plan', auth, async (req, res) => {
     if (!shop.rows[0]?.is_test) {
       return res.status(403).json({ error: 'Solo las cuentas de testing pueden cambiar de plan' });
     }
-    await pool.query('UPDATE shops SET plan=$1, filo_plan=$1 WHERE id=$2', [plan, req.shopId]);
-    res.json({ ok: true, plan });
+
+    const isEnterpriseOwner = plan === 'enterprise';
+    await pool.query(
+      `UPDATE shops SET
+         plan=$1, filo_plan=$1,
+         is_enterprise_owner=$2,
+         is_branch=FALSE,
+         is_barber=FALSE,
+         parent_shop_id=NULL,
+         parent_enterprise_id=NULL
+       WHERE id=$3`,
+      [plan, isEnterpriseOwner, req.shopId]
+    );
+
+    const updated = await pool.query('SELECT * FROM shops WHERE id=$1', [req.shopId]);
+    const updatedShop = updated.rows[0];
+
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      {
+        shopId:             updatedShop.id,
+        email:              updatedShop.email,
+        isBarber:           false,
+        parentShopId:       null,
+        isEnterpriseOwner:  isEnterpriseOwner,
+        isBranch:           false,
+        parentEnterpriseId: null,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({ ok: true, plan, token, shop: updatedShop });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

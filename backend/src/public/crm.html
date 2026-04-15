@@ -3562,10 +3562,19 @@ function startPolling() {
 // ─── NAVIGATION ───
 async function switchPlan(plan) {
   try {
-    await api('PUT', '/settings/plan', { plan });
+    const data = await api('PUT', '/settings/plan', { plan });
+    // Refresh token so JWT reflects new is_enterprise_owner/is_barber/is_branch flags
+    if (data.token) {
+      localStorage.setItem('filo_token', data.token);
+    }
     currentShop.plan = plan;
-    currentShop.filo_plan = plan; // actualizar también filo_plan
+    currentShop.filo_plan = plan;
     currentShop.is_test = true;
+    currentShop.is_enterprise_owner = plan === 'enterprise';
+    currentShop.is_branch = false;
+    currentShop.is_barber = false;
+    currentShop.parent_shop_id = null;
+    currentShop.parent_enterprise_id = null;
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     showToast('✅', `Plan cambiado a ${plan}`, 'Recargando...');
     setTimeout(() => location.reload(), 1000);
