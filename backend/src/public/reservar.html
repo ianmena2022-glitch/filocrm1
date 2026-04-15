@@ -809,13 +809,22 @@ async function doReserve(clientData) {
       showScreen('success');
     }
   } catch (e) {
-    showError(e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Ya pagué la seña'; }
-    // Volver al formulario si hay error grave (slot tomado, etc.)
-    if (e.message.includes('disponible') || e.message.includes('horario')) {
-      showScreen('form');
-      document.getElementById('steps').style.display = 'flex';
+    // Mostrar error en la pantalla donde está el usuario (sena o form)
+    const isOnSena = document.getElementById('screen-sena')?.style.display !== 'none';
+    if (isOnSena) {
+      let errEl = document.getElementById('sena-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'sena-error';
+        errEl.style.cssText = 'background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px 16px;color:#ff8080;font-size:13px;margin-top:12px;text-align:center';
+        document.getElementById('sena-ya-pague-btn')?.insertAdjacentElement('afterend', errEl);
+      }
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    } else {
+      showError(e.message);
     }
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Ya pagué la seña'; }
   }
 }
 

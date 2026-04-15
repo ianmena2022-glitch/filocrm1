@@ -210,6 +210,19 @@ router.post('/:slug/reserve', async (req, res) => {
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
 
+    // Si es sucursal sin seña propia, heredar sena_* del enterprise owner
+    if (shopData.is_branch && shopData.parent_enterprise_id && !shopData.sena_enabled) {
+      const ownerQ = await pool.query(
+        'SELECT sena_enabled, sena_pct, sena_alias FROM shops WHERE id=$1',
+        [shopData.parent_enterprise_id]
+      );
+      if (ownerQ.rows.length && ownerQ.rows[0].sena_enabled) {
+        shopData.sena_enabled = ownerQ.rows[0].sena_enabled;
+        shopData.sena_pct     = ownerQ.rows[0].sena_pct;
+        shopData.sena_alias   = ownerQ.rows[0].sena_alias;
+      }
+    }
+
     // Verificar día cerrado extraordinario
     if (shopData.closed_days) {
       const closedDays = JSON.parse(shopData.closed_days);
