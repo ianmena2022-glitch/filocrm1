@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, is_branch, parent_enterprise_id
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -42,6 +42,19 @@ router.get('/:slug', async (req, res) => {
         [shopData.id]
       );
       barbers = barbersQ.rows;
+    }
+
+    // Si es sucursal sin seña propia, heredar sena_* del enterprise owner
+    if (shopData.is_branch && shopData.parent_enterprise_id && !shopData.sena_enabled) {
+      const ownerQ = await pool.query(
+        'SELECT sena_enabled, sena_pct, sena_alias FROM shops WHERE id=$1',
+        [shopData.parent_enterprise_id]
+      );
+      if (ownerQ.rows.length && ownerQ.rows[0].sena_enabled) {
+        shopData.sena_enabled = ownerQ.rows[0].sena_enabled;
+        shopData.sena_pct     = ownerQ.rows[0].sena_pct;
+        shopData.sena_alias   = ownerQ.rows[0].sena_alias;
+      }
     }
 
     res.json({ shop: shopData, services: services.rows, barbers });
