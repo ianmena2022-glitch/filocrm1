@@ -822,7 +822,7 @@ function renderVendorsTable() {
   }
   const baseUrl = window.location.origin;
   tbody.innerHTML = allVendors.map(v => {
-    const link = `${baseUrl}/?ref=${encodeURIComponent(v.code)}`;
+    const link = `${baseUrl}/app?ref=${encodeURIComponent(v.code)}`;
     return `<tr>
       <td>
         <div style="font-weight:600">${esc(v.name)}</div>
