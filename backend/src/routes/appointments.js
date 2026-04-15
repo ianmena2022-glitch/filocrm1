@@ -239,11 +239,15 @@ router.put('/:id/status', auth, async (req, res) => {
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
+    const shopConditionStatus = req.isEnterpriseOwner
+      ? `(shop_id = $5 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $5 AND is_branch = TRUE))`
+      : `shop_id = $5`;
+
     const result = await pool.query(
       `UPDATE appointments SET status=$1,
          payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
          tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
-       WHERE id=$4 AND shop_id=$5 RETURNING *`,
+       WHERE id=$4 AND ${shopConditionStatus} RETURNING *`,
       [status, payment_method || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
@@ -361,9 +365,14 @@ router.put('/:id/sena', auth, async (req, res) => {
       newSenaStatus = 'lost';
     }
 
+    // Enterprise owner puede confirmar señas de sus sucursales también
+    const shopCondition = req.isEnterpriseOwner
+      ? `(shop_id = $4 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $4 AND is_branch = TRUE))`
+      : `shop_id = $4`;
+
     const result = await pool.query(
       `UPDATE appointments SET status=$1, sena_status=$2
-       WHERE id=$3 AND shop_id=$4 AND status='waiting_sena'
+       WHERE id=$3 AND ${shopCondition} AND status='waiting_sena'
        RETURNING *`,
       [newStatus, newSenaStatus, req.params.id, shopId]
     );
@@ -378,8 +387,12 @@ router.put('/:id/sena', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   const shopId = realShopId(req);
   try {
+    const shopConditionDel = req.isEnterpriseOwner
+      ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
+      : `shop_id = $2`;
+
     const result = await pool.query(
-      'DELETE FROM appointments WHERE id=$1 AND shop_id=$2 RETURNING id',
+      `DELETE FROM appointments WHERE id=$1 AND ${shopConditionDel} RETURNING id`,
       [req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
