@@ -124,9 +124,12 @@ router.get('/:slug/available', async (req, res) => {
     }
 
     // Turnos ya ocupados ese día
+    // waiting_sena solo cuenta si no venció (sena_expires_at > NOW() o es null)
     const occupied = await pool.query(
       `SELECT time_start, time_end FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status NOT IN ('cancelled','noshow')
+       WHERE shop_id=$1 AND date=$2
+         AND status NOT IN ('cancelled','noshow')
+         AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
        ORDER BY time_start`,
       [shopId, date]
     );
