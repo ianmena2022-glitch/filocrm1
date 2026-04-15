@@ -616,29 +616,41 @@ router.post('/cash/auto-close', async (req, res) => {
         if (Math.abs(nowMins - closeMins) <= 30) {
           // Calcular y guardar cierre
           const appts = await pool.query(
-            `SELECT
-               COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0) AS cash_total,
-               COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0) AS debit_total,
-               COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0) AS credit_total,
-               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-               COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0) AS debt_total,
+            `WITH adj AS (
+               SELECT *,
+                 price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END AS adj_price
+               FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'
+             )
+             SELECT
+               COALESCE(SUM(CASE WHEN payment_method='cash'     THEN adj_price ELSE 0 END),0) AS cash_total,
+               COALESCE(SUM(CASE WHEN payment_method='debit'    THEN adj_price ELSE 0 END),0) AS debit_total,
+               COALESCE(SUM(CASE WHEN payment_method='credit'   THEN adj_price ELSE 0 END),0) AS credit_total,
+               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN adj_price ELSE 0 END),0) AS transfer_total,
+               COALESCE(SUM(CASE WHEN payment_method='debt'     THEN adj_price ELSE 0 END),0) AS debt_total,
                COALESCE(SUM(tip),0) AS tips_total,
-               COALESCE(SUM(price),0) AS revenue_total,
+               COALESCE(SUM(adj_price),0) AS revenue_total,
                COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
-               COUNT(*) FILTER (WHERE status='completed') AS cuts_count
-             FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+               COUNT(*) AS cuts_count
+             FROM adj`,
             [shop.id, today]
           );
           const exps = await pool.query(
-            `SELECT COALESCE(SUM(amount),0) AS expenses_total FROM expenses WHERE shop_id=$1 AND date=$2`,
+            `SELECT
+               COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
+               COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS all_income,
+               COALESCE(SUM(CASE WHEN source_type='sena' THEN amount ELSE 0 END),0) AS sena_total
+             FROM expenses WHERE shop_id=$1 AND date=$2`,
             [shop.id, today]
           );
           const a = appts.rows[0];
+          const e = exps.rows[0];
           const revenue = parseFloat(a.revenue_total);
-          const expenses = parseFloat(exps.rows[0].expenses_total);
+          const expenses = parseFloat(e.expenses_total);
+          const allIncome = parseFloat(e.all_income || 0);
+          const sena_total = parseFloat(e.sena_total || 0);
           const tips = parseFloat(a.tips_total);
           const commissions = parseFloat(a.commissions_total);
-          const net = revenue + tips - expenses - commissions;
+          const net = revenue + tips + allIncome - expenses - commissions;
           await pool.query(
             `INSERT INTO cash_registers
                (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
@@ -648,7 +660,8 @@ router.post('/cash/auto-close', async (req, res) => {
                cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
                debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
                net_total=$11, cuts_count=$12, closed_at=NOW()`,
-            [shop.id, today, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
+            [shop.id, today, a.cash_total, a.debit_total, a.credit_total,
+             parseFloat(a.transfer_total) + sena_total,
              a.debt_total, tips, expenses, revenue, net, a.cuts_count]
           );
           closed++;
