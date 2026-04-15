@@ -4197,7 +4197,7 @@ async function confirmPayment(apptId) {
     showToast('✅', 'Turno completado', method === 'debt' ? '💰 Deuda registrada' : '¡Cobro registrado en caja!');
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
-    loadCashSummary();
+    await loadCashSummary();
   } catch(e) {
     showToast('❌', 'Error', e.message);
   }
@@ -6477,7 +6477,10 @@ async function loadCashSummary() {
     renderCashSummary(cash);
     renderDebts(debts);
     renderCashHistory(history);
-  } catch(e) { console.error('loadCashSummary error:', e.message); }
+  } catch(e) {
+    console.error('loadCashSummary error:', e.message);
+    showToast('❌', 'Error al actualizar caja', e.message);
+  }
 }
 
 function renderCashSummary(c) {

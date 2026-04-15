@@ -21,8 +21,13 @@ router.get('/today', auth, async (req, res) => {
     const [metricsQ, prodRevenueQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0)          AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt'
+             THEN price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END
+             ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt'
+             THEN (price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END)
+                  - COALESCE(cost,0) - (price * COALESCE(commission_pct,0) / 100.0)
+             ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
            COUNT(CASE WHEN status='pending' OR status='confirmed' OR status='waiting_sena' THEN 1 END) AS pending,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows

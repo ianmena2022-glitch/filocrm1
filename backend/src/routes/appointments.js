@@ -382,14 +382,20 @@ router.put('/:id/sena', auth, async (req, res) => {
 
     // Al confirmar seña → registrar como ingreso en caja (transfer del día)
     if (action === 'confirm' && appt.sena_amount > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      await pool.query(
-        `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
-         VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')`,
-        [appt.shop_id, parseFloat(appt.sena_amount),
-         `Seña - ${appt.client_name || 'Sin nombre'}`,
-         today, appt.id]
-      );
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        await pool.query(
+          `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+           VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')
+           ON CONFLICT DO NOTHING`,
+          [appt.shop_id, parseFloat(appt.sena_amount),
+           `Seña - ${appt.client_name || 'Sin nombre'}`,
+           today, appt.id]
+        );
+      } catch (senaErr) {
+        // No fallar la confirmación si el registro en caja falla
+        console.error('[SENA] Error registrando en caja:', senaErr.message);
+      }
     }
 
     res.json({ ok: true, appointment: appt });
