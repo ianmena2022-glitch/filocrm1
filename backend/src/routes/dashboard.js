@@ -21,13 +21,8 @@ router.get('/today', auth, async (req, res) => {
     const [metricsQ, prodRevenueQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt'
-             THEN price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END
-             ELSE 0 END), 0) AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt'
-             THEN (price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END)
-                  - COALESCE(cost,0) - (price * COALESCE(commission_pct,0) / 100.0)
-             ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - COALESCE(cost,0) - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
            COUNT(CASE WHEN status='pending' OR status='confirmed' OR status='waiting_sena' THEN 1 END) AS pending,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
@@ -312,33 +307,28 @@ router.get('/cash', auth, async (req, res) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
   const shopId = req.shopId;
   try {
-    // Ingresos por método de pago (descontando sena_amount para no doble-contar con el income de seña)
+    // Ingresos por método de pago (precio completo — la seña se suma como income_item aparte)
     const appts = await pool.query(
-      `WITH adj AS (
-         SELECT *,
-           price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END AS adj_price
-         FROM appointments
-         WHERE shop_id=$1 AND date=$2 AND status='completed'
-       )
-       SELECT
-         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN adj_price ELSE 0 END),0) AS cash_total,
-         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN adj_price ELSE 0 END),0) AS debit_total,
-         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN adj_price ELSE 0 END),0) AS credit_total,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN adj_price ELSE 0 END),0) AS transfer_total,
-         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN adj_price ELSE 0 END),0) AS debt_total,
-         COALESCE(SUM(CASE WHEN payment_method IS NULL    THEN adj_price ELSE 0 END),0) AS no_method_total,
-         COALESCE(SUM(tip),0)                                                            AS tips_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN adj_price ELSE 0 END),0) AS revenue_total,
-         COUNT(*)                                                                         AS cuts_count
-       FROM adj`,
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
+         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
+         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
+         COALESCE(SUM(CASE WHEN payment_method IS NULL    THEN price ELSE 0 END),0) AS no_method_total,
+         COALESCE(SUM(tip),0)                                                        AS tips_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+         COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed'`,
       [shopId, date]
     );
-    // Gastos e ingresos extras del día (separados por is_income y tipo)
+    // Gastos e ingresos extras del día (señas son informativas, no suman al net para evitar doble conteo)
     const exps = await pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
-         COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS all_income,
-         COALESCE(SUM(CASE WHEN is_income=TRUE AND (source_type IS DISTINCT FROM 'debt_payment') THEN amount ELSE 0 END),0) AS extra_income,
+         COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income,
+         COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'debt_payment' AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS extra_income,
          json_agg(json_build_object(
            'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method
          ) ORDER BY created_at DESC) FILTER (WHERE is_income IS NULL OR is_income=FALSE) AS items,
@@ -376,20 +366,12 @@ router.get('/cash', auth, async (req, res) => {
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
 
-    // Señas confirmadas del día (siempre transfer; se restan del ingreso del turno para no doble-contar)
-    const senaQ = await pool.query(
-      `SELECT COALESCE(SUM(amount),0) AS sena_total
-       FROM expenses WHERE shop_id=$1 AND date=$2 AND source_type='sena'`,
-      [shopId, date]
-    );
-    const sena_total = parseFloat(senaQ.rows[0].sena_total);
-
     res.json({
       date,
       cash_total:        parseFloat(a.cash_total)     + parseFloat(dc.cash_col),
       debit_total:       parseFloat(a.debit_total)    + parseFloat(dc.debit_col),
       credit_total:      parseFloat(a.credit_total)   + parseFloat(dc.credit_col),
-      transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col) + sena_total,
+      transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col),
       debt_total:        Math.max(0, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
       no_method_total:   parseFloat(a.no_method_total),
       tips_total:        tips,
@@ -616,29 +598,23 @@ router.post('/cash/auto-close', async (req, res) => {
         if (Math.abs(nowMins - closeMins) <= 30) {
           // Calcular y guardar cierre
           const appts = await pool.query(
-            `WITH adj AS (
-               SELECT *,
-                 price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END AS adj_price
-               FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'
-             )
-             SELECT
-               COALESCE(SUM(CASE WHEN payment_method='cash'     THEN adj_price ELSE 0 END),0) AS cash_total,
-               COALESCE(SUM(CASE WHEN payment_method='debit'    THEN adj_price ELSE 0 END),0) AS debit_total,
-               COALESCE(SUM(CASE WHEN payment_method='credit'   THEN adj_price ELSE 0 END),0) AS credit_total,
-               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN adj_price ELSE 0 END),0) AS transfer_total,
-               COALESCE(SUM(CASE WHEN payment_method='debt'     THEN adj_price ELSE 0 END),0) AS debt_total,
+            `SELECT
+               COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
+               COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
+               COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
+               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+               COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
                COALESCE(SUM(tip),0) AS tips_total,
-               COALESCE(SUM(adj_price),0) AS revenue_total,
+               COALESCE(SUM(price),0) AS revenue_total,
                COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
-               COUNT(*) AS cuts_count
-             FROM adj`,
+               COUNT(*) FILTER (WHERE status='completed') AS cuts_count
+             FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
             [shop.id, today]
           );
           const exps = await pool.query(
             `SELECT
                COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
-               COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS all_income,
-               COALESCE(SUM(CASE WHEN source_type='sena' THEN amount ELSE 0 END),0) AS sena_total
+               COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income
              FROM expenses WHERE shop_id=$1 AND date=$2`,
             [shop.id, today]
           );
@@ -647,7 +623,6 @@ router.post('/cash/auto-close', async (req, res) => {
           const revenue = parseFloat(a.revenue_total);
           const expenses = parseFloat(e.expenses_total);
           const allIncome = parseFloat(e.all_income || 0);
-          const sena_total = parseFloat(e.sena_total || 0);
           const tips = parseFloat(a.tips_total);
           const commissions = parseFloat(a.commissions_total);
           const net = revenue + tips + allIncome - expenses - commissions;
@@ -660,8 +635,7 @@ router.post('/cash/auto-close', async (req, res) => {
                cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
                debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
                net_total=$11, cuts_count=$12, closed_at=NOW()`,
-            [shop.id, today, a.cash_total, a.debit_total, a.credit_total,
-             parseFloat(a.transfer_total) + sena_total,
+            [shop.id, today, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
              a.debt_total, tips, expenses, revenue, net, a.cuts_count]
           );
           closed++;
