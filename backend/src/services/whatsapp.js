@@ -247,11 +247,10 @@ async function findPendingPayment(shopId, phone) {
 async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
   try {
     let pending = await findPendingPayment(shopId, phone);
+    console.log(`[WPP] findPendingPayment(${phone}): ${pending ? `${pending.type} #${pending.id}` : 'null'}`);
     if (!pending) {
-      // Fallback: si hay exactamente 1 pago pendiente en la tienda, asumirlo
-      // (cubre el caso donde el phone resuelto de @lid no matchea exactamente el formato en DB)
       pending = await findAnyPendingPayment(shopId);
-      if (pending) console.log(`[WPP] Phone ${phone} no matcheó — fallback a ${pending.type} #${pending.id}`);
+      console.log(`[WPP] findAnyPendingPayment fallback: ${pending ? `${pending.type} #${pending.id} clientPhone=${pending.clientPhone}` : 'null'}`);
     }
     if (!pending) return false;
 
