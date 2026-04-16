@@ -18,9 +18,9 @@ async function sendReminders() {
   try {
     const now = new Date();
 
-    // Ventana: turnos que empiezan entre 11:30hs y 12:30hs desde ahora
-    const windowStart = new Date(now.getTime() + 3.5 * 60 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + 4.5 * 60 * 60 * 1000);
+    // Ventana: turnos que empiezan entre 1:30hs y 2:30hs desde ahora (~2hs antes)
+    const windowStart = new Date(now.getTime() + 1.5 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
 
     const startDate = windowStart.toISOString().split('T')[0];
     const endDate   = windowEnd.toISOString().split('T')[0];
@@ -201,6 +201,56 @@ async function deleteExpiredAccounts() {
   }
 }
 
+// Envía mensajes de rescate automático a clientes que no vienen hace N días
+async function sendAutoRescue() {
+  try {
+    const { generateMessage } = require('./services/ai');
+    const baseUrl = process.env.APP_URL || 'https://filocrm1-production.up.railway.app';
+
+    const { rows } = await pool.query(
+      `SELECT c.id, c.shop_id, c.name, c.phone,
+              s.name AS shop_name, s.booking_slug, s.wpp_connected, s.churn_days
+       FROM clients c
+       JOIN shops s ON s.id = c.shop_id
+       WHERE s.wpp_connected = TRUE
+         AND c.phone IS NOT NULL AND c.phone != ''
+         AND c.last_visit IS NOT NULL
+         AND c.last_visit < CURRENT_DATE - (s.churn_days || ' days')::INTERVAL
+         AND (
+           c.last_rescue_sent IS NULL
+           OR c.last_rescue_sent < CURRENT_DATE - (s.churn_days || ' days')::INTERVAL
+         )
+         AND (s.is_test = FALSE OR s.is_test IS NULL)`
+    );
+
+    if (!rows.length) return;
+    console.log(`[CRON] ${rows.length} mensaje(s) de rescate automático a enviar`);
+
+    for (const client of rows) {
+      try {
+        const daysSince = Math.floor((Date.now() - new Date(client.last_visit)) / 86400000);
+        const bookingLink = client.booking_slug ? `${baseUrl}/reservar/${client.booking_slug}` : null;
+
+        let msg = await generateMessage(client.shop_id, 'rescate_auto', {
+          clientName: client.name,
+          shopName: client.shop_name,
+          daysSince,
+          bookingLink,
+        });
+        if (!msg) msg = `¡Hola ${client.name}! Hace un tiempo que no te vemos por ${client.shop_name}. 🪒 Reservá tu próximo turno cuando quieras.${bookingLink ? `\n${bookingLink}` : ''}`;
+
+        await wpp.sendText(client.shop_id, client.phone, msg);
+        await pool.query('UPDATE clients SET last_rescue_sent = NOW() WHERE id = $1', [client.id]);
+        console.log(`[CRON] Rescate enviado a ${client.name} (shop ${client.shop_id})`);
+      } catch (e) {
+        console.error(`[CRON] Error enviando rescate a ${client.name}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[CRON] Error en sendAutoRescue:', e.message);
+  }
+}
+
 async function runHourlyTasks() {
   await sendReminders();
   await closeCashRegisters();
@@ -208,10 +258,27 @@ async function runHourlyTasks() {
   await deleteExpiredAccounts();
 }
 
+async function runDailyTasks() {
+  await sendAutoRescue();
+}
+
+let _dailyTasksLastRun = null;
+
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + rescate auto)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
+
+  // Tareas diarias: correr una vez al arrancar, luego verificar cada hora si ya corrió hoy
+  const runDailyIfNeeded = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (_dailyTasksLastRun !== today) {
+      _dailyTasksLastRun = today;
+      await runDailyTasks();
+    }
+  };
+  runDailyIfNeeded();
+  setInterval(runDailyIfNeeded, 60 * 60 * 1000);
 }
 
 module.exports = { startScheduler };

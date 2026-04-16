@@ -328,3 +328,20 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements     ON product_stock_movements(sh
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 'pct'
   CHECK (commission_mode IN ('pct','fixed','mixed'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
+
+-- Comprobantes de seña en turnos
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_comprobante_status VARCHAR(20) DEFAULT NULL
+  CHECK (sena_comprobante_status IN ('received','verified','rejected') OR sena_comprobante_status IS NULL);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_comprobante_data TEXT DEFAULT NULL;
+
+-- Comprobantes de pago en membresías
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS comprobante_status VARCHAR(20) DEFAULT NULL
+  CHECK (comprobante_status IN ('received','verified','rejected') OR comprobante_status IS NULL);
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS comprobante_data TEXT DEFAULT NULL;
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'
+  CHECK (payment_status IN ('pending','paid','overdue'));
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
+
+-- Rescate automático
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAULT NULL;
+

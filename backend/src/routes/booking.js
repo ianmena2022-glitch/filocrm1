@@ -251,14 +251,33 @@ router.post('/:slug/reserve', async (req, res) => {
        assignedBarberId, assignedBarberCommission]
     );
 
+    const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+
     // Notificar al barbero por WhatsApp si está conectado
     if (shopData.wpp_connected && shopData.phone) {
-      const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
       const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
       try {
         await wpp.sendText(shopData.id, shopData.phone, msg);
       } catch (e) {
         console.error('Error notificando al barbero:', e.message);
+      }
+    }
+
+    // Notificar al cliente que su reserva fue recibida
+    if (shopData.wpp_connected && client_phone) {
+      try {
+        const { generateMessage } = require('../services/ai');
+        let msg = await generateMessage(shopData.id, 'reserva_recibida', {
+          clientName: client_name,
+          shopName: shopData.name,
+          fecha: dateFormatted,
+          hora: time_start,
+          serviceName: svcName || null,
+        });
+        if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
+        await wpp.sendText(shopData.id, client_phone, msg);
+      } catch (e) {
+        console.error('Error notificando al cliente:', e.message);
       }
     }
 
