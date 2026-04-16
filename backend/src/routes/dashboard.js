@@ -62,7 +62,7 @@ router.get('/today', auth, async (req, res) => {
        WHERE ${shopFilterPlain} AND date >= CURRENT_DATE - INTERVAL '6 days' AND date <= CURRENT_DATE
        GROUP BY date
        ORDER BY date`,
-      [shopId, today]
+      [shopId]
     );
 
     // Split de comisiones del dia (barberos) — agrupar por barbero usando su nombre real

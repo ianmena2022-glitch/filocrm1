@@ -81,14 +81,14 @@ router.post('/', auth, async (req, res) => {
     // Enviar instrucciones de pago por WhatsApp
     try {
       const shopData = await pool.query(
-        'SELECT name, wpp_alias, wpp_connected FROM shops WHERE id=$1',
+        'SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1',
         [req.shopId]
       );
       const shop = shopData.rows[0];
       const clientData = await pool.query('SELECT name, phone FROM clients WHERE id=$1', [client_id]);
       const client = clientData.rows[0];
 
-      if (shop?.wpp_connected && shop?.wpp_alias && client?.phone) {
+      if (shop?.wpp_connected && shop?.sena_alias && client?.phone) {
         const { generateMessage } = require('../services/ai');
         const { sendMessage } = require('../services/whatsapp');
         const price = parseFloat(price_monthly || 0);
@@ -99,9 +99,9 @@ router.post('/', auth, async (req, res) => {
           planName: plan,
           credits,
           price,
-          alias: shop.wpp_alias,
+          alias: shop.sena_alias,
         });
-        if (!msg) msg = buildPaymentMsg(client.name, price, shop.wpp_alias, plan);
+        if (!msg) msg = buildPaymentMsg(client.name, price, shop.sena_alias, plan);
 
         await sendMessage(req.shopId, client.phone, msg);
       }
@@ -136,7 +136,7 @@ router.put('/:id/mark-paid', auth, async (req, res) => {
 
     // Notificar al cliente
     try {
-      const shopData = await pool.query('SELECT name, wpp_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+      const shopData = await pool.query('SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
       const shop = shopData.rows[0];
       if (shop?.wpp_connected && m.client_phone) {
         const { generateMessage } = require('../services/ai');
@@ -173,7 +173,7 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
     if (!memRes.rows.length) return res.status(404).json({ error: 'Membresía no encontrada' });
     const m = memRes.rows[0];
 
-    const shopData = await pool.query('SELECT name, wpp_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+    const shopData = await pool.query('SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
     const shop = shopData.rows[0];
     if (!shop?.wpp_connected) return res.status(400).json({ error: 'WhatsApp no conectado' });
     if (!m.client_phone) return res.status(400).json({ error: 'El cliente no tiene teléfono' });
@@ -189,9 +189,9 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
       shopName: shop.name,
       fechaVencimiento,
       price: parseFloat(m.price_monthly || 0),
-      alias: shop.wpp_alias || '',
+      alias: shop.sena_alias || '',
     });
-    if (!msg) msg = buildPaymentMsg(m.client_name, parseFloat(m.price_monthly || 0), shop.wpp_alias || '', m.plan);
+    if (!msg) msg = buildPaymentMsg(m.client_name, parseFloat(m.price_monthly || 0), shop.sena_alias || '', m.plan);
 
     await sendMessage(req.shopId, m.client_phone, msg);
     res.json({ ok: true });

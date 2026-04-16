@@ -165,7 +165,7 @@ async function findPendingPayment(shopId, phone) {
     const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
 
     const senaRes = await pool.query(
-      `SELECT a.id, a.sena_amount, s.wpp_alias
+      `SELECT a.id, a.sena_amount, s.sena_alias
        FROM appointments a
        JOIN shops s ON s.id = a.shop_id
        WHERE a.shop_id = $1
@@ -180,11 +180,11 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (senaRes.rows.length) {
-      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].wpp_alias };
+      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].sena_alias };
     }
 
     const memRes = await pool.query(
-      `SELECT m.id, m.price_monthly AS price, s.wpp_alias
+      `SELECT m.id, m.price_monthly AS price, s.sena_alias
        FROM memberships m
        JOIN shops s ON s.id = m.shop_id
        JOIN clients c ON c.id = m.client_id
@@ -197,7 +197,7 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (memRes.rows.length) {
-      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].wpp_alias };
+      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].sena_alias };
     }
 
     return null;
