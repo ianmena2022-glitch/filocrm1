@@ -151,6 +151,48 @@ function extractTextFromMessage(msgContent) {
   return null;
 }
 
+// Intentar resolver @lid → phone real consultando la API de WhatsApp
+// Itera sobre clientes con pago pendiente, llama onWhatsApp para obtener su LID y hace match
+async function resolveLidToPhone(shopId, lidNumber, sock) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT c.phone
+       FROM (
+         SELECT client_id FROM appointments
+         WHERE shop_id=$1 AND status='waiting_sena' AND sena_comprobante_status IS NULL
+         UNION
+         SELECT client_id FROM memberships
+         WHERE shop_id=$1 AND (payment_status='pending' OR payment_status IS NULL)
+           AND comprobante_status IS NULL AND active=TRUE
+       ) pending
+       JOIN clients c ON c.id = pending.client_id
+       WHERE c.phone IS NOT NULL AND c.phone != ''`,
+      [shopId]
+    );
+
+    for (const row of rows) {
+      try {
+        const phoneClean = row.phone.replace(/\D/g, '');
+        const results = await sock.onWhatsApp(`${phoneClean}@s.whatsapp.net`);
+        const info = Array.isArray(results) ? results[0] : results;
+        if (!info) continue;
+        const lid = (info.lid || '').replace(/@.*/, '');
+        if (lid) {
+          if (!lidToPhone[shopId]) lidToPhone[shopId] = {};
+          lidToPhone[shopId][lid] = phoneClean;
+          if (lid === lidNumber) {
+            console.log(`[WPP] LID ${lidNumber} resuelto via onWhatsApp → ${phoneClean}`);
+            return phoneClean;
+          }
+        }
+      } catch(e) { /* este número no devolvió LID */ }
+    }
+  } catch(e) {
+    console.error('[WPP] resolveLidToPhone error:', e.message);
+  }
+  return null;
+}
+
 // Buscar pago pendiente para un teléfono (seña o membresía)
 async function findPendingPayment(shopId, phone) {
   try {
@@ -448,12 +490,17 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
-        // Si es @lid, resolver número real: senderPn > mapa de contactos > phoneRaw (LID)
-        const phone = (jid.endsWith('@lid') && msg.senderPn)
+        // Si es @lid, resolver número real: senderPn > mapa de contactos > onWhatsApp API > phoneRaw
+        let phone = (jid.endsWith('@lid') && msg.senderPn)
           ? msg.senderPn.replace('@s.whatsapp.net', '')
           : (jid.endsWith('@lid') && lidToPhone[shopId]?.[phoneRaw])
             ? lidToPhone[shopId][phoneRaw]
             : phoneRaw;
+        // Último recurso: consultar la API de WA para resolver el LID
+        if (jid.endsWith('@lid') && phone === phoneRaw) {
+          const resolved = await resolveLidToPhone(shopId, phoneRaw, sock);
+          if (resolved) phone = resolved;
+        }
         if (jid.endsWith('@lid')) console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
 
         // Detectar error de PreKey (mensaje no descifrable) — limpiar keys Signal
