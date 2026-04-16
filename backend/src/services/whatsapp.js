@@ -178,7 +178,7 @@ async function findAnyPendingPayment(shopId) {
       `SELECT m.id, m.price_monthly AS price, s.sena_alias, c.phone AS client_phone
        FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
        WHERE m.shop_id=$1
-         AND m.payment_status != 'paid'
+         AND m.payment_status IS DISTINCT FROM 'paid'
          AND (m.comprobante_status IS NULL OR m.comprobante_status = 'rejected')
          AND c.phone IS NOT NULL AND c.phone != ''
        ORDER BY m.created_at DESC LIMIT 2`,
@@ -226,7 +226,7 @@ async function findPendingPayment(shopId, phone) {
        JOIN shops s ON s.id = m.shop_id
        JOIN clients c ON c.id = m.client_id
        WHERE m.shop_id = $1
-         AND m.payment_status != 'paid'
+         AND m.payment_status IS DISTINCT FROM 'paid'
          AND (m.comprobante_status IS NULL OR m.comprobante_status = 'rejected')
          AND regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE $2
        ORDER BY m.created_at DESC
