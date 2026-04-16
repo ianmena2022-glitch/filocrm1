@@ -163,29 +163,33 @@ function extractTextFromMessage(msgContent) {
 }
 
 // Buscar pago pendiente sin filtrar por phone (fallback para @lid no resuelto)
-// Solo se usa cuando hay exactamente 1 pago pendiente en el shop
+// Solo retorna resultado cuando hay EXACTAMENTE 1 pago pendiente en el shop (incluye phone del cliente)
 async function findAnyPendingPayment(shopId) {
   try {
     const senaRes = await pool.query(
-      `SELECT a.id, a.sena_amount, s.sena_alias
-       FROM appointments a JOIN shops s ON s.id = a.shop_id
+      `SELECT a.id, a.sena_amount, s.sena_alias, c.phone AS client_phone
+       FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
        WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
+         AND c.phone IS NOT NULL AND c.phone != ''
        LIMIT 2`,
       [shopId]
     );
     if (senaRes.rows.length === 1) {
-      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].sena_alias };
+      const r = senaRes.rows[0];
+      return { type: 'sena', id: r.id, amount: parseFloat(r.sena_amount), alias: r.sena_alias, clientPhone: r.client_phone };
     }
     const memRes = await pool.query(
-      `SELECT m.id, m.price_monthly AS price, s.sena_alias
-       FROM memberships m JOIN shops s ON s.id = m.shop_id
+      `SELECT m.id, m.price_monthly AS price, s.sena_alias, c.phone AS client_phone
+       FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
        WHERE m.shop_id=$1 AND (m.payment_status='pending' OR m.payment_status IS NULL)
          AND m.comprobante_status IS NULL AND m.active=TRUE
+         AND c.phone IS NOT NULL AND c.phone != ''
        ORDER BY m.created_at DESC LIMIT 2`,
       [shopId]
     );
     if (memRes.rows.length === 1) {
-      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].sena_alias };
+      const r = memRes.rows[0];
+      return { type: 'membership', id: r.id, amount: parseFloat(r.price), alias: r.sena_alias, clientPhone: r.client_phone };
     }
     return null;
   } catch(e) {
@@ -532,11 +536,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           continue;
         }
 
-        // messageStubType 2 = CIPHERTEXT: Baileys no pudo descifrar — limpiar keys Signal
-        // No enviamos notificación a nadie (no sabemos quién es el @lid)
+        // messageStubType 2 = CIPHERTEXT: Baileys no puede descifrar mensajes de @lid
         if (msg.messageStubType === 2) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phone} — limpiando keys Signal para shop ${shopId}`);
           await clearSignalKeys(shopId);
+          // Notificar solo si hay exactamente 1 pago pendiente → enviar al phone conocido del cliente
+          try {
+            const pending = await findAnyPendingPayment(shopId);
+            if (pending?.clientPhone) {
+              await sendText(shopId, pending.clientPhone, '⚠️ No pudimos leer tu imagen. Por favor reenviá el comprobante por este chat.');
+              console.log(`[WPP] CIPHERTEXT: aviso enviado a ${pending.clientPhone}`);
+            }
+          } catch(e) { console.error('[WPP] CIPHERTEXT notify error:', e.message); }
           continue;
         }
 
