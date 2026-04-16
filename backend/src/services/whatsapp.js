@@ -246,7 +246,13 @@ async function findPendingPayment(shopId, phone) {
 // Verificar y procesar comprobante recibido (imagen o PDF)
 async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
   try {
-    const pending = await findPendingPayment(shopId, phone);
+    let pending = await findPendingPayment(shopId, phone);
+    if (!pending) {
+      // Fallback: si hay exactamente 1 pago pendiente en la tienda, asumirlo
+      // (cubre el caso donde el phone resuelto de @lid no matchea exactamente el formato en DB)
+      pending = await findAnyPendingPayment(shopId);
+      if (pending) console.log(`[WPP] Phone ${phone} no matcheó — fallback a ${pending.type} #${pending.id}`);
+    }
     if (!pending) return false;
 
     console.log(`[WPP] Comprobante ${mediaType} de ${phone} para ${pending.type} #${pending.id}`);
@@ -522,7 +528,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         // Interceptar PDFs como posibles comprobantes
         if (msgContent?.documentMessage) {
           const mime = msgContent.documentMessage.mimetype || '';
-          if (mime === 'application/pdf' || mime.includes('pdf')) {
+          console.log(`[WPP] documentMessage mime="${mime}" fileName="${msgContent.documentMessage.fileName || ''}"`);
+          if (mime === 'application/pdf' || mime.includes('pdf') || (msgContent.documentMessage.fileName || '').toLowerCase().endsWith('.pdf')) {
             const handled = await handleComprobanteMedia(shopId, phone, msg, sock, 'pdf');
             if (handled) continue;
           }
