@@ -1,4 +1,10 @@
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
+// Baileys v7 — ESM-only, lazy dynamic import desde CJS
+let _baileys = null;
+async function getBaileys() {
+  if (!_baileys) _baileys = await import('@whiskeysockets/baileys');
+  return _baileys;
+}
+
 const { Boom } = require('@hapi/boom');
 const pool = require('../db/pool');
 const fs   = require('fs');
@@ -8,10 +14,7 @@ const path = require('path');
 const sockets  = {};
 const qrCodes  = {};
 const statuses = {};
-const decryptErrors = {}; // contador de errores de descifrado por shopId
-
-// Mapa LID → phone real (por shopId) — poblado desde contacts.set / contacts.update
-const lidToPhone = {}; // lidToPhone[shopId][lidNumber] = phoneNumber
+const decryptErrors = {};
 
 // Limpiar sesión completamente (tmp + DB)
 async function clearSession(shopId) {
@@ -50,7 +53,6 @@ async function clearSignalKeys(shopId) {
     console.error('clearSignalKeys error:', e.message);
   }
 }
-
 
 function authDir(shopId) {
   const dir = path.join('/tmp', `baileys_${shopId}`);
@@ -112,16 +114,22 @@ async function saveSessionToDB(shopId) {
   }
 }
 
+// Descargar media usando API de Baileys v7
+async function downloadMediaBuffer(mediaMessage, mediaType) {
+  const { downloadContentFromMessage } = await getBaileys();
+  const stream = await downloadContentFromMessage(mediaMessage, mediaType);
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
 
 // Extraer texto de cualquier tipo de mensaje de Baileys
 function extractTextFromMessage(msgContent) {
   if (!msgContent) return null;
 
-  // Tipos directos
   if (msgContent.conversation) return msgContent.conversation;
   if (msgContent.extendedTextMessage?.text) return msgContent.extendedTextMessage.text;
 
-  // Mensajes con contexto (viewOnce, ephemeral, etc.)
   if (msgContent.ephemeralMessage?.message) {
     return extractTextFromMessage(msgContent.ephemeralMessage.message);
   }
@@ -138,12 +146,10 @@ function extractTextFromMessage(msgContent) {
     return extractTextFromMessage(msgContent.editedMessage.message);
   }
 
-  // Mensajes con caption (imágenes, videos, docs con texto)
   if (msgContent.imageMessage?.caption) return msgContent.imageMessage.caption;
   if (msgContent.videoMessage?.caption) return msgContent.videoMessage.caption;
   if (msgContent.documentMessage?.caption) return msgContent.documentMessage.caption;
 
-  // Botones y listas
   if (msgContent.buttonsResponseMessage?.selectedDisplayText) return msgContent.buttonsResponseMessage.selectedDisplayText;
   if (msgContent.listResponseMessage?.title) return msgContent.listResponseMessage.title;
   if (msgContent.templateButtonReplyMessage?.selectedDisplayText) return msgContent.templateButtonReplyMessage.selectedDisplayText;
@@ -151,56 +157,51 @@ function extractTextFromMessage(msgContent) {
   return null;
 }
 
-// Intentar resolver @lid → phone real consultando la API de WhatsApp
-// Itera sobre clientes con pago pendiente, llama onWhatsApp para obtener su LID y hace match
-async function resolveLidToPhone(shopId, lidNumber, sock) {
+// Buscar pago pendiente (seña o membresía) exactamente si es 1 solo cliente
+// Retorna resultado solo si hay exactamente 1 pendiente — evita notificar a múltiples clientes
+async function findAnyPendingPayment(shopId) {
   try {
-    const { rows } = await pool.query(
-      `SELECT DISTINCT c.phone
-       FROM (
-         SELECT client_id FROM appointments
-         WHERE shop_id=$1 AND status='waiting_sena' AND sena_comprobante_status IS NULL
-         UNION
-         SELECT client_id FROM memberships
-         WHERE shop_id=$1 AND (payment_status='pending' OR payment_status IS NULL)
-           AND comprobante_status IS NULL AND active=TRUE
-       ) pending
-       JOIN clients c ON c.id = pending.client_id
-       WHERE c.phone IS NOT NULL AND c.phone != ''`,
+    const senaRes = await pool.query(
+      `SELECT a.id, a.sena_amount, s.sena_alias, c.phone AS client_phone
+       FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
+       WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
+         AND c.phone IS NOT NULL AND c.phone != ''
+       LIMIT 2`,
       [shopId]
     );
-
-    for (const row of rows) {
-      try {
-        const phoneClean = row.phone.replace(/\D/g, '');
-        const results = await sock.onWhatsApp(`${phoneClean}@s.whatsapp.net`);
-        const info = Array.isArray(results) ? results[0] : results;
-        if (!info) continue;
-        const lid = (info.lid || '').replace(/@.*/, '');
-        if (lid) {
-          if (!lidToPhone[shopId]) lidToPhone[shopId] = {};
-          lidToPhone[shopId][lid] = phoneClean;
-          if (lid === lidNumber) {
-            console.log(`[WPP] LID ${lidNumber} resuelto via onWhatsApp → ${phoneClean}`);
-            return phoneClean;
-          }
-        }
-      } catch(e) { /* este número no devolvió LID */ }
+    if (senaRes.rows.length === 1) {
+      const r = senaRes.rows[0];
+      return { type: 'sena', id: r.id, amount: parseFloat(r.sena_amount), alias: r.sena_alias, clientPhone: r.client_phone };
     }
-  } catch(e) {
-    console.error('[WPP] resolveLidToPhone error:', e.message);
+
+    const memRes = await pool.query(
+      `SELECT m.id, m.price_monthly AS price, s.sena_alias, c.phone AS client_phone
+       FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
+       WHERE m.shop_id=$1 AND (m.payment_status='pending' OR m.payment_status IS NULL)
+         AND m.comprobante_status IS NULL AND m.active=TRUE
+         AND c.phone IS NOT NULL AND c.phone != ''
+       ORDER BY m.created_at DESC LIMIT 2`,
+      [shopId]
+    );
+    if (memRes.rows.length === 1) {
+      const r = memRes.rows[0];
+      return { type: 'membership', id: r.id, amount: parseFloat(r.price), alias: r.sena_alias, clientPhone: r.client_phone };
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[WPP] findAnyPendingPayment error:', e.message);
+    return null;
   }
-  return null;
 }
 
-// Buscar pago pendiente para un teléfono (seña o membresía)
+// Buscar pago pendiente para un teléfono específico (seña o membresía)
 async function findPendingPayment(shopId, phone) {
   try {
     const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
 
-    // Buscar seña pendiente
     const senaRes = await pool.query(
-      `SELECT a.id, a.sena_amount, s.wpp_alias
+      `SELECT a.id, a.sena_amount, s.sena_alias
        FROM appointments a
        JOIN shops s ON s.id = a.shop_id
        WHERE a.shop_id = $1
@@ -215,12 +216,11 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (senaRes.rows.length) {
-      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].wpp_alias };
+      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].sena_alias };
     }
 
-    // Buscar membresía con pago pendiente
     const memRes = await pool.query(
-      `SELECT m.id, m.price, s.wpp_alias
+      `SELECT m.id, m.price_monthly AS price, s.sena_alias
        FROM memberships m
        JOIN shops s ON s.id = m.shop_id
        JOIN clients c ON c.id = m.client_id
@@ -233,7 +233,7 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (memRes.rows.length) {
-      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].wpp_alias };
+      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].sena_alias };
     }
 
     return null;
@@ -255,12 +255,12 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
     let result = null;
 
     if (mediaType === 'image') {
-      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      const buffer = await downloadMediaBuffer(msg.message.imageMessage, 'image');
       const base64 = buffer.toString('base64');
       const mime = msg.message?.imageMessage?.mimetype || 'image/jpeg';
       result = await verifyComprobante(base64, mime, pending);
     } else if (mediaType === 'pdf') {
-      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      const buffer = await downloadMediaBuffer(msg.message.documentMessage, 'document');
       try {
         const pdfParse = require('pdf-parse');
         const pdfData = await pdfParse(buffer);
@@ -281,7 +281,6 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
       return true;
     }
 
-    // Validar monto (±2%), fecha (hoy o ayer), alias
     const today = new Date(); today.setHours(0,0,0,0);
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
     const comprobanteDate = result.date ? new Date(result.date) : null;
@@ -336,9 +335,10 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
 
 // Conectar o reconectar WhatsApp
 async function connect(shopId, onQR, onConnected, onDisconnected) {
-  // Restaurar sesión previa si existe
-  await restoreSessionFromDB(shopId);
+  // Cargar Baileys v7 (ESM)
+  const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = await getBaileys();
 
+  await restoreSessionFromDB(shopId);
 
   const dir = authDir(shopId);
   const { state, saveCreds } = await useMultiFileAuthState(dir);
@@ -354,15 +354,14 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     keepAliveIntervalMs: 15000,
     syncFullHistory: false,
     markOnlineOnConnect: false,
-    retryRequestDelayMs: 0,      // No reintentar mensajes fallidos
-    maxMsgRetryCount: 0,         // Sin reintentos   evita el sendRetryRequest que crashea
-    fireInitQueries: false,      // No hacer queries iniciales innecesarias
+    retryRequestDelayMs: 0,
+    maxMsgRetryCount: 0,
+    fireInitQueries: false,
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
     getMessage: async (key) => {
       return { conversation: '' };
     },
     shouldIgnoreJid: (jid) => {
-      // Ignorar status broadcast, newsletters y cualquier JID no individual
       if (jid === 'status@broadcast') return true;
       if (jid.endsWith('@newsletter')) return true;
       if (jid.endsWith('@broadcast')) return true;
@@ -374,8 +373,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   sockets[shopId]  = sock;
   statuses[shopId] = 'connecting';
 
-  // Capturar errores no manejados del socket para evitar crash de Node
-  sock.ev.on('CB:receipt', () => {}); // ignorar receipts
+  sock.ev.on('CB:receipt', () => {});
   process.on('unhandledRejection', (reason) => {
     if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
       console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
@@ -409,31 +407,36 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.log(`Baileys desconectado para shop ${shopId}, código: ${code}, reconectar: ${shouldReconnect}`);
+      console.log(`Baileys desconectado para shop ${shopId}, código: ${code}`);
       statuses[shopId] = 'disconnected';
 
       if (code === DisconnectReason.loggedOut) {
-        // Sesión cerrada   limpiar
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
         if (onDisconnected) onDisconnected();
       } else if (shouldReconnect) {
-        // Reconectar automáticamente
-        setTimeout(() => connect(shopId, null, null, null), 5000);
+        const attempt = (statuses[`${shopId}_reconnect`] || 0) + 1;
+        statuses[`${shopId}_reconnect`] = attempt;
+        if (attempt <= 10) {
+          console.log(`[WPP] Shop ${shopId}: reconectando en 5s (intento ${attempt}/10)...`);
+          setTimeout(() => connect(shopId, null, null, null), 5000);
+        } else {
+          console.log(`[WPP] Shop ${shopId}: demasiados intentos de reconexión, abortando`);
+          await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);
+          delete sockets[shopId];
+        }
       }
     }
   });
 
-  // Manejar fallos de descifrado   ocurre cuando la sesión Signal está desincronizada
+  // Errores de descifrado — v7 los reporta acá
   sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    console.log(`[WPP] Error de descifrado para shop ${shopId}   ${failedMessages?.length || 0} mensajes fallidos`);
+    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
     decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
 
-    // Si acumulamos 3+ errores de descifrado, limpiar keys Signal
     if (decryptErrors[shopId] >= 3) {
       console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
       try {
-        // Limpiar solo los archivos de session keys (no las creds principales)
         const dir = authDir(shopId);
         const files = fs.readdirSync(dir);
         for (const f of files) {
@@ -449,24 +452,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
-  // Mapear LID → phone real desde la lista de contactos
-  const storeLidMappings = (contacts) => {
-    if (!lidToPhone[shopId]) lidToPhone[shopId] = {};
-    for (const contact of contacts) {
-      if (!contact.lid || !contact.id) continue;
-      const lid   = contact.lid.replace(/@.*/, '');
-      const phone = contact.id.replace(/@.*/, '');
-      if (/^\d+$/.test(lid) && /^\d+$/.test(phone)) {
-        lidToPhone[shopId][lid] = phone;
-      }
-    }
-  };
-  sock.ev.on('contacts.set',    ({ contacts }) => {
-    storeLidMappings(contacts);
-    console.log(`[WPP] Contacts sync: ${Object.keys(lidToPhone[shopId] || {}).length} LID mappings`);
-  });
-  sock.ev.on('contacts.update', (updates) => storeLidMappings(updates));
-
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     const firstJid = messages[0]?.key?.remoteJid || 'unknown';
@@ -476,154 +461,55 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     for (const msg of messages) {
       try {
-        // Ignorar mensajes propios
         if (msg.key.fromMe) continue;
 
         const jid = msg.key.remoteJid || '';
 
-        // Solo responder a contactos individuales (@s.whatsapp.net o @lid)
-        // Bloquear grupos (@g.us), newsletters, broadcasts, status, bots, y cualquier otro
         const isIndividual = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
         if (!isIndividual) continue;
 
-        // Extraer el número/id del JID
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
-        // Si es @lid, resolver número real: senderPn > mapa de contactos > onWhatsApp API > phoneRaw
-        let phone = (jid.endsWith('@lid') && msg.senderPn)
-          ? msg.senderPn.replace('@s.whatsapp.net', '')
-          : (jid.endsWith('@lid') && lidToPhone[shopId]?.[phoneRaw])
-            ? lidToPhone[shopId][phoneRaw]
-            : phoneRaw;
-        // Último recurso: consultar la API de WA para resolver el LID
-        if (jid.endsWith('@lid') && phone === phoneRaw) {
-          const resolved = await resolveLidToPhone(shopId, phoneRaw, sock);
-          if (resolved) phone = resolved;
-        }
-        if (jid.endsWith('@lid')) console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
-
-        // Detectar error de PreKey (mensaje no descifrable) — limpiar keys Signal
-        if (msg.messageStubParameters?.includes('Invalid PreKey ID')) {
-          console.log(`[WPP] Invalid PreKey ID para shop ${shopId} — limpiando keys Signal...`);
-          await clearSignalKeys(shopId);
-          continue;
+        // Resolver phone desde @lid — v7 provee senderPn nativo
+        let phone = phoneRaw;
+        if (jid.endsWith('@lid')) {
+          if (msg.senderPn) {
+            phone = msg.senderPn.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+          } else {
+            // Intentar via signalRepository de v7 (nativo)
+            try {
+              const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(jid);
+              if (pn) phone = pn.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+            } catch(e) {}
+          }
+          console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
         }
 
-        // messageStubType 2 = CIPHERTEXT: Baileys no pudo descifrar — limpiar keys Signal
+        // messageStubType 2 = CIPHERTEXT (no debería ocurrir en v7 con @lid nativo)
         if (msg.messageStubType === 2) {
-          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phone} — limpiando keys Signal para shop ${shopId}`);
+          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — limpiando keys Signal para shop ${shopId}`);
           await clearSignalKeys(shopId);
-          // No podemos enviar de vuelta al @lid ni buscar por LID no resuelto.
-          // Notificamos a TODOS los clientes con pago pendiente via su phone conocido en DB.
+          // Solo notificar si hay exactamente 1 cliente con pago pendiente
           try {
-            const { rows } = await pool.query(
-              `SELECT DISTINCT c.phone
-               FROM (
-                 SELECT client_id FROM appointments
-                 WHERE shop_id=$1 AND status='waiting_sena' AND sena_comprobante_status IS NULL
-                 UNION
-                 SELECT client_id FROM memberships
-                 WHERE shop_id=$1 AND (payment_status='pending' OR payment_status IS NULL)
-                   AND comprobante_status IS NULL AND active=TRUE
-               ) pending
-               JOIN clients c ON c.id = pending.client_id
-               WHERE c.phone IS NOT NULL AND c.phone != ''`,
-              [shopId]
-            );
-            for (const row of rows) {
-              try {
-                await sendText(shopId, row.phone, '⚠️ No pudimos leer tu último mensaje. Por favor reenviá el comprobante como imagen por este chat.');
-                console.log(`[WPP] CIPHERTEXT: aviso enviado a ${row.phone}`);
-              } catch(e) { console.error('[WPP] CIPHERTEXT notify error:', e.message); }
+            const pending = await findAnyPendingPayment(shopId);
+            if (pending?.clientPhone) {
+              await sendText(shopId, pending.clientPhone, '⚠️ No pudimos leer tu imagen. Por favor reenviá el comprobante por este chat.');
             }
-          } catch(e) { console.error('[WPP] CIPHERTEXT query error:', e.message); }
+          } catch(e) {}
           continue;
         }
 
         let msgContent = msg.message;
-        // Algunos mensajes de @lid llegan con msg.message vacío; intentar ruta alternativa
         if ((!msgContent || Object.keys(msgContent).length === 0) && msg.message?.message) {
           msgContent = msg.message.message;
         }
 
-        // Log de diagnostico
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
         console.log(`[WPP] Mensaje de ${phone} - keys: ${msgKeys.join(', ')}`);
 
-        // @lid con mensaje vacío: registrar estructura completa y manejar media
-        if (msgKeys.length === 0 && jid.endsWith('@lid')) {
-          try {
-            const topKeys = Object.keys(msg).join(', ');
-            console.log(`[WPP] @lid msg vacío — top-level keys: ${topKeys}`);
-            if (msg.messageStubType != null) console.log(`[WPP] @lid messageStubType: ${msg.messageStubType}`);
-          } catch(e) {}
-
-          // Intentar descargar como imagen (best-effort)
-          try {
-            const pending = await findPendingPayment(shopId, phone);
-            if (pending) {
-              let buffer;
-              try { buffer = await downloadMediaMessage(msg, 'buffer', {}); } catch(dlErr) {
-                console.log(`[WPP] @lid downloadMediaMessage falló: ${dlErr.message}`);
-              }
-              if (buffer && buffer.length > 100) {
-                console.log(`[WPP] @lid media descargada (${buffer.length} bytes) — verificando como comprobante`);
-                const { verifyComprobante } = require('./ai');
-                const base64 = buffer.toString('base64');
-                const result = await verifyComprobante(base64, 'image/jpeg', pending);
-                if (!result) {
-                  await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
-                } else {
-                  const today = new Date(); today.setHours(0,0,0,0);
-                  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-                  const comprobanteDate = result.date ? new Date(result.date) : null;
-                  comprobanteDate?.setHours(0,0,0,0);
-                  const amountOk = result.amount && Math.abs(result.amount - pending.amount) / pending.amount <= 0.02;
-                  const dateOk = comprobanteDate && (comprobanteDate.getTime() === today.getTime() || comprobanteDate.getTime() === yesterday.getTime());
-                  const aliasOk = !pending.alias || (result.alias && result.alias.replace(/\s/g,'').toLowerCase().includes(pending.alias.replace(/\s/g,'').toLowerCase().slice(0,6)));
-                  const verified = result.valid && amountOk && dateOk && aliasOk;
-                  const status = verified ? 'verified' : 'rejected';
-                  const dataJson = JSON.stringify(result);
-                  if (pending.type === 'sena') {
-                    await pool.query('UPDATE appointments SET sena_comprobante_status=$1, sena_comprobante_data=$2 WHERE id=$3', [status, dataJson, pending.id]);
-                    if (verified) {
-                      await pool.query("UPDATE appointments SET status='confirmed' WHERE id=$1", [pending.id]);
-                      await sock.sendMessage(msg.key.remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
-                    } else {
-                      const reasons = [];
-                      if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
-                      if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
-                      if (!aliasOk) reasons.push('el alias del destinatario no coincide');
-                      await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
-                    }
-                  } else if (pending.type === 'membership') {
-                    await pool.query('UPDATE memberships SET comprobante_status=$1, comprobante_data=$2 WHERE id=$3', [status, dataJson, pending.id]);
-                    if (verified) {
-                      await pool.query("UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1", [pending.id]);
-                      await sock.sendMessage(msg.key.remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
-                    } else {
-                      const reasons = [];
-                      if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
-                      if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
-                      if (!aliasOk) reasons.push('el alias del destinatario no coincide');
-                      await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
-                    }
-                  }
-                }
-                continue;
-              } else {
-                // No se pudo descargar la media — avisar al usuario
-                await sock.sendMessage(msg.key.remoteJid, {
-                  text: '⚠️ Recibimos tu archivo, pero no pudimos procesarlo. Por favor reenviá el comprobante como imagen directamente por este chat.'
-                });
-                continue;
-              }
-            }
-          } catch(e) {
-            console.error('[WPP] Error procesando @lid media:', e.message);
-          }
-          console.log(`[WPP] @lid mensaje vacío sin pago pendiente — ignorando`);
+        if (msgKeys.length === 0) {
+          console.log(`[WPP] Mensaje vacío de ${phone} — ignorando`);
           continue;
         }
 
@@ -642,7 +528,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           }
         }
 
-        // Extraer texto usando handler multi-tipo
         const text = extractTextFromMessage(msgContent);
 
         if (!text || !text.trim()) {
@@ -652,7 +537,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         console.log(`[WPP] Texto extraído de ${phone}: "${text}"`);
 
-        // Obtener respuesta del AI
         const { getAIResponse } = require('./ai');
         const reply = await getAIResponse(shopId, phone, text);
 
@@ -674,7 +558,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
 // Iniciar sesión (devuelve QR como base64 o status connected)
 async function startSession(shopId) {
-  // Limpiar sesión anterior para reconectar desde cero
   await clearSession(shopId);
   if (sockets[shopId]) {
     try { sockets[shopId].end(); } catch(e) {}
@@ -690,9 +573,7 @@ async function startSession(shopId) {
       await connect(
         shopId,
         (qr) => {
-          // QR generado   convertir a base64 image para el frontend
           clearTimeout(timeout);
-          // qr es el string raw del QR   el frontend lo mostrará con qrcode lib
           resolve({ qrcode: qr, type: 'raw' });
         },
         () => {
@@ -719,13 +600,11 @@ async function getStatus(shopId) {
 async function sendText(shopId, phone, message) {
   let sock = sockets[shopId];
 
-  // Si no hay socket activo, intentar reconectar con sesión guardada
   if (!sock || statuses[shopId] !== 'connected') {
     console.log(`Baileys: no hay socket activo para shop ${shopId}, intentando restaurar...`);
     const restored = await restoreSessionFromDB(shopId);
     if (!restored) throw new Error('WhatsApp no está conectado. Conectalo desde Configuración.');
 
-    // Reconectar con sesión restaurada
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Timeout reconectando WhatsApp')), 30000);
       connect(
