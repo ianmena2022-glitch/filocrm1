@@ -16,6 +16,9 @@ const lastIncomingEvent  = {}; // [H] timestamp del último evento recibido de W
 
 const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 horas sin ningún evento = falla silenciosa
 
+// Mapa LID → phone real (por shopId) — poblado desde contacts.set / contacts.update
+const lidToPhone = {}; // lidToPhone[shopId][lidNumber] = phoneNumber
+
 // ── [A] Backoff exponencial ───────────────────────────────────────────────────
 const MAX_RECONNECT_ATTEMPTS = 10;
 function getReconnectDelay(attempts) {
@@ -441,6 +444,24 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     }
   });
 
+  // Mapear LID → phone real desde la lista de contactos
+  const storeLidMappings = (contacts) => {
+    if (!lidToPhone[shopId]) lidToPhone[shopId] = {};
+    for (const contact of contacts) {
+      if (!contact.lid || !contact.id) continue;
+      const lid   = contact.lid.replace(/@.*/, '');
+      const phone = contact.id.replace(/@.*/, '');
+      if (/^\d+$/.test(lid) && /^\d+$/.test(phone)) {
+        lidToPhone[shopId][lid] = phone;
+      }
+    }
+  };
+  sock.ev.on('contacts.set',    ({ contacts }) => {
+    storeLidMappings(contacts);
+    console.log(`[WPP] Contacts sync: ${Object.keys(lidToPhone[shopId] || {}).length} LID mappings`);
+  });
+  sock.ev.on('contacts.update', (updates) => storeLidMappings(updates));
+
   // Mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     lastIncomingEvent[shopId] = Date.now(); // [H] WA nos está entregando mensajes
@@ -460,13 +481,30 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
+        // Si es @lid, resolver número real: senderPn > mapa de contactos > phoneRaw (LID)
         const phone = (jid.endsWith('@lid') && msg.senderPn)
           ? msg.senderPn.replace('@s.whatsapp.net', '')
-          : phoneRaw;
+          : (jid.endsWith('@lid') && lidToPhone[shopId]?.[phoneRaw])
+            ? lidToPhone[shopId][phoneRaw]
+            : phoneRaw;
+        if (jid.endsWith('@lid')) console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
 
         if (msg.messageStubParameters?.includes('Invalid PreKey ID')) {
           console.log(`[WPP] Invalid PreKey ID para shop ${shopId} — limpiando keys Signal...`);
           await clearSignalKeys(shopId);
+          continue;
+        }
+
+        // messageStubType 2 = CIPHERTEXT: Baileys no pudo descifrar — limpiar keys Signal
+        if (msg.messageStubType === 2) {
+          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phone} — limpiando keys Signal para shop ${shopId}`);
+          await clearSignalKeys(shopId);
+          try {
+            const pending = await findPendingPayment(shopId, phone);
+            if (pending) {
+              await sock.sendMessage(jid, { text: '⚠️ No pudimos leer tu mensaje. Por favor reenviá el comprobante por este chat.' });
+            }
+          } catch(e) {}
           continue;
         }
 
