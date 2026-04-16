@@ -178,7 +178,7 @@ async function findAnyPendingPayment(shopId) {
       `SELECT m.id, m.price_monthly AS price, s.sena_alias, c.phone AS client_phone
        FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
        WHERE m.shop_id=$1 AND (m.payment_status='pending' OR m.payment_status IS NULL)
-         AND m.comprobante_status IS NULL AND m.active=TRUE
+         AND m.comprobante_status IS NULL
          AND c.phone IS NOT NULL AND c.phone != ''
        ORDER BY m.created_at DESC LIMIT 2`,
       [shopId]
