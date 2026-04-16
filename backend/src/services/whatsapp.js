@@ -491,17 +491,27 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
         }
 
-        // messageStubType 2 = CIPHERTEXT (no debería ocurrir en v7 con @lid nativo)
+        // messageStubType 2 = CIPHERTEXT — descifrado fallido, pedir reenvío como imagen
         if (msg.messageStubType === 2) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — limpiando keys Signal para shop ${shopId}`);
           await clearSignalKeys(shopId);
-          // Solo notificar si hay exactamente 1 cliente con pago pendiente
-          try {
-            const pending = await findAnyPendingPayment(shopId);
-            if (pending?.clientPhone) {
-              await sendText(shopId, pending.clientPhone, '⚠️ No pudimos leer tu imagen. Por favor reenviá el comprobante por este chat.');
-            }
-          } catch(e) {}
+          const warning = '⚠️ No pudimos leer tu archivo. Por favor reenviá el comprobante como *imagen* (foto, no PDF) por este chat.';
+          // Enviar al phone resuelto directamente (más confiable que buscar en DB)
+          if (phone && phone !== phoneRaw && phone.length >= 10) {
+            try {
+              await sendText(shopId, phone, warning);
+              console.log(`[WPP] CIPHERTEXT: aviso enviado a phone resuelto ${phone}`);
+            } catch(e) { console.error('[WPP] CIPHERTEXT sendText error:', e.message); }
+          } else {
+            // Fallback: buscar cliente pendiente en DB
+            try {
+              const pending = await findAnyPendingPayment(shopId);
+              console.log(`[WPP] CIPHERTEXT findAnyPending: ${pending ? `${pending.type} #${pending.id} phone=${pending.clientPhone}` : 'null'}`);
+              if (pending?.clientPhone) {
+                await sendText(shopId, pending.clientPhone, warning);
+              }
+            } catch(e) { console.error('[WPP] CIPHERTEXT fallback error:', e.message); }
+          }
           continue;
         }
 
