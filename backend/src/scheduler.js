@@ -224,7 +224,7 @@ async function expirePendingSenas() {
 
     for (const appt of rows) {
       try {
-        const shopQ = await pool.query('SELECT wpp_connected FROM shops WHERE id=$1', [appt.shop_id]);
+        const shopQ = await pool.query('SELECT wpp_connected, name FROM shops WHERE id=$1', [appt.shop_id]);
         if (!shopQ.rows[0]?.wpp_connected) continue;
         const clientQ = await pool.query('SELECT phone, name FROM clients WHERE id=$1', [appt.client_id]);
         const phone = clientQ.rows[0]?.phone;
@@ -234,7 +234,7 @@ async function expirePendingSenas() {
         const hora = String(appt.time_start).slice(0, 5);
         let msg = await generateMessage(appt.shop_id, 'sena_vencida', {
           clientName: clientQ.rows[0]?.name || appt.client_name,
-          shopName: appt.shop_id,
+          shopName: shopQ.rows[0].name,
         });
         if (!msg) msg = `⚠️ Tu turno del ${fecha} a las *${hora}* fue *cancelado* porque no se recibió la seña de $${parseFloat(appt.sena_amount).toLocaleString('es-AR')}. Si querés reservar de nuevo, ingresá al sistema de turnos.`;
         await wpp.sendText(appt.shop_id, phone, msg);
