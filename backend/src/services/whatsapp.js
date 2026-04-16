@@ -440,11 +440,91 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           continue;
         }
 
-        const msgContent = msg.message;
+        let msgContent = msg.message;
+        // Algunos mensajes de @lid llegan con msg.message vacío; intentar ruta alternativa
+        if ((!msgContent || Object.keys(msgContent).length === 0) && msg.message?.message) {
+          msgContent = msg.message.message;
+        }
 
         // Log de diagnostico
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
         console.log(`[WPP] Mensaje de ${phone} - keys: ${msgKeys.join(', ')}`);
+
+        // @lid con mensaje vacío: registrar estructura completa y manejar media
+        if (msgKeys.length === 0 && jid.endsWith('@lid')) {
+          try {
+            const topKeys = Object.keys(msg).join(', ');
+            console.log(`[WPP] @lid msg vacío — top-level keys: ${topKeys}`);
+            if (msg.messageStubType != null) console.log(`[WPP] @lid messageStubType: ${msg.messageStubType}`);
+          } catch(e) {}
+
+          // Intentar descargar como imagen (best-effort)
+          try {
+            const pending = await findPendingPayment(shopId, phone);
+            if (pending) {
+              let buffer;
+              try { buffer = await downloadMediaMessage(msg, 'buffer', {}); } catch(dlErr) {
+                console.log(`[WPP] @lid downloadMediaMessage falló: ${dlErr.message}`);
+              }
+              if (buffer && buffer.length > 100) {
+                console.log(`[WPP] @lid media descargada (${buffer.length} bytes) — verificando como comprobante`);
+                const { verifyComprobante } = require('./ai');
+                const base64 = buffer.toString('base64');
+                const result = await verifyComprobante(base64, 'image/jpeg', pending);
+                if (!result) {
+                  await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
+                } else {
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+                  const comprobanteDate = result.date ? new Date(result.date) : null;
+                  comprobanteDate?.setHours(0,0,0,0);
+                  const amountOk = result.amount && Math.abs(result.amount - pending.amount) / pending.amount <= 0.02;
+                  const dateOk = comprobanteDate && (comprobanteDate.getTime() === today.getTime() || comprobanteDate.getTime() === yesterday.getTime());
+                  const aliasOk = !pending.alias || (result.alias && result.alias.replace(/\s/g,'').toLowerCase().includes(pending.alias.replace(/\s/g,'').toLowerCase().slice(0,6)));
+                  const verified = result.valid && amountOk && dateOk && aliasOk;
+                  const status = verified ? 'verified' : 'rejected';
+                  const dataJson = JSON.stringify(result);
+                  if (pending.type === 'sena') {
+                    await pool.query('UPDATE appointments SET sena_comprobante_status=$1, sena_comprobante_data=$2 WHERE id=$3', [status, dataJson, pending.id]);
+                    if (verified) {
+                      await pool.query("UPDATE appointments SET status='confirmed' WHERE id=$1", [pending.id]);
+                      await sock.sendMessage(msg.key.remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
+                    } else {
+                      const reasons = [];
+                      if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
+                      if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
+                      if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+                      await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+                    }
+                  } else if (pending.type === 'membership') {
+                    await pool.query('UPDATE memberships SET comprobante_status=$1, comprobante_data=$2 WHERE id=$3', [status, dataJson, pending.id]);
+                    if (verified) {
+                      await pool.query("UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1", [pending.id]);
+                      await sock.sendMessage(msg.key.remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
+                    } else {
+                      const reasons = [];
+                      if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
+                      if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
+                      if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+                      await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+                    }
+                  }
+                }
+                continue;
+              } else {
+                // No se pudo descargar la media — avisar al usuario
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: '⚠️ Recibimos tu archivo, pero no pudimos procesarlo. Por favor reenviá el comprobante como imagen directamente por este chat.'
+                });
+                continue;
+              }
+            }
+          } catch(e) {
+            console.error('[WPP] Error procesando @lid media:', e.message);
+          }
+          console.log(`[WPP] @lid mensaje vacío sin pago pendiente — ignorando`);
+          continue;
+        }
 
         // Interceptar imágenes como posibles comprobantes
         if (msgContent?.imageMessage) {
@@ -477,7 +557,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (reply) {
           console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
-          await sock.sendMessage(msg.key.remoteJid, { text: reply });
+          const sendJid = (jid.endsWith('@lid') && msg.senderPn) ? msg.senderPn : msg.key.remoteJid;
+          await sock.sendMessage(sendJid, { text: reply });
         } else {
           console.log(`[WPP] AI no respondió (ignorado por clasificador o sin contexto)`);
         }
