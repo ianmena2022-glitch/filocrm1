@@ -162,46 +162,36 @@ function extractTextFromMessage(msgContent) {
   return null;
 }
 
-// Intentar resolver @lid → phone real consultando la API de WhatsApp
-// Itera sobre clientes con pago pendiente, llama onWhatsApp para obtener su LID y hace match
-async function resolveLidToPhone(shopId, lidNumber, sock) {
+// Buscar pago pendiente sin filtrar por phone (fallback para @lid no resuelto)
+// Solo se usa cuando hay exactamente 1 pago pendiente en el shop
+async function findAnyPendingPayment(shopId) {
   try {
-    const { rows } = await pool.query(
-      `SELECT DISTINCT c.phone
-       FROM (
-         SELECT client_id FROM appointments
-         WHERE shop_id=$1 AND status='waiting_sena' AND sena_comprobante_status IS NULL
-         UNION
-         SELECT client_id FROM memberships
-         WHERE shop_id=$1 AND (payment_status='pending' OR payment_status IS NULL)
-           AND comprobante_status IS NULL AND active=TRUE
-       ) pending
-       JOIN clients c ON c.id = pending.client_id
-       WHERE c.phone IS NOT NULL AND c.phone != ''`,
+    const senaRes = await pool.query(
+      `SELECT a.id, a.sena_amount, s.sena_alias
+       FROM appointments a JOIN shops s ON s.id = a.shop_id
+       WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
+       LIMIT 2`,
       [shopId]
     );
-
-    for (const row of rows) {
-      try {
-        const phoneClean = row.phone.replace(/\D/g, '');
-        const results = await sock.onWhatsApp(`${phoneClean}@s.whatsapp.net`);
-        const info = Array.isArray(results) ? results[0] : results;
-        if (!info) continue;
-        const lid = (info.lid || '').replace(/@.*/, '');
-        if (lid) {
-          if (!lidToPhone[shopId]) lidToPhone[shopId] = {};
-          lidToPhone[shopId][lid] = phoneClean;
-          if (lid === lidNumber) {
-            console.log(`[WPP] LID ${lidNumber} resuelto via onWhatsApp → ${phoneClean}`);
-            return phoneClean;
-          }
-        }
-      } catch(e) { /* este número no devolvió LID */ }
+    if (senaRes.rows.length === 1) {
+      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].sena_alias };
     }
+    const memRes = await pool.query(
+      `SELECT m.id, m.price_monthly AS price, s.sena_alias
+       FROM memberships m JOIN shops s ON s.id = m.shop_id
+       WHERE m.shop_id=$1 AND (m.payment_status='pending' OR m.payment_status IS NULL)
+         AND m.comprobante_status IS NULL AND m.active=TRUE
+       ORDER BY m.created_at DESC LIMIT 2`,
+      [shopId]
+    );
+    if (memRes.rows.length === 1) {
+      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].sena_alias };
+    }
+    return null;
   } catch(e) {
-    console.error('[WPP] resolveLidToPhone error:', e.message);
+    console.error('[WPP] findAnyPendingPayment error:', e.message);
+    return null;
   }
-  return null;
 }
 
 // Buscar pago pendiente para un teléfono (seña o membresía)
@@ -255,7 +245,12 @@ async function findPendingPayment(shopId, phone) {
 // Verificar y procesar comprobante recibido (imagen o PDF)
 async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
   try {
-    const pending = await findPendingPayment(shopId, phone);
+    let pending = await findPendingPayment(shopId, phone);
+    // Fallback para @lid no resuelto: si hay exactamente 1 pago pendiente en el shop, usarlo
+    if (!pending && phone.length > 13) {
+      pending = await findAnyPendingPayment(shopId);
+      if (pending) console.log(`[WPP] @lid fallback: usando pago pendiente ${pending.type} #${pending.id}`);
+    }
     if (!pending) return false;
 
     console.log(`[WPP] Comprobante ${mediaType} de ${phone} para ${pending.type} #${pending.id}`);
@@ -523,17 +518,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
 
-        // Si es @lid, resolver número real: senderPn > mapa de contactos > onWhatsApp API > phoneRaw
-        let phone = (jid.endsWith('@lid') && msg.senderPn)
+        // Si es @lid, resolver número real: senderPn > mapa de contactos > phoneRaw (LID)
+        const phone = (jid.endsWith('@lid') && msg.senderPn)
           ? msg.senderPn.replace('@s.whatsapp.net', '')
           : (jid.endsWith('@lid') && lidToPhone[shopId]?.[phoneRaw])
             ? lidToPhone[shopId][phoneRaw]
             : phoneRaw;
-        // Último recurso: consultar la API de WA para resolver el LID
-        if (jid.endsWith('@lid') && phone === phoneRaw) {
-          const resolved = await resolveLidToPhone(shopId, phoneRaw, sock);
-          if (resolved) phone = resolved;
-        }
         if (jid.endsWith('@lid')) console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
 
         if (msg.messageStubParameters?.includes('Invalid PreKey ID')) {
@@ -593,7 +583,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
           // Intentar descargar como imagen (best-effort)
           try {
-            const pending = await findPendingPayment(shopId, phone);
+            let pending = await findPendingPayment(shopId, phone);
+            if (!pending) pending = await findAnyPendingPayment(shopId);
             if (pending) {
               let buffer;
               try { buffer = await downloadMediaMessage(msg, 'buffer', {}); } catch(dlErr) {
