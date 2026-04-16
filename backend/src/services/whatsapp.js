@@ -533,33 +533,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         }
 
         // messageStubType 2 = CIPHERTEXT: Baileys no pudo descifrar — limpiar keys Signal
+        // No enviamos notificación a nadie (no sabemos quién es el @lid)
         if (msg.messageStubType === 2) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phone} — limpiando keys Signal para shop ${shopId}`);
           await clearSignalKeys(shopId);
-          // No podemos enviar de vuelta al @lid ni buscar por LID no resuelto.
-          // Notificamos a TODOS los clientes con pago pendiente via su phone conocido en DB.
-          try {
-            const { rows } = await pool.query(
-              `SELECT DISTINCT c.phone
-               FROM (
-                 SELECT client_id FROM appointments
-                 WHERE shop_id=$1 AND status='waiting_sena' AND sena_comprobante_status IS NULL
-                 UNION
-                 SELECT client_id FROM memberships
-                 WHERE shop_id=$1 AND (payment_status='pending' OR payment_status IS NULL)
-                   AND comprobante_status IS NULL AND active=TRUE
-               ) pending
-               JOIN clients c ON c.id = pending.client_id
-               WHERE c.phone IS NOT NULL AND c.phone != ''`,
-              [shopId]
-            );
-            for (const row of rows) {
-              try {
-                await sendText(shopId, row.phone, '⚠️ No pudimos leer tu último mensaje. Por favor reenviá el comprobante como imagen por este chat.');
-                console.log(`[WPP] CIPHERTEXT: aviso enviado a ${row.phone}`);
-              } catch(e) { console.error('[WPP] CIPHERTEXT notify error:', e.message); }
-            }
-          } catch(e) { console.error('[WPP] CIPHERTEXT query error:', e.message); }
           continue;
         }
 
