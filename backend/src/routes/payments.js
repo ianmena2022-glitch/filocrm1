@@ -311,6 +311,31 @@ router.post('/filo-subscription', auth, async (req, res) => {
 
 // POST /api/payments/webhook-filo — MP notifica pagos de suscripción FILO
 router.post('/webhook-filo', async (req, res) => {
+  // Validar que el request viene de Mercado Pago (User-Agent + token query param)
+  const mpToken = req.query['data.id'] || req.query.token || '';
+  const userAgent = req.headers['user-agent'] || '';
+  const mpAccessToken = process.env.MP_ACCESS_TOKEN || '';
+
+  // MP envía x-signature en headers para notificaciones v2
+  const xSignature = req.headers['x-signature'];
+  const xRequestId = req.headers['x-request-id'];
+  if (xSignature && mpAccessToken) {
+    // Validar firma HMAC-SHA256
+    const crypto = require('crypto');
+    const manifest = `id:${req.query['data.id']};request-id:${xRequestId};ts:${xSignature.split(';').find(p => p.startsWith('ts='))?.split('=')[1]};`;
+    const ts = xSignature.split(';').find(p => p.startsWith('ts='))?.split('=')[1];
+    const v1 = xSignature.split(';').find(p => p.startsWith('v1='))?.split('=')[1];
+    if (ts && v1) {
+      const expected = crypto.createHmac('sha256', process.env.MP_WEBHOOK_SECRET || mpAccessToken)
+        .update(`id:${req.query['data.id'] || ''};request-id:${xRequestId || ''};ts:${ts};`)
+        .digest('hex');
+      if (expected !== v1) {
+        console.warn('[FILO Webhook] Firma inválida — ignorado');
+        return res.sendStatus(200); // MP espera 200 aunque rechacemos
+      }
+    }
+  }
+
   try {
     const { type, data } = req.body;
     console.log(`[FILO Webhook] type=${type} id=${data?.id}`);

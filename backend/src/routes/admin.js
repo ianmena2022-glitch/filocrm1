@@ -5,6 +5,22 @@ const pool    = require('../db/pool');
 
 const ADMIN_SECRET = process.env.ADMIN_PASSWORD || 'filo-admin-2026';
 
+// Rate limiting simple para login admin (máx 10 intentos por IP cada 15 min)
+const loginAttempts = new Map();
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 10;
+  const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+  entry.count++;
+  loginAttempts.set(ip, entry);
+  return entry.count > maxAttempts;
+}
+
 // Middleware de autenticación admin
 function adminAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -21,6 +37,10 @@ function adminAuth(req, res, next) {
 
 // POST /api/admin/login
 router.post('/login', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  if (checkRateLimit(ip)) {
+    return res.status(429).json({ error: 'Demasiados intentos. Esperá 15 minutos.' });
+  }
   const { password } = req.body;
   if (!password || password !== ADMIN_SECRET) {
     return res.status(401).json({ error: 'Contraseña incorrecta' });

@@ -52,17 +52,17 @@ router.get('/today', auth, async (req, res) => {
       [shopId, today]
     );
 
-    // Gráfico últimos 7 días
+    // Gráfico últimos 7 días (enterprise owner incluye sucursales)
     const weekQ = await pool.query(
       `SELECT
          date::text,
          COALESCE(SUM(CASE WHEN status='completed' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
          COUNT(CASE WHEN status='completed' THEN 1 END) AS completed
        FROM appointments
-       WHERE shop_id = $1 AND date >= CURRENT_DATE - INTERVAL '6 days' AND date <= CURRENT_DATE
+       WHERE ${shopFilterPlain} AND date >= CURRENT_DATE - INTERVAL '6 days' AND date <= CURRENT_DATE
        GROUP BY date
        ORDER BY date`,
-      [shopId]
+      [shopId, today]
     );
 
     // Split de comisiones del dia (barberos) — agrupar por barbero usando su nombre real
@@ -106,6 +106,11 @@ module.exports = router;
 // GET /api/dashboard/month — métricas del mes actual
 router.get('/month', auth, async (req, res) => {
   const shopId = req.shopId;
+  const isEnterpriseOwner = req.isEnterpriseOwner || false;
+  const shopFilterMonth = isEnterpriseOwner
+    ? `(shop_id = $1 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
+    : `shop_id = $1`;
+
   try {
     const [monthQ, prodRevMonthQ] = await Promise.all([
       pool.query(
@@ -116,7 +121,7 @@ router.get('/month', auth, async (req, res) => {
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
            COUNT(*)                                                                      AS total
          FROM appointments
-         WHERE shop_id=$1
+         WHERE ${shopFilterMonth}
            AND date >= date_trunc('month', CURRENT_DATE)
            AND date <= CURRENT_DATE`,
         [shopId]
@@ -135,7 +140,7 @@ router.get('/month', auth, async (req, res) => {
     const prevQ = await pool.query(
       `SELECT COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0) AS revenue
        FROM appointments
-       WHERE shop_id=$1
+       WHERE ${shopFilterMonth}
          AND date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
          AND date < date_trunc('month', CURRENT_DATE)`,
       [shopId]
@@ -145,12 +150,12 @@ router.get('/month', auth, async (req, res) => {
     const avgQ = await pool.query(
       `SELECT COALESCE(AVG(price), 0) AS avg_ticket
        FROM appointments
-       WHERE shop_id=$1 AND status='completed'
+       WHERE ${shopFilterMonth} AND status='completed'
          AND date >= date_trunc('month', CURRENT_DATE)`,
       [shopId]
     );
 
-    // Clientes nuevos este mes
+    // Clientes nuevos este mes (solo del shop propio, no sucursales)
     const newClientsQ = await pool.query(
       `SELECT COUNT(*) AS new_clients
        FROM clients

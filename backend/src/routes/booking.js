@@ -120,7 +120,7 @@ router.get('/:slug/available', async (req, res) => {
         'SELECT duration_minutes FROM services WHERE id=$1 AND shop_id=$2',
         [service_id, shopId]
       );
-      if (svc.rows.length) duration = svc.rows[0].duration_minutes;
+      if (svc.rows.length) duration = svc.rows[0].duration_minutes || 30;
     }
 
     // Turnos ya ocupados ese día
@@ -244,6 +244,22 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     }
 
+    // Validar membresía activa con créditos disponibles (re-verificar en el servidor)
+    if (is_member_booking && membership_id) {
+      const mem = await pool.query(
+        `SELECT id, credits_remaining, active FROM memberships WHERE id=$1 AND client_id IN (
+           SELECT id FROM clients WHERE shop_id=$2
+         )`,
+        [parseInt(membership_id), shopData.id]
+      );
+      if (!mem.rows.length || !mem.rows[0].active) {
+        return res.status(400).json({ error: 'La membresía no está activa.' });
+      }
+      if (mem.rows[0].credits_remaining !== null && mem.rows[0].credits_remaining <= 0) {
+        return res.status(400).json({ error: 'Sin créditos disponibles en la membresía.' });
+      }
+    }
+
     // Resolver servicio
     let svcName = null, svcPrice = 0, svcCost = 0, duration = 30;
     if (service_id) {
@@ -255,7 +271,7 @@ router.post('/:slug/reserve', async (req, res) => {
         svcName     = svc.rows[0].name;
         svcPrice    = is_member_booking ? 0 : svc.rows[0].price; // membresía = sin cargo
         svcCost     = svc.rows[0].cost;
-        duration    = svc.rows[0].duration_minutes;
+        duration    = svc.rows[0].duration_minutes || 30;
       }
     }
 
@@ -264,11 +280,12 @@ router.post('/:slug/reserve', async (req, res) => {
     const end = new Date(2000, 0, 1, h, m + duration);
     const time_end = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
 
-    // Verificar que el slot sigue disponible
+    // Verificar que el slot sigue disponible (excluir waiting_sena vencidas, igual que en /available)
     const conflict = await pool.query(
       `SELECT id FROM appointments
        WHERE shop_id=$1 AND date=$2
          AND status NOT IN ('cancelled','noshow')
+         AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
          AND time_start < $3 AND time_end > $4`,
       [shopData.id, date, time_end, time_start]
     );
@@ -380,12 +397,13 @@ router.post('/:slug/reserve', async (req, res) => {
           'SELECT * FROM points_store WHERE id=$1 AND shop_id=$2 AND active=TRUE',
           [redeem_item_id, shopData.id]
         );
-        const clientPts = await pool.query('SELECT points FROM clients WHERE id=$1', [clientId]);
-        if (item.rows.length && clientPts.rows.length) {
-          const pts = clientPts.rows[0].points;
+        if (item.rows.length) {
           const cost = item.rows[0].points_cost;
-          if (pts >= cost) {
-            await pool.query('UPDATE clients SET points = points - $1 WHERE id=$2', [cost, clientId]);
+          const deducted = await pool.query(
+            'UPDATE clients SET points = points - $1 WHERE id=$2 AND points >= $1 RETURNING points',
+            [cost, clientId]
+          );
+          if (deducted.rows.length) {
             await pool.query(
               `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
                VALUES ($1,$2,$3,$4,$5,'pending')`,

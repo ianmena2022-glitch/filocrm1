@@ -59,12 +59,13 @@ router.get('/store/public/:slug', async (req, res) => {
 
 // POST /api/points/store — crear item
 router.post('/store', auth, async (req, res) => {
-  const { name, description, points_cost } = req.body;
+  const { name, description, points_cost, stock } = req.body;
   if (!name || !points_cost) return res.status(400).json({ error: 'Nombre y costo en puntos requeridos' });
   try {
+    const stockVal = stock !== undefined && stock !== '' ? parseInt(stock) : null;
     const result = await pool.query(
-      'INSERT INTO points_store (shop_id, name, description, points_cost) VALUES ($1,$2,$3,$4) RETURNING *',
-      [req.shopId, name.trim(), description||null, parseInt(points_cost)]
+      'INSERT INTO points_store (shop_id, name, description, points_cost, stock) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.shopId, name.trim(), description||null, parseInt(points_cost), stockVal]
     );
     res.status(201).json(result.rows[0]);
   } catch (e) {
@@ -74,12 +75,13 @@ router.post('/store', auth, async (req, res) => {
 
 // PUT /api/points/store/:id — editar item
 router.put('/store/:id', auth, async (req, res) => {
-  const { name, description, points_cost } = req.body;
+  const { name, description, points_cost, stock } = req.body;
   try {
+    const stockVal = stock !== undefined && stock !== '' ? parseInt(stock) : null;
     const result = await pool.query(
-      `UPDATE points_store SET name=$1, description=$2, points_cost=$3
-       WHERE id=$4 AND shop_id=$5 RETURNING *`,
-      [name, description||null, parseInt(points_cost), req.params.id, req.shopId]
+      `UPDATE points_store SET name=$1, description=$2, points_cost=$3, stock=$4
+       WHERE id=$5 AND shop_id=$6 RETURNING *`,
+      [name, description||null, parseInt(points_cost), stockVal, req.params.id, req.shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item no encontrado' });
     res.json(result.rows[0]);
@@ -156,9 +158,28 @@ router.post('/redeem', auth, async (req, res) => {
       });
     }
 
-    // Descontar puntos
-    const newPoints = c.points - it.points_cost;
-    await pool.query('UPDATE clients SET points=$1 WHERE id=$2', [newPoints, client_id]);
+    // Verificar stock disponible (NULL = ilimitado)
+    if (it.stock !== null && it.stock !== undefined && it.stock <= 0) {
+      return res.status(400).json({ error: 'Premio sin stock disponible' });
+    }
+
+    // Descontar puntos atómicamente (WHERE points >= cost evita puntos negativos por race condition)
+    const deducted = await pool.query(
+      'UPDATE clients SET points = points - $1 WHERE id=$2 AND shop_id=$3 AND points >= $1 RETURNING points',
+      [it.points_cost, client_id, req.shopId]
+    );
+    if (!deducted.rows.length) {
+      return res.status(400).json({ error: 'Puntos insuficientes (verificación concurrente fallida)' });
+    }
+    const newPoints = deducted.rows[0].points;
+
+    // Decrementar stock si tiene límite (atómico, no llega a negativo)
+    if (it.stock !== null && it.stock !== undefined) {
+      await pool.query(
+        'UPDATE points_store SET stock = stock - 1 WHERE id=$1 AND shop_id=$2 AND stock > 0',
+        [it.id, req.shopId]
+      );
+    }
 
     // Registrar canje
     const redemption = await pool.query(
@@ -228,9 +249,13 @@ router.get('/client/phone/:slug/:phone', async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
 
+    // Sanitizar teléfono: solo dígitos, últimos 8, con LIMIT para evitar enumeración
+    const rawPhone = req.params.phone.replace(/\D/g, '').slice(-8);
+    if (rawPhone.length < 6) return res.json({ client: null });
+
     const client = await pool.query(
-      'SELECT id, name, points FROM clients WHERE shop_id=$1 AND phone LIKE $2',
-      [shop.rows[0].id, '%' + req.params.phone.slice(-8)]
+      'SELECT id, name, points FROM clients WHERE shop_id=$1 AND phone LIKE $2 LIMIT 1',
+      [shop.rows[0].id, '%' + rawPhone]
     );
     if (!client.rows.length) return res.json({ client: null });
     res.json({ client: client.rows[0] });

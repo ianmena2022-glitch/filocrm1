@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS points_store (
   active      BOOLEAN DEFAULT TRUE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE points_store ADD COLUMN IF NOT EXISTS stock INT DEFAULT NULL; -- NULL = ilimitado
 
 CREATE TABLE IF NOT EXISTS points_redemptions (
   id          SERIAL PRIMARY KEY,

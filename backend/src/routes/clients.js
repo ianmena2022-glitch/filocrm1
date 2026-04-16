@@ -60,8 +60,9 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   const { name, phone, notes, _add_points, _note } = req.body;
   try {
-    // Modo referido: solo sumar puntos sin tocar otros campos
+    // Modo referido: solo sumar puntos sin tocar otros campos (solo dueños, no barberos)
     if (_add_points !== undefined) {
+      if (req.isBarber) return res.status(403).json({ error: 'No autorizado' });
       const pts = parseInt(_add_points) || 0;
       const result = await pool.query(
         `UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3 RETURNING *`,

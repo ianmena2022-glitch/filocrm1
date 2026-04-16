@@ -177,9 +177,12 @@ async function syncSubscriptions() {
             [shop.id]
           );
           console.log(`[CRON] ${shop.email} → cancelado manualmente (sin sub_id válido) → acceso revocado`);
+        } else if (e.message?.includes('404') || e.message?.includes('not found')) {
+          // Subscription ID inválido — loggear pero no revocar acceso
+          console.warn(`[CRON] Sub ID inválido para ${shop.email} (${shop.mp_shop_subscription_id}) — omitiendo`);
         } else {
-          // No revocar acceso por error de red/MP — fail-safe
-          console.error(`[CRON] Error verificando suscripción de ${shop.email}:`, e.message);
+          // Error de red/MP — no revocar acceso, registrar para diagnóstico
+          console.error(`[CRON] Error verificando suscripción de ${shop.email} (id=${shop.id}):`, e.message);
         }
       }
     }

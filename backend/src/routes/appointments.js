@@ -145,7 +145,7 @@ router.post('/', auth, async (req, res) => {
       if (cl.rows.length) cName = cl.rows[0].name;
     }
 
-    // Validar puntos si hay canje
+    // Validar puntos si hay canje (verificación atómica con UPDATE condicional para evitar race condition)
     const pointsCost = parseInt(redeem_points_cost) || 0;
     let redeemInfo = null;
     if (client_id && redeem_item_id && pointsCost > 0) {
@@ -155,6 +155,17 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({ error: `Puntos insuficientes. El cliente tiene ${cl.rows[0].points} pts y el premio cuesta ${pointsCost} pts.` });
       }
       redeemInfo = redeem_item_name || 'Premio canjeado';
+    }
+
+    // Pre-descontar puntos atómicamente (WHERE points >= $1 garantiza no llegar a negativos)
+    if (client_id && redeem_item_id && pointsCost > 0 && redeemInfo) {
+      const deducted = await pool.query(
+        'UPDATE clients SET points = points - $1 WHERE id=$2 AND shop_id=$3 AND points >= $1 RETURNING points',
+        [pointsCost, parseInt(client_id), shopId]
+      );
+      if (!deducted.rows.length) {
+        return res.status(400).json({ error: 'Puntos insuficientes (verificación concurrente fallida)' });
+      }
     }
 
     // Resolver barber_id:
@@ -208,15 +219,10 @@ router.post('/', auth, async (req, res) => {
 
     const appt = result.rows[0];
 
-    // Restar puntos si hay canje
+    // Registrar canje (puntos ya descontados atómicamente antes del INSERT del turno)
     const clientIdInt = parseInt(client_id) || null;
     const redeemItemIdInt = parseInt(redeem_item_id) || null;
     if (clientIdInt && redeemItemIdInt && pointsCost > 0 && redeemInfo) {
-      const updateResult = await pool.query(
-        'UPDATE clients SET points = points - $1 WHERE id = $2 AND shop_id = $3 RETURNING id, points',
-        [pointsCost, clientIdInt, shopId]
-      );
-      console.log(`[CANJE] puntos restados:`, updateResult.rows[0]);
       await pool.query(
         `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
          VALUES ($1, $2, $3, $4, $5, 'pending')`,
@@ -370,12 +376,30 @@ router.put('/:id/sena', auth, async (req, res) => {
       ? `(shop_id = $4 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $4 AND is_branch = TRUE))`
       : `shop_id = $4`;
 
-    const result = await pool.query(
-      `UPDATE appointments SET status=$1, sena_status=$2
-       WHERE id=$3 AND ${shopCondition} AND status='waiting_sena'
-       RETURNING *`,
-      [newStatus, newSenaStatus, req.params.id, shopId]
-    );
+    // FOR UPDATE para evitar race condition con el scheduler (expirePendingSenas)
+    const client = await pool.connect();
+    let result;
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        `SELECT id, status FROM appointments WHERE id=$1 AND ${shopCondition} FOR UPDATE`,
+        [req.params.id, shopId]
+      );
+      if (!locked.rows.length || locked.rows[0].status !== 'waiting_sena') {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Turno no encontrado o ya fue procesado' });
+      }
+      result = await client.query(
+        `UPDATE appointments SET status=$1, sena_status=$2 WHERE id=$3 RETURNING *`,
+        [newStatus, newSenaStatus, req.params.id]
+      );
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      client.release();
+      throw txErr;
+    }
+    client.release();
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado o ya fue procesado' });
 
     const appt = result.rows[0];
