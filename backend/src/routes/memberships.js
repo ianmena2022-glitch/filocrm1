@@ -88,10 +88,12 @@ router.post('/', auth, async (req, res) => {
       const clientData = await pool.query('SELECT name, phone FROM clients WHERE id=$1', [client_id]);
       const client = clientData.rows[0];
 
-      if (shop?.wpp_connected && shop?.sena_alias && client?.phone) {
+      console.log(`[memberships] WPP check: wpp_connected=${shop?.wpp_connected} sena_alias=${shop?.sena_alias} phone=${client?.phone}`);
+      if (shop?.wpp_connected && client?.phone) {
         const { generateMessage } = require('../services/ai');
         const { sendText } = require('../services/whatsapp');
         const price = parseFloat(price_monthly || 0);
+        const alias = shop.sena_alias || '';
 
         let msg = await generateMessage(req.shopId, 'membresia_bienvenida', {
           clientName: client.name,
@@ -99,9 +101,11 @@ router.post('/', auth, async (req, res) => {
           planName: plan,
           credits,
           price,
-          alias: shop.sena_alias,
+          alias,
         });
-        if (!msg) msg = buildPaymentMsg(client.name, price, shop.sena_alias, plan);
+        if (!msg) msg = alias
+          ? buildPaymentMsg(client.name, price, alias, plan)
+          : `¡Hola ${client.name}! Tu membresía (${plan}, ${credits} créditos) fue creada en ${shop.name}. Cuando realices el pago, avisanos por este chat. ¡Gracias!`;
 
         await sendText(req.shopId, client.phone, msg);
       }
