@@ -272,6 +272,31 @@ router.put('/:id/status', auth, async (req, res) => {
       console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${appt.price}`);
     }
 
+    // Notificar al cliente cuando el turno es confirmado
+    if (status === 'confirmed' && appt.client_id) {
+      try {
+        const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug FROM shops WHERE id=$1', [shopId])).rows[0];
+        const client = (await pool.query('SELECT name, phone FROM clients WHERE id=$1', [appt.client_id])).rows[0];
+        if (shopData?.wpp_connected && client?.phone) {
+          const { generateMessage } = require('../services/ai');
+          const wpp = require('../services/whatsapp');
+          const fecha = appt.date ? new Date(appt.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+          const hora = appt.time_start ? appt.time_start.slice(0,5) : '';
+          let msg = await generateMessage(shopId, 'turno_confirmado', {
+            clientName: client.name,
+            shopName: shopData.name,
+            fecha,
+            hora,
+            serviceName: appt.service_name || null,
+          });
+          if (!msg) msg = `✅ ¡Turno confirmado, ${client.name}! Te esperamos el ${fecha} a las ${hora}${appt.service_name ? ` para ${appt.service_name}` : ''}. Cualquier cambio avisanos. 💈`;
+          await wpp.sendText(shopId, client.phone, msg);
+        }
+      } catch (wppErr) {
+        console.error('[appointments] Error enviando WPP confirmado:', wppErr.message);
+      }
+    }
+
     // Actualizar stats del cliente al completar
     if (status === 'completed' && appt.client_id) {
       const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);

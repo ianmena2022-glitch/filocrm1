@@ -1,4 +1,4 @@
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const pool = require('../db/pool');
 const fs   = require('fs');
@@ -157,6 +157,138 @@ function extractTextFromMessage(msgContent) {
   if (msgContent.listResponseMessage?.title)                      return msgContent.listResponseMessage.title;
   if (msgContent.templateButtonReplyMessage?.selectedDisplayText) return msgContent.templateButtonReplyMessage.selectedDisplayText;
   return null;
+}
+
+// Buscar pago pendiente para un teléfono (seña o membresía)
+async function findPendingPayment(shopId, phone) {
+  try {
+    const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
+
+    const senaRes = await pool.query(
+      `SELECT a.id, a.sena_amount, s.wpp_alias
+       FROM appointments a
+       JOIN shops s ON s.id = a.shop_id
+       WHERE a.shop_id = $1
+         AND a.status = 'waiting_sena'
+         AND a.sena_comprobante_status IS NULL
+         AND EXISTS (
+           SELECT 1 FROM clients c
+           WHERE c.id = a.client_id
+             AND regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE $2
+         )
+       LIMIT 1`,
+      [shopId, '%' + phoneSuffix]
+    );
+    if (senaRes.rows.length) {
+      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].wpp_alias };
+    }
+
+    const memRes = await pool.query(
+      `SELECT m.id, m.price_monthly AS price, s.wpp_alias
+       FROM memberships m
+       JOIN shops s ON s.id = m.shop_id
+       JOIN clients c ON c.id = m.client_id
+       WHERE m.shop_id = $1
+         AND m.comprobante_status IS NULL
+         AND (m.payment_status = 'pending' OR m.payment_status IS NULL)
+         AND regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE $2
+       ORDER BY m.created_at DESC
+       LIMIT 1`,
+      [shopId, '%' + phoneSuffix]
+    );
+    if (memRes.rows.length) {
+      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].wpp_alias };
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[WPP] findPendingPayment error:', e.message);
+    return null;
+  }
+}
+
+// Verificar y procesar comprobante recibido (imagen o PDF)
+async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
+  try {
+    const pending = await findPendingPayment(shopId, phone);
+    if (!pending) return false;
+
+    console.log(`[WPP] Comprobante ${mediaType} de ${phone} para ${pending.type} #${pending.id}`);
+
+    const { verifyComprobante, verifyComprobanteFromText } = require('./ai');
+    let result = null;
+
+    if (mediaType === 'image') {
+      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      const base64 = buffer.toString('base64');
+      const mime = msg.message?.imageMessage?.mimetype || 'image/jpeg';
+      result = await verifyComprobante(base64, mime, pending);
+    } else if (mediaType === 'pdf') {
+      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      try {
+        const pdfParse = require('pdf-parse');
+        const pdfData = await pdfParse(buffer);
+        if (!pdfData.text?.trim()) {
+          await sock.sendMessage(msg.key.remoteJid, { text: 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.' });
+          return true;
+        }
+        result = await verifyComprobanteFromText(pdfData.text, pending);
+      } catch (pdfErr) {
+        console.error('[WPP] pdf-parse error:', pdfErr.message);
+        await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos leer el PDF. Por favor mandá una foto del comprobante.' });
+        return true;
+      }
+    }
+
+    if (!result) {
+      await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
+      return true;
+    }
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const comprobanteDate = result.date ? new Date(result.date) : null;
+    comprobanteDate?.setHours(0,0,0,0);
+
+    const amountOk = result.amount && Math.abs(result.amount - pending.amount) / pending.amount <= 0.02;
+    const dateOk = comprobanteDate && (comprobanteDate.getTime() === today.getTime() || comprobanteDate.getTime() === yesterday.getTime());
+    const aliasOk = !pending.alias || (result.alias && result.alias.replace(/\s/g,'').toLowerCase().includes(pending.alias.replace(/\s/g,'').toLowerCase().slice(0,6)));
+
+    const verified = result.valid && amountOk && dateOk && aliasOk;
+    const status = verified ? 'verified' : 'rejected';
+    const dataJson = JSON.stringify(result);
+
+    if (pending.type === 'sena') {
+      await pool.query(`UPDATE appointments SET sena_comprobante_status=$1, sena_comprobante_data=$2 WHERE id=$3`, [status, dataJson, pending.id]);
+      if (verified) {
+        await pool.query(`UPDATE appointments SET status='confirmed' WHERE id=$1`, [pending.id]);
+        await sock.sendMessage(msg.key.remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
+      } else {
+        const reasons = [];
+        if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
+        if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
+        if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+        await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+      }
+    } else if (pending.type === 'membership') {
+      await pool.query(`UPDATE memberships SET comprobante_status=$1, comprobante_data=$2 WHERE id=$3`, [status, dataJson, pending.id]);
+      if (verified) {
+        await pool.query(`UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1`, [pending.id]);
+        await sock.sendMessage(msg.key.remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
+      } else {
+        const reasons = [];
+        if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
+        if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
+        if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+        await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+      }
+    }
+
+    return true;
+  } catch (e) {
+    console.error('[WPP] handleComprobanteMedia error:', e.message);
+    return false;
+  }
 }
 
 // ── Conectar / reconectar ─────────────────────────────────────────────────────
@@ -341,6 +473,21 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const msgContent = msg.message;
         const msgKeys = msgContent ? Object.keys(msgContent) : [];
         console.log(`[WPP] Mensaje de ${phone} - keys: ${msgKeys.join(', ')}`);
+
+        // Interceptar imágenes como posibles comprobantes
+        if (msgContent?.imageMessage) {
+          const handled = await handleComprobanteMedia(shopId, phone, msg, sock, 'image');
+          if (handled) continue;
+        }
+
+        // Interceptar PDFs como posibles comprobantes
+        if (msgContent?.documentMessage) {
+          const mime = msgContent.documentMessage.mimetype || '';
+          if (mime === 'application/pdf' || mime.includes('pdf')) {
+            const handled = await handleComprobanteMedia(shopId, phone, msg, sock, 'pdf');
+            if (handled) continue;
+          }
+        }
 
         const text = extractTextFromMessage(msgContent);
         if (!text || !text.trim()) {

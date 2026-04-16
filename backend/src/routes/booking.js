@@ -374,18 +374,49 @@ router.post('/:slug/reserve', async (req, res) => {
        senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
     );
 
+    const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+
     // Notificar por WhatsApp
     if (shopData.wpp_connected) {
-      const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
       if (requiresSena) {
-        // Mensaje al cliente con instrucciones de seña
+        // Instrucciones de seña al cliente via Groq
         if (client_phone) {
-          const msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar el turno, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al alias:\n\n📲 *${shopData.sena_alias}*\n\n⏰ Tenés *60 minutos* para realizar la transferencia. Si no se recibe, el turno se cancela automáticamente.`;
-          try { await wpp.sendText(shopData.id, client_phone, msgCliente); } catch(e) { console.error('WPP seña cliente:', e.message); }
+          try {
+            const { generateMessage } = require('../services/ai');
+            let msgCliente = await generateMessage(shopData.id, 'sena_instrucciones', {
+              clientName: client_name,
+              shopName: shopData.name,
+              senaAmount,
+              alias: shopData.sena_alias,
+              minutesLimit: 60,
+            });
+            if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al alias:\n\n📲 *${shopData.sena_alias}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
+            await wpp.sendText(shopData.id, client_phone, msgCliente);
+          } catch(e) { console.error('WPP seña cliente:', e.message); }
         }
-      } else if (shopData.phone) {
-        const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
-        try { await wpp.sendText(shopData.id, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
+      } else {
+        // Notificar al barbero
+        if (shopData.phone) {
+          const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
+          try { await wpp.sendText(shopData.id, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
+        }
+        // Notificar al cliente que su reserva fue recibida
+        if (client_phone) {
+          try {
+            const { generateMessage } = require('../services/ai');
+            let msg = await generateMessage(shopData.id, 'reserva_recibida', {
+              clientName: client_name,
+              shopName: shopData.name,
+              fecha: dateFormatted,
+              hora: time_start,
+              serviceName: svcName || null,
+            });
+            if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
+            await wpp.sendText(shopData.id, client_phone, msg);
+          } catch (e) {
+            console.error('Error notificando al cliente:', e.message);
+          }
+        }
       }
     }
 

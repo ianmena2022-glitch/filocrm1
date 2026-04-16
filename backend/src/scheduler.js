@@ -18,7 +18,7 @@ async function sendReminders() {
   try {
     const now = new Date();
 
-    // Ventana: turnos que empiezan entre 1:30hs y 2:30hs desde ahora
+    // Ventana: turnos que empiezan entre 1:30hs y 2:30hs desde ahora (~2hs antes)
     const windowStart = new Date(now.getTime() + 1.5 * 60 * 60 * 1000);
     const windowEnd   = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
 
@@ -222,22 +222,74 @@ async function expirePendingSenas() {
     if (!rows.length) return;
     console.log(`[CRON] ${rows.length} seña(s) vencida(s) — turnos cancelados`);
 
-    // Notificar al cliente por WhatsApp
     for (const appt of rows) {
       try {
         const shopQ = await pool.query('SELECT wpp_connected FROM shops WHERE id=$1', [appt.shop_id]);
         if (!shopQ.rows[0]?.wpp_connected) continue;
-        const clientQ = await pool.query('SELECT phone FROM clients WHERE id=$1', [appt.client_id]);
+        const clientQ = await pool.query('SELECT phone, name FROM clients WHERE id=$1', [appt.client_id]);
         const phone = clientQ.rows[0]?.phone;
         if (!phone) continue;
+        const { generateMessage } = require('./services/ai');
         const fecha = new Date(appt.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
         const hora = String(appt.time_start).slice(0, 5);
-        const msg = `⚠️ Tu turno del ${fecha} a las *${hora}* fue *cancelado* porque no se recibió la seña de $${parseFloat(appt.sena_amount).toLocaleString('es-AR')}. Si querés reservar de nuevo, ingresá al sistema de turnos.`;
+        let msg = await generateMessage(appt.shop_id, 'sena_vencida', {
+          clientName: clientQ.rows[0]?.name || appt.client_name,
+          shopName: appt.shop_id,
+        });
+        if (!msg) msg = `⚠️ Tu turno del ${fecha} a las *${hora}* fue *cancelado* porque no se recibió la seña de $${parseFloat(appt.sena_amount).toLocaleString('es-AR')}. Si querés reservar de nuevo, ingresá al sistema de turnos.`;
         await wpp.sendText(appt.shop_id, phone, msg);
       } catch(e) { console.error('[CRON] Error notificando seña vencida:', e.message); }
     }
   } catch(e) {
     console.error('[CRON] Error en expirePendingSenas:', e.message);
+  }
+}
+
+// Envía mensajes de rescate automático a clientes que no vienen hace N días
+async function sendAutoRescue() {
+  try {
+    const { generateMessage } = require('./services/ai');
+    const baseUrl = process.env.APP_URL || 'https://filocrm1-production.up.railway.app';
+
+    const { rows } = await pool.query(
+      `SELECT c.id, c.shop_id, c.name, c.phone,
+              s.name AS shop_name, s.booking_slug, s.wpp_connected, s.churn_days
+       FROM clients c
+       JOIN shops s ON s.id = c.shop_id
+       WHERE s.wpp_connected = TRUE
+         AND c.phone IS NOT NULL AND c.phone != ''
+         AND c.last_visit IS NOT NULL
+         AND c.last_visit < CURRENT_DATE - (s.churn_days || ' days')::INTERVAL
+         AND (
+           c.last_rescue_sent IS NULL
+           OR c.last_rescue_sent < CURRENT_DATE - (s.churn_days || ' days')::INTERVAL
+         )
+         AND (s.is_test = FALSE OR s.is_test IS NULL)`
+    );
+
+    if (!rows.length) return;
+    console.log(`[CRON] ${rows.length} mensaje(s) de rescate automático a enviar`);
+
+    for (const client of rows) {
+      try {
+        const daysSince = Math.floor((Date.now() - new Date(client.last_visit)) / 86400000);
+        const bookingLink = client.booking_slug ? `${baseUrl}/reservar/${client.booking_slug}` : null;
+        let msg = await generateMessage(client.shop_id, 'rescate_auto', {
+          clientName: client.name,
+          shopName: client.shop_name,
+          daysSince,
+          bookingLink,
+        });
+        if (!msg) msg = `¡Hola ${client.name}! Hace un tiempo que no te vemos por ${client.shop_name}. 🪒 Reservá tu próximo turno cuando quieras.${bookingLink ? `\n${bookingLink}` : ''}`;
+        await wpp.sendText(client.shop_id, client.phone, msg);
+        await pool.query('UPDATE clients SET last_rescue_sent = NOW() WHERE id = $1', [client.id]);
+        console.log(`[CRON] Rescate enviado a ${client.name} (shop ${client.shop_id})`);
+      } catch (e) {
+        console.error(`[CRON] Error enviando rescate a ${client.name}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[CRON] Error en sendAutoRescue:', e.message);
   }
 }
 
@@ -249,10 +301,27 @@ async function runHourlyTasks() {
   await expirePendingSenas();
 }
 
+async function runDailyTasks() {
+  await sendAutoRescue();
+}
+
+let _dailyTasksLastRun = null;
+
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + señas)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + señas + rescate auto)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
+
+  // Tareas diarias: correr una vez al arrancar, luego verificar cada hora si ya corrió hoy
+  const runDailyIfNeeded = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (_dailyTasksLastRun !== today) {
+      _dailyTasksLastRun = today;
+      await runDailyTasks();
+    }
+  };
+  runDailyIfNeeded();
+  setInterval(runDailyIfNeeded, 60 * 60 * 1000);
 }
 
 module.exports = { startScheduler };

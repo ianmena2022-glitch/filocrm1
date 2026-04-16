@@ -363,37 +363,29 @@ CREATE TABLE IF NOT EXISTS barber_settlements (
 CREATE INDEX IF NOT EXISTS idx_barber_settlements ON barber_settlements(shop_id, barber_id);
 
 -- ── DÍAS NO LABORABLES EXTRAORDINARIOS ───────────────────────────────────────
--- Array JSON de fechas "YYYY-MM-DD" — ej: ["2025-12-25","2026-01-01"]
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS closed_days TEXT DEFAULT NULL;
 
 -- ── MEMBRESÍAS EN RESERVAS ────────────────────────────────────────────────────
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS member_booking BOOLEAN DEFAULT FALSE;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS membership_id INT REFERENCES memberships(id) ON DELETE SET NULL;
 
--- Ampliar constraint payment_method para incluir 'membership'
 ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_payment_method_check;
 ALTER TABLE appointments ADD CONSTRAINT appointments_payment_method_check
   CHECK (payment_method IN ('cash','debit','credit','transfer','debt','membership') OR payment_method IS NULL);
 
 -- ── ENTERPRISE MULTI-BRANCH ───────────────────────────────────────────────────
--- Cuenta madre enterprise (no reserva, solo gestión y estadísticas)
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_enterprise_owner BOOLEAN DEFAULT FALSE;
--- Sucursal creada por un enterprise owner (tiene CRM completo)
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_branch BOOLEAN DEFAULT FALSE;
--- FK al enterprise owner (NULL para shops normales y barberos)
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS parent_enterprise_id INT REFERENCES shops(id) ON DELETE SET NULL;
--- Etiqueta corta de la sucursal, ej: "Palermo", "Belgrano"
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS branch_label VARCHAR(100);
 
 CREATE INDEX IF NOT EXISTS idx_shops_parent_enterprise ON shops(parent_enterprise_id)
   WHERE parent_enterprise_id IS NOT NULL;
 
--- Configuración extra del enterprise owner
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_currency   VARCHAR(10)  DEFAULT 'ARS';
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_timezone   VARCHAR(50)  DEFAULT 'America/Argentina/Buenos_Aires';
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_logo_url   TEXT;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_notes      TEXT;
--- WhatsApp compartido: un solo número para todas las sucursales
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_shared_wpp BOOLEAN DEFAULT FALSE;
 
 -- ── Sistema de referidos ────────────────────────────────────────────────────
@@ -417,7 +409,22 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_status     VARCHAR(20)
   CHECK (sena_status IN ('pending','confirmed','lost') OR sena_status IS NULL);
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_expires_at TIMESTAMPTZ;
 
--- Ampliar constraint de status para incluir 'waiting_sena'
 ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check;
 ALTER TABLE appointments ADD CONSTRAINT appointments_status_check
   CHECK (status IN ('pending','confirmed','completed','noshow','cancelled','waiting_sena'));
+
+-- Comprobantes de seña en turnos
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_comprobante_status VARCHAR(20) DEFAULT NULL
+  CHECK (sena_comprobante_status IN ('received','verified','rejected') OR sena_comprobante_status IS NULL);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_comprobante_data TEXT DEFAULT NULL;
+
+-- Comprobantes de pago en membresías
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS comprobante_status VARCHAR(20) DEFAULT NULL
+  CHECK (comprobante_status IN ('received','verified','rejected') OR comprobante_status IS NULL);
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS comprobante_data TEXT DEFAULT NULL;
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'
+  CHECK (payment_status IN ('pending','paid','overdue'));
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
+
+-- Rescate automático
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAULT NULL;

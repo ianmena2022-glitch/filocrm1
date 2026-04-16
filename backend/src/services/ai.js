@@ -176,15 +176,25 @@ async function getAIResponse(shopId, phone, userMessage) {
   }
 }
 
+const TONE = `Escribí en español rioplatense profesional. Usá "vos", sé cálido pero directo. Nada de "che" ni lunfardo exagerado. Emojis con criterio. Solo el mensaje final, sin comillas ni aclaraciones.`;
+
 async function generateMessage(shopId, type, context) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
 
   const prompts = {
-    sillon_libre:    `Escribí un mensaje de WhatsApp corto y amigable para avisarle a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}. ${context.incentivo ? `Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-    rescate:         `Escribí un mensaje de WhatsApp corto y amigable para ${context.clientName}, un cliente que no visita ${context.shopName} hace ${context.daysSince} días. El objetivo es que vuelva a reservar un turno. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-    turno_completado:`Escribí un mensaje de WhatsApp corto para ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Incluí este link para ver sus premios: ${context.tiendaLink}` : ''} Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`,
-    recordatorio:    `Escribí un mensaje de WhatsApp corto y amigable para recordarle a ${context.clientName} que tiene un turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 3 líneas, usá emojis con criterio. Solo el mensaje, sin comillas ni explicaciones.`
+    sillon_libre: `${TONE}\n\nAvisale a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}.${context.incentivo ? ` Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas.`,
+    rescate: `${TONE}\n\nEscribí un mensaje para ${context.clientName}, que no visita ${context.shopName} hace ${context.daysSince} días. Invitalo a que vuelva a reservar. Máximo 3 líneas.`,
+    rescate_auto: `${TONE}\n\nEscribí un mensaje para ${context.clientName}, un cliente de ${context.shopName} que hace ${context.daysSince} días que no viene. Invitalo a reservar su próximo turno.${context.bookingLink ? ` Link: ${context.bookingLink}` : ''} Máximo 3 líneas.`,
+    turno_completado: `${TONE}\n\nAvisale a ${context.clientName} que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Link de premios: ${context.tiendaLink}` : ''} Máximo 3 líneas.`,
+    turno_confirmado: `${TONE}\n\nAvisale a ${context.clientName} que su turno en ${context.shopName} fue confirmado para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Máximo 2 líneas.`,
+    reserva_recibida: `${TONE}\n\nAvisale a ${context.clientName} que su reserva en ${context.shopName} fue recibida para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Cuando el barbero la confirme te avisamos. Máximo 3 líneas.`,
+    recordatorio: `${TONE}\n\nRecordále a ${context.clientName} su turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 2 líneas.`,
+    sena_instrucciones: `${TONE}\n\nInformale a ${context.clientName} que para confirmar su turno en ${context.shopName} debe abonar una seña de $${context.senaAmount} en los próximos ${context.minutesLimit} minutos.\n\nPaso a paso:\n1. Transferí $${context.senaAmount} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nSi no recibimos el pago en ese tiempo, el turno queda libre. Máximo 6 líneas.`,
+    sena_vencida: `${TONE}\n\nAvisale a ${context.clientName} que la seña para su turno en ${context.shopName} venció sin recibir el pago, por lo que el turno fue liberado. Invitalo a reservar nuevamente cuando quiera. Máximo 3 líneas.`,
+    membresia_bienvenida: `${TONE}\n\nDale la bienvenida a ${context.clientName} a la membresía de ${context.shopName} (${context.planName || 'plan mensual'}, ${context.credits} créditos).\n\nPaso a paso para activarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nUna vez confirmado el pago, los créditos quedan activos. Máximo 6 líneas.`,
+    membresia_recordatorio: `${TONE}\n\nRecordále a ${context.clientName} que su membresía en ${context.shopName} vence el ${context.fechaVencimiento}.\n\nPara renovarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nMáximo 5 líneas.`,
+    membresia_pago_confirmado: `${TONE}\n\nAvisale a ${context.clientName} que el pago de su membresía en ${context.shopName} fue confirmado. Ya tiene ${context.credits} créditos disponibles hasta el ${context.fechaVencimiento}. Máximo 2 líneas.`,
   };
 
   const prompt = prompts[type];
@@ -199,11 +209,11 @@ async function generateMessage(shopId, type, context) {
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages: [{ role: 'user', content: prompt }],
-          max_tokens: 150,
+          max_tokens: 200,
           temperature: 0.8,
         })
       },
-      10000 // 10s timeout para generación de mensajes
+      10000
     );
     if (!response.ok) return null;
     const data = await response.json();
@@ -214,4 +224,95 @@ async function generateMessage(shopId, type, context) {
   }
 }
 
-module.exports = { getAIResponse, isBarberiaRelated, generateMessage };
+// Verificar comprobante de pago desde imagen (base64)
+async function verifyComprobante(imageBase64, mimeType, expected) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `Analizá esta imagen de comprobante de transferencia bancaria y respondé ÚNICAMENTE con un JSON con este formato exacto:
+{
+  "amount": <número o null>,
+  "date": "<YYYY-MM-DD o null>",
+  "alias": "<alias del destinatario o null>",
+  "valid": <true o false>
+}
+
+Reglas:
+- "amount": el monto transferido como número (sin símbolos)
+- "date": la fecha de la transferencia en formato YYYY-MM-DD
+- "alias": el alias o CBU/CVU del destinatario
+- "valid": true si parece un comprobante real y legible
+
+Solo el JSON, sin texto extra.`;
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }
+          ]
+        }],
+        max_tokens: 200,
+        temperature: 0,
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    const match = text?.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]);
+  } catch (e) {
+    console.error('verifyComprobante error:', e.message);
+    return null;
+  }
+}
+
+// Verificar comprobante desde texto extraído de PDF
+async function verifyComprobanteFromText(pdfText, expected) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `Analizá este texto extraído de un comprobante de transferencia bancaria y respondé ÚNICAMENTE con un JSON con este formato exacto:
+{
+  "amount": <número o null>,
+  "date": "<YYYY-MM-DD o null>",
+  "alias": "<alias del destinatario o null>",
+  "valid": <true o false>
+}
+
+Texto del comprobante:
+${pdfText.slice(0, 2000)}
+
+Solo el JSON, sin texto extra.`;
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 200,
+        temperature: 0,
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    const match = text?.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]);
+  } catch (e) {
+    console.error('verifyComprobanteFromText error:', e.message);
+    return null;
+  }
+}
+
+module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText };

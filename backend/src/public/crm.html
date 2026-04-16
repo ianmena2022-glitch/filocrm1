@@ -4682,7 +4682,21 @@ async function loadMemberships() {
       el.innerHTML = `<div class="empty-state"><div class="icon">👑</div><h3>Sin membresías todavía</h3><p>Creá la primera con el botón +</p></div>`;
       return;
     }
-    el.innerHTML = membs.map(m => `
+    el.innerHTML = membs.map(m => {
+      const payStatus = m.payment_status;
+      const payBadge = payStatus === 'paid'
+        ? `<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#00E676;background:rgba(0,230,118,0.1);padding:3px 8px;border-radius:20px">✅ PAGADO</span>`
+        : payStatus === 'overdue'
+          ? `<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#FF4343;background:rgba(255,67,67,0.1);padding:3px 8px;border-radius:20px">⚠️ VENCIDO</span>`
+          : `<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#FF9800;background:rgba(255,152,0,0.1);padding:3px 8px;border-radius:20px">⏳ PEND. PAGO</span>`;
+      const compBadge = m.comprobante_status === 'verified'
+        ? `<span style="font-size:10px;color:#00E676;cursor:pointer" onclick="showComprobanteDetails(${m.id},'membership')" title="Ver comprobante">📸 ✅</span>`
+        : m.comprobante_status === 'rejected'
+          ? `<span style="font-size:10px;color:#FF4343;cursor:pointer" onclick="showComprobanteDetails(${m.id},'membership')" title="Ver comprobante rechazado">📸 ❌</span>`
+          : m.comprobante_status === 'received'
+            ? `<span style="font-size:10px;color:#FF9800">📸 Esperando...</span>`
+            : '';
+      return `
       <div class="memb-card">
         <div class="client-avatar">${m.client_name.charAt(0).toUpperCase()}</div>
         <div class="client-info">
@@ -4692,6 +4706,7 @@ async function loadMemberships() {
             <span>Renueva: ${m.renews_at ? new Date(m.renews_at).toLocaleDateString('es-AR') : '—'}</span>
             <span>$${parseFloat(m.price_monthly||0).toLocaleString('es-AR')}/mes</span>
           </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${payBadge}${compBadge}</div>
         </div>
         ${m.plan === 'basic' ? `<div class="memb-credits" style="color:${m.credits_remaining > 0 ? 'var(--green)' : 'var(--red)'}">${m.credits_remaining}<div style="font-size:11px;color:var(--gray);font-family:'Barlow',sans-serif;font-weight:400">créditos</div></div>` : '<div style="color:var(--yellow);font-size:20px">∞</div>'}
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
@@ -4699,12 +4714,11 @@ async function loadMemberships() {
             ${m.active ? `<button class="appt-btn complete" onclick="checkin(${m.id})" title="Usar crédito / Check-in">✓</button>` : ''}
             ${m.active ? `<button class="appt-btn noshow" onclick="cancelMembership(${m.id})" title="Cancelar membresía">✗</button>` : ''}
           </div>
-          ${m.mp_status === 'authorized' ? `<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#00E676;background:rgba(0,230,118,0.1);padding:3px 8px;border-radius:20px">MP ACTIVO</span>` : ''}
-          ${!m.mp_subscription_id && m.active && m.price_monthly > 0 ? `<button style="background:rgba(0,148,255,0.12);border:1px solid rgba(0,148,255,0.3);color:#0094FF;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="linkMP(${m.id},'${m.client_phone || ''}','${m.plan}',${m.price_monthly})">💳 Cobrar con MP</button>` : ''}
-          ${m.mp_subscription_id && m.mp_status !== 'authorized' ? `<button style="background:rgba(0,148,255,0.12);border:1px solid rgba(0,148,255,0.3);color:#0094FF;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="window.open('${m.payment_url}','_blank')">🔗 Link de pago</button>` : ''}
+          ${m.active && m.price_monthly > 0 ? `<button style="background:rgba(100,170,255,0.12);border:1px solid rgba(100,170,255,0.3);color:#7ab8ff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="sendPaymentReminder(${m.id})">💬 Recordatorio</button>` : ''}
+          ${m.active && payStatus !== 'paid' ? `<button style="background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:#00E676;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="markMembershipPaid(${m.id})">✅ Pago recibido</button>` : ''}
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   } catch (e) {
     console.error(e);
   }
@@ -4830,6 +4844,46 @@ async function cancelMembership(id) {
     showToast('❌', 'Error', e.message);
     if (card) card.style.opacity = '1';
     loadMemberships();
+  }
+}
+
+async function sendPaymentReminder(id) {
+  try {
+    await api('POST', `/memberships/${id}/send-reminder`);
+    showToast('💬', 'Recordatorio enviado', 'El cliente recibió el mensaje por WhatsApp');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function markMembershipPaid(id) {
+  if (!confirm('¿Confirmar que recibiste el pago de esta membresía?')) return;
+  try {
+    await api('PUT', `/memberships/${id}/mark-paid`);
+    showToast('✅', 'Pago confirmado', 'Se notificó al cliente y se renovaron los créditos');
+    loadMemberships();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function showComprobanteDetails(id, type) {
+  try {
+    let data;
+    if (type === 'membership') {
+      const m = await api('GET', `/memberships`);
+      const found = m.find(x => x.id === id);
+      data = found?.comprobante_data ? JSON.parse(found.comprobante_data) : null;
+    }
+    if (!data) return showToast('ℹ️', 'Sin datos', 'No hay información del comprobante');
+    const lines = [
+      data.amount ? `Monto: $${data.amount}` : null,
+      data.date ? `Fecha: ${data.date}` : null,
+      data.alias ? `Alias: ${data.alias}` : null,
+    ].filter(Boolean).join('\n');
+    alert(`Comprobante:\n\n${lines}`);
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
   }
 }
 
