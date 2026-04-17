@@ -345,3 +345,7 @@ ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
 -- Rescate automático
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAULT NULL;
 
+-- CBU/CVU para verificación de comprobantes (reemplaza alias)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_cbu VARCHAR(100) DEFAULT NULL;
+UPDATE shops SET sena_cbu = sena_alias WHERE sena_cbu IS NULL AND sena_alias IS NOT NULL;
+

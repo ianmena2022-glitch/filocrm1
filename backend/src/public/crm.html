@@ -1689,9 +1689,9 @@ body {
       <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(0,148,255,.8);margin-bottom:12px">💳 Cobros con Mercado Pago</div>
       <div class="form-grid">
         <div class="form-field" style="grid-column:1/-1">
-          <label>CBU o Alias de tu cuenta MP</label>
-          <input type="text" id="plan-mp-cbu" placeholder="mi.alias.mp o 0000003100...">
-          <div style="font-size:11px;color:var(--gray);margin-top:4px">Los pagos de suscripciones se acreditarán en esta cuenta</div>
+          <label>CBU / CVU de tu cuenta <span style="color:#e55">*</span></label>
+          <input type="text" id="plan-mp-cbu" placeholder="0000003100123456789012" maxlength="22" pattern="\d{22}">
+          <div style="font-size:11px;color:var(--gray);margin-top:4px">Ingresá el CBU/CVU de 22 dígitos. Los comprobantes se verificarán contra este número.</div>
         </div>
       </div>
     </div>
@@ -3277,6 +3277,11 @@ async function loadPlanesConfig() {
 }
 
 async function savePlanesConfig() {
+  const mpCbu = document.getElementById('plan-mp-cbu').value.trim().replace(/\D/g, '');
+  if (!mpCbu || mpCbu.length !== 22) {
+    showToast('❌', 'CBU/CVU inválido', 'Ingresá el CBU/CVU de 22 dígitos para continuar');
+    return;
+  }
   const planes = {
     basic: {
       name:    document.getElementById('plan-basic-name').value.trim() || 'Básico',
@@ -3289,7 +3294,7 @@ async function savePlanesConfig() {
       price: parseFloat(document.getElementById('plan-premium-price').value) || 0,
       desc:  document.getElementById('plan-premium-desc').value.trim() || 'Cortes ilimitados por mes',
     },
-    mp_cbu: document.getElementById('plan-mp-cbu').value.trim(),
+    mp_cbu: mpCbu,
   };
   try {
     await api('PUT', '/settings', { membership_plans: JSON.stringify(planes) });
@@ -3509,7 +3514,7 @@ async function showComprobanteDetails(id, type) {
     const lines = [
       data.amount ? `Monto: $${data.amount}` : null,
       data.date ? `Fecha: ${data.date}` : null,
-      data.alias ? `Alias: ${data.alias}` : null,
+      data.cbu_cvu ? `CBU/CVU: ${data.cbu_cvu}` : null,
     ].filter(Boolean).join('\n');
     alert(`Comprobante:\n\n${lines}`);
   } catch (e) {

@@ -221,14 +221,14 @@ async function verifyComprobante(imageBase64, mimeType, expected) {
 {
   "amount": <número o null>,
   "date": "<YYYY-MM-DD o null>",
-  "alias": "<alias del destinatario o null>",
+  "cbu_cvu": "<CBU o CVU del destinatario (22 dígitos) o null>",
   "valid": <true o false>
 }
 
 Reglas:
 - "amount": el monto transferido como número (sin símbolos)
 - "date": la fecha de la transferencia en formato YYYY-MM-DD
-- "alias": el alias o CBU/CVU del destinatario
+- "cbu_cvu": el CBU o CVU del destinatario (número de 22 dígitos). Si no aparece explícitamente, devolvé null.
 - "valid": true si parece un comprobante real y legible
 
 Solo el JSON, sin texto extra.`;
@@ -271,9 +271,15 @@ async function verifyComprobanteFromText(pdfText, expected) {
 {
   "amount": <número o null>,
   "date": "<YYYY-MM-DD o null>",
-  "alias": "<alias del destinatario o null>",
+  "cbu_cvu": "<CBU o CVU del destinatario (22 dígitos) o null>",
   "valid": <true o false>
 }
+
+Reglas:
+- "amount": el monto transferido como número (sin símbolos)
+- "date": la fecha de la transferencia en formato YYYY-MM-DD
+- "cbu_cvu": el CBU o CVU del destinatario (número de 22 dígitos). Si no aparece explícitamente, devolvé null.
+- "valid": true si parece un comprobante real y legible
 
 Texto del comprobante:
 ${pdfText.slice(0, 2000)}

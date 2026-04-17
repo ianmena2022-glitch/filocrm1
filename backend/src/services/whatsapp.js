@@ -162,7 +162,7 @@ function extractTextFromMessage(msgContent) {
 async function findAnyPendingPayment(shopId) {
   try {
     const senaRes = await pool.query(
-      `SELECT a.id, a.sena_amount, s.sena_alias, c.phone AS client_phone
+      `SELECT a.id, a.sena_amount, s.sena_cbu, c.phone AS client_phone
        FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
        WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
          AND c.phone IS NOT NULL AND c.phone != ''
@@ -171,11 +171,11 @@ async function findAnyPendingPayment(shopId) {
     );
     if (senaRes.rows.length) {
       const r = senaRes.rows[0];
-      return { type: 'sena', id: r.id, amount: parseFloat(r.sena_amount), alias: r.sena_alias, clientPhone: r.client_phone };
+      return { type: 'sena', id: r.id, amount: parseFloat(r.sena_amount), cbu: r.sena_cbu, clientPhone: r.client_phone };
     }
 
     const memRes = await pool.query(
-      `SELECT m.id, m.price_monthly AS price, s.sena_alias, c.phone AS client_phone
+      `SELECT m.id, m.price_monthly AS price, s.sena_cbu, c.phone AS client_phone
        FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
        WHERE m.shop_id=$1
          AND m.payment_status IS DISTINCT FROM 'paid'
@@ -186,7 +186,7 @@ async function findAnyPendingPayment(shopId) {
     );
     if (memRes.rows.length) {
       const r = memRes.rows[0];
-      return { type: 'membership', id: r.id, amount: parseFloat(r.price), alias: r.sena_alias, clientPhone: r.client_phone };
+      return { type: 'membership', id: r.id, amount: parseFloat(r.price), cbu: r.sena_cbu, clientPhone: r.client_phone };
     }
 
     return null;
@@ -202,7 +202,7 @@ async function findPendingPayment(shopId, phone) {
     const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
 
     const senaRes = await pool.query(
-      `SELECT a.id, a.sena_amount, s.sena_alias
+      `SELECT a.id, a.sena_amount, s.sena_cbu
        FROM appointments a
        JOIN shops s ON s.id = a.shop_id
        WHERE a.shop_id = $1
@@ -217,11 +217,11 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (senaRes.rows.length) {
-      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), alias: senaRes.rows[0].sena_alias };
+      return { type: 'sena', id: senaRes.rows[0].id, amount: parseFloat(senaRes.rows[0].sena_amount), cbu: senaRes.rows[0].sena_cbu };
     }
 
     const memRes = await pool.query(
-      `SELECT m.id, m.price_monthly AS price, s.sena_alias
+      `SELECT m.id, m.price_monthly AS price, s.sena_cbu
        FROM memberships m
        JOIN shops s ON s.id = m.shop_id
        JOIN clients c ON c.id = m.client_id
@@ -234,7 +234,7 @@ async function findPendingPayment(shopId, phone) {
       [shopId, '%' + phoneSuffix]
     );
     if (memRes.rows.length) {
-      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), alias: memRes.rows[0].sena_alias };
+      return { type: 'membership', id: memRes.rows[0].id, amount: parseFloat(memRes.rows[0].price), cbu: memRes.rows[0].sena_cbu };
     }
 
     return null;
@@ -294,9 +294,15 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
 
     const amountOk = result.amount && Math.abs(result.amount - pending.amount) / pending.amount <= 0.02;
     const dateOk = comprobanteDate && (comprobanteDate.getTime() === today.getTime() || comprobanteDate.getTime() === yesterday.getTime());
-    const aliasOk = !pending.alias || (result.alias && result.alias.replace(/\s/g,'').toLowerCase().includes(pending.alias.replace(/\s/g,'').toLowerCase().slice(0,6)));
+    // Verificar CBU/CVU: comparar los últimos 10 dígitos para tolerar diferencias de formato
+    const cbuOk = !pending.cbu || (() => {
+      const expectedCbu = (pending.cbu || '').replace(/\D/g, '');
+      const receivedCbu = (result.cbu_cvu || '').replace(/\D/g, '');
+      if (!receivedCbu || !expectedCbu) return !expectedCbu; // si no hay CBU en el comprobante y tampoco está configurado, ok
+      return expectedCbu.slice(-10) === receivedCbu.slice(-10);
+    })();
 
-    const verified = result.valid && amountOk && dateOk && aliasOk;
+    const verified = result.valid && amountOk && dateOk && cbuOk;
     const status = verified ? 'verified' : 'rejected';
     const dataJson = JSON.stringify(result);
 
@@ -312,7 +318,7 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
-        if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+        if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
         await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
       }
     } else if (pending.type === 'membership') {
@@ -327,7 +333,7 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
-        if (!aliasOk) reasons.push('el alias del destinatario no coincide');
+        if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
         await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
       }
     }

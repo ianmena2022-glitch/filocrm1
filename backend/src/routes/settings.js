@@ -63,6 +63,16 @@ router.put('/', auth, async (req, res) => {
        home_service !== undefined ? home_service : null,
        allow_barber_choice !== undefined ? allow_barber_choice : null, req.shopId]
     );
+    // Sincronizar sena_cbu desde mp_cbu del JSON de planes
+    if (membership_plans) {
+      try {
+        const planes = JSON.parse(membership_plans);
+        if (planes.mp_cbu) {
+          await pool.query('UPDATE shops SET sena_cbu=$1 WHERE id=$2', [planes.mp_cbu, req.shopId]);
+        }
+      } catch(e) {}
+    }
+
     res.json({ ok: true, shop: result.rows[0] });
   } catch (e) {
     res.status(500).json({ error: e.message });
