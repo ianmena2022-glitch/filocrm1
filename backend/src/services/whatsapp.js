@@ -15,6 +15,7 @@ const sockets  = {};
 const qrCodes  = {};
 const statuses = {};
 const decryptErrors = {};
+const ciphertextLastWarning = {}; // debounce: última vez que se avisó por JID
 
 // Limpiar sesión completamente (tmp + DB)
 async function clearSession(shopId) {
@@ -534,25 +535,34 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
           // 1) Limpiar archivo de sesión
           await clearJidSession(shopId, jid, phone);
-          // 2) Forzar re-fetch del PreKey bundle desde servidores WA → nueva sesión limpia
+          // 2) assertSessions con el phone JID (mismo que usará sendText) → nueva sesión + PreKey message
+          const phoneJid = phone && phone.length >= 10 ? `${phone}@s.whatsapp.net` : null;
           try {
-            await sock.assertSessions([jid], true);
-            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${jid}`);
+            const assertJids = [jid];
+            if (phoneJid && phoneJid !== jid) assertJids.push(phoneJid);
+            await sock.assertSessions(assertJids, true);
+            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${assertJids.join(', ')}`);
           } catch(e) {
             console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
           }
+          // 3) Enviar aviso (debounce: máx 1 por JID cada 2 min)
+          const now = Date.now();
+          const lastWarn = ciphertextLastWarning[jid] || 0;
+          if (now - lastWarn < 2 * 60 * 1000) {
+            console.log(`[WPP] CIPHERTEXT: aviso omitido (debounce) para ${phoneRaw}`);
+            continue;
+          }
+          ciphertextLastWarning[jid] = now;
           const warning = '⚠️ Hubo un error al recibir tu mensaje. Por favor reenviálo nuevamente y lo veremos.';
-          // Enviar al phone resuelto directamente (más confiable que buscar en DB)
-          if (phone && phone !== phoneRaw && phone.length >= 10) {
+          if (phoneJid) {
             try {
               await sendText(shopId, phone, warning);
-              console.log(`[WPP] CIPHERTEXT: aviso enviado a phone resuelto ${phone}`);
+              console.log(`[WPP] CIPHERTEXT: aviso enviado a ${phone}`);
             } catch(e) { console.error('[WPP] CIPHERTEXT sendText error:', e.message); }
           } else {
             // Fallback: buscar cliente pendiente en DB
             try {
               const pending = await findAnyPendingPayment(shopId);
-              console.log(`[WPP] CIPHERTEXT findAnyPending: ${pending ? `${pending.type} #${pending.id} phone=${pending.clientPhone}` : 'null'}`);
               if (pending?.clientPhone) {
                 await sendText(shopId, pending.clientPhone, warning);
               }
