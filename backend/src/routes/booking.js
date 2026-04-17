@@ -381,8 +381,15 @@ router.post('/:slug/reserve', async (req, res) => {
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP
-    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} client_phone=${client_phone||'null'}`);
+    // Determinar shopId para WPP: usar enterprise owner si la sucursal no tiene WPP propio
     const wpp = require('../services/whatsapp');
+    const wppShopId = (() => {
+      const wppStatus = wpp.getStatus ? null : null; // no usamos getStatus (poco confiable durante 440)
+      if (shopData.parent_enterprise_id) return shopData.parent_enterprise_id;
+      return shopData.id;
+    })();
+    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppShopId=${wppShopId} client_phone=${client_phone||'null'}`);
+
     {
       if (requiresSena) {
         // Instrucciones de seña al cliente via Groq
@@ -398,8 +405,8 @@ router.post('/:slug/reserve', async (req, res) => {
                 minutesLimit: 60,
               });
               if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
-              await wpp.sendText(shopData.id, client_phone, msgCliente);
-              console.log(`[booking] WPP seña enviada OK a ${client_phone}`);
+              await wpp.sendText(wppShopId, client_phone, msgCliente);
+              console.log(`[booking] WPP seña enviada OK a ${client_phone} via shop ${wppShopId}`);
             } catch(e) { console.error('[booking] WPP seña error:', e.message); }
           })();
         } else {
@@ -409,7 +416,7 @@ router.post('/:slug/reserve', async (req, res) => {
         // Notificar al barbero
         if (shopData.phone) {
           const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
-          try { await wpp.sendText(shopData.id, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
+          try { await wpp.sendText(wppShopId, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
         }
         // Notificar al cliente que su reserva fue recibida
         if (client_phone) {
@@ -423,7 +430,7 @@ router.post('/:slug/reserve', async (req, res) => {
               serviceName: svcName || null,
             });
             if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
-            await wpp.sendText(shopData.id, client_phone, msg);
+            await wpp.sendText(wppShopId, client_phone, msg);
           } catch (e) {
             console.error('Error notificando al cliente:', e.message);
           }
