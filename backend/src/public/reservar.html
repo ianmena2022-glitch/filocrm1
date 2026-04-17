@@ -669,18 +669,10 @@ function selectTime(time) {
 // ── FORM ──
 function goToForm() {
   if (shopData?.allow_barber_choice && barbers.length && !selectedBarber) {
-    // Filtrar solo los barberos que trabajan en la fecha+hora seleccionada
-    const availableBarbers = barbers.filter(b =>
-      isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime)
-    );
-    if (availableBarbers.length > 0) {
-      renderBarbers();
-      showScreen('barber');
-      setStep(4);
-      return;
-    }
-    // Si ningún barbero trabaja ese día/hora, saltar la pantalla de barbero
-    // El backend hará auto-assign entre los disponibles (o dejará sin asignar)
+    renderBarbers();
+    showScreen('barber');
+    setStep(4);
+    return;
   }
   showScreen('form');
   setStep(shopData?.allow_barber_choice && barbers.length ? 5 : 4);
@@ -902,10 +894,11 @@ function isBarberAvailableClient(barberSchedule, date, timeStart) {
 function renderBarbers() {
   const grid = document.getElementById('barber-grid');
   if (!grid) return;
+  const noneAvailable = barbers.every(b => !isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime));
   grid.innerHTML = barbers.map(b => {
     const available = isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime);
     const unavailableStyle = available ? '' : 'opacity:0.4;pointer-events:none;filter:grayscale(1)';
-    const badge = available ? '' : `<span style="font-size:10px;color:#f87171;margin-left:auto">No disponible</span>`;
+    const badge = available ? '' : `<span style="font-size:10px;color:#f87171;margin-left:auto">No trabaja ese día</span>`;
     return `
     <div class="service-btn ${selectedBarber?.id === b.id ? 'selected' : ''}"
          ${available ? `onclick="selectBarber(${b.id})"` : ''}
@@ -916,6 +909,18 @@ function renderBarbers() {
       ${badge}
     </div>`;
   }).join('');
+  const noAvailMsg = document.getElementById('barber-no-avail');
+  if (noneAvailable) {
+    if (!noAvailMsg) {
+      const msg = document.createElement('div');
+      msg.id = 'barber-no-avail';
+      msg.style = 'text-align:center;color:#f87171;font-size:13px;margin-top:8px;padding:10px;background:rgba(248,113,113,0.08);border-radius:8px';
+      msg.textContent = 'Ningún barbero trabaja en ese horario. Elegí otra fecha u hora.';
+      grid.after(msg);
+    }
+  } else {
+    noAvailMsg?.remove();
+  }
 }
 
 function selectBarber(id) {
