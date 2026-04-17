@@ -535,13 +535,11 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
           // 1) Limpiar archivo de sesión
           await clearJidSession(shopId, jid, phone);
-          // 2) assertSessions con el phone JID (mismo que usará sendText) → nueva sesión + PreKey message
+          // 2) assertSessions solo con el JID original (para no mezclar con phone JID que puede ser incorrecto)
           const phoneJid = phone && phone.length >= 10 ? `${phone}@s.whatsapp.net` : null;
           try {
-            const assertJids = [jid];
-            if (phoneJid && phoneJid !== jid) assertJids.push(phoneJid);
-            await sock.assertSessions(assertJids, true);
-            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${assertJids.join(', ')}`);
+            await sock.assertSessions([jid], true);
+            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${jid}`);
           } catch(e) {
             console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
           }
