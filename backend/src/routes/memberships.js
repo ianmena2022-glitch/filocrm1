@@ -90,7 +90,7 @@ router.post('/', auth, async (req, res) => {
 
       if (shop?.wpp_connected && shop?.sena_cbu && client?.phone) {
         const { generateMessage } = require('../services/ai');
-        const { sendMessage } = require('../services/whatsapp');
+        const { sendText } = require('../services/whatsapp');
         const price = parseFloat(price_monthly || 0);
 
         let msg = await generateMessage(req.shopId, 'membresia_bienvenida', {
@@ -103,7 +103,7 @@ router.post('/', auth, async (req, res) => {
         });
         if (!msg) msg = buildPaymentMsg(client.name, price, shop.sena_cbu, plan);
 
-        await sendMessage(req.shopId, client.phone, msg);
+        await sendText(req.shopId, client.phone, msg);
       }
     } catch (wppErr) {
       console.error('[memberships] Error enviando WPP bienvenida:', wppErr.message);
@@ -140,7 +140,7 @@ router.put('/:id/mark-paid', auth, async (req, res) => {
       const shop = shopData.rows[0];
       if (shop?.wpp_connected && m.client_phone) {
         const { generateMessage } = require('../services/ai');
-        const { sendMessage } = require('../services/whatsapp');
+        const { sendText } = require('../services/whatsapp');
         const fechaVencimiento = renews.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
         let msg = await generateMessage(req.shopId, 'membresia_pago_confirmado', {
           clientName: m.client_name,
@@ -149,7 +149,7 @@ router.put('/:id/mark-paid', auth, async (req, res) => {
           fechaVencimiento,
         });
         if (!msg) msg = `✅ Pago confirmado, ${m.client_name}. Tu membresía está activa con ${m.credits_total} créditos hasta el ${fechaVencimiento}.`;
-        await sendMessage(req.shopId, m.client_phone, msg);
+        await sendText(req.shopId, m.client_phone, msg);
       }
     } catch (wppErr) {
       console.error('[memberships] Error enviando WPP pago confirmado:', wppErr.message);
@@ -179,7 +179,7 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
     if (!m.client_phone) return res.status(400).json({ error: 'El cliente no tiene teléfono' });
 
     const { generateMessage } = require('../services/ai');
-    const { sendMessage } = require('../services/whatsapp');
+    const { sendText } = require('../services/whatsapp');
     const fechaVencimiento = m.renews_at
       ? new Date(m.renews_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
       : 'próximamente';
@@ -193,7 +193,7 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
     });
     if (!msg) msg = buildPaymentMsg(m.client_name, parseFloat(m.price_monthly || 0), shop.sena_cbu || '', m.plan);
 
-    await sendMessage(req.shopId, m.client_phone, msg);
+    await sendText(req.shopId, m.client_phone, msg);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
