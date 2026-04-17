@@ -380,9 +380,12 @@ router.post('/:slug/reserve', async (req, res) => {
 
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
-    // Notificar por WhatsApp
-    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} client_phone=${client_phone||'null'}`);
-    if (shopData.wpp_connected) {
+    // Notificar por WhatsApp — verificar estado real del socket, no solo la DB
+    const wpp = require('../services/whatsapp');
+    const wppStatus = await wpp.getStatus(shopData.id);
+    const wppOk = wppStatus.connected || shopData.wpp_connected;
+    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppSocket=${wppStatus.connected} client_phone=${client_phone||'null'}`);
+    if (wppOk) {
       if (requiresSena) {
         // Instrucciones de seña al cliente via Groq
         console.log(`[booking] enviando WPP seña a ${client_phone}`);
