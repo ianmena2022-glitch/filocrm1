@@ -364,7 +364,26 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
         [status, dataJson, pending.id]
       );
       if (verified) {
-        await pool.query(`UPDATE appointments SET status='confirmed' WHERE id=$1`, [pending.id]);
+        await pool.query(`UPDATE appointments SET status='pending', sena_status='confirmed' WHERE id=$1`, [pending.id]);
+        // Registrar seña en caja (igual que confirmación manual)
+        if (pending.amount > 0) {
+          try {
+            const today = new Date().toISOString().split('T')[0];
+            const apptRow = await pool.query('SELECT shop_id, client_name FROM appointments WHERE id=$1', [pending.id]);
+            if (apptRow.rows.length) {
+              await pool.query(
+                `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+                 VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')
+                 ON CONFLICT DO NOTHING`,
+                [apptRow.rows[0].shop_id, pending.amount,
+                 `Seña - ${apptRow.rows[0].client_name || 'Sin nombre'}`,
+                 today, pending.id]
+              );
+            }
+          } catch (cajaErr) {
+            console.error('[SENA] Error registrando en caja:', cajaErr.message);
+          }
+        }
         await sock.sendMessage(msg.key.remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
       } else {
         const reasons = [];
