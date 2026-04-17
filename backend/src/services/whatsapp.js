@@ -190,12 +190,14 @@ function extractTextFromMessage(msgContent) {
 
 // Buscar pago pendiente (seña o membresía) exactamente si es 1 solo cliente
 // Retorna resultado solo si hay exactamente 1 pendiente — evita notificar a múltiples clientes
+// Incluye sucursales del enterprise (shops con parent_enterprise_id = shopId)
 async function findAnyPendingPayment(shopId) {
   try {
     const senaRes = await pool.query(
       `SELECT a.id, a.sena_amount, s.sena_cbu, c.phone AS client_phone
        FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
-       WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
+       WHERE (a.shop_id=$1 OR s.parent_enterprise_id=$1)
+         AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
          AND c.phone IS NOT NULL AND c.phone != ''
        LIMIT 1`,
       [shopId]
@@ -208,7 +210,7 @@ async function findAnyPendingPayment(shopId) {
     const memRes = await pool.query(
       `SELECT m.id, m.price_monthly AS price, s.sena_cbu, c.phone AS client_phone
        FROM memberships m JOIN shops s ON s.id = m.shop_id JOIN clients c ON c.id = m.client_id
-       WHERE m.shop_id=$1
+       WHERE (m.shop_id=$1 OR s.parent_enterprise_id=$1)
          AND m.payment_status IS DISTINCT FROM 'paid'
          AND (m.comprobante_status IS NULL OR m.comprobante_status = 'rejected')
          AND c.phone IS NOT NULL AND c.phone != ''
@@ -228,6 +230,7 @@ async function findAnyPendingPayment(shopId) {
 }
 
 // Buscar pago pendiente para un teléfono específico (seña o membresía)
+// Incluye sucursales del enterprise (shops con parent_enterprise_id = shopId)
 async function findPendingPayment(shopId, phone) {
   try {
     const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
@@ -236,7 +239,7 @@ async function findPendingPayment(shopId, phone) {
       `SELECT a.id, a.sena_amount, s.sena_cbu
        FROM appointments a
        JOIN shops s ON s.id = a.shop_id
-       WHERE a.shop_id = $1
+       WHERE (a.shop_id = $1 OR s.parent_enterprise_id = $1)
          AND a.status = 'waiting_sena'
          AND a.sena_comprobante_status IS NULL
          AND EXISTS (
@@ -256,7 +259,7 @@ async function findPendingPayment(shopId, phone) {
        FROM memberships m
        JOIN shops s ON s.id = m.shop_id
        JOIN clients c ON c.id = m.client_id
-       WHERE m.shop_id = $1
+       WHERE (m.shop_id = $1 OR s.parent_enterprise_id = $1)
          AND m.payment_status IS DISTINCT FROM 'paid'
          AND (m.comprobante_status IS NULL OR m.comprobante_status = 'rejected')
          AND regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE $2
