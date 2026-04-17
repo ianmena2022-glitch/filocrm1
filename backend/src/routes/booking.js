@@ -149,19 +149,11 @@ router.get('/:slug/available', async (req, res) => {
       if (svc.rows.length) duration = svc.rows[0].duration_minutes || 30;
     }
 
-    // Turnos ya ocupados ese día
-    // waiting_sena solo cuenta si no venció (sena_expires_at > NOW() o es null)
-    const occupied = await pool.query(
-      `SELECT time_start, time_end FROM appointments
-       WHERE shop_id=$1 AND date=$2
-         AND status NOT IN ('cancelled','noshow')
-         AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
-       ORDER BY time_start`,
-      [shopId, date]
-    );
-
     // Generar slots según horario configurado
-    const shopFull = await pool.query('SELECT schedule, closed_days FROM shops WHERE id=$1', [shopId]);
+    const shopFull = await pool.query(
+      'SELECT schedule, closed_days, allow_barber_choice, is_branch, parent_enterprise_id FROM shops WHERE id=$1',
+      [shopId]
+    );
     const scheduleRaw = shopFull.rows[0]?.schedule;
     const schedule = scheduleRaw ? JSON.parse(scheduleRaw) : null;
 
@@ -192,15 +184,77 @@ router.get('/:slug/available', async (req, res) => {
       workEnd   = endH * 60 + endM;
     }
 
-    const occupiedRanges = occupied.rows.map(a => {
-      const [sh, sm] = String(a.time_start).split(':').map(Number);
-      const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
-      return { from: sh * 60 + sm, to: eh * 60 + em || sh * 60 + sm + 30 };
-    });
+    // Cargar barberos (para cálculo de disponibilidad por barbero)
+    const shopRow = shopFull.rows[0];
+    let allowBarberChoice = shopRow.allow_barber_choice;
+    const barberShopId = (shopRow.is_branch && shopRow.parent_enterprise_id)
+      ? shopRow.parent_enterprise_id : shopId;
+    if (!allowBarberChoice && shopRow.is_branch && shopRow.parent_enterprise_id) {
+      const ownerChoice = await pool.query('SELECT allow_barber_choice FROM shops WHERE id=$1', [shopRow.parent_enterprise_id]);
+      allowBarberChoice = ownerChoice.rows[0]?.allow_barber_choice || false;
+    }
+
+    let barberMap = null; // { barberId -> [occupiedRanges] }
+    if (allowBarberChoice) {
+      const barbersQ = await pool.query(
+        'SELECT id, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
+        [barberShopId]
+      );
+      if (barbersQ.rows.length) {
+        // Solo barberos que trabajan este día/hora (se filtrará por slot abajo)
+        const DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+        const bsDayKey = DAY_KEYS[dayOfWeek];
+
+        barberMap = {};
+        for (const b of barbersQ.rows) {
+          const sched = b.barber_schedule;
+          // Si tiene schedule, verificar que trabaja este día
+          if (sched) {
+            const cfg = sched[bsDayKey];
+            if (!cfg || !cfg.active) continue; // no trabaja este día
+          }
+          barberMap[b.id] = { schedule: b.barber_schedule, ranges: [] };
+        }
+
+        if (Object.keys(barberMap).length > 0) {
+          // Turnos ocupados por barbero ese día
+          const occupiedByBarber = await pool.query(
+            `SELECT barber_id, time_start, time_end FROM appointments
+             WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL
+               AND status NOT IN ('cancelled','noshow')
+               AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())`,
+            [shopId, date]
+          );
+          for (const a of occupiedByBarber.rows) {
+            if (!barberMap[a.barber_id]) continue;
+            const [sh, sm] = String(a.time_start).split(':').map(Number);
+            const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
+            barberMap[a.barber_id].ranges.push({ from: sh * 60 + sm, to: eh * 60 + em || sh * 60 + sm + 30 });
+          }
+        } else {
+          barberMap = null; // sin barberos disponibles este día → usar lógica normal
+        }
+      }
+    }
+
+    // Si no hay barberMap, usar la lógica original (turnos globales del shop)
+    let occupiedRanges = [];
+    if (!barberMap) {
+      const occupied = await pool.query(
+        `SELECT time_start, time_end FROM appointments
+         WHERE shop_id=$1 AND date=$2
+           AND status NOT IN ('cancelled','noshow')
+           AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())`,
+        [shopId, date]
+      );
+      occupiedRanges = occupied.rows.map(a => {
+        const [sh, sm] = String(a.time_start).split(':').map(Number);
+        const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
+        return { from: sh * 60 + sm, to: eh * 60 + em || sh * 60 + sm + 30 };
+      });
+    }
 
     const slots = [];
-    // Fix #13: servidor corre en UTC, turnos en hora Argentina (UTC-3)
-    // Usar hora AR para comparar slots del día actual
     const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
     const nowAR = new Date(Date.now() - AR_OFFSET_MS);
     const todayAR = nowAR.toISOString().split('T')[0];
@@ -208,10 +262,31 @@ router.get('/:slug/available', async (req, res) => {
     for (let t = workStart; t + duration <= workEnd; t += 30) {
       if (date === todayAR) {
         const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
-        if (t <= nowMinsAR + 30) continue; // al menos 30 min de anticipación
+        if (t <= nowMinsAR + 30) continue;
       }
-      const isOccupied = occupiedRanges.some(o => t < o.to && t + duration > o.from);
-      if (!isOccupied) {
+
+      let available;
+      if (barberMap) {
+        // Con barberos: slot disponible si al menos 1 barbero que trabaja ese horario tiene el slot libre
+        const DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+        const bsDayKey = DAY_KEYS[dayOfWeek];
+        const slotHH = String(Math.floor(t / 60)).padStart(2, '0');
+        const slotMM = String(t % 60).padStart(2, '0');
+        const slotTime = `${slotHH}:${slotMM}`;
+        available = Object.values(barberMap).some(b => {
+          // Verificar que el barbero trabaja en este slot específico
+          if (b.schedule) {
+            const cfg = b.schedule[bsDayKey];
+            if (!cfg || !cfg.active) return false;
+            if (cfg.from && cfg.to && (slotTime < cfg.from || slotTime >= cfg.to)) return false;
+          }
+          return !b.ranges.some(o => t < o.to && t + duration > o.from);
+        });
+      } else {
+        available = !occupiedRanges.some(o => t < o.to && t + duration > o.from);
+      }
+
+      if (available) {
         const hh = String(Math.floor(t / 60)).padStart(2, '0');
         const mm = String(t % 60).padStart(2, '0');
         slots.push(`${hh}:${mm}`);
