@@ -184,6 +184,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab active" onclick="switchTab('accounts')">Cuentas</button>
       <button class="tab" onclick="switchTab('billing')">Liquidaciones</button>
       <button class="tab" onclick="switchTab('vendors')">Vendedores</button>
+      <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
     </div>
 
     <!-- TAB: CUENTAS -->
@@ -254,6 +255,9 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         </table>
       </div>
     </div>
+
+    <!-- TAB: MÉTRICAS -->
+    <div id="tab-metrics" style="display:none"></div>
 
     <!-- TAB: VENDEDORES -->
     <div id="tab-vendors" style="display:none">
@@ -495,6 +499,7 @@ async function loadAll() {
     filterAccounts();
     filterBilling();
     renderVendorsTable();
+    renderMetrics();
     document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
   } catch(e) {
     console.error(e);
@@ -811,6 +816,8 @@ function switchTab(tab) {
   document.getElementById('tab-accounts').style.display = tab === 'accounts' ? 'block' : 'none';
   document.getElementById('tab-billing').style.display  = tab === 'billing'  ? 'block' : 'none';
   document.getElementById('tab-vendors').style.display  = tab === 'vendors'  ? 'block' : 'none';
+  document.getElementById('tab-metrics').style.display  = tab === 'metrics'  ? 'block' : 'none';
+  if (tab === 'metrics') renderMetrics();
 }
 
 // ── VENDEDORES ────────────────────────────────────────────────────────────────
@@ -953,6 +960,210 @@ async function openVendorAccounts(id, name) {
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--r)">Error cargando cuentas</td></tr>`;
   }
+}
+
+// ── MÉTRICAS ──────────────────────────────────────────────────────────────────
+function renderMetrics() {
+  const el = document.getElementById('tab-metrics');
+  if (!allAccounts.length) { el.innerHTML = '<div class="empty-state">Cargando datos...</div>'; return; }
+
+  const roots   = allAccounts.filter(a => !a.is_barber && !a.is_branch && !a.is_test);
+  const active  = roots.filter(a => a.subscription_status === 'active');
+  const trial   = roots.filter(a => a.subscription_status === 'trial');
+  const churned = roots.filter(a => ['expired','cancelled'].includes(a.subscription_status));
+
+  const byPlan = {
+    starter:    active.filter(a => a.filo_plan === 'starter').length,
+    staff:      active.filter(a => a.filo_plan === 'staff').length,
+    enterprise: active.filter(a => a.filo_plan === 'enterprise').length,
+  };
+  const trialByPlan = {
+    starter:    trial.filter(a => a.filo_plan === 'starter').length,
+    staff:      trial.filter(a => a.filo_plan === 'staff').length,
+    enterprise: trial.filter(a => a.filo_plan === 'enterprise').length,
+  };
+
+  const mrr          = byPlan.starter * 40000 + byPlan.staff * 80000 + byPlan.enterprise * 130000;
+  const arr          = mrr * 12;
+  const potentialMrr = trialByPlan.starter * 40000 + trialByPlan.staff * 80000 + trialByPlan.enterprise * 130000;
+  const avgTicket    = active.length ? Math.round(mrr / active.length) : 0;
+  const retentionPct = (active.length + churned.length) > 0
+    ? Math.round(active.length / (active.length + churned.length) * 100) : 0;
+  const wppCount  = roots.filter(a => a.wpp_connected).length;
+  const wppPct    = active.length ? Math.round(wppCount / active.length * 100) : 0;
+
+  // Nuevas cuentas últimos 6 meses
+  const now = new Date();
+  const months = Array.from({length: 6}, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString('es-AR', {month:'short'}), count: 0 };
+  });
+  roots.forEach(a => {
+    if (!a.created_at) return;
+    const d = new Date(a.created_at);
+    const m = months.find(m => m.year === d.getFullYear() && m.month === d.getMonth());
+    if (m) m.count++;
+  });
+  const maxBar = Math.max(...months.map(m => m.count), 1);
+
+  const fmt  = n => '$' + Math.round(n).toLocaleString('es-AR');
+  const pct  = (n, total) => total > 0 ? Math.round(n / total * 100) : 0;
+  const bar  = (val, max, color = 'var(--y)') =>
+    `<div style="background:rgba(255,255,255,.06);border-radius:4px;height:7px;overflow:hidden;flex:1">
+       <div style="background:${color};height:100%;width:${pct(val,max)}%;border-radius:4px"></div>
+     </div>`;
+
+  const retColor = retentionPct >= 70 ? 'var(--gr)' : retentionPct >= 50 ? 'var(--or)' : 'var(--r)';
+
+  el.innerHTML = `
+    <!-- KPIs financieros -->
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card highlight">
+        <div class="stat-label">MRR Activo</div>
+        <div class="stat-val yellow">${fmt(mrr)}</div>
+        <div class="stat-sub">${active.length} cuentas pagando</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">ARR Proyectado</div>
+        <div class="stat-val">${fmt(arr)}</div>
+        <div class="stat-sub">MRR × 12 meses</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">MRR Potencial</div>
+        <div class="stat-val" style="color:var(--or)">${fmt(potentialMrr)}</div>
+        <div class="stat-sub">${trial.length} trials si convierten</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ticket promedio</div>
+        <div class="stat-val">${avgTicket ? fmt(avgTicket) : '—'}</div>
+        <div class="stat-sub">Por cuenta activa / mes</div>
+      </div>
+    </div>
+
+    <!-- KPIs de salud -->
+    <div class="stats-grid" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-label">Retención</div>
+        <div class="stat-val" style="color:${retColor}">${retentionPct}%</div>
+        <div class="stat-sub">Activas / (Activas + Churn)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Churn total</div>
+        <div class="stat-val" style="color:var(--r)">${churned.length}</div>
+        <div class="stat-sub">Expiradas + Canceladas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">WPP conectado</div>
+        <div class="stat-val" style="color:var(--gr)">${wppCount}</div>
+        <div class="stat-sub">${wppPct}% de cuentas activas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Enterprise</div>
+        <div class="stat-val" style="color:#9f7aea">${byPlan.enterprise}</div>
+        <div class="stat-sub">${fmt(byPlan.enterprise * 130000)}/mes</div>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+
+      <!-- Ingresos por plan -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:18px">Ingresos por plan</div>
+        ${[
+          { label:'Enterprise', key:'enterprise', price:130000, color:'#9f7aea' },
+          { label:'Staff',      key:'staff',      price:80000,  color:'#63b3ed' },
+          { label:'Starter',    key:'starter',    price:40000,  color:'var(--y)' },
+        ].map(p => {
+          const rev = byPlan[p.key] * p.price;
+          const share = pct(rev, mrr);
+          return `<div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <span style="font-size:12px;font-weight:700;color:${p.color}">${p.label} <span style="font-weight:400;color:var(--g)">(${byPlan[p.key]})</span></span>
+              <span style="font-size:12px;color:var(--g)">${fmt(rev)}/mes · ${share}%</span>
+            </div>
+            <div style="background:rgba(255,255,255,.06);border-radius:4px;height:8px;overflow:hidden">
+              <div style="background:${p.color};height:100%;width:${share}%;border-radius:4px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--g)">MRR total</span>
+          <span style="font-family:'Oswald',sans-serif;font-size:16px;color:var(--y)">${fmt(mrr)}</span>
+        </div>
+      </div>
+
+      <!-- Nuevas cuentas por mes -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:18px">Nuevas cuentas — últimos 6 meses</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:90px;margin-bottom:8px">
+          ${months.map(m => {
+            const h = Math.round((m.count / maxBar) * 74);
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+              <span style="font-size:10px;color:var(--g);min-height:14px">${m.count || ''}</span>
+              <div style="width:100%;background:${m.count ? 'var(--y)' : 'rgba(255,255,255,.06)'};opacity:${m.count ? 0.85 : 1};height:${Math.max(h,4)}px;border-radius:4px 4px 0 0;transition:height .4s"></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${months.map(m => `<div style="flex:1;text-align:center;font-size:9px;color:var(--g);text-transform:uppercase">${m.label}</div>`).join('')}
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--g)">Total cuentas raíz</span>
+          <span style="font-family:'Oswald',sans-serif;font-size:16px">${roots.length}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla resumen por plan -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Activas</th>
+            <th>Trial</th>
+            <th>Precio / mes</th>
+            <th>MRR</th>
+            <th>% del MRR</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${[
+            { label:'Starter',    key:'starter',    price:40000,  cls:'starter'    },
+            { label:'Staff',      key:'staff',      price:80000,  cls:'staff'      },
+            { label:'Enterprise', key:'enterprise', price:130000, cls:'enterprise' },
+          ].map(p => {
+            const rev   = byPlan[p.key] * p.price;
+            const share = pct(rev, mrr);
+            return `<tr>
+              <td><span class="badge ${p.cls}">${p.label}</span></td>
+              <td style="font-family:'Oswald',sans-serif;font-size:18px">${byPlan[p.key]}</td>
+              <td style="color:var(--or)">${trialByPlan[p.key]}</td>
+              <td style="color:var(--g)">${fmt(p.price)}</td>
+              <td style="font-family:'Oswald',sans-serif;color:var(--y)">${fmt(rev)}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="background:rgba(255,255,255,.06);border-radius:3px;height:6px;width:80px;overflow:hidden">
+                    <div style="background:var(--y);height:100%;width:${share}%;border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:12px;color:var(--g)">${share}%</span>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+          <tr style="border-top:2px solid var(--border-y)">
+            <td style="font-weight:700;color:var(--g)">TOTAL</td>
+            <td style="font-family:'Oswald',sans-serif;font-size:18px;color:var(--gr)">${active.length}</td>
+            <td style="color:var(--or);font-weight:600">${trial.length}</td>
+            <td></td>
+            <td style="font-family:'Oswald',sans-serif;font-size:20px;color:var(--y)">${fmt(mrr)}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
