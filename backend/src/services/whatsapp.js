@@ -598,7 +598,14 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           } catch(e) {
             console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
           }
-          // 3) Enviar aviso (debounce: máx 1 por JID cada 2 min)
+          // 3) Enviar aviso SOLO si el contacto tiene un pago pendiente (seña o membresía)
+          // Si no tiene pago pendiente, no tiene sentido avisarle — era un mensaje normal que falló al descifrar
+          const hasPending = phone ? await findPendingPayment(shopId, phone) : null;
+          if (!hasPending) {
+            console.log(`[WPP] CIPHERTEXT: sin pago pendiente para ${phoneRaw} — omitiendo aviso`);
+            continue;
+          }
+          // Debounce: máx 1 aviso por JID cada 2 min
           const now = Date.now();
           const lastWarn = ciphertextLastWarning[jid] || 0;
           if (now - lastWarn < 2 * 60 * 1000) {
