@@ -554,11 +554,19 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           }
           ciphertextLastWarning[jid] = now;
           const warning = '⚠️ Hubo un error al recibir tu mensaje. Por favor reenviálo nuevamente y lo veremos.';
-          if (phoneJid) {
+          // Enviar usando el JID original (@lid o phone) — usa la sesión que acaba de establecer assertSessions
+          const sendJid = jid.endsWith('@lid') ? jid : (phoneJid || null);
+          if (sendJid) {
             try {
-              await sendText(shopId, phone, warning);
-              console.log(`[WPP] CIPHERTEXT: aviso enviado a ${phone}`);
-            } catch(e) { console.error('[WPP] CIPHERTEXT sendText error:', e.message); }
+              await sock.sendMessage(sendJid, { text: warning });
+              console.log(`[WPP] CIPHERTEXT: aviso enviado a ${sendJid}`);
+            } catch(e) {
+              console.error('[WPP] CIPHERTEXT sock.sendMessage error:', e.message);
+              // Fallback a sendText si falla
+              if (phoneJid) {
+                try { await sendText(shopId, phone, warning); } catch(e2) {}
+              }
+            }
           } else {
             // Fallback: buscar cliente pendiente en DB
             try {
