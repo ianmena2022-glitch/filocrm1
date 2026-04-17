@@ -404,8 +404,8 @@ router.put('/:id/sena', auth, async (req, res) => {
 
     // Enterprise owner puede confirmar señas de sus sucursales también
     const shopCondition = req.isEnterpriseOwner
-      ? `(shop_id = $4 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $4 AND is_branch = TRUE))`
-      : `shop_id = $4`;
+      ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
+      : `shop_id = $2`;
 
     // FOR UPDATE para evitar race condition con el scheduler (expirePendingSenas)
     const client = await pool.connect();
