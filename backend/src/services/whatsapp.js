@@ -34,6 +34,28 @@ async function clearSession(shopId) {
   }
 }
 
+// Limpiar sesión Signal de un JID específico (para resetear cifrado con ese contacto)
+async function clearJidSession(shopId, jid) {
+  try {
+    const dir = authDir(shopId);
+    const user = jid.split('@')[0];
+    const files = fs.readdirSync(dir);
+    let removed = 0;
+    for (const f of files) {
+      // useMultiFileAuthState guarda: session-{user}.{device}.json
+      // fixFileName reemplaza ':' por '-', '/' por '__'
+      if (f.startsWith(`session-${user}.`) && f.endsWith('.json')) {
+        fs.unlinkSync(path.join(dir, f));
+        removed++;
+      }
+    }
+    console.log(`[WPP] clearJidSession: ${removed} sesión(es) eliminada(s) para ${jid}`);
+    if (removed > 0) await saveSessionToDB(shopId);
+  } catch(e) {
+    console.error('clearJidSession error:', e.message);
+  }
+}
+
 // Limpiar solo las session keys de Signal (no las credenciales principales)
 async function clearSignalKeys(shopId) {
   try {
@@ -498,10 +520,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           console.log(`[WPP] @lid ${phoneRaw} → phone resuelto: ${phone}`);
         }
 
-        // messageStubType 2 = CIPHERTEXT — descifrado fallido, pedir reenvío como imagen
+        // messageStubType 2 = CIPHERTEXT — descifrado fallido
         if (msg.messageStubType === 2) {
-          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — sesión no descifrable`);
-          const warning = '⚠️ No pudimos leer tu archivo. Por favor reenviá el comprobante como *imagen* (foto, no PDF) por este chat.';
+          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
+          // Limpiar sesión de este JID para que el próximo mensaje se pueda descifrar
+          await clearJidSession(shopId, jid);
+          const warning = '⚠️ Hubo un error al recibir tu mensaje. Por favor reenviálo nuevamente y lo veremos.';
           // Enviar al phone resuelto directamente (más confiable que buscar en DB)
           if (phone && phone !== phoneRaw && phone.length >= 10) {
             try {
