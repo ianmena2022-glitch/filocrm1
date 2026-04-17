@@ -80,7 +80,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
 
 // ── VENDEDORES / REFERIDOS ────────────────────────────────────────────────────
 
-// Precio mensual por plan (para calcular MRR de cuentas pagando)
+// Precio del primer mes por plan
 function planPrice(filo_plan) {
   if (filo_plan === 'enterprise') return 130000;
   if (filo_plan === 'staff')      return 80000;
@@ -99,17 +99,33 @@ router.get('/vendors', adminAuth, async (req, res) => {
       GROUP BY v.id
       ORDER BY v.created_at DESC
     `);
-    // Calcular MRR y comisión por vendedor
+    // Comisión one-time: se cobra una sola vez por el primer pago de cada cuenta referida
     const vendors = await Promise.all(result.rows.map(async v => {
-      const mrrQ = await pool.query(
+      const pct = v.commission_pct || 20;
+
+      // Todas las cuentas que alguna vez pagaron (first_payment_at o ya active antes de la migración)
+      const totalQ = await pool.query(
         `SELECT filo_plan FROM shops
-         WHERE vendor_id=$1 AND subscription_status='active'
+         WHERE vendor_id=$1
+           AND (first_payment_at IS NOT NULL OR subscription_status='active')
            AND COALESCE(is_barber,FALSE)=FALSE AND COALESCE(is_branch,FALSE)=FALSE`,
         [v.id]
       );
-      const mrr = mrrQ.rows.reduce((sum, s) => sum + planPrice(s.filo_plan), 0);
-      const commission = Math.round(mrr * (v.commission_pct || 20) / 100);
-      return { ...v, mrr, commission };
+      const commission_total = totalQ.rows.reduce((sum, s) =>
+        sum + Math.round(planPrice(s.filo_plan) * pct / 100), 0);
+
+      // Solo las que pagaron por primera vez este mes
+      const monthQ = await pool.query(
+        `SELECT filo_plan FROM shops
+         WHERE vendor_id=$1 AND first_payment_at >= date_trunc('month', NOW())
+           AND COALESCE(is_barber,FALSE)=FALSE AND COALESCE(is_branch,FALSE)=FALSE`,
+        [v.id]
+      );
+      const commission_month = monthQ.rows.reduce((sum, s) =>
+        sum + Math.round(planPrice(s.filo_plan) * pct / 100), 0);
+      const new_this_month = monthQ.rows.length;
+
+      return { ...v, commission_total, commission_month, new_this_month };
     }));
     res.json({ vendors });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -237,10 +253,11 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
     if (validStatus.includes(subscription_status)) {
       updates.push(`subscription_status=$${i++}`);
       params.push(subscription_status);
-      // Si se activa manualmente, marcar como activo también en mp_shop_status
+      // Si se activa manualmente, marcar como activo y registrar primer pago si no existe
       if (subscription_status === 'active') {
         updates.push(`mp_shop_status=$${i++}`);
         params.push('authorized');
+        updates.push(`first_payment_at=COALESCE(first_payment_at, NOW())`);
       }
     }
 

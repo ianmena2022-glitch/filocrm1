@@ -354,7 +354,8 @@ router.post('/webhook-filo', async (req, res) => {
       const updated = await pool.query(
         `UPDATE shops SET mp_shop_status=$1, subscription_status=$2, mp_shop_subscription_id=$3,
            mp_payer_email=COALESCE($5, mp_payer_email),
-           expired_at=CASE WHEN $2='expired' THEN COALESCE(expired_at, NOW()) ELSE NULL END
+           expired_at=CASE WHEN $2='expired' THEN COALESCE(expired_at, NOW()) ELSE NULL END,
+           first_payment_at=CASE WHEN $2='active' THEN COALESCE(first_payment_at, NOW()) ELSE first_payment_at END
          WHERE mp_shop_subscription_id=$3 OR mp_shop_subscription_id=$4 RETURNING id`,
         [status, status === 'authorized' ? 'active' : 'expired', subId, planId, payerEmail]
       );
@@ -471,7 +472,8 @@ router.post('/webhook-qr', async (req, res) => {
         const updated = await pool.query(
           `UPDATE shops
            SET subscription_status='active', mp_shop_status='authorized',
-               filo_plan=$1, trial_ends_at=$2, expired_at=NULL
+               filo_plan=$1, trial_ends_at=$2, expired_at=NULL,
+               first_payment_at=COALESCE(first_payment_at, NOW())
            WHERE id=$3
            RETURNING name, phone, wpp_connected`,
           [plan, accessUntil.toISOString(), shopId]

@@ -264,6 +264,23 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <div class="toolbar">
         <button class="btn-sm" onclick="openVendorModal()">+ Nuevo vendedor</button>
       </div>
+      <!-- Card de comisiones del mes -->
+      <div id="vendors-month-card" style="display:none;margin-bottom:18px;padding:18px 24px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:10px;display:flex;gap:32px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(74,222,128,.7);margin-bottom:4px">Comisiones a pagar este mes</div>
+          <div id="vendors-month-total" style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:#4ade80">$0</div>
+        </div>
+        <div style="width:1px;height:40px;background:rgba(74,222,128,.2)"></div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:4px">Nuevas conversiones</div>
+          <div id="vendors-month-new" style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--w)">0</div>
+        </div>
+        <div style="width:1px;height:40px;background:rgba(255,255,255,.06)"></div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:4px">Comisiones totales (histórico)</div>
+          <div id="vendors-total-all" style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--y)">$0</div>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -273,8 +290,8 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Link</th>
               <th>Cuentas</th>
               <th>Pagando</th>
-              <th>MRR referido</th>
-              <th>Comisión</th>
+              <th>Este mes</th>
+              <th>Comisión total</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -313,7 +330,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <div class="form-group">
         <label>Comisión (%)</label>
         <input class="input" id="vendor-commission" type="number" min="0" max="100" value="20" placeholder="20" style="max-width:120px">
-        <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">% del MRR de las cuentas pagando referidas por este vendedor.</span>
+        <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">% del primer pago de cada cuenta que convierte. Se cobra una sola vez por cuenta.</span>
       </div>
       <div id="vendor-err" style="color:var(--r);font-size:13px;display:none"></div>
     </div>
@@ -835,14 +852,27 @@ function renderVendorsTable() {
   const tbody = document.getElementById('vendors-tbody');
   if (!allVendors.length) {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Sin vendedores. Creá el primero con "+ Nuevo vendedor".</div></td></tr>`;
+    document.getElementById('vendors-month-card').style.display = 'none';
     return;
   }
+
+  // Calcular totales para la card de resumen
+  const totalMonth = allVendors.reduce((s, v) => s + (v.commission_month || 0), 0);
+  const totalNew   = allVendors.reduce((s, v) => s + (v.new_this_month || 0), 0);
+  const totalAll   = allVendors.reduce((s, v) => s + (v.commission_total || 0), 0);
+  const card = document.getElementById('vendors-month-card');
+  card.style.display = 'flex';
+  document.getElementById('vendors-month-total').textContent = '$' + totalMonth.toLocaleString('es-AR');
+  document.getElementById('vendors-month-new').textContent   = totalNew;
+  document.getElementById('vendors-total-all').textContent   = '$' + totalAll.toLocaleString('es-AR');
+
   const baseUrl = window.location.origin;
   tbody.innerHTML = allVendors.map(v => {
-    const link = `${baseUrl}/app?ref=${encodeURIComponent(v.code)}`;
-    const mrr = v.mrr || 0;
-    const commission = v.commission || 0;
-    const pct = v.commission_pct || 20;
+    const link           = `${baseUrl}/app?ref=${encodeURIComponent(v.code)}`;
+    const commTotal      = v.commission_total || 0;
+    const commMonth      = v.commission_month || 0;
+    const newThisMonth   = v.new_this_month   || 0;
+    const pct            = v.commission_pct   || 20;
     return `<tr>
       <td>
         <div style="font-weight:600">${esc(v.name)}</div>
@@ -868,11 +898,15 @@ function renderVendorsTable() {
         <span style="font-family:'Oswald',sans-serif;font-size:15px;color:${v.paying_count > 0 ? 'var(--ok)' : 'var(--g)'}">${v.paying_count || 0}</span>
       </td>
       <td>
-        <span style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--w)">$${mrr.toLocaleString('es-AR')}</span>
+        ${newThisMonth > 0
+          ? `<div style="font-family:'Oswald',sans-serif;font-size:15px;color:#4ade80">+${newThisMonth} nueva${newThisMonth > 1 ? 's' : ''}</div>
+             <div style="font-size:11px;color:#4ade80">$${commMonth.toLocaleString('es-AR')}</div>`
+          : `<span style="color:var(--g);font-size:12px">—</span>`
+        }
       </td>
       <td>
-        <div style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80;font-weight:700">$${commission.toLocaleString('es-AR')}</div>
-        <div style="font-size:10px;color:var(--g)">${pct}% del MRR</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:16px;color:var(--y);font-weight:700">$${commTotal.toLocaleString('es-AR')}</div>
+        <div style="font-size:10px;color:var(--g)">${pct}% × primer pago</div>
       </td>
       <td style="display:flex;gap:6px">
         <button class="action-btn" onclick="openVendorModal(${v.id})">Editar</button>
