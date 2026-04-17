@@ -10,12 +10,16 @@ function buildPaymentMsg(clientName, price, alias, planName) {
 // GET /api/memberships
 router.get('/', auth, async (req, res) => {
   try {
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const shopFilter = isEnterprise
+      ? `(m.shop_id=$1 OR m.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE))`
+      : `m.shop_id=$1`;
     const result = await pool.query(
       `SELECT m.*, c.name AS client_name, c.phone AS client_phone,
          m.credits_total - m.credits_used AS credits_remaining
        FROM memberships m
        JOIN clients c ON c.id = m.client_id
-       WHERE m.shop_id=$1
+       WHERE ${shopFilter}
        ORDER BY m.active DESC, m.created_at DESC`,
       [req.shopId]
     );
@@ -28,13 +32,17 @@ router.get('/', auth, async (req, res) => {
 // GET /api/memberships/stats
 router.get('/stats', auth, async (req, res) => {
   try {
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const shopFilter = isEnterprise
+      ? `(shop_id=$1 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE))`
+      : `shop_id=$1`;
     const result = await pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE active=TRUE)                   AS active_total,
          COUNT(*) FILTER (WHERE active=TRUE AND plan='basic')  AS basic_active,
          COUNT(*) FILTER (WHERE active=TRUE AND plan='premium') AS premium_active,
          COALESCE(SUM(price_monthly) FILTER (WHERE active=TRUE), 0) AS mrr
-       FROM memberships WHERE shop_id=$1`,
+       FROM memberships WHERE ${shopFilter}`,
       [req.shopId]
     );
     res.json(result.rows[0]);

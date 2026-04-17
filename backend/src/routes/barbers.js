@@ -111,7 +111,8 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0) AS pending_commission,
   COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments
 FROM shops s
-LEFT JOIN appointments a ON a.barber_id = s.id AND a.shop_id = $1
+LEFT JOIN appointments a ON a.barber_id = s.id
+  AND (a.shop_id = $1 OR a.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))
 WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE
 GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct
 ORDER BY s.name`,

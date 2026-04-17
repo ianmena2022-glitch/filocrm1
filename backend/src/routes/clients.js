@@ -5,13 +5,17 @@ const auth   = require('../middleware/auth');
 // GET /api/clients
 router.get('/', auth, async (req, res) => {
   try {
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const shopFilter = isEnterprise
+      ? `(c.shop_id = $1 OR c.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
+      : `c.shop_id = $1`;
     const result = await pool.query(
       `SELECT c.*,
          m.plan  AS membership_plan,
          m.active AS membership_active
        FROM clients c
        LEFT JOIN memberships m ON m.client_id = c.id AND m.active = TRUE
-       WHERE c.shop_id = $1
+       WHERE ${shopFilter}
        ORDER BY c.name`,
       [req.shopId]
     );
@@ -24,14 +28,18 @@ router.get('/', auth, async (req, res) => {
 // GET /api/clients/:id
 router.get('/:id', auth, async (req, res) => {
   try {
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const ownerFilter = isEnterprise
+      ? `(shop_id=$2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$2 AND is_branch=TRUE))`
+      : `shop_id=$2`;
     const client = await pool.query(
-      'SELECT * FROM clients WHERE id=$1 AND shop_id=$2',
+      `SELECT * FROM clients WHERE id=$1 AND ${ownerFilter}`,
       [req.params.id, req.shopId]
     );
     if (!client.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const history = await pool.query(
-      `SELECT * FROM appointments WHERE client_id=$1 AND shop_id=$2 ORDER BY date DESC, time_start DESC LIMIT 20`,
+      `SELECT * FROM appointments WHERE client_id=$1 AND ${ownerFilter} ORDER BY date DESC, time_start DESC LIMIT 20`,
       [req.params.id, req.shopId]
     );
     res.json({ ...client.rows[0], history: history.rows });

@@ -73,7 +73,7 @@ router.get('/today', auth, async (req, res) => {
          COUNT(*) AS cuts
        FROM appointments a
        JOIN shops s ON s.id = a.barber_id
-       WHERE a.shop_id = $1 AND a.date = $2 AND a.status = 'completed'
+       WHERE ${shopFilter} AND a.date = $2 AND a.status = 'completed'
          AND a.barber_id IS NOT NULL
        GROUP BY s.id, s.name
        ORDER BY s.name`,
@@ -129,7 +129,7 @@ router.get('/month', auth, async (req, res) => {
       pool.query(
         `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
          FROM product_sales
-         WHERE shop_id=$1
+         WHERE (shop_id=$1 OR (${isEnterpriseOwner ? `shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE)` : 'FALSE'}))
            AND sold_at >= date_trunc('month', CURRENT_DATE)`,
         [shopId]
       ),
@@ -167,12 +167,12 @@ router.get('/month', auth, async (req, res) => {
     const recurringQ = await pool.query(
       `SELECT COUNT(DISTINCT client_id) AS recurring
        FROM appointments
-       WHERE shop_id=$1 AND status='completed'
+       WHERE ${shopFilterMonth} AND status='completed'
          AND date >= date_trunc('month', CURRENT_DATE)
          AND client_id IS NOT NULL
          AND client_id IN (
            SELECT client_id FROM appointments
-           WHERE shop_id=$1 AND status='completed'
+           WHERE ${shopFilterMonth} AND status='completed'
              AND date >= date_trunc('month', CURRENT_DATE)
            GROUP BY client_id HAVING COUNT(*) > 1
          )`,
