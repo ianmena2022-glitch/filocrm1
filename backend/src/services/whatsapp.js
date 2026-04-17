@@ -46,7 +46,7 @@ async function clearJidSession(shopId, jid, resolvedPhone) {
     for (const f of sessionFiles) {
       // useMultiFileAuthState: session-{user}.{device}.json o session-{user}-{device}.json (fixFileName convierte ':' a '-')
       const base = f.replace(/^session-/, '').replace(/\.json$/, '');
-      const fileUser = base.replace(/[.\-]\d+$/, ''); // strip .0 or -0 suffix
+      const fileUser = base.replace(/_\d+(\.\d+)*$/, ''); // strip _1.0, _1.89, etc (formato Baileys v7)
       if (fileUser === user || (phoneClean && fileUser === phoneClean)) {
         fs.unlinkSync(path.join(dir, f));
         removed++;
