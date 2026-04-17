@@ -551,8 +551,23 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const isIndividual = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
         if (!isIndividual) continue;
 
+        // Ignorar mensajes de status/broadcast
+        if (jid === 'status@broadcast') continue;
+
         const phoneRaw = jid.replace('@s.whatsapp.net', '').replace('@lid', '');
         if (!/^\d+$/.test(phoneRaw)) continue;
+
+        // Ignorar reacciones, stickers, protocolMessages y eventos de sistema
+        const stubType = msg.messageStubType;
+        if (stubType && stubType !== 2) {
+          console.log(`[WPP] Ignorando messageStubType=${stubType} de ${phoneRaw}`);
+          continue;
+        }
+        const rawKeys = msg.message ? Object.keys(msg.message) : [];
+        if (rawKeys.includes('reactionMessage') || rawKeys.includes('stickerMessage') || rawKeys.includes('protocolMessage')) {
+          console.log(`[WPP] Ignorando ${rawKeys[0]} de ${phoneRaw}`);
+          continue;
+        }
 
         // Resolver phone desde @lid — v7 provee senderPn nativo
         let phone = phoneRaw;

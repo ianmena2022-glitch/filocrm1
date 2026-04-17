@@ -3,7 +3,23 @@ const pool = require('../db/pool');
 // Historial de conversaciones en memoria
 const conversations  = {};
 const lastActivity   = {};
-const CONVERSATION_TIMEOUT_MS = 1 * 60 * 1000; // 1 minuto
+const CONVERSATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
+
+// Rate limiting: máx mensajes por ventana de tiempo
+const rateLimiter = {};
+const RATE_LIMIT_MAX = 6;     // máx respuestas
+const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // por 5 minutos
+
+function checkRateLimit(shopId, phone) {
+  const key = `${shopId}:${phone}`;
+  const now = Date.now();
+  if (!rateLimiter[key]) rateLimiter[key] = [];
+  // limpiar entradas viejas
+  rateLimiter[key] = rateLimiter[key].filter(t => now - t < RATE_LIMIT_WINDOW);
+  if (rateLimiter[key].length >= RATE_LIMIT_MAX) return false;
+  rateLimiter[key].push(now);
+  return true;
+}
 
 function hasActiveConversation(shopId, phone) {
   const key = `${shopId}:${phone}`;
@@ -32,8 +48,30 @@ async function fetchWithTimeout(url, options, timeoutMs = 10000) {
 }
 
 // Clasificación contextual con IA
-async function isBarberiaRelated(text, apiKey) {
+// strict=true: solo responder si intención clara (primer mensaje)
+// strict=false: también responder si hay contexto activo (follow-up dentro conversación)
+async function isBarberiaRelated(text, apiKey, strict = true) {
+  // Filtros rápidos sin LLM — casos obvios que nunca deben disparar el bot
+  const t = text.trim();
+  if (t.length <= 3) return false; // "ok", "👍", "si"
+  // Solo emojis
+  if (/^[\u{1F000}-\u{1FFFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+$/u.test(t)) return false;
+  // Números solos (que no sean precios ni horarios)
+  if (/^\d{1,4}$/.test(t)) return false;
+
   try {
+    const systemPrompt = strict
+      ? `Sos un clasificador ESTRICTO para una barbería. Respondé "true" SOLO si el mensaje tiene una intención EXPLÍCITA Y CLARA de: pedir o consultar turno, preguntar precios/servicios/horarios/ubicación, cancelar turno, consultar puntos/premios.
+
+SIEMPRE respondé "false" para: saludos solos ("hola", "buenas", "hey", "buen día"), "ok", "gracias", "jaja", conversación casual, mensajes cortos sin contexto, preguntas o temas que no son de barbería, mensajes ambiguos.
+
+Ante la duda: "false". Respondé ÚNICAMENTE "true" o "false".`
+      : `Sos un clasificador para una barbería. Ya hay una conversación activa. Respondé "false" SOLO si el mensaje claramente NO tiene nada que ver con una barbería ni con una conversación sobre turnos/servicios (ej: chistes, noticias, temas políticos, insultos, mensajes a otra persona).
+
+En conversaciones activas, saludos y respuestas cortas como "ok", "gracias" o preguntas de seguimiento son "true".
+
+Respondé ÚNICAMENTE "true" o "false".`;
+
     const response = await fetchWithTimeout(
       'https://api.groq.com/openai/v1/chat/completions',
       {
@@ -42,21 +80,14 @@ async function isBarberiaRelated(text, apiKey) {
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages: [
-            {
-              role: 'system',
-              content: `Sos un clasificador de mensajes para una barbería. Tu única tarea es decidir si el mensaje recibido tiene una intención clara relacionada con servicios de barbería: pedir turno, consultar precios, preguntar horarios, consultar ubicación, preguntar por servicios, cancelar o modificar un turno, preguntar por puntos o premios, o cualquier consulta específica que una persona le haría a una barbería.
-
-NO clasificar como relacionado: saludos solos ("hola", "buenas", "hey"), mensajes genéricos sin contexto, conversación casual, mensajes que no tienen nada que ver con una barbería.
-
-Respondé ÚNICAMENTE con "true" o "false", sin ninguna otra palabra ni explicación.`
-            },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: `Mensaje: "${text}"` }
           ],
           max_tokens: 5,
           temperature: 0,
         })
       },
-      8000 // 8s timeout para clasificación
+      8000
     );
     if (!response.ok) return false;
     const data = await response.json();
@@ -129,8 +160,23 @@ async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
-  if (!hasActiveConversation(shopId, phone)) {
-    const related = await isBarberiaRelated(userMessage, apiKey);
+  // Rate limiting
+  if (!checkRateLimit(shopId, phone)) {
+    console.log(`[AI] Rate limit alcanzado para ${phone} — ignorando`);
+    return null;
+  }
+
+  const activeConv = hasActiveConversation(shopId, phone);
+  if (activeConv) {
+    // Dentro de conversación activa: clasificación laxa — solo bloquear temas totalmente ajenos
+    const related = await isBarberiaRelated(userMessage, apiKey, false);
+    if (!related) {
+      console.log(`[AI] Ignorado dentro de conversación activa (off-topic): "${userMessage}"`);
+      return null;
+    }
+  } else {
+    // Primer mensaje: clasificación estricta
+    const related = await isBarberiaRelated(userMessage, apiKey, true);
     if (!related) {
       console.log(`[AI] Ignorado (no relacionado con barbería): "${userMessage}"`);
       return null;
@@ -320,5 +366,20 @@ Solo el JSON, sin texto extra.`;
     return null;
   }
 }
+
+// Limpiar rateLimiter y conversaciones expiradas cada 30 min
+setInterval(() => {
+  const now = Date.now();
+  for (const k of Object.keys(rateLimiter)) {
+    rateLimiter[k] = rateLimiter[k].filter(t => now - t < RATE_LIMIT_WINDOW);
+    if (rateLimiter[k].length === 0) delete rateLimiter[k];
+  }
+  for (const k of Object.keys(conversations)) {
+    if (now - (lastActivity[k] || 0) > CONVERSATION_TIMEOUT_MS) {
+      delete conversations[k];
+      delete lastActivity[k];
+    }
+  }
+}, 30 * 60 * 1000);
 
 module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText };
