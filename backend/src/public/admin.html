@@ -270,13 +270,16 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
             <tr>
               <th>Vendedor</th>
               <th>Código</th>
-              <th>Link de referido</th>
-              <th>Cuentas referidas</th>
+              <th>Link</th>
+              <th>Cuentas</th>
+              <th>Pagando</th>
+              <th>MRR referido</th>
+              <th>Comisión</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="vendors-tbody">
-            <tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>
+            <tr class="loading-row"><td colspan="8"><div class="spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -307,6 +310,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         <input class="input" id="vendor-code" placeholder="Ej: JUAN2026" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')">
         <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">Solo letras y números, sin espacios. Se usa como código y en el link.</span>
       </div>
+      <div class="form-group">
+        <label>Comisión (%)</label>
+        <input class="input" id="vendor-commission" type="number" min="0" max="100" value="20" placeholder="20" style="max-width:120px">
+        <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">% del MRR de las cuentas pagando referidas por este vendedor.</span>
+      </div>
       <div id="vendor-err" style="color:var(--r);font-size:13px;display:none"></div>
     </div>
     <div class="modal-footer">
@@ -323,13 +331,15 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <h3 id="vendor-accounts-title">CUENTAS REFERIDAS</h3>
       <button class="modal-close" onclick="closeModal('vendor-accounts-modal')">×</button>
     </div>
-    <div class="modal-body" style="padding:0;max-height:420px;overflow-y:auto">
+    <div id="vendor-accounts-summary" style="display:none;padding:12px 16px;background:rgba(74,222,128,.07);border-bottom:1px solid rgba(74,222,128,.2);font-size:13px;display:flex;gap:24px;flex-wrap:wrap"></div>
+    <div class="modal-body" style="padding:0;max-height:380px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr>
             <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);text-align:left">Barbería</th>
             <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);text-align:left">Plan</th>
             <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);text-align:left">Estado</th>
+            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);text-align:right">Precio/mes</th>
             <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);text-align:left">Registro</th>
           </tr>
         </thead>
@@ -824,12 +834,15 @@ function switchTab(tab) {
 function renderVendorsTable() {
   const tbody = document.getElementById('vendors-tbody');
   if (!allVendors.length) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Sin vendedores. Creá el primero con "+ Nuevo vendedor".</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Sin vendedores. Creá el primero con "+ Nuevo vendedor".</div></td></tr>`;
     return;
   }
   const baseUrl = window.location.origin;
   tbody.innerHTML = allVendors.map(v => {
     const link = `${baseUrl}/app?ref=${encodeURIComponent(v.code)}`;
+    const mrr = v.mrr || 0;
+    const commission = v.commission || 0;
+    const pct = v.commission_pct || 20;
     return `<tr>
       <td>
         <div style="font-weight:600">${esc(v.name)}</div>
@@ -838,11 +851,11 @@ function renderVendorsTable() {
       <td><span style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--y);letter-spacing:1px">${esc(v.code)}</span></td>
       <td>
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--g);word-break:break-all">${esc(link)}</span>
+          <span style="font-size:11px;color:var(--g);word-break:break-all;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(link)}</span>
           <button class="action-btn" onclick="copyVendorLink('${esc(link)}')" title="Copiar link">📋</button>
         </div>
       </td>
-      <td>
+      <td style="text-align:center">
         ${v.referred_count > 0
           ? `<button class="action-btn" onclick="openVendorAccounts(${v.id},'${esc(v.name)}')" style="color:var(--y);border-color:rgba(255,209,0,.3)">
                <span style="font-family:'Oswald',sans-serif;font-size:15px">${v.referred_count}</span>
@@ -850,6 +863,16 @@ function renderVendorsTable() {
              </button>`
           : `<span style="color:var(--g);font-size:12px">0</span>`
         }
+      </td>
+      <td style="text-align:center">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:${v.paying_count > 0 ? 'var(--ok)' : 'var(--g)'}">${v.paying_count || 0}</span>
+      </td>
+      <td>
+        <span style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--w)">$${mrr.toLocaleString('es-AR')}</span>
+      </td>
+      <td>
+        <div style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80;font-weight:700">$${commission.toLocaleString('es-AR')}</div>
+        <div style="font-size:10px;color:var(--g)">${pct}% del MRR</div>
       </td>
       <td style="display:flex;gap:6px">
         <button class="action-btn" onclick="openVendorModal(${v.id})">Editar</button>
@@ -879,13 +902,15 @@ function openVendorModal(id) {
     document.getElementById('vendor-id').value    = v.id;
     document.getElementById('vendor-name').value  = v.name;
     document.getElementById('vendor-email').value = v.email || '';
-    document.getElementById('vendor-code').value  = v.code;
+    document.getElementById('vendor-code').value       = v.code;
+    document.getElementById('vendor-commission').value = v.commission_pct || 20;
   } else {
     document.getElementById('vendor-modal-title').textContent = 'NUEVO VENDEDOR';
-    document.getElementById('vendor-id').value    = '';
-    document.getElementById('vendor-name').value  = '';
-    document.getElementById('vendor-email').value = '';
-    document.getElementById('vendor-code').value  = '';
+    document.getElementById('vendor-id').value         = '';
+    document.getElementById('vendor-name').value       = '';
+    document.getElementById('vendor-email').value      = '';
+    document.getElementById('vendor-code').value       = '';
+    document.getElementById('vendor-commission').value = 20;
   }
   document.getElementById('vendor-modal').classList.add('open');
 }
@@ -910,7 +935,7 @@ async function saveVendor() {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-      body: JSON.stringify({ name, email: email || null, code })
+      body: JSON.stringify({ name, email: email || null, code, commission_pct: parseInt(document.getElementById('vendor-commission').value) || 20 })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Error'; errEl.style.display = 'block'; return; }
@@ -934,8 +959,10 @@ async function deleteVendor(id, name) {
 
 async function openVendorAccounts(id, name) {
   document.getElementById('vendor-accounts-title').textContent = `CUENTAS — ${name.toUpperCase()}`;
-  const tbody = document.getElementById('vendor-accounts-tbody');
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px"><div class="spinner"></div></td></tr>`;
+  const tbody   = document.getElementById('vendor-accounts-tbody');
+  const summary = document.getElementById('vendor-accounts-summary');
+  tbody.innerHTML   = `<tr><td colspan="5" style="text-align:center;padding:24px"><div class="spinner"></div></td></tr>`;
+  summary.style.display = 'none';
   document.getElementById('vendor-accounts-modal').classList.add('open');
   try {
     const res = await fetch(`/api/admin/vendors/${id}/accounts`, {
@@ -944,21 +971,39 @@ async function openVendorAccounts(id, name) {
     const data = await res.json();
     const accounts = data.accounts || [];
     if (!accounts.length) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--g);font-size:13px">Sin cuentas referidas aún</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--g);font-size:13px">Sin cuentas referidas aún</td></tr>`;
       return;
     }
+
+    // Find commission_pct for this vendor
+    const vendor = allVendors.find(v => v.id === id);
+    const commPct = vendor?.commission_pct || 20;
+
+    // Summary bar
+    const paying = accounts.filter(a => a.is_paying);
+    const mrr    = paying.reduce((s, a) => s + (a.monthly_price || 0), 0);
+    const comm   = Math.round(mrr * commPct / 100);
+    summary.style.display = 'flex';
+    summary.innerHTML = `
+      <span>✅ <strong>${paying.length}</strong> pagando de <strong>${accounts.length}</strong> total</span>
+      <span style="color:#4ade80">MRR: <strong>$${mrr.toLocaleString('es-AR')}</strong></span>
+      <span style="color:var(--y)">Comisión (${commPct}%): <strong>$${comm.toLocaleString('es-AR')}</strong></span>`;
+
     tbody.innerHTML = accounts.map(a => `
-      <tr style="border-bottom:1px solid var(--border)">
+      <tr style="border-bottom:1px solid var(--border);${a.is_paying ? '' : 'opacity:.55'}">
         <td style="padding:10px 16px">
           <div style="font-weight:600;font-size:13px">${esc(a.name)}</div>
           <div style="font-size:11px;color:var(--g)">${esc(a.email)}</div>
         </td>
         <td style="padding:10px 16px"><span class="badge ${a.filo_plan}">${(a.filo_plan||'').toUpperCase()}</span></td>
         <td style="padding:10px 16px"><span class="badge ${a.subscription_status}"><span class="dot"></span>${labelStatus(a.subscription_status)}</span></td>
+        <td style="padding:10px 16px;text-align:right;font-family:'Oswald',sans-serif;font-size:14px;color:${a.is_paying ? '#4ade80' : 'var(--g)'}">
+          ${a.is_paying ? `$${(a.monthly_price||0).toLocaleString('es-AR')}` : '—'}
+        </td>
         <td style="padding:10px 16px;font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</td>
       </tr>`).join('');
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--r)">Error cargando cuentas</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--r)">Error cargando cuentas</td></tr>`;
   }
 }
 

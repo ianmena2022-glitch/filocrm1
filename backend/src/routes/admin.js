@@ -80,18 +80,38 @@ router.get('/accounts', adminAuth, async (req, res) => {
 
 // ── VENDEDORES / REFERIDOS ────────────────────────────────────────────────────
 
+// Precio mensual por plan (para calcular MRR de cuentas pagando)
+function planPrice(filo_plan) {
+  if (filo_plan === 'enterprise') return 130000;
+  if (filo_plan === 'staff')      return 80000;
+  return 40000; // starter
+}
+
 // GET /api/admin/vendors
 router.get('/vendors', adminAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT v.id, v.name, v.email, v.code, v.created_at,
-             COUNT(s.id)::int AS referred_count
+      SELECT v.id, v.name, v.email, v.code, v.commission_pct, v.created_at,
+             COUNT(s.id) FILTER (WHERE s.id IS NOT NULL AND COALESCE(s.is_barber,FALSE)=FALSE AND COALESCE(s.is_branch,FALSE)=FALSE)::int AS referred_count,
+             COUNT(s.id) FILTER (WHERE COALESCE(s.is_barber,FALSE)=FALSE AND COALESCE(s.is_branch,FALSE)=FALSE AND s.subscription_status='active')::int AS paying_count
       FROM vendors v
       LEFT JOIN shops s ON s.vendor_id = v.id
       GROUP BY v.id
       ORDER BY v.created_at DESC
     `);
-    res.json({ vendors: result.rows });
+    // Calcular MRR y comisión por vendedor
+    const vendors = await Promise.all(result.rows.map(async v => {
+      const mrrQ = await pool.query(
+        `SELECT filo_plan FROM shops
+         WHERE vendor_id=$1 AND subscription_status='active'
+           AND COALESCE(is_barber,FALSE)=FALSE AND COALESCE(is_branch,FALSE)=FALSE`,
+        [v.id]
+      );
+      const mrr = mrrQ.rows.reduce((sum, s) => sum + planPrice(s.filo_plan), 0);
+      const commission = Math.round(mrr * (v.commission_pct || 20) / 100);
+      return { ...v, mrr, commission };
+    }));
+    res.json({ vendors });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -99,26 +119,32 @@ router.get('/vendors', adminAuth, async (req, res) => {
 router.get('/vendors/:id/accounts', adminAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, filo_plan, subscription_status, created_at
-       FROM shops WHERE vendor_id=$1 AND (is_barber IS NULL OR is_barber=FALSE) AND (is_branch IS NULL OR is_branch=FALSE)
-       ORDER BY created_at DESC`,
+      `SELECT id, name, email, filo_plan, subscription_status, trial_ends_at, created_at
+       FROM shops
+       WHERE vendor_id=$1 AND COALESCE(is_barber,FALSE)=FALSE AND COALESCE(is_branch,FALSE)=FALSE
+       ORDER BY subscription_status='active' DESC, created_at DESC`,
       [req.params.id]
     );
-    res.json({ accounts: result.rows });
+    const accounts = result.rows.map(s => ({
+      ...s,
+      monthly_price: planPrice(s.filo_plan),
+      is_paying: s.subscription_status === 'active'
+    }));
+    res.json({ accounts });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/admin/vendors
 router.post('/vendors', adminAuth, async (req, res) => {
-  const { name, email, code } = req.body;
+  const { name, email, code, commission_pct } = req.body;
   if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
   const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
   try {
     const exists = await pool.query('SELECT id FROM vendors WHERE code=$1', [codeNorm]);
     if (exists.rows.length) return res.status(400).json({ error: 'Ya existe un vendedor con ese código' });
     const result = await pool.query(
-      'INSERT INTO vendors (name, email, code) VALUES ($1,$2,$3) RETURNING *',
-      [name.trim(), email?.trim() || null, codeNorm]
+      'INSERT INTO vendors (name, email, code, commission_pct) VALUES ($1,$2,$3,$4) RETURNING *',
+      [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20]
     );
     res.json({ vendor: result.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -126,16 +152,15 @@ router.post('/vendors', adminAuth, async (req, res) => {
 
 // PUT /api/admin/vendors/:id
 router.put('/vendors/:id', adminAuth, async (req, res) => {
-  const { name, email, code } = req.body;
+  const { name, email, code, commission_pct } = req.body;
   if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
   const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
   try {
-    // Verificar que el código no esté usado por otro vendedor
     const conflict = await pool.query('SELECT id FROM vendors WHERE code=$1 AND id<>$2', [codeNorm, req.params.id]);
     if (conflict.rows.length) return res.status(400).json({ error: 'Ese código ya está en uso por otro vendedor' });
     const result = await pool.query(
-      'UPDATE vendors SET name=$1, email=$2, code=$3 WHERE id=$4 RETURNING *',
-      [name.trim(), email?.trim() || null, codeNorm, req.params.id]
+      'UPDATE vendors SET name=$1, email=$2, code=$3, commission_pct=$4 WHERE id=$5 RETURNING *',
+      [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20, req.params.id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Vendedor no encontrado' });
     res.json({ vendor: result.rows[0] });

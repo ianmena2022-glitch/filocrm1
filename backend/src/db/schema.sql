@@ -354,3 +354,15 @@ UPDATE shops SET sena_cbu = sena_alias WHERE sena_cbu IS NULL AND sena_alias IS 
 -- Días: mon, tue, wed, thu, fri, sat, sun
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS barber_schedule JSONB DEFAULT NULL;
 
+-- Vendedores / referidos
+CREATE TABLE IF NOT EXISTS vendors (
+  id           SERIAL PRIMARY KEY,
+  name         VARCHAR(255) NOT NULL,
+  email        VARCHAR(255),
+  code         VARCHAR(50) UNIQUE NOT NULL,
+  commission_pct INT DEFAULT 20,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_shops_vendor ON shops(vendor_id);
+
