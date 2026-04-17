@@ -166,10 +166,10 @@ async function findAnyPendingPayment(shopId) {
        FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
        WHERE a.shop_id=$1 AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
          AND c.phone IS NOT NULL AND c.phone != ''
-       LIMIT 2`,
+       LIMIT 1`,
       [shopId]
     );
-    if (senaRes.rows.length === 1) {
+    if (senaRes.rows.length) {
       const r = senaRes.rows[0];
       return { type: 'sena', id: r.id, amount: parseFloat(r.sena_amount), alias: r.sena_alias, clientPhone: r.client_phone };
     }
@@ -181,10 +181,10 @@ async function findAnyPendingPayment(shopId) {
          AND m.payment_status IS DISTINCT FROM 'paid'
          AND (m.comprobante_status IS NULL OR m.comprobante_status = 'rejected')
          AND c.phone IS NOT NULL AND c.phone != ''
-       ORDER BY m.created_at DESC LIMIT 2`,
+       ORDER BY m.created_at DESC LIMIT 1`,
       [shopId]
     );
-    if (memRes.rows.length === 1) {
+    if (memRes.rows.length) {
       const r = memRes.rows[0];
       return { type: 'membership', id: r.id, amount: parseFloat(r.price), alias: r.sena_alias, clientPhone: r.client_phone };
     }
