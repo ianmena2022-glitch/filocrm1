@@ -730,6 +730,11 @@ async function confirmReservation() {
 
   hideError();
 
+  // Fix #17: deshabilitar botón para prevenir double-submit
+  const confirmBtn = document.querySelector('#screen-form .btn-primary');
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Procesando...'; }
+  const reEnableBtn = () => { if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '✅ Confirmar turno'; } };
+
   // Si hay seña activa → mostrar pantalla informativa ANTES de crear el turno
   const requiresSena = !isMemberFlow
     && shopData?.sena_enabled
@@ -761,7 +766,11 @@ async function confirmReservation() {
   }
 
   // Sin seña → flujo normal
-  await doReserve({ name, phone, address });
+  try {
+    await doReserve({ name, phone, address });
+  } catch(e) {
+    reEnableBtn();
+  }
 }
 
 async function doReserve(clientData) {

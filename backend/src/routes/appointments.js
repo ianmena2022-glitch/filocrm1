@@ -220,12 +220,14 @@ router.post('/', auth, async (req, res) => {
     const appt = result.rows[0];
 
     // Registrar canje (puntos ya descontados atómicamente antes del INSERT del turno)
+    // Fix #20: ON CONFLICT DO NOTHING para idempotencia ante reintentos
     const clientIdInt = parseInt(client_id) || null;
     const redeemItemIdInt = parseInt(redeem_item_id) || null;
     if (clientIdInt && redeemItemIdInt && pointsCost > 0 && redeemInfo) {
       await pool.query(
         `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
-         VALUES ($1, $2, $3, $4, $5, 'pending')`,
+         VALUES ($1, $2, $3, $4, $5, 'pending')
+         ON CONFLICT DO NOTHING`,
         [shopId, clientIdInt, redeemItemIdInt, redeemInfo, pointsCost]
       );
     }
@@ -273,13 +275,15 @@ router.put('/:id/status', auth, async (req, res) => {
     }
 
     // Notificar al cliente cuando el turno es confirmado
+    // Fix #3: usar enterprise owner para WPP si la sucursal no tiene socket propio
     if (status === 'confirmed' && appt.client_id) {
       try {
-        const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug FROM shops WHERE id=$1', [shopId])).rows[0];
+        const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug, parent_enterprise_id FROM shops WHERE id=$1', [shopId])).rows[0];
         const client = (await pool.query('SELECT name, phone FROM clients WHERE id=$1', [appt.client_id])).rows[0];
         if (shopData?.wpp_connected && client?.phone) {
           const { generateMessage } = require('../services/ai');
           const wpp = require('../services/whatsapp');
+          const wppShopId = shopData.parent_enterprise_id || shopId;
           const fecha = appt.date ? new Date(appt.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
           const hora = appt.time_start ? appt.time_start.slice(0,5) : '';
           let msg = await generateMessage(shopId, 'turno_confirmado', {
@@ -290,7 +294,7 @@ router.put('/:id/status', auth, async (req, res) => {
             serviceName: appt.service_name || null,
           });
           if (!msg) msg = `✅ ¡Turno confirmado, ${client.name}! Te esperamos el ${fecha} a las ${hora}${appt.service_name ? ` para ${appt.service_name}` : ''}. Cualquier cambio avisanos. 💈`;
-          await wpp.sendText(shopId, client.phone, msg);
+          await wpp.sendText(wppShopId, client.phone, msg);
         }
       } catch (wppErr) {
         console.error('[appointments] Error enviando WPP confirmado:', wppErr.message);
@@ -298,6 +302,7 @@ router.put('/:id/status', auth, async (req, res) => {
     }
 
     // Actualizar stats del cliente al completar
+    // Fix #3: usar enterprise owner para WPP si la sucursal no tiene socket propio
     if (status === 'completed' && appt.client_id) {
       const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);
       const shopData = shop.rows[0];
@@ -321,6 +326,7 @@ router.put('/:id/status', auth, async (req, res) => {
         try {
           const wpp = require('../services/whatsapp');
           const { generateMessage } = require('../services/ai');
+          const wppShopId = shopData.parent_enterprise_id || shopId;
           const slug = shopData.booking_slug;
           const tiendaLink = slug
             ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
@@ -343,7 +349,7 @@ router.put('/:id/status', auth, async (req, res) => {
               .replace('{link}', tiendaLink || '');
           }
 
-          await wpp.sendText(shopId, client.phone, msg);
+          await wpp.sendText(wppShopId, client.phone, msg);
         } catch(wppErr) {
           console.error('Error enviando WPP puntos:', wppErr.message);
         }

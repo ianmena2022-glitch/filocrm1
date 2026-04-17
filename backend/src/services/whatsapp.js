@@ -17,6 +17,14 @@ const statuses = {};
 const decryptErrors = {};
 const ciphertextLastWarning = {}; // debounce: última vez que se avisó por JID
 
+// Fix #15: limpiar entradas de ciphertextLastWarning con más de 10 minutos
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const jid of Object.keys(ciphertextLastWarning)) {
+    if (ciphertextLastWarning[jid] < cutoff) delete ciphertextLastWarning[jid];
+  }
+}, 10 * 60 * 1000);
+
 // Limpiar sesión completamente (tmp + DB)
 async function clearSession(shopId) {
   try {
@@ -283,7 +291,9 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
   try {
     let pending = await findPendingPayment(shopId, phone);
     console.log(`[WPP] findPendingPayment(${phone}): ${pending ? `${pending.type} #${pending.id}` : 'null'}`);
-    if (!pending) {
+    // Fix #4 + #12: solo usar fallback sin phone cuando no tenemos teléfono del cliente
+    // Si tenemos el teléfono y no se encontró pago, no aplicar fallback (evita verificar cliente incorrecto)
+    if (!pending && !phone) {
       pending = await findAnyPendingPayment(shopId);
       console.log(`[WPP] findAnyPendingPayment fallback: ${pending ? `${pending.type} #${pending.id} clientPhone=${pending.clientPhone}` : 'null'}`);
     }
@@ -321,13 +331,21 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
       return true;
     }
 
-    const today = new Date(); today.setHours(0,0,0,0);
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const comprobanteDate = result.date ? new Date(result.date) : null;
-    comprobanteDate?.setHours(0,0,0,0);
+    // Fix #9: usar UTC para comparación de fechas — el servidor corre en UTC
+    // Aceptar ayer, hoy y mañana para cubrir diferencias de timezone (AR = UTC-3)
+    const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
+    const nowAR = new Date(Date.now() - AR_OFFSET_MS);
+    const todayAR = new Date(nowAR.toISOString().split('T')[0] + 'T00:00:00.000Z');
+    const yesterdayAR = new Date(todayAR.getTime() - 86400000);
+    const tomorrowAR  = new Date(todayAR.getTime() + 86400000);
+    const comprobanteDate = result.date ? new Date(result.date + 'T00:00:00.000Z') : null;
 
     const amountOk = result.amount && Math.abs(result.amount - pending.amount) / pending.amount <= 0.02;
-    const dateOk = comprobanteDate && (comprobanteDate.getTime() === today.getTime() || comprobanteDate.getTime() === yesterday.getTime());
+    const dateOk = comprobanteDate && (
+      comprobanteDate.getTime() === todayAR.getTime() ||
+      comprobanteDate.getTime() === yesterdayAR.getTime() ||
+      comprobanteDate.getTime() === tomorrowAR.getTime()
+    );
     // Verificar CBU/CVU: comparar los últimos 10 dígitos para tolerar diferencias de formato
     const cbuOk = !pending.cbu || (() => {
       const expectedCbu = (pending.cbu || '').replace(/\D/g, '');
@@ -677,33 +695,49 @@ async function getStatus(shopId) {
   return { connected, status: status || 'disconnected' };
 }
 
+// Fix #7: resolver shopId real para WPP — si la sucursal no tiene socket, usar enterprise owner
+async function resolveWppShopId(shopId) {
+  if (sockets[shopId] && statuses[shopId] === 'connected') return shopId;
+  try {
+    const r = await pool.query('SELECT parent_enterprise_id FROM shops WHERE id=$1', [shopId]);
+    const parentId = r.rows[0]?.parent_enterprise_id;
+    if (parentId) {
+      console.log(`[WPP] resolveWppShopId: shop ${shopId} → usando enterprise owner ${parentId}`);
+      return parentId;
+    }
+  } catch(e) { /* fallback al shopId original */ }
+  return shopId;
+}
+
 // Enviar mensaje de texto
 async function sendText(shopId, phone, message) {
-  let sock = sockets[shopId];
+  // Auto-resolver enterprise owner si la sucursal no tiene socket activo
+  const wppShopId = await resolveWppShopId(shopId);
+  let sock = sockets[wppShopId];
 
-  if (!sock || statuses[shopId] !== 'connected') {
-    console.log(`Baileys: no hay socket activo para shop ${shopId}, intentando restaurar...`);
-    const restored = await restoreSessionFromDB(shopId);
+  if (!sock || statuses[wppShopId] !== 'connected') {
+    console.log(`Baileys: no hay socket activo para shop ${wppShopId}, intentando restaurar...`);
+    const restored = await restoreSessionFromDB(wppShopId);
     if (!restored) throw new Error('WhatsApp no está conectado. Conectalo desde Configuración.');
 
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Timeout reconectando WhatsApp')), 30000);
       connect(
-        shopId,
+        wppShopId,
         null,
         () => { clearTimeout(timeout); resolve(); },
         null
       ).catch(e => { clearTimeout(timeout); reject(e); });
     });
 
-    sock = sockets[shopId];
+    sock = sockets[wppShopId];
     if (!sock) throw new Error('No se pudo reconectar WhatsApp');
   }
 
   const phoneClean = phone.replace(/\D/g, '');
   const jid = `${phoneClean}@s.whatsapp.net`;
 
-  console.log(`Baileys sendText → ${jid}`);
+  console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
 
   const result = await sock.sendMessage(jid, { text: message });
   console.log(`Baileys sendText OK → ${result?.key?.id}`);

@@ -174,17 +174,18 @@ router.get('/:slug/available', async (req, res) => {
     });
 
     const slots = [];
+    // Fix #13: servidor corre en UTC, turnos en hora Argentina (UTC-3)
+    // Usar hora AR para comparar slots del día actual
+    const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
+    const nowAR = new Date(Date.now() - AR_OFFSET_MS);
+    const todayAR = nowAR.toISOString().split('T')[0];
+
     for (let t = workStart; t + duration <= workEnd; t += 30) {
-      const isOccupied = occupiedRanges.some(o => t < o.to && t + duration > o.from);
-
-      // No mostrar slots en el pasado si es hoy
-      const today = new Date().toISOString().split('T')[0];
-      if (date === today) {
-        const now = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-        if (t <= nowMins + 30) continue; // al menos 30 min de anticipación
+      if (date === todayAR) {
+        const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
+        if (t <= nowMinsAR + 30) continue; // al menos 30 min de anticipación
       }
-
+      const isOccupied = occupiedRanges.some(o => t < o.to && t + duration > o.from);
       if (!isOccupied) {
         const hh = String(Math.floor(t / 60)).padStart(2, '0');
         const mm = String(t % 60).padStart(2, '0');
@@ -205,6 +206,11 @@ router.post('/:slug/reserve', async (req, res) => {
 
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
+  }
+
+  // Fix #14: si viene redeem pero no hay teléfono, no se puede asociar cliente
+  if (redeem_item_id && !client_phone) {
+    return res.status(400).json({ error: 'Para canjear puntos necesitás ingresar tu número de WhatsApp.' });
   }
 
   try {
@@ -283,79 +289,6 @@ router.post('/:slug/reserve', async (req, res) => {
     const end = new Date(2000, 0, 1, h, m + duration);
     const time_end = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
 
-    // Verificar que el slot sigue disponible (excluir waiting_sena vencidas, igual que en /available)
-    const conflict = await pool.query(
-      `SELECT id FROM appointments
-       WHERE shop_id=$1 AND date=$2
-         AND status NOT IN ('cancelled','noshow')
-         AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
-         AND time_start < $3 AND time_end > $4`,
-      [shopData.id, date, time_end, time_start]
-    );
-    if (conflict.rows.length) {
-      return res.status(409).json({ error: 'Ese horario ya no está disponible. Por favor elegí otro.' });
-    }
-
-    // Buscar o crear cliente
-    let clientId = null;
-    if (client_phone) {
-      const existing = await pool.query(
-        'SELECT id FROM clients WHERE shop_id=$1 AND phone=$2',
-        [shopData.id, client_phone]
-      );
-      if (existing.rows.length) {
-        clientId = existing.rows[0].id;
-        // Actualizar domicilio si viene en la reserva
-        if (client_address) {
-          await pool.query('UPDATE clients SET address=$1 WHERE id=$2', [client_address.trim(), clientId]);
-        }
-      } else {
-        const newClient = await pool.query(
-          'INSERT INTO clients (shop_id, name, phone, address) VALUES ($1,$2,$3,$4) RETURNING id',
-          [shopData.id, client_name.trim(), client_phone.trim(), client_address?.trim() || null]
-        );
-        clientId = newClient.rows[0].id;
-      }
-    }
-
-    // Asignar barbero: elegido por el cliente o auto-asignado por menos turnos
-    let assignedBarberId = null;
-    let assignedBarberCommission = 0; // 0 si no hay barbero asignado
-    try {
-      if (chosen_barber_id && shopData.allow_barber_choice) {
-        // Usar el barbero elegido por el cliente
-        assignedBarberId = parseInt(chosen_barber_id);
-      } else {
-        // Auto-asignar al barbero con menos turnos
-        const barbers = await pool.query(
-          'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
-        );
-        if (barbers.rows.length) {
-          const counts = await pool.query(
-            `SELECT barber_id, COUNT(*) as total FROM appointments
-             WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
-            [shopData.id, date]
-          );
-          const countMap = {};
-          counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
-          let minCount = Infinity;
-          for (const b of barbers.rows) {
-            const c = countMap[b.id] || 0;
-            if (c < minCount) { minCount = c; assignedBarberId = b.id; }
-          }
-        }
-      }
-      if (assignedBarberId) {
-        assignedBarberCommission = 50; // default si hay barbero pero sin % configurado
-        const barberData = await pool.query(
-          'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
-        );
-        if (barberData.rows[0]?.barber_commission_pct) {
-          assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
-        }
-      }
-    } catch(e) { console.error('autoAssign booking error:', e.message); }
-
     // Determinar si se requiere seña
     const senaCbu = shopData.sena_cbu || shopData.sena_alias;
     const requiresSena = !is_member_booking && shopData.sena_enabled && svcPrice > 0 && senaCbu;
@@ -363,110 +296,204 @@ router.post('/:slug/reserve', async (req, res) => {
     const senaExpiresAt = requiresSena ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null;
     const apptStatus = requiresSena ? 'waiting_sena' : 'pending';
 
-    // Crear turno
-    const appt = await pool.query(
-      `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-       RETURNING *`,
-      [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
-       svcPrice, svcCost, date, time_start, time_end, apptStatus, null,
-       assignedBarberId, assignedBarberCommission,
-       is_member_booking ? true : false,
-       (is_member_booking && membership_id) ? parseInt(membership_id) : null,
-       is_member_booking ? 'membership' : null,
-       senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
-    );
+    // Fix #1 + #2 + #6: todo dentro de una transacción con advisory lock por shop+fecha
+    // para prevenir double-booking y double-redeem concurrente
+    const pgClient = await pool.connect();
+    let appt;
+    let redeemInfo = null;
+    let redeemItemId = null;
+    let redeemPointsCost = 0;
+
+    try {
+      await pgClient.query('BEGIN');
+
+      // Advisory lock por shop+date: serializa reservas concurrentes del mismo slot
+      const dateInt = parseInt(date.replace(/-/g, '')) % 2147483647;
+      await pgClient.query('SELECT pg_advisory_xact_lock($1, $2)', [shopData.id, dateInt]);
+
+      // Verificar que el slot sigue disponible (dentro de la transacción con lock)
+      const conflict = await pgClient.query(
+        `SELECT id FROM appointments
+         WHERE shop_id=$1 AND date=$2
+           AND status NOT IN ('cancelled','noshow')
+           AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
+           AND time_start < $3 AND time_end > $4`,
+        [shopData.id, date, time_end, time_start]
+      );
+      if (conflict.rows.length) {
+        await pgClient.query('ROLLBACK');
+        pgClient.release();
+        return res.status(409).json({ error: 'Ese horario ya no está disponible. Por favor elegí otro.' });
+      }
+
+      // Buscar o crear cliente
+      let clientId = null;
+      if (client_phone) {
+        const existing = await pgClient.query(
+          'SELECT id FROM clients WHERE shop_id=$1 AND phone=$2',
+          [shopData.id, client_phone]
+        );
+        if (existing.rows.length) {
+          clientId = existing.rows[0].id;
+          if (client_address) {
+            await pgClient.query('UPDATE clients SET address=$1 WHERE id=$2', [client_address.trim(), clientId]);
+          }
+        } else {
+          const newClient = await pgClient.query(
+            'INSERT INTO clients (shop_id, name, phone, address) VALUES ($1,$2,$3,$4) RETURNING id',
+            [shopData.id, client_name.trim(), client_phone.trim(), client_address?.trim() || null]
+          );
+          clientId = newClient.rows[0].id;
+        }
+      }
+
+      // Fix #2 + #6: descontar puntos ANTES del INSERT del turno (atómico, dentro de transacción)
+      if (redeem_item_id && clientId) {
+        const item = await pgClient.query(
+          'SELECT * FROM points_store WHERE id=$1 AND shop_id=$2 AND active=TRUE',
+          [redeem_item_id, shopData.id]
+        );
+        if (item.rows.length) {
+          const cost = item.rows[0].points_cost;
+          const deducted = await pgClient.query(
+            'UPDATE clients SET points = points - $1 WHERE id=$2 AND points >= $1 RETURNING points',
+            [cost, clientId]
+          );
+          if (deducted.rows.length) {
+            redeemInfo = item.rows[0].name;
+            redeemItemId = item.rows[0].id;
+            redeemPointsCost = cost;
+          }
+        }
+      }
+
+      // Asignar barbero
+      let assignedBarberId = null;
+      let assignedBarberCommission = 0;
+      try {
+        if (chosen_barber_id && shopData.allow_barber_choice) {
+          assignedBarberId = parseInt(chosen_barber_id);
+        } else {
+          const barbers = await pgClient.query(
+            'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
+          );
+          if (barbers.rows.length) {
+            const counts = await pgClient.query(
+              `SELECT barber_id, COUNT(*) as total FROM appointments
+               WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
+              [shopData.id, date]
+            );
+            const countMap = {};
+            counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
+            let minCount = Infinity;
+            for (const b of barbers.rows) {
+              const c = countMap[b.id] || 0;
+              if (c < minCount) { minCount = c; assignedBarberId = b.id; }
+            }
+          }
+        }
+        if (assignedBarberId) {
+          assignedBarberCommission = 50;
+          // Fix #10: validar que el barbero pertenezca a este shop
+          const barberData = await pgClient.query(
+            'SELECT barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2',
+            [assignedBarberId, shopData.id]
+          );
+          if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
+            assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
+          } else if (!barberData.rows.length) {
+            // Barbero no pertenece a este shop — ignorar asignación
+            assignedBarberId = null;
+            assignedBarberCommission = 0;
+          }
+        }
+      } catch(e) { console.error('autoAssign booking error:', e.message); }
+
+      // Crear turno (con redeemInfo ya calculado)
+      const apptResult = await pgClient.query(
+        `INSERT INTO appointments
+           (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         RETURNING *`,
+        [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
+         svcPrice, svcCost, date, time_start, time_end, apptStatus, redeemInfo,
+         assignedBarberId, assignedBarberCommission,
+         is_member_booking ? true : false,
+         (is_member_booking && membership_id) ? parseInt(membership_id) : null,
+         is_member_booking ? 'membership' : null,
+         senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
+      );
+      appt = apptResult;
+
+      // Fix #20: registrar canje dentro de la transacción con ON CONFLICT para idempotencia
+      if (redeemInfo && redeemItemId && clientId) {
+        await pgClient.query(
+          `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
+           VALUES ($1,$2,$3,$4,$5,'pending')
+           ON CONFLICT DO NOTHING`,
+          [shopData.id, clientId, redeemItemId, redeemInfo, redeemPointsCost]
+        );
+      }
+
+      await pgClient.query('COMMIT');
+    } catch(txErr) {
+      await pgClient.query('ROLLBACK');
+      pgClient.release();
+      throw txErr;
+    }
+    pgClient.release();
 
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP
     // Determinar shopId para WPP: usar enterprise owner si la sucursal no tiene WPP propio
     const wpp = require('../services/whatsapp');
-    const wppShopId = (() => {
-      const wppStatus = wpp.getStatus ? null : null; // no usamos getStatus (poco confiable durante 440)
-      if (shopData.parent_enterprise_id) return shopData.parent_enterprise_id;
-      return shopData.id;
-    })();
+    const wppShopId = shopData.parent_enterprise_id || shopData.id;
     console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppShopId=${wppShopId} client_phone=${client_phone||'null'}`);
 
-    {
-      if (requiresSena) {
-        // Instrucciones de seña al cliente via Groq
-        if (client_phone) {
-          (async () => {
-            try {
-              const { generateMessage } = require('../services/ai');
-              let msgCliente = await generateMessage(shopData.id, 'sena_instrucciones', {
-                clientName: client_name,
-                shopName: shopData.name,
-                senaAmount,
-                alias: senaCbu,
-                minutesLimit: 60,
-              });
-              if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
-              await wpp.sendText(wppShopId, client_phone, msgCliente);
-              console.log(`[booking] WPP seña enviada OK a ${client_phone} via shop ${wppShopId}`);
-            } catch(e) { console.error('[booking] WPP seña error:', e.message); }
-          })();
-        } else {
-          console.log(`[booking] sin client_phone — no se envía WPP seña`);
-        }
-      } else {
-        // Notificar al barbero
-        if (shopData.phone) {
-          const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
-          try { await wpp.sendText(wppShopId, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
-        }
-        // Notificar al cliente que su reserva fue recibida
-        if (client_phone) {
+    if (requiresSena) {
+      if (client_phone) {
+        (async () => {
           try {
             const { generateMessage } = require('../services/ai');
-            let msg = await generateMessage(shopData.id, 'reserva_recibida', {
+            let msgCliente = await generateMessage(shopData.id, 'sena_instrucciones', {
               clientName: client_name,
               shopName: shopData.name,
-              fecha: dateFormatted,
-              hora: time_start,
-              serviceName: svcName || null,
+              senaAmount,
+              alias: senaCbu,
+              minutesLimit: 60,
             });
-            if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
-            await wpp.sendText(wppShopId, client_phone, msg);
-          } catch (e) {
-            console.error('Error notificando al cliente:', e.message);
-          }
+            if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
+            await wpp.sendText(wppShopId, client_phone, msgCliente);
+            console.log(`[booking] WPP seña enviada OK a ${client_phone} via shop ${wppShopId}`);
+          } catch(e) { console.error('[booking] WPP seña error:', e.message); }
+        })();
+      } else {
+        console.log(`[booking] sin client_phone — no se envía WPP seña`);
+      }
+    } else {
+      // Notificar al barbero
+      if (shopData.phone) {
+        const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
+        try { await wpp.sendText(wppShopId, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
+      }
+      // Notificar al cliente que su reserva fue recibida
+      if (client_phone) {
+        try {
+          const { generateMessage } = require('../services/ai');
+          let msg = await generateMessage(shopData.id, 'reserva_recibida', {
+            clientName: client_name,
+            shopName: shopData.name,
+            fecha: dateFormatted,
+            hora: time_start,
+            serviceName: svcName || null,
+          });
+          if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
+          await wpp.sendText(wppShopId, client_phone, msg);
+        } catch (e) {
+          console.error('Error notificando al cliente:', e.message);
         }
       }
-    }
-
-    // Procesar canje de puntos si viene con la reserva
-    let redeemInfo = null;
-    if (redeem_item_id && clientId) {
-      try {
-        const item = await pool.query(
-          'SELECT * FROM points_store WHERE id=$1 AND shop_id=$2 AND active=TRUE',
-          [redeem_item_id, shopData.id]
-        );
-        if (item.rows.length) {
-          const cost = item.rows[0].points_cost;
-          const deducted = await pool.query(
-            'UPDATE clients SET points = points - $1 WHERE id=$2 AND points >= $1 RETURNING points',
-            [cost, clientId]
-          );
-          if (deducted.rows.length) {
-            await pool.query(
-              `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
-               VALUES ($1,$2,$3,$4,$5,'pending')`,
-              [shopData.id, clientId, item.rows[0].id, item.rows[0].name, cost]
-            );
-            redeemInfo = item.rows[0].name;
-            // Guardar en el turno
-            await pool.query(
-              'UPDATE appointments SET redeem_info=$1 WHERE id=$2',
-              [item.rows[0].name, appt.rows[0].id]
-            );
-          }
-        }
-      } catch(e) { console.error('Redeem error:', e.message); }
     }
 
     const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
