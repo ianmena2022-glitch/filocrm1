@@ -51,9 +51,13 @@ router.get('/:slug', async (req, res) => {
     // Si tiene eleccion de barbero activa, incluir lista de barberos con sus horarios
     let barbers = [];
     if (shopData.allow_barber_choice) {
+      // Para sucursales, los barberos están registrados bajo el enterprise owner
+      const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
+        ? shopData.parent_enterprise_id
+        : shopData.id;
       const barbersQ = await pool.query(
         'SELECT id, name, barber_color, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
-        [shopData.id]
+        [barberShopId]
       );
       barbers = barbersQ.rows;
     }
@@ -385,12 +389,17 @@ router.post('/:slug/reserve', async (req, res) => {
       let assignedBarberId = null;
       let assignedBarberCommission = 0;
       try {
+        // Para sucursales, buscar barberos bajo el enterprise owner
+        const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
+          ? shopData.parent_enterprise_id
+          : shopData.id;
+
         if (chosen_barber_id && shopData.allow_barber_choice) {
           // Elección manual: validar que el barbero trabaja en esa fecha/hora
           const chosenId = parseInt(chosen_barber_id);
           const barberData = await pgClient.query(
             'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
-            [chosenId, shopData.id]
+            [chosenId, barberShopId]
           );
           if (!barberData.rows.length) {
             await pgClient.query('ROLLBACK');
@@ -409,7 +418,7 @@ router.post('/:slug/reserve', async (req, res) => {
           // Auto-assign: solo barberos que trabajan en esa fecha/hora
           const barbers = await pgClient.query(
             'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
-            [shopData.id]
+            [barberShopId]
           );
           const availableBarbers = barbers.rows.filter(b =>
             isBarberAvailable(b.barber_schedule, date, time_start)
