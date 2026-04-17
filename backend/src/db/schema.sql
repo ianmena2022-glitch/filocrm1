@@ -363,6 +363,8 @@ CREATE TABLE IF NOT EXISTS vendors (
   commission_pct INT DEFAULT 20,
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+-- commission_pct puede no existir en BDs creadas antes de esta versión
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS commission_pct INT DEFAULT 20;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_shops_vendor ON shops(vendor_id);
 
