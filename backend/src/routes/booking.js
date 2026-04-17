@@ -259,7 +259,7 @@ router.get('/:slug/available', async (req, res) => {
     const nowAR = new Date(Date.now() - AR_OFFSET_MS);
     const todayAR = nowAR.toISOString().split('T')[0];
 
-    for (let t = workStart; t + duration <= workEnd; t += 30) {
+    for (let t = workStart; t + duration <= workEnd; t += duration) {
       if (date === todayAR) {
         const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
         if (t <= nowMinsAR + 30) continue;
