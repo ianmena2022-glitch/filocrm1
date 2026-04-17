@@ -385,6 +385,7 @@ router.post('/:slug/reserve', async (req, res) => {
     if (shopData.wpp_connected) {
       if (requiresSena) {
         // Instrucciones de seña al cliente via Groq
+        console.log(`[booking] enviando WPP seña a ${client_phone}`);
         if (client_phone) {
           try {
             const { generateMessage } = require('../services/ai');
@@ -397,7 +398,10 @@ router.post('/:slug/reserve', async (req, res) => {
             });
             if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
             await wpp.sendText(shopData.id, client_phone, msgCliente);
-          } catch(e) { console.error('WPP seña cliente:', e.message); }
+            console.log(`[booking] WPP seña enviada OK a ${client_phone}`);
+          } catch(e) { console.error('[booking] WPP seña error:', e.message); }
+        } else {
+          console.log(`[booking] sin client_phone — no se envía WPP seña`);
         }
       } else {
         // Notificar al barbero
