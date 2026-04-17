@@ -35,22 +35,30 @@ async function clearSession(shopId) {
 }
 
 // Limpiar sesión Signal de un JID específico (para resetear cifrado con ese contacto)
-async function clearJidSession(shopId, jid) {
+async function clearJidSession(shopId, jid, resolvedPhone) {
   try {
     const dir = authDir(shopId);
     const user = jid.split('@')[0];
+    const phoneClean = (resolvedPhone || '').replace(/\D/g, '');
     const files = fs.readdirSync(dir);
+    const sessionFiles = files.filter(f => f.startsWith('session-'));
     let removed = 0;
-    for (const f of files) {
-      // useMultiFileAuthState guarda: session-{user}.{device}.json
-      // fixFileName reemplaza ':' por '-', '/' por '__'
-      if (f.startsWith(`session-${user}.`) && f.endsWith('.json')) {
+    for (const f of sessionFiles) {
+      // useMultiFileAuthState: session-{user}.{device}.json o session-{user}-{device}.json (fixFileName convierte ':' a '-')
+      const base = f.replace(/^session-/, '').replace(/\.json$/, '');
+      const fileUser = base.replace(/[.\-]\d+$/, ''); // strip .0 or -0 suffix
+      if (fileUser === user || (phoneClean && fileUser === phoneClean)) {
         fs.unlinkSync(path.join(dir, f));
         removed++;
       }
     }
-    console.log(`[WPP] clearJidSession: ${removed} sesión(es) eliminada(s) para ${jid}`);
-    if (removed > 0) await saveSessionToDB(shopId);
+    if (removed === 0) {
+      // Log arquivos para diagnóstico
+      console.log(`[WPP] clearJidSession: sin match para "${user}" / "${phoneClean}". Archivos: ${sessionFiles.slice(0,10).join(', ')}`);
+    } else {
+      console.log(`[WPP] clearJidSession: ${removed} sesión(es) eliminada(s) para ${jid}`);
+      await saveSessionToDB(shopId);
+    }
   } catch(e) {
     console.error('clearJidSession error:', e.message);
   }
@@ -525,7 +533,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         if (msg.messageStubType === 2) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
           // Limpiar sesión de este JID para que el próximo mensaje se pueda descifrar
-          await clearJidSession(shopId, jid);
+          await clearJidSession(shopId, jid, phone);
           const warning = '⚠️ Hubo un error al recibir tu mensaje. Por favor reenviálo nuevamente y lo veremos.';
           // Enviar al phone resuelto directamente (más confiable que buscar en DB)
           if (phone && phone !== phoneRaw && phone.length >= 10) {
