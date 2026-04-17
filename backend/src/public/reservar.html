@@ -69,6 +69,14 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .slot-btn.selected{background:var(--y);border-color:var(--y);color:var(--nk)}
 .no-slots{text-align:center;padding:32px;color:var(--g);font-size:14px}
 
+/* BRANCH SELECTION */
+.branch-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 16px;cursor:pointer;transition:all .2s;text-align:left;width:100%;margin-bottom:10px;display:block}
+.branch-btn:hover{border-color:rgba(255,209,0,.35);background:rgba(255,209,0,.06);transform:translateY(-1px)}
+.branch-btn:active{transform:translateY(0)}
+.branch-name{font-family:'Oswald',sans-serif;font-size:17px;font-weight:700;letter-spacing:.5px;margin-bottom:4px;color:#fff}
+.branch-label-tag{display:inline-block;background:rgba(255,209,0,.12);color:var(--y);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:6px;letter-spacing:.5px}
+.branch-meta{font-size:12px;color:var(--g);margin-top:4px}
+
 /* FORM */
 .form-field{margin-bottom:16px}
 .form-field label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
@@ -115,6 +123,17 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .prize-desc{font-size:11px;color:var(--g);margin-top:2px}
 .prize-cost{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--y);white-space:nowrap}
 .no-prizes{font-size:13px;color:var(--g);padding:8px 0}
+
+/* MEMBER FLOW */
+.member-teaser{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;margin-bottom:14px;cursor:pointer;background:transparent;border:1px dashed rgba(255,209,0,.2);border-radius:10px;width:100%;transition:all .2s;font-size:13px;color:rgba(255,255,255,.45)}
+.member-teaser:hover{background:rgba(255,209,0,.04);border-color:rgba(255,209,0,.4);color:rgba(255,255,255,.7)}
+.member-teaser b{color:var(--y)}
+.member-active-banner{background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.member-active-info{display:flex;align-items:center;gap:10px}
+.member-active-text{font-size:14px;font-weight:700;color:var(--y)}
+.member-active-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px}
+.btn-member-change{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:11px;cursor:pointer;text-decoration:underline;padding:0;white-space:nowrap;flex-shrink:0}
+.svc-price-member{font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)}
 </style>
 </head>
 <body>
@@ -136,6 +155,7 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
   <div class="container">
     <!-- Steps -->
     <div class="steps" id="steps">
+      <div class="step" id="step-0" style="display:none"><div class="step-dot">📍</div><div class="step-lbl">Sucursal</div></div>
       <div class="step active" id="step-1"><div class="step-dot">1</div><div class="step-lbl">Servicio</div></div>
       <div class="step" id="step-2"><div class="step-dot">2</div><div class="step-lbl">Fecha</div></div>
       <div class="step" id="step-3"><div class="step-dot">3</div><div class="step-lbl">Hora</div></div>
@@ -145,13 +165,54 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 
     <div id="error-banner" class="error-banner"></div>
 
+    <!-- Step 0: Sucursal (solo enterprise con WPP compartido) -->
+    <div id="screen-branch" style="display:none">
+      <div class="card">
+        <div class="card-title">📍 ¿A qué sucursal querés ir?</div>
+        <div id="branch-grid"></div>
+      </div>
+    </div>
+
     <!-- Step 1: Servicio -->
     <div id="screen-service">
+      <!-- Member teaser / banner activo -->
+      <button class="member-teaser" id="member-teaser" onclick="goToMemberLogin()">
+        👑 ¿Sos miembro? <b>Usá tu membresía →</b>
+      </button>
+      <div class="member-active-banner" id="member-active-banner" style="display:none">
+        <div class="member-active-info">
+          <span style="font-size:22px">👑</span>
+          <div>
+            <div class="member-active-text" id="member-banner-name">Membresía activa</div>
+            <div class="member-active-sub" id="member-banner-sub"></div>
+          </div>
+        </div>
+        <button class="btn-member-change" onclick="cancelMemberFlow()">✕ Cambiar</button>
+      </div>
       <div class="card">
         <div class="card-title">✂️ ¿Qué servicio querés?</div>
         <div class="service-grid" id="service-grid"></div>
       </div>
       <button class="btn-primary" id="btn-next-service" onclick="goToDate()" disabled>Elegir fecha →</button>
+      <button class="btn-back" id="btn-back-to-branch" onclick="goBackToBranch()" style="display:none">← Cambiar sucursal</button>
+    </div>
+
+    <!-- Member Login -->
+    <div id="screen-member-login" style="display:none">
+      <div class="card">
+        <div class="card-title">👑 Verificar membresía</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.55);margin-bottom:20px;line-height:1.6">
+          Ingresá tu número de WhatsApp para verificar tu membresía y reservar sin costo.
+        </div>
+        <div class="form-field">
+          <label>Tu WhatsApp</label>
+          <input type="tel" id="member-phone" placeholder="5491100000000" inputmode="numeric"
+            style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .2s">
+        </div>
+        <div id="member-verify-error" class="error-banner"></div>
+      </div>
+      <button class="btn-primary" id="btn-verify-member" onclick="verifyMember()">✅ Verificar membresía</button>
+      <button class="btn-back" onclick="showScreen('service');setStep(1)">← Volver</button>
     </div>
 
     <!-- Step 2: Fecha -->
@@ -225,6 +286,37 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
       <button class="btn-back" onclick="goBack(3)">← Volver</button>
     </div>
 
+    <!-- Seña requerida -->
+    <div id="screen-sena" style="display:none">
+      <div class="success">
+        <span class="success-icon">💸</span>
+        <div class="success-title" style="color:#c084fc">Reserva recibida</div>
+        <div class="success-msg" style="color:rgba(255,255,255,.8);margin-bottom:20px">
+          Para confirmar tu turno, enviá la seña al siguiente alias:
+        </div>
+        <div style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:14px;padding:20px;margin-bottom:20px;text-align:center">
+          <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(192,132,252,.7);margin-bottom:8px">Alias de transferencia</div>
+          <div id="sena-alias-display" style="font-size:22px;font-weight:800;color:#c084fc;font-family:monospace;letter-spacing:1px"></div>
+          <div style="margin-top:16px;font-size:13px;color:rgba(255,255,255,.6)">Monto a transferir</div>
+          <div id="sena-amount-display" style="font-size:28px;font-weight:800;color:#fff;margin-top:4px"></div>
+        </div>
+        <div style="background:rgba(255,145,0,0.08);border:1px solid rgba(255,145,0,0.2);border-radius:10px;padding:14px;margin-bottom:20px;font-size:13px;color:rgba(255,200,100,.9);text-align:left;line-height:1.5">
+          ⏰ <strong>Tenés 60 minutos</strong> para realizar la transferencia.<br>
+          Si no se recibe la seña, el turno se cancela automáticamente.<br>
+          El barbero confirmará tu turno una vez verificado el pago.
+        </div>
+        <div id="success-detail-sena" style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:16px;line-height:1.6"></div>
+        <button id="sena-ya-pague-btn" onclick="doReserve()" style="display:none;width:100%;padding:16px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">
+          ✅ Ya pagué la seña
+        </button>
+        <div id="sena-done-msg" style="display:none;padding:16px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;text-align:center">
+          <div style="font-size:20px;margin-bottom:6px">✅</div>
+          <div style="font-size:14px;font-weight:700;color:#4ade80">¡Listo! Tu reserva quedó pendiente</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">El barbero va a confirmar tu turno cuando verifique la transferencia.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Success -->
     <div id="screen-success" style="display:none">
       <div class="success">
@@ -239,7 +331,8 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 
 <script>
 const slug = window.location.pathname.split('/reservar/')[1]?.split('/')[0];
-const API = window.location.origin + '/api/booking/' + slug;
+let API = window.location.origin + '/api/booking/' + slug;
+let currentBranchSlug = null; // slug de la sucursal elegida (solo modo enterprise)
 
 let shopData = null;
 let services = [];
@@ -252,6 +345,10 @@ let currentMonth = new Date();
 let clientPointsData = null;
 let selectedPrize = null;
 let storeItems = [];
+let isMemberFlow = false;
+let memberData = null;
+let isEnterpriseFlow = false;
+let enterpriseName = '';
 
 // ── INIT ──
 async function init() {
@@ -264,31 +361,115 @@ async function init() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    shopData = data.shop;
-    services = data.services;
-    barbers = data.barbers || [];
-    // Mostrar step de barbero si aplica
-    const step4El = document.getElementById('step-4');
-    if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
-    // Mostrar campo domicilio si el shop tiene servicios a domicilio
-    if (shopData.home_service) {
-      const af = document.getElementById('client-address-field');
-      if (af) af.style.display = 'block';
+    // ── Modo Enterprise: mostrar selección de sucursal primero ──
+    if (data.is_enterprise) {
+      isEnterpriseFlow = true;
+      enterpriseName   = data.enterprise?.name || 'Grupo';
+      document.getElementById('shop-name').textContent = enterpriseName;
+      document.getElementById('shop-logo').textContent = enterpriseName.charAt(0).toUpperCase();
+      document.title = `Reservar turno — ${enterpriseName}`;
+      document.getElementById('step-0').style.display = 'flex';
+      renderBranches(data.branches || []);
+      showScreen('branch');
+      setStep(0);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      return;
     }
 
-    document.getElementById('shop-name').textContent = shopData.name;
-    document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
-    document.title = `Reservar turno — ${shopData.name}`;
-    if (shopData.city || shopData.address) {
-      document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
-    }
-
+    // ── Modo normal ──
+    loadShopData(data);
     renderServices();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display = 'block';
   } catch (e) {
     document.getElementById('loading').innerHTML = `<div class="loading">No se encontró la barbería.<br><small>${e.message}</small></div>`;
   }
+}
+
+function loadShopData(data) {
+  shopData = data.shop;
+  services = data.services;
+  barbers  = data.barbers || [];
+  const step4El = document.getElementById('step-4');
+  if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
+  if (shopData.home_service) {
+    const af = document.getElementById('client-address-field');
+    if (af) af.style.display = 'block';
+  }
+  document.getElementById('shop-name').textContent = shopData.name;
+  document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+  document.title = `Reservar turno — ${shopData.name}`;
+  if (shopData.city || shopData.address) {
+    document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
+  }
+}
+
+// ── BRANCH SELECTION (solo enterprise) ──
+function renderBranches(branches) {
+  const grid = document.getElementById('branch-grid');
+  if (!branches.length) {
+    grid.innerHTML = '<div style="color:var(--g);font-size:13px;padding:16px 0">No hay sucursales disponibles.</div>';
+    return;
+  }
+  grid.innerHTML = branches.map(b => {
+    const label    = b.branch_label || b.name;
+    const showFull = b.branch_label && b.branch_label !== b.name;
+    const meta     = [b.address, b.city].filter(Boolean).join(' · ');
+    return `
+      <button class="branch-btn" onclick="selectBranch('${b.booking_slug}', this)" ${!b.booking_slug ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>
+        ${b.branch_label ? `<div class="branch-label-tag">📍 ${b.branch_label}</div>` : ''}
+        <div class="branch-name">${b.name}</div>
+        ${meta ? `<div class="branch-meta">📍 ${meta}</div>` : ''}
+      </button>`;
+  }).join('');
+}
+
+async function selectBranch(branchSlug, btnEl) {
+  if (!branchSlug) return;
+  // feedback visual
+  document.querySelectorAll('.branch-btn').forEach(b => b.style.opacity = '0.5');
+  if (btnEl) { btnEl.style.opacity = '1'; btnEl.style.borderColor = 'var(--y)'; }
+
+  try {
+    const res  = await fetch(window.location.origin + '/api/booking/' + branchSlug);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Actualizar API y slug activo
+    API              = window.location.origin + '/api/booking/' + branchSlug;
+    currentBranchSlug = branchSlug;
+
+    loadShopData(data);
+    renderServices();
+
+    // Marcar step-0 como done
+    const s0 = document.getElementById('step-0');
+    if (s0) { s0.classList.remove('active'); s0.classList.add('done'); }
+
+    // Mostrar botón "← Cambiar sucursal"
+    const backBtn = document.getElementById('btn-back-to-branch');
+    if (backBtn) backBtn.style.display = 'block';
+
+    showScreen('service');
+    setStep(1);
+  } catch(e) {
+    document.querySelectorAll('.branch-btn').forEach(b => b.style.opacity = '1');
+    alert('Error al cargar la sucursal: ' + e.message);
+  }
+}
+
+function goBackToBranch() {
+  // Volver a la selección de sucursal
+  document.querySelectorAll('.branch-btn').forEach(b => {
+    b.style.opacity = '1'; b.style.borderColor = '';
+  });
+  const backBtn = document.getElementById('btn-back-to-branch');
+  if (backBtn) backBtn.style.display = 'none';
+  const s0 = document.getElementById('step-0');
+  if (s0) { s0.classList.remove('done'); s0.classList.add('active'); }
+  showScreen('branch');
+  setStep(0);
 }
 
 // ── SERVICES ──
@@ -302,11 +483,73 @@ function renderServices() {
     <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}">
       <div class="svc-name">${s.name}</div>
       <div class="svc-meta">
-        <span class="svc-price">$${parseFloat(s.price).toLocaleString('es-AR')}</span>
+        ${isMemberFlow
+          ? `<span class="svc-price-member">👑 Gratis</span>`
+          : `<span class="svc-price">$${parseFloat(s.price).toLocaleString('es-AR')}</span>`}
         <span class="svc-duration">${s.duration_minutes} min</span>
       </div>
     </div>
   `).join('');
+}
+
+// ── MEMBER FLOW ──
+function goToMemberLogin() {
+  document.getElementById('member-verify-error').style.display = 'none';
+  document.getElementById('member-phone').value = '';
+  showScreen('member-login');
+  setStep(1);
+}
+
+async function verifyMember() {
+  const phone = document.getElementById('member-phone').value.trim().replace(/\D/g, '');
+  const errEl = document.getElementById('member-verify-error');
+  errEl.style.display = 'none';
+  if (phone.length < 10) {
+    errEl.textContent = 'Ingresá un número de WhatsApp válido';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('btn-verify-member');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+
+  try {
+    const res = await fetch(`${API}/member-verify?phone=${phone}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al verificar');
+
+    isMemberFlow = true;
+    memberData = { ...data.client, membership: data.membership };
+
+    // Actualizar banner
+    document.getElementById('member-teaser').style.display = 'none';
+    document.getElementById('member-active-banner').style.display = 'flex';
+    document.getElementById('member-banner-name').textContent = memberData.name;
+    const plan = data.membership.plan === 'premium'
+      ? 'Premium — turnos ilimitados'
+      : `Basic — ${data.membership.credits_total - data.membership.credits_used} crédito(s) restante(s)`;
+    document.getElementById('member-banner-sub').textContent = `👑 Membresía ${plan}`;
+
+    // Deseleccionar servicio previo
+    selectedService = null;
+    document.getElementById('btn-next-service').disabled = true;
+    renderServices();
+    showScreen('service');
+    setStep(1);
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = '✅ Verificar membresía';
+}
+
+function cancelMemberFlow() {
+  isMemberFlow = false;
+  memberData = null;
+  selectedService = null;
+  document.getElementById('btn-next-service').disabled = true;
+  document.getElementById('member-teaser').style.display = 'flex';
+  document.getElementById('member-active-banner').style.display = 'none';
+  renderServices();
 }
 
 function selectService(id) {
@@ -353,7 +596,11 @@ function renderCalendar() {
 
     // Verificar si el día está habilitado en el horario
     const dayKey = dayKeys[date.getDay()];
-    const isClosed = schedule ? !schedule[dayKey]?.active : date.getDay() === 0;
+    const isWeeklyClosed = schedule ? !schedule[dayKey]?.active : date.getDay() === 0;
+    // Verificar si es día cerrado extraordinario
+    const closedDays = shopData?.closed_days ? JSON.parse(shopData.closed_days) : [];
+    const isExtraordinaryClosed = closedDays.includes(dateStr);
+    const isClosed = isWeeklyClosed || isExtraordinaryClosed;
     const disabled = isPast || isClosed;
 
     let cls = 'cal-day';
@@ -438,13 +685,19 @@ function goToForm() {
     <div class="summary-row"><span class="summary-label">Fecha</span><span class="summary-value">${dateFormatted}</span></div>
     <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
     ${selectedBarber ? `<div class="summary-row"><span class="summary-label">Barbero</span><span class="summary-value">✂️ ${selectedBarber.name}</span></div>` : ''}
-    <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">$${parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
+    <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">${isMemberFlow ? '👑 Membresía' : '$' + parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
   `;
+
+  // Pre-completar datos si es flujo miembro
+  if (isMemberFlow && memberData) {
+    document.getElementById('client-name').value = memberData.name || '';
+    document.getElementById('client-phone').value = memberData.phone || '';
+  }
 
   // Si ya tiene teléfono cargado (autocomplete), chequear puntos automáticamente
   setTimeout(async () => {
     const phone = document.getElementById('client-phone').value.trim().replace(/\D/g, '');
-    if (phone.length >= 8 && slug && !clientPointsData) {
+    if (phone.length >= 8 && slug && !clientPointsData && !isMemberFlow) {
       await checkPhonePoints(phone);
     }
   }, 500);
@@ -452,7 +705,8 @@ function goToForm() {
 
 async function checkPhonePoints(phone) {
   try {
-    const res = await fetch(`${window.location.origin}/api/points/client/phone/${slug}/${phone}`);
+    const activeSlug = currentBranchSlug || slug;
+    const res = await fetch(`${window.location.origin}/api/points/client/phone/${activeSlug}/${phone}`);
     const data = await res.json();
     if (data.client && data.client.points > 0) {
       clientPointsData = data.client;
@@ -461,20 +715,59 @@ async function checkPhonePoints(phone) {
   } catch(e) { /* silent */ }
 }
 
+// Datos del cliente guardados para el POST diferido (flujo seña)
+let _pendingReserveData = null;
+
 async function confirmReservation() {
   const name = document.getElementById('client-name').value.trim();
   const phone = document.getElementById('client-phone').value.trim();
   const address = document.getElementById('client-address')?.value.trim() || '';
   if (!phone) { showError('El número de WhatsApp es obligatorio'); return; }
-  // Validar formato +54911XXXXXXXX (solo dígitos, debe empezar con 549 y tener 13 dígitos)
   const phoneClean = phone.replace(/\D/g, '');
   if (phoneClean.length < 10) { showError('Ingresá un número de WhatsApp válido'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
   if (shopData?.home_service && !address) { showError('El domicilio es obligatorio para servicio a domicilio'); return; }
 
-  const btn = document.querySelector('#screen-form .btn-primary');
-  btn.disabled = true; btn.textContent = 'Confirmando...';
   hideError();
+
+  // Si hay seña activa → mostrar pantalla informativa ANTES de crear el turno
+  const requiresSena = !isMemberFlow
+    && shopData?.sena_enabled
+    && shopData?.sena_alias
+    && (selectedService?.price || 0) > 0;
+
+  if (requiresSena) {
+    const senaAmount = Math.ceil(selectedService.price * ((shopData.sena_pct || 30) / 100));
+    const dateFormatted = new Date(selectedDate + 'T12:00:00')
+      .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+
+    // Guardar datos para el POST cuando el cliente haga click en "Ya pagué"
+    _pendingReserveData = { name, phone, address };
+
+    document.getElementById('sena-alias-display').textContent  = shopData.sena_alias;
+    document.getElementById('sena-amount-display').textContent = `$${senaAmount.toLocaleString('es-AR')}`;
+    document.getElementById('success-detail-sena').innerHTML = `
+      <strong>${selectedService?.name || 'Turno'}</strong><br>
+      📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
+      📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
+    `;
+    document.getElementById('sena-ya-pague-btn').style.display = 'block';
+    document.getElementById('sena-done-msg').style.display = 'none';
+    document.getElementById('steps').style.display = 'none';
+    showScreen('sena');
+    // Crear el turno ahora — el backend envía el WPP de seña en este momento
+    doReserve({ name, phone, address });
+    return;
+  }
+
+  // Sin seña → flujo normal
+  await doReserve({ name, phone, address });
+}
+
+async function doReserve(clientData) {
+  const { name, phone, address } = clientData || _pendingReserveData || {};
+  const btn = document.getElementById('sena-ya-pague-btn') || document.querySelector('#screen-form .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
 
   try {
     const res = await fetch(`${API}/reserve`, {
@@ -488,7 +781,9 @@ async function confirmReservation() {
         service_id: selectedService?.id || null,
         date: selectedDate,
         time_start: selectedTime,
-        redeem_item_id: selectedPrize?.id || null
+        redeem_item_id: selectedPrize?.id || null,
+        is_member_booking: isMemberFlow || false,
+        membership_id: isMemberFlow ? memberData?.membership?.id : null
       })
     });
     const data = await res.json();
@@ -497,33 +792,56 @@ async function confirmReservation() {
     const dateFormatted = new Date(selectedDate + 'T12:00:00')
       .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
-    let successMsg = data.message;
-    if (data.redeem) successMsg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
-    document.getElementById('success-msg').textContent = successMsg;
-    document.getElementById('success-detail').innerHTML = `
-      <strong>${selectedService?.name || 'Turno'}</strong><br>
-      📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
-      📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
-    `;
-
-    showScreen('success');
     document.getElementById('steps').style.display = 'none';
+
+    if (data.requires_sena) {
+      // El turno quedó en waiting_sena — mostrar confirmación en la misma pantalla
+      if (btn) btn.style.display = 'none';
+      const doneMsg = document.getElementById('sena-done-msg');
+      if (doneMsg) doneMsg.style.display = 'block';
+    } else {
+      let successMsg = data.message;
+      if (data.redeem) successMsg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
+      document.getElementById('success-msg').textContent = successMsg;
+      document.getElementById('success-detail').innerHTML = `
+        <strong>${selectedService?.name || 'Turno'}</strong><br>
+        📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
+        📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
+      `;
+      showScreen('success');
+    }
   } catch (e) {
-    showError(e.message);
-    btn.disabled = false; btn.textContent = '✅ Confirmar turno';
+    // Mostrar error en la pantalla donde está el usuario (sena o form)
+    const isOnSena = document.getElementById('screen-sena')?.style.display !== 'none';
+    if (isOnSena) {
+      let errEl = document.getElementById('sena-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'sena-error';
+        errEl.style.cssText = 'background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px 16px;color:#ff8080;font-size:13px;margin-top:12px;text-align:center';
+        document.getElementById('sena-ya-pague-btn')?.insertAdjacentElement('afterend', errEl);
+      }
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    } else {
+      showError(e.message);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Ya pagué la seña'; }
   }
 }
 
 // ── HELPERS ──
 function showScreen(name) {
-  ['service','date','time','barber','form','success'].forEach(s => {
-    document.getElementById('screen-' + s).style.display = s === name ? 'block' : 'none';
+  ['branch','service','member-login','date','time','barber','form','sena','success'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.style.display = s === name ? 'block' : 'none';
   });
 }
 
 function setStep(n) {
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 0; i <= 5; i++) {
     const el = document.getElementById('step-' + i);
+    if (!el) continue;
     el.classList.remove('active','done');
     if (i < n) el.classList.add('done');
     if (i === n) el.classList.add('active');
@@ -588,7 +906,8 @@ function goBackFromForm() {
 document.getElementById('client-phone')?.addEventListener('blur'
 , async function() {
   const phone = this.value.trim().replace(/\D/g, '');
-  if (phone.length < 8 || !slug) return;
+  const activeSlug = currentBranchSlug || slug;
+  if (phone.length < 8 || !activeSlug) return;
   clientPointsData = null;
   await checkPhonePoints(phone);
 });
