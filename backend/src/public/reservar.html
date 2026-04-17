@@ -755,6 +755,8 @@ async function confirmReservation() {
     document.getElementById('sena-done-msg').style.display = 'none';
     document.getElementById('steps').style.display = 'none';
     showScreen('sena');
+    // Crear el turno ahora — el backend envía el WPP de seña en este momento
+    doReserve({ name, phone, address });
     return;
   }
 
