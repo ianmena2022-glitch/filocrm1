@@ -6,7 +6,7 @@ const wpp    = require('../services/whatsapp');
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, is_branch, parent_enterprise_id
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -47,13 +47,14 @@ router.get('/:slug', async (req, res) => {
     // Si es sucursal sin seña propia, heredar sena_* del enterprise owner
     if (shopData.is_branch && shopData.parent_enterprise_id && !shopData.sena_enabled) {
       const ownerQ = await pool.query(
-        'SELECT sena_enabled, sena_pct, sena_alias FROM shops WHERE id=$1',
+        'SELECT sena_enabled, sena_pct, sena_alias, sena_cbu FROM shops WHERE id=$1',
         [shopData.parent_enterprise_id]
       );
       if (ownerQ.rows.length && ownerQ.rows[0].sena_enabled) {
         shopData.sena_enabled = ownerQ.rows[0].sena_enabled;
         shopData.sena_pct     = ownerQ.rows[0].sena_pct;
         shopData.sena_alias   = ownerQ.rows[0].sena_alias;
+        shopData.sena_cbu     = ownerQ.rows[0].sena_cbu;
       }
     }
 
@@ -216,13 +217,14 @@ router.post('/:slug/reserve', async (req, res) => {
     // Si es sucursal sin seña propia, heredar sena_* del enterprise owner
     if (shopData.is_branch && shopData.parent_enterprise_id && !shopData.sena_enabled) {
       const ownerQ = await pool.query(
-        'SELECT sena_enabled, sena_pct, sena_alias FROM shops WHERE id=$1',
+        'SELECT sena_enabled, sena_pct, sena_alias, sena_cbu FROM shops WHERE id=$1',
         [shopData.parent_enterprise_id]
       );
       if (ownerQ.rows.length && ownerQ.rows[0].sena_enabled) {
         shopData.sena_enabled = ownerQ.rows[0].sena_enabled;
         shopData.sena_pct     = ownerQ.rows[0].sena_pct;
         shopData.sena_alias   = ownerQ.rows[0].sena_alias;
+        shopData.sena_cbu     = ownerQ.rows[0].sena_cbu;
       }
     }
 
@@ -354,7 +356,8 @@ router.post('/:slug/reserve', async (req, res) => {
     } catch(e) { console.error('autoAssign booking error:', e.message); }
 
     // Determinar si se requiere seña
-    const requiresSena = !is_member_booking && shopData.sena_enabled && svcPrice > 0 && shopData.sena_alias;
+    const senaCbu = shopData.sena_cbu || shopData.sena_alias;
+    const requiresSena = !is_member_booking && shopData.sena_enabled && svcPrice > 0 && senaCbu;
     const senaAmount = requiresSena ? Math.ceil(svcPrice * (shopData.sena_pct || 30) / 100) : 0;
     const senaExpiresAt = requiresSena ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null;
     const apptStatus = requiresSena ? 'waiting_sena' : 'pending';
@@ -387,10 +390,10 @@ router.post('/:slug/reserve', async (req, res) => {
               clientName: client_name,
               shopName: shopData.name,
               senaAmount,
-              alias: shopData.sena_alias,
+              alias: senaCbu,
               minutesLimit: 60,
             });
-            if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al alias:\n\n📲 *${shopData.sena_alias}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
+            if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
             await wpp.sendText(shopData.id, client_phone, msgCliente);
           } catch(e) { console.error('WPP seña cliente:', e.message); }
         }
@@ -457,9 +460,9 @@ router.post('/:slug/reserve', async (req, res) => {
       redeem: redeemInfo,
       requires_sena: requiresSena,
       sena_amount: requiresSena ? senaAmount : null,
-      sena_alias: requiresSena ? shopData.sena_alias : null,
+      sena_alias: requiresSena ? senaCbu : null,
       message: requiresSena
-        ? `Tu reserva fue recibida. Para confirmarla, enviá una seña de $${senaAmount.toLocaleString('es-AR')} al alias ${shopData.sena_alias} en los próximos 60 minutos.`
+        ? `Tu reserva fue recibida. Para confirmarla, enviá una seña de $${senaAmount.toLocaleString('es-AR')} al CBU/CVU ${senaCbu} en los próximos 60 minutos.`
         : `¡Turno confirmado! Te esperamos el ${dateLabel} a las ${time_start} en ${shopData.name}.`,
       appointment: appt.rows[0]
     });
