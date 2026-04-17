@@ -494,8 +494,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         // messageStubType 2 = CIPHERTEXT — descifrado fallido, pedir reenvío como imagen
         if (msg.messageStubType === 2) {
-          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — limpiando keys Signal para shop ${shopId}`);
-          await clearSignalKeys(shopId);
+          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — sesión no descifrable`);
           const warning = '⚠️ No pudimos leer tu archivo. Por favor reenviá el comprobante como *imagen* (foto, no PDF) por este chat.';
           // Enviar al phone resuelto directamente (más confiable que buscar en DB)
           if (phone && phone !== phoneRaw && phone.length >= 10) {
