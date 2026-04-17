@@ -669,10 +669,18 @@ function selectTime(time) {
 // ── FORM ──
 function goToForm() {
   if (shopData?.allow_barber_choice && barbers.length && !selectedBarber) {
-    renderBarbers();
-    showScreen('barber');
-    setStep(4);
-    return;
+    // Filtrar solo los barberos que trabajan en la fecha+hora seleccionada
+    const availableBarbers = barbers.filter(b =>
+      isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime)
+    );
+    if (availableBarbers.length > 0) {
+      renderBarbers();
+      showScreen('barber');
+      setStep(4);
+      return;
+    }
+    // Si ningún barbero trabaja ese día/hora, saltar la pantalla de barbero
+    // El backend hará auto-assign entre los disponibles (o dejará sin asignar)
   }
   showScreen('form');
   setStep(shopData?.allow_barber_choice && barbers.length ? 5 : 4);
