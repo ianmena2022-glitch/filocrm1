@@ -299,6 +299,37 @@ router.get('/:slug/available', async (req, res) => {
   }
 });
 
+// GET /api/booking/:slug/barber-busy?date=YYYY-MM-DD&time=HH:MM&duration=30
+// Devuelve los IDs de barberos que ya tienen turno en ese slot
+router.get('/:slug/barber-busy', async (req, res) => {
+  const { date, time, duration } = req.query;
+  if (!date || !time) return res.status(400).json({ error: 'Faltan parámetros' });
+  try {
+    const shop = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
+    if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    const shopId = shop.rows[0].id;
+
+    const dur = parseInt(duration) || 30;
+    const [sh, sm] = time.split(':').map(Number);
+    const slotFrom = sh * 60 + sm;
+    const slotTo   = slotFrom + dur;
+
+    const result = await pool.query(
+      `SELECT DISTINCT barber_id FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL
+         AND status NOT IN ('cancelled','noshow')
+         AND NOT (status='waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
+         AND (
+           (EXTRACT(HOUR FROM time_start::time)*60 + EXTRACT(MINUTE FROM time_start::time)) < $4
+           AND
+           (EXTRACT(HOUR FROM COALESCE(time_end,time_start)::time)*60 + EXTRACT(MINUTE FROM COALESCE(time_end,time_start)::time) + CASE WHEN time_end IS NULL THEN 30 ELSE 0 END) > $3
+         )`,
+      [shopId, date, slotFrom, slotTo]
+    );
+    res.json({ busy: result.rows.map(r => r.barber_id) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
   const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
