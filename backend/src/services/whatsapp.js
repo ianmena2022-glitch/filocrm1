@@ -532,8 +532,15 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         // messageStubType 2 = CIPHERTEXT — descifrado fallido
         if (msg.messageStubType === 2) {
           console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
-          // Limpiar sesión de este JID para que el próximo mensaje se pueda descifrar
+          // 1) Limpiar archivo de sesión
           await clearJidSession(shopId, jid, phone);
+          // 2) Forzar re-fetch del PreKey bundle desde servidores WA → nueva sesión limpia
+          try {
+            await sock.assertSessions([jid], true);
+            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${jid}`);
+          } catch(e) {
+            console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
+          }
           const warning = '⚠️ Hubo un error al recibir tu mensaje. Por favor reenviálo nuevamente y lo veremos.';
           // Enviar al phone resuelto directamente (más confiable que buscar en DB)
           if (phone && phone !== phoneRaw && phone.length >= 10) {
