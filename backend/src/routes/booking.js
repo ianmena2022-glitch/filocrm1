@@ -380,6 +380,7 @@ router.post('/:slug/reserve', async (req, res) => {
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp
+    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} client_phone=${client_phone||'null'}`);
     if (shopData.wpp_connected) {
       if (requiresSena) {
         // Instrucciones de seña al cliente via Groq
