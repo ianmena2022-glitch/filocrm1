@@ -509,7 +509,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         let phone = phoneRaw;
         if (jid.endsWith('@lid')) {
           if (msg.senderPn) {
-            phone = msg.senderPn.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+            // senderPn puede ser "5491135899641:0@s.whatsapp.net" — strip device suffix antes de digits
+            phone = msg.senderPn.split(':')[0].split('@')[0].replace(/\D/g, '');
           } else {
             // Intentar via signalRepository de v7 (nativo)
             try {
