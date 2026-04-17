@@ -380,29 +380,28 @@ router.post('/:slug/reserve', async (req, res) => {
 
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
-    // Notificar por WhatsApp — verificar estado real del socket, no solo la DB
+    // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP
+    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} client_phone=${client_phone||'null'}`);
     const wpp = require('../services/whatsapp');
-    const wppStatus = await wpp.getStatus(shopData.id);
-    const wppOk = wppStatus.connected || shopData.wpp_connected;
-    console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppSocket=${wppStatus.connected} client_phone=${client_phone||'null'}`);
-    if (wppOk) {
+    {
       if (requiresSena) {
         // Instrucciones de seña al cliente via Groq
-        console.log(`[booking] enviando WPP seña a ${client_phone}`);
         if (client_phone) {
-          try {
-            const { generateMessage } = require('../services/ai');
-            let msgCliente = await generateMessage(shopData.id, 'sena_instrucciones', {
-              clientName: client_name,
-              shopName: shopData.name,
-              senaAmount,
-              alias: senaCbu,
-              minutesLimit: 60,
-            });
-            if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
-            await wpp.sendText(shopData.id, client_phone, msgCliente);
-            console.log(`[booking] WPP seña enviada OK a ${client_phone}`);
-          } catch(e) { console.error('[booking] WPP seña error:', e.message); }
+          (async () => {
+            try {
+              const { generateMessage } = require('../services/ai');
+              let msgCliente = await generateMessage(shopData.id, 'sena_instrucciones', {
+                clientName: client_name,
+                shopName: shopData.name,
+                senaAmount,
+                alias: senaCbu,
+                minutesLimit: 60,
+              });
+              if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
+              await wpp.sendText(shopData.id, client_phone, msgCliente);
+              console.log(`[booking] WPP seña enviada OK a ${client_phone}`);
+            } catch(e) { console.error('[booking] WPP seña error:', e.message); }
+          })();
         } else {
           console.log(`[booking] sin client_phone — no se envía WPP seña`);
         }
