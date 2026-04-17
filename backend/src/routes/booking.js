@@ -49,12 +49,19 @@ router.get('/:slug', async (req, res) => {
     );
 
     // Si tiene eleccion de barbero activa, incluir lista de barberos con sus horarios
+    // Para sucursales, heredar allow_barber_choice y barberos del enterprise owner
+    const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
+      ? shopData.parent_enterprise_id
+      : shopData.id;
+    if (!shopData.allow_barber_choice && shopData.is_branch && shopData.parent_enterprise_id) {
+      const ownerChoice = await pool.query(
+        'SELECT allow_barber_choice FROM shops WHERE id=$1', [shopData.parent_enterprise_id]
+      );
+      if (ownerChoice.rows[0]?.allow_barber_choice) shopData.allow_barber_choice = true;
+    }
+
     let barbers = [];
     if (shopData.allow_barber_choice) {
-      // Para sucursales, los barberos están registrados bajo el enterprise owner
-      const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
-        ? shopData.parent_enterprise_id
-        : shopData.id;
       const barbersQ = await pool.query(
         'SELECT id, name, barber_color, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
         [barberShopId]
