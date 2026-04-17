@@ -73,6 +73,11 @@ router.put('/', auth, async (req, res) => {
        sena_pct !== undefined ? parseInt(sena_pct) : null,
        sena_alias !== undefined ? (sena_alias || null) : null]
     );
+    // Sincronizar sena_cbu desde sena_alias (config de señas)
+    if (sena_alias !== undefined && sena_alias) {
+      await pool.query('UPDATE shops SET sena_cbu=$1 WHERE id=$2', [sena_alias, req.shopId]);
+    }
+
     // Sincronizar sena_cbu desde mp_cbu del JSON de planes
     if (membership_plans) {
       try {

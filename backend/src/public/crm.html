@@ -2254,8 +2254,9 @@ select.form-input { padding-right: 32px; }
             </div>
             <div id="sena-config-fields" style="display:none;flex-direction:column;gap:10px">
               <div class="form-field" style="margin-bottom:0">
-                <label>Alias / CVU de cobro</label>
-                <input type="text" id="cfg-sena-alias" placeholder="mi.alias.mercadopago" style="font-family:monospace">
+                <label>CBU / CVU de cobro <span style="color:#e55">*</span></label>
+                <input type="text" id="cfg-sena-alias" placeholder="0000003100123456789012" maxlength="22" pattern="\d{22}" style="font-family:monospace">
+                <div style="font-size:11px;color:var(--gray);margin-top:4px">22 dígitos numéricos. Sin alias, solo CBU/CVU.</div>
               </div>
               <div class="form-field" style="margin-bottom:0">
                 <label>Porcentaje de seña (% del servicio)</label>
@@ -5207,14 +5208,13 @@ async function toggleSenaEnabled() {
   // Mostrar/ocultar campos de configuración
   if (fields) fields.style.display = enabled ? 'flex' : 'none';
 
-  // Si se está activando, validar que haya alias
+  // Si se está activando, validar que haya CBU/CVU de 22 dígitos
   if (enabled) {
-    const alias = document.getElementById('cfg-sena-alias')?.value.trim();
-    if (!alias) {
-      // Revertir el toggle visualmente
+    const cbu = document.getElementById('cfg-sena-alias')?.value.trim().replace(/\D/g, '');
+    if (!cbu || cbu.length !== 22) {
       document.getElementById('toggle-sena').checked = false;
-      if (fields) fields.style.display = 'flex'; // mantener visible para que llene
-      showToast('⚠️', 'Completá el alias primero', 'Ingresá el alias de Mercado Pago antes de activar las señas');
+      if (fields) fields.style.display = 'flex';
+      showToast('⚠️', 'CBU/CVU inválido', 'Ingresá el CBU/CVU de 22 dígitos antes de activar las señas');
       document.getElementById('cfg-sena-alias')?.focus();
       return;
     }
@@ -5224,7 +5224,7 @@ async function toggleSenaEnabled() {
   else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
 
   // Guardar enabled + alias + pct juntos en una sola llamada
-  const alias = document.getElementById('cfg-sena-alias')?.value.trim() || null;
+  const alias = (document.getElementById('cfg-sena-alias')?.value.trim().replace(/\D/g, '')) || null;
   const pct   = parseInt(document.getElementById('cfg-sena-pct')?.value) || 30;
   try {
     await api('PUT', '/settings', { sena_enabled: enabled, sena_alias: alias, sena_pct: pct });
