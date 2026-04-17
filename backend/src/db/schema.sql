@@ -107,7 +107,6 @@ CREATE TABLE IF NOT EXISTS points_store (
   active      BOOLEAN DEFAULT TRUE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE points_store ADD COLUMN IF NOT EXISTS stock INT DEFAULT NULL; -- NULL = ilimitado
 
 CREATE TABLE IF NOT EXISTS points_redemptions (
   id          SERIAL PRIMARY KEY,
@@ -231,28 +230,16 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEF
   CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
 
--- Gastos/egresos e ingresos extras de caja
+-- Gastos/egresos
 CREATE TABLE IF NOT EXISTS expenses (
   id          SERIAL PRIMARY KEY,
   shop_id     INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   amount      NUMERIC(10,2) NOT NULL,
-  category    VARCHAR(50) NOT NULL CHECK (category IN ('insumos','alquiler','servicios','salarios','otros','comisiones','ventas')),
+  category    VARCHAR(50) NOT NULL CHECK (category IN ('insumos','alquiler','servicios','salarios','otros')),
   description VARCHAR(255),
   date        DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
--- Campos para modelo contable completo
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_income       BOOLEAN DEFAULT FALSE;
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type     VARCHAR(50) DEFAULT 'manual';
-ALTER TABLE expenses DROP CONSTRAINT IF EXISTS expenses_source_type_check;
-ALTER TABLE expenses ADD CONSTRAINT expenses_source_type_check
-  CHECK (source_type IN ('manual','stock_compra','product_sale','debt_payment','barber_settlement','sena'));
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_id       INT;
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method  VARCHAR(20);
--- Ampliar check de categoría para instalaciones existentes
-ALTER TABLE expenses DROP CONSTRAINT IF EXISTS expenses_category_check;
-ALTER TABLE expenses ADD CONSTRAINT expenses_category_check
-  CHECK (category IN ('insumos','alquiler','servicios','salarios','otros','comisiones','ventas'));
 CREATE INDEX IF NOT EXISTS idx_expenses_shop_date ON expenses(shop_id, date);
 
 -- Caja diaria (calculada automáticamente al cierre)
@@ -342,77 +329,6 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_mode  VARCHAR(10) DEFAULT 
   CHECK (commission_mode IN ('pct','fixed','mixed'));
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS commission_fixed NUMERIC(10,2) DEFAULT 0;
 
--- Liquidaciones de barberos
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS commission_settled BOOLEAN DEFAULT FALSE;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS commission_settled_at TIMESTAMPTZ;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS settlement_id INT;
-
-CREATE TABLE IF NOT EXISTS barber_settlements (
-  id               SERIAL PRIMARY KEY,
-  shop_id          INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-  barber_id        INT REFERENCES shops(id) ON DELETE SET NULL,
-  barber_name      VARCHAR(100),
-  appointments_count INT DEFAULT 0,
-  total_price      NUMERIC(10,2) DEFAULT 0,
-  commission_pct_avg NUMERIC(5,2),
-  commission_amount NUMERIC(10,2) DEFAULT 0,
-  notes            TEXT,
-  settled_at       TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_barber_settlements ON barber_settlements(shop_id, barber_id);
-
--- ── DÍAS NO LABORABLES EXTRAORDINARIOS ───────────────────────────────────────
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS closed_days TEXT DEFAULT NULL;
-
--- ── MEMBRESÍAS EN RESERVAS ────────────────────────────────────────────────────
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS member_booking BOOLEAN DEFAULT FALSE;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS membership_id INT REFERENCES memberships(id) ON DELETE SET NULL;
-
-ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_payment_method_check;
-ALTER TABLE appointments ADD CONSTRAINT appointments_payment_method_check
-  CHECK (payment_method IN ('cash','debit','credit','transfer','debt','membership') OR payment_method IS NULL);
-
--- ── ENTERPRISE MULTI-BRANCH ───────────────────────────────────────────────────
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_enterprise_owner BOOLEAN DEFAULT FALSE;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_branch BOOLEAN DEFAULT FALSE;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS parent_enterprise_id INT REFERENCES shops(id) ON DELETE SET NULL;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS branch_label VARCHAR(100);
-
-CREATE INDEX IF NOT EXISTS idx_shops_parent_enterprise ON shops(parent_enterprise_id)
-  WHERE parent_enterprise_id IS NOT NULL;
-
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_currency   VARCHAR(10)  DEFAULT 'ARS';
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_timezone   VARCHAR(50)  DEFAULT 'America/Argentina/Buenos_Aires';
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_logo_url   TEXT;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_notes      TEXT;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_shared_wpp BOOLEAN DEFAULT FALSE;
-
--- ── Sistema de referidos ────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS vendors (
-  id         SERIAL PRIMARY KEY,
-  name       VARCHAR(255) NOT NULL,
-  email      VARCHAR(255),
-  code       VARCHAR(50)  UNIQUE NOT NULL,
-  created_at TIMESTAMPTZ  DEFAULT NOW()
-);
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id      INTEGER REFERENCES vendors(id) ON DELETE SET NULL;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS referral_code  VARCHAR(50);
-
--- ── SISTEMA DE SEÑAS (DEPÓSITOS PREVIOS) ──────────────────────────────────────
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_enabled BOOLEAN DEFAULT FALSE;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_pct     INT DEFAULT 30;
-ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_alias   VARCHAR(100);
-
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_amount     NUMERIC(10,2) DEFAULT 0;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_status     VARCHAR(20)
-  CHECK (sena_status IN ('pending','confirmed','lost') OR sena_status IS NULL);
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_expires_at TIMESTAMPTZ;
-
-ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_status_check;
-ALTER TABLE appointments ADD CONSTRAINT appointments_status_check
-  CHECK (status IN ('pending','confirmed','completed','noshow','cancelled','waiting_sena'));
-
 -- Comprobantes de seña en turnos
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS sena_comprobante_status VARCHAR(20) DEFAULT NULL
   CHECK (sena_comprobante_status IN ('received','verified','rejected') OR sena_comprobante_status IS NULL);
@@ -428,3 +344,8 @@ ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
 
 -- Rescate automático
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAULT NULL;
+
+-- CBU/CVU para verificación de comprobantes (reemplaza alias)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_cbu VARCHAR(100) DEFAULT NULL;
+UPDATE shops SET sena_cbu = sena_alias WHERE sena_cbu IS NULL AND sena_alias IS NOT NULL;
+

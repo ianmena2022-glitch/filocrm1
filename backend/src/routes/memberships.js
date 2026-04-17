@@ -81,19 +81,17 @@ router.post('/', auth, async (req, res) => {
     // Enviar instrucciones de pago por WhatsApp
     try {
       const shopData = await pool.query(
-        'SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1',
+        'SELECT name, sena_cbu, wpp_connected FROM shops WHERE id=$1',
         [req.shopId]
       );
       const shop = shopData.rows[0];
       const clientData = await pool.query('SELECT name, phone FROM clients WHERE id=$1', [client_id]);
       const client = clientData.rows[0];
 
-      console.log(`[memberships] WPP check: wpp_connected=${shop?.wpp_connected} sena_alias=${shop?.sena_alias} phone=${client?.phone}`);
-      if (shop?.wpp_connected && client?.phone) {
+      if (shop?.wpp_connected && shop?.sena_cbu && client?.phone) {
         const { generateMessage } = require('../services/ai');
-        const { sendText } = require('../services/whatsapp');
+        const { sendMessage } = require('../services/whatsapp');
         const price = parseFloat(price_monthly || 0);
-        const alias = shop.sena_alias || '';
 
         let msg = await generateMessage(req.shopId, 'membresia_bienvenida', {
           clientName: client.name,
@@ -101,13 +99,11 @@ router.post('/', auth, async (req, res) => {
           planName: plan,
           credits,
           price,
-          alias,
+          alias: shop.sena_cbu,
         });
-        if (!msg) msg = alias
-          ? buildPaymentMsg(client.name, price, alias, plan)
-          : `¡Hola ${client.name}! Tu membresía (${plan}, ${credits} créditos) fue creada en ${shop.name}. Cuando realices el pago, avisanos por este chat. ¡Gracias!`;
+        if (!msg) msg = buildPaymentMsg(client.name, price, shop.sena_cbu, plan);
 
-        await sendText(req.shopId, client.phone, msg);
+        await sendMessage(req.shopId, client.phone, msg);
       }
     } catch (wppErr) {
       console.error('[memberships] Error enviando WPP bienvenida:', wppErr.message);
@@ -140,11 +136,11 @@ router.put('/:id/mark-paid', auth, async (req, res) => {
 
     // Notificar al cliente
     try {
-      const shopData = await pool.query('SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+      const shopData = await pool.query('SELECT name, sena_cbu, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
       const shop = shopData.rows[0];
       if (shop?.wpp_connected && m.client_phone) {
         const { generateMessage } = require('../services/ai');
-        const { sendText } = require('../services/whatsapp');
+        const { sendMessage } = require('../services/whatsapp');
         const fechaVencimiento = renews.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
         let msg = await generateMessage(req.shopId, 'membresia_pago_confirmado', {
           clientName: m.client_name,
@@ -153,7 +149,7 @@ router.put('/:id/mark-paid', auth, async (req, res) => {
           fechaVencimiento,
         });
         if (!msg) msg = `✅ Pago confirmado, ${m.client_name}. Tu membresía está activa con ${m.credits_total} créditos hasta el ${fechaVencimiento}.`;
-        await sendText(req.shopId, m.client_phone, msg);
+        await sendMessage(req.shopId, m.client_phone, msg);
       }
     } catch (wppErr) {
       console.error('[memberships] Error enviando WPP pago confirmado:', wppErr.message);
@@ -177,13 +173,13 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
     if (!memRes.rows.length) return res.status(404).json({ error: 'Membresía no encontrada' });
     const m = memRes.rows[0];
 
-    const shopData = await pool.query('SELECT name, sena_alias, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
+    const shopData = await pool.query('SELECT name, sena_cbu, wpp_connected FROM shops WHERE id=$1', [req.shopId]);
     const shop = shopData.rows[0];
     if (!shop?.wpp_connected) return res.status(400).json({ error: 'WhatsApp no conectado' });
     if (!m.client_phone) return res.status(400).json({ error: 'El cliente no tiene teléfono' });
 
     const { generateMessage } = require('../services/ai');
-    const { sendText } = require('../services/whatsapp');
+    const { sendMessage } = require('../services/whatsapp');
     const fechaVencimiento = m.renews_at
       ? new Date(m.renews_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
       : 'próximamente';
@@ -193,11 +189,11 @@ router.post('/:id/send-reminder', auth, async (req, res) => {
       shopName: shop.name,
       fechaVencimiento,
       price: parseFloat(m.price_monthly || 0),
-      alias: shop.sena_alias || '',
+      alias: shop.sena_cbu || '',
     });
-    if (!msg) msg = buildPaymentMsg(m.client_name, parseFloat(m.price_monthly || 0), shop.sena_alias || '', m.plan);
+    if (!msg) msg = buildPaymentMsg(m.client_name, parseFloat(m.price_monthly || 0), shop.sena_cbu || '', m.plan);
 
-    await sendText(req.shopId, m.client_phone, msg);
+    await sendMessage(req.shopId, m.client_phone, msg);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
