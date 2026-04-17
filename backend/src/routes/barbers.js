@@ -13,7 +13,7 @@ function ownerOnly(req, res, next) {
 router.get('/', auth, ownerOnly, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, barber_commission_pct, barber_color, created_at,
+      `SELECT id, name, email, barber_commission_pct, barber_color, barber_schedule, created_at,
          (SELECT COUNT(*) FROM appointments WHERE barber_id=s.id AND date=CURRENT_DATE AND status NOT IN ('cancelled','noshow')) AS turnos_hoy
        FROM shops s WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name`,
       [req.shopId]
@@ -52,18 +52,32 @@ router.post('/invite', auth, ownerOnly, async (req, res) => {
   }
 });
 
-// PUT /api/barbers/:id — editar barbero (comisión, color)
+// PUT /api/barbers/:id — editar barbero (comisión, color, horarios)
 router.put('/:id', auth, ownerOnly, async (req, res) => {
-  const { barber_commission_pct, barber_color, name } = req.body;
+  const { barber_commission_pct, barber_color, name, barber_schedule } = req.body;
   try {
+    // barber_schedule puede ser null (sin restricciones) o un objeto con días
+    const scheduleVal = barber_schedule !== undefined
+      ? (barber_schedule ? JSON.stringify(barber_schedule) : null)
+      : undefined;
+
     const result = await pool.query(
       `UPDATE shops SET
          barber_commission_pct = COALESCE($1, barber_commission_pct),
          barber_color = COALESCE($2, barber_color),
-         name = COALESCE($3, name)
-       WHERE id=$4 AND parent_shop_id=$5
-       RETURNING id, name, barber_commission_pct, barber_color`,
-      [barber_commission_pct || null, barber_color || null, name || null, req.params.id, req.shopId]
+         name = COALESCE($3, name),
+         barber_schedule = CASE WHEN $6 THEN $5::jsonb ELSE barber_schedule END
+       WHERE id=$4 AND parent_shop_id=$7
+       RETURNING id, name, barber_commission_pct, barber_color, barber_schedule`,
+      [
+        barber_commission_pct || null,
+        barber_color || null,
+        name || null,
+        req.params.id,
+        scheduleVal || null,
+        barber_schedule !== undefined, // $6: si se envió el campo
+        req.shopId
+      ]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
     res.json(result.rows[0]);

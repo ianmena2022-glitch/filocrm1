@@ -2,6 +2,20 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const wpp    = require('../services/whatsapp');
 
+// Helper: verificar si un barbero trabaja en una fecha+hora dada
+// barberSchedule: null = sin restricciones (siempre disponible)
+// date: 'YYYY-MM-DD', timeStart: 'HH:MM'
+function isBarberAvailable(barberSchedule, date, timeStart) {
+  if (!barberSchedule) return true;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const d = new Date(date + 'T12:00:00');
+  const dayKey = DAY_KEYS[d.getDay()];
+  const dayCfg = barberSchedule[dayKey];
+  if (!dayCfg || !dayCfg.active) return false;
+  if (!timeStart || !dayCfg.from || !dayCfg.to) return true;
+  return timeStart >= dayCfg.from && timeStart < dayCfg.to;
+}
+
 // GET /api/booking/:slug — info pública de la barbería para el formulario
 router.get('/:slug', async (req, res) => {
   try {
@@ -34,11 +48,11 @@ router.get('/:slug', async (req, res) => {
       [shopData.id]
     );
 
-    // Si tiene eleccion de barbero activa, incluir lista de barberos
+    // Si tiene eleccion de barbero activa, incluir lista de barberos con sus horarios
     let barbers = [];
     if (shopData.allow_barber_choice) {
       const barbersQ = await pool.query(
-        'SELECT id, name, barber_color FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
+        'SELECT id, name, barber_color, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
         [shopData.id]
       );
       barbers = barbersQ.rows;
@@ -372,12 +386,35 @@ router.post('/:slug/reserve', async (req, res) => {
       let assignedBarberCommission = 0;
       try {
         if (chosen_barber_id && shopData.allow_barber_choice) {
-          assignedBarberId = parseInt(chosen_barber_id);
-        } else {
-          const barbers = await pgClient.query(
-            'SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopData.id]
+          // Elección manual: validar que el barbero trabaja en esa fecha/hora
+          const chosenId = parseInt(chosen_barber_id);
+          const barberData = await pgClient.query(
+            'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+            [chosenId, shopData.id]
           );
-          if (barbers.rows.length) {
+          if (!barberData.rows.length) {
+            await pgClient.query('ROLLBACK');
+            pgClient.release();
+            return res.status(400).json({ error: 'Barbero no encontrado' });
+          }
+          const chosenBarber = barberData.rows[0];
+          if (!isBarberAvailable(chosenBarber.barber_schedule, date, time_start)) {
+            await pgClient.query('ROLLBACK');
+            pgClient.release();
+            return res.status(400).json({ error: 'El barbero seleccionado no trabaja en esa fecha/horario' });
+          }
+          assignedBarberId = chosenId;
+          assignedBarberCommission = parseInt(chosenBarber.barber_commission_pct) || 50;
+        } else {
+          // Auto-assign: solo barberos que trabajan en esa fecha/hora
+          const barbers = await pgClient.query(
+            'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
+            [shopData.id]
+          );
+          const availableBarbers = barbers.rows.filter(b =>
+            isBarberAvailable(b.barber_schedule, date, time_start)
+          );
+          if (availableBarbers.length) {
             const counts = await pgClient.query(
               `SELECT barber_id, COUNT(*) as total FROM appointments
                WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
@@ -386,25 +423,10 @@ router.post('/:slug/reserve', async (req, res) => {
             const countMap = {};
             counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
             let minCount = Infinity;
-            for (const b of barbers.rows) {
+            for (const b of availableBarbers) {
               const c = countMap[b.id] || 0;
-              if (c < minCount) { minCount = c; assignedBarberId = b.id; }
+              if (c < minCount) { minCount = c; assignedBarberId = b.id; assignedBarberCommission = parseInt(b.barber_commission_pct) || 50; }
             }
-          }
-        }
-        if (assignedBarberId) {
-          assignedBarberCommission = 50;
-          // Fix #10: validar que el barbero pertenezca a este shop
-          const barberData = await pgClient.query(
-            'SELECT barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2',
-            [assignedBarberId, shopData.id]
-          );
-          if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
-            assignedBarberCommission = parseInt(barberData.rows[0].barber_commission_pct);
-          } else if (!barberData.rows.length) {
-            // Barbero no pertenece a este shop — ignorar asignación
-            assignedBarberId = null;
-            assignedBarberCommission = 0;
           }
         }
       } catch(e) { console.error('autoAssign booking error:', e.message); }

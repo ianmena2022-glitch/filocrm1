@@ -879,18 +879,35 @@ function hideError() {
   document.getElementById('error-banner').style.display = 'none';
 }
 
+// Verifica si un barbero trabaja en la fecha+hora seleccionada
+function isBarberAvailableClient(barberSchedule, date, timeStart) {
+  if (!barberSchedule) return true;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const d = new Date(date + 'T12:00:00');
+  const dayKey = DAY_KEYS[d.getDay()];
+  const dayCfg = barberSchedule[dayKey];
+  if (!dayCfg || !dayCfg.active) return false;
+  if (!timeStart || !dayCfg.from || !dayCfg.to) return true;
+  return timeStart >= dayCfg.from && timeStart < dayCfg.to;
+}
+
 function renderBarbers() {
   const grid = document.getElementById('barber-grid');
   if (!grid) return;
-  grid.innerHTML = barbers.map(b => `
+  grid.innerHTML = barbers.map(b => {
+    const available = isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime);
+    const unavailableStyle = available ? '' : 'opacity:0.4;pointer-events:none;filter:grayscale(1)';
+    const badge = available ? '' : `<span style="font-size:10px;color:#f87171;margin-left:auto">No disponible</span>`;
+    return `
     <div class="service-btn ${selectedBarber?.id === b.id ? 'selected' : ''}"
-         onclick="selectBarber(${b.id})"
+         ${available ? `onclick="selectBarber(${b.id})"` : ''}
          id="barber-${b.id}"
-         style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px;${unavailableStyle}">
       <div style="width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${b.name.charAt(0).toUpperCase()}</div>
       <div style="font-weight:600;font-size:15px">${b.name}</div>
-    </div>
-  `).join('');
+      ${badge}
+    </div>`;
+  }).join('');
 }
 
 function selectBarber(id) {

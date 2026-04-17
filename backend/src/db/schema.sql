@@ -349,3 +349,8 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAUL
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_cbu VARCHAR(100) DEFAULT NULL;
 UPDATE shops SET sena_cbu = sena_alias WHERE sena_cbu IS NULL AND sena_alias IS NOT NULL;
 
+-- Horarios individuales por barbero
+-- Estructura: {"mon":{"active":true,"from":"09:00","to":"18:00"},"tue":{...},...}
+-- Días: mon, tue, wed, thu, fri, sat, sun
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS barber_schedule JSONB DEFAULT NULL;
+

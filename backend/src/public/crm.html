@@ -1708,6 +1708,42 @@ select.form-input { padding-right: 32px; }
       </div>
     </section>
 
+    <!-- Modal: Editar barbero (comisión + horarios) -->
+    <div class="modal-overlay" id="modal-edit-barber" onclick="if(event.target===this)closeModal('modal-edit-barber')">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-title">✏️ Editar barbero</div>
+        <div class="modal-sub" id="edit-barber-name-title"></div>
+
+        <div class="form-field" style="margin-bottom:16px">
+          <label>Comisión (%)</label>
+          <input type="number" id="edit-barber-commission" min="0" max="100" style="max-width:120px">
+        </div>
+
+        <div style="margin-bottom:8px;font-size:13px;font-weight:600;color:var(--gray)">DÍAS Y HORARIOS DE TRABAJO</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px">Dejá todos sin tildar para que trabaje todos los días sin restricción</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+          ${[['mon','Lunes'],['tue','Martes'],['wed','Miércoles'],['thu','Jueves'],['fri','Viernes'],['sat','Sábado'],['sun','Domingo']].map(([key,label]) => `
+          <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 12px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:110px;font-size:13px">
+              <input type="checkbox" id="bs-${key}-active" onchange="toggleBarberDay('${key}')" style="width:16px;height:16px;accent-color:var(--yellow)">
+              ${label}
+            </label>
+            <div id="bs-${key}-hours" style="display:none;align-items:center;gap:6px;font-size:12px">
+              <input type="time" id="bs-${key}-from" value="09:00" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:3px 6px;font-size:12px">
+              <span style="color:var(--gray)">→</span>
+              <input type="time" id="bs-${key}-to" value="18:00" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:3px 6px;font-size:12px">
+            </div>
+          </div>`).join('')}
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-modal-primary" onclick="saveBarberEdit()">💾 Guardar</button>
+          <button class="btn-modal-secondary" onclick="closeModal('modal-edit-barber')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Invitar barbero -->
     <div class="modal-overlay" id="modal-invite">
       <div class="modal">
@@ -5652,7 +5688,7 @@ async function loadEquipo() {
         </div>
         <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end">
           <div style="display:flex;gap:8px">
-            <button class="appt-btn" onclick="editBarber(${b.id},'${b.name}',${b.barber_commission_pct})" title="Editar">✏️</button>
+            <button class="appt-btn" onclick="editBarber(${b.id})" title="Editar">✏️</button>
             <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
           </div>
           ${hasPending ? `<button class="btn-add" style="font-size:12px;padding:6px 12px;background:linear-gradient(135deg,#FFD100,#ff9800)" onclick="openSettlementModal(${b.id},'${b.name.replace(/'/g,"\\'")}')">💸 Liquidar</button>` : `<button class="appt-btn" style="font-size:11px;opacity:0.5" onclick="openSettlementHistory(${b.id},'${b.name.replace(/'/g,"\\'")}')">📋 Historial</button>`}
@@ -5729,12 +5765,62 @@ async function toggleCommission() {
   }
 }
 
-async function editBarber(id, name, commission) {
-  const newPct = prompt(`Comisión para ${name} (%):`, commission);
-  if (!newPct || isNaN(newPct)) return;
+let _editBarberId = null;
+
+function editBarber(id) {
+  const b = (window._barbersList || []).find(x => x.id === id);
+  if (!b) return;
+  _editBarberId = id;
+  document.getElementById('edit-barber-name-title').textContent = b.name;
+  document.getElementById('edit-barber-commission').value = b.barber_commission_pct || 50;
+  const schedule = b.barber_schedule || {};
+  const days = [
+    { key: 'mon', label: 'Lunes' }, { key: 'tue', label: 'Martes' },
+    { key: 'wed', label: 'Miércoles' }, { key: 'thu', label: 'Jueves' },
+    { key: 'fri', label: 'Viernes' }, { key: 'sat', label: 'Sábado' },
+    { key: 'sun', label: 'Domingo' }
+  ];
+  days.forEach(({ key }) => {
+    const cfg = schedule[key] || { active: false, from: '09:00', to: '18:00' };
+    const chk = document.getElementById(`bs-${key}-active`);
+    const from = document.getElementById(`bs-${key}-from`);
+    const to = document.getElementById(`bs-${key}-to`);
+    if (chk) chk.checked = cfg.active !== false;
+    if (from) from.value = cfg.from || '09:00';
+    if (to) to.value = cfg.to || '18:00';
+    toggleBarberDay(key);
+  });
+  openModal('modal-edit-barber');
+}
+
+function toggleBarberDay(key) {
+  const chk = document.getElementById(`bs-${key}-active`);
+  const row = document.getElementById(`bs-${key}-hours`);
+  if (row) row.style.display = chk?.checked ? 'flex' : 'none';
+}
+
+async function saveBarberEdit() {
+  const id = _editBarberId;
+  if (!id) return;
+  const commission = parseInt(document.getElementById('edit-barber-commission').value);
+  const days = ['mon','tue','wed','thu','fri','sat','sun'];
+  const schedule = {};
+  let hasAnySchedule = false;
+  days.forEach(key => {
+    const chk = document.getElementById(`bs-${key}-active`);
+    const from = document.getElementById(`bs-${key}-from`);
+    const to = document.getElementById(`bs-${key}-to`);
+    const active = chk?.checked || false;
+    schedule[key] = { active, from: from?.value || '09:00', to: to?.value || '18:00' };
+    if (active) hasAnySchedule = true;
+  });
   try {
-    await api('PUT', `/barbers/${id}`, { barber_commission_pct: parseInt(newPct) });
-    showToast('✅', 'Comisión actualizada', `${name}: ${newPct}%`);
+    await api('PUT', `/barbers/${id}`, {
+      barber_commission_pct: commission,
+      barber_schedule: hasAnySchedule ? schedule : null
+    });
+    showToast('✅', 'Barbero actualizado', '');
+    closeModal('modal-edit-barber');
     loadEquipo();
   } catch(e) {
     showToast('❌', 'Error', e.message);
