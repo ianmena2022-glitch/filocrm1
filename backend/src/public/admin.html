@@ -332,6 +332,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         <input class="input" id="vendor-commission" type="number" min="0" max="100" value="20" placeholder="20" style="max-width:120px">
         <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">% del primer pago de cada cuenta que convierte. Se cobra una sola vez por cuenta.</span>
       </div>
+      <div class="form-group">
+        <label id="vendor-pass-label">Contraseña del portal</label>
+        <input class="input" id="vendor-password" type="password" placeholder="Dejar vacío para no cambiar" autocomplete="new-password">
+        <span style="font-size:11px;color:var(--g);margin-top:4px;display:block">El vendedor usa esta contraseña para entrar en <strong style="color:rgba(255,255,255,.5)">/vendor</strong></span>
+      </div>
       <div id="vendor-err" style="color:var(--r);font-size:13px;display:none"></div>
     </div>
     <div class="modal-footer">
@@ -938,6 +943,8 @@ function openVendorModal(id) {
     document.getElementById('vendor-email').value = v.email || '';
     document.getElementById('vendor-code').value       = v.code;
     document.getElementById('vendor-commission').value = v.commission_pct || 20;
+    document.getElementById('vendor-password').value   = '';
+    document.getElementById('vendor-pass-label').textContent = 'Contraseña del portal (dejar vacío para no cambiar)';
   } else {
     document.getElementById('vendor-modal-title').textContent = 'NUEVO VENDEDOR';
     document.getElementById('vendor-id').value         = '';
@@ -945,6 +952,8 @@ function openVendorModal(id) {
     document.getElementById('vendor-email').value      = '';
     document.getElementById('vendor-code').value       = '';
     document.getElementById('vendor-commission').value = 20;
+    document.getElementById('vendor-password').value   = '';
+    document.getElementById('vendor-pass-label').textContent = 'Contraseña del portal';
   }
   document.getElementById('vendor-modal').classList.add('open');
 }
@@ -969,7 +978,7 @@ async function saveVendor() {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-      body: JSON.stringify({ name, email: email || null, code, commission_pct: parseInt(document.getElementById('vendor-commission').value) || 20 })
+      body: JSON.stringify({ name, email: email || null, code, commission_pct: parseInt(document.getElementById('vendor-commission').value) || 20, password: document.getElementById('vendor-password').value || undefined })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Error'; errEl.style.display = 'block'; return; }
