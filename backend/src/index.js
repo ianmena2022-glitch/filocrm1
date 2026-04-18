@@ -29,6 +29,7 @@ app.use('/api/barbers',      require('./routes/barbers'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/enterprise',   require('./routes/enterprise'));
 app.use('/api/admin',         require('./routes/admin'));
+app.use('/api/vendor',        require('./routes/vendor'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));
@@ -38,6 +39,11 @@ app.use('/api/payments',              require('./routes/payments'));
 // Panel admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(publicDir, 'admin.html'));
+});
+
+// Dashboard vendedor
+app.get('/vendor', (req, res) => {
+  res.sendFile(path.join(publicDir, 'vendor.html'));
 });
 
 // Dashboard barbero

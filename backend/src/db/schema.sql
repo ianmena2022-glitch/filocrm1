@@ -365,6 +365,7 @@ CREATE TABLE IF NOT EXISTS vendors (
 );
 -- commission_pct puede no existir en BDs creadas antes de esta versión
 ALTER TABLE vendors ADD COLUMN IF NOT EXISTS commission_pct INT DEFAULT 20;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT NULL;
 
 -- Fecha del primer pago real de cada cuenta (para cálculo de comisión one-time)
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS first_payment_at TIMESTAMPTZ DEFAULT NULL;

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/logo_f.png">
+<title>FILO — Portal Vendedores</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --y:#FFD100;
+  --n:#050d18;
+  --nm:#0a1628;
+  --nk:#001a38;
+  --w:#fff;
+  --g:#7a8fa8;
+  --gl:#0d1e35;
+  --gll:#162840;
+  --ok:#00C875;
+  --r:#FF4343;
+  --or:#FF9100;
+  --border:rgba(255,255,255,0.06);
+  --border-y:rgba(255,209,0,0.15)
+}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh}
+
+/* ── LOGIN ── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-box{background:var(--gl);border:1px solid var(--border-y);border-radius:16px;padding:48px;width:100%;max-width:400px;text-align:center}
+.login-logo{font-family:'Oswald',sans-serif;font-size:36px;color:var(--y);letter-spacing:2px;margin-bottom:4px}
+.login-subtitle{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--g);margin-bottom:32px}
+.input{width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--w);font-family:'Barlow',sans-serif;font-size:15px;outline:none;transition:border .2s;margin-bottom:12px}
+.input:focus{border-color:rgba(255,209,0,0.4)}
+.input::placeholder{color:var(--g)}
+.btn-y{background:var(--y);color:var(--nk);border:none;border-radius:8px;padding:13px 28px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;width:100%;margin-top:4px}
+.btn-y:hover{box-shadow:0 0 24px rgba(255,209,0,.4)}
+.btn-y:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.login-err{color:var(--r);font-size:13px;margin-top:12px;display:none;background:rgba(255,67,67,.08);border:1px solid rgba(255,67,67,.2);border-radius:6px;padding:10px 14px}
+
+/* ── SPINNER ── */
+.spinner{display:none;width:36px;height:36px;border:3px solid rgba(255,209,0,.15);border-top-color:var(--y);border-radius:50%;animation:spin .7s linear infinite;margin:24px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── PANEL ── */
+#panel{display:none}
+.topbar{height:60px;background:rgba(5,13,24,.95);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px)}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.topbar-logo{font-family:'Oswald',sans-serif;font-size:20px;color:var(--y);letter-spacing:1px}
+.topbar-sep{width:1px;height:24px;background:var(--border)}
+.topbar-vendor{font-size:14px;color:var(--g);font-weight:500}
+.topbar-vendor span{color:var(--w);font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--g);border-radius:6px;padding:7px 16px;font-family:'Barlow',sans-serif;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-ghost:hover{border-color:rgba(255,255,255,.25);color:var(--w)}
+
+.content{padding:32px;max-width:1280px;margin:0 auto}
+.page-title{font-family:'Oswald',sans-serif;font-size:28px;font-weight:600;margin-bottom:4px}
+.page-sub{color:var(--g);font-size:14px;margin-bottom:28px}
+
+/* ── COMMISSION INFO BANNER ── */
+.commission-banner{background:rgba(255,209,0,.06);border:1px solid var(--border-y);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--g);margin-bottom:24px;display:flex;align-items:center;gap:10px}
+.commission-banner strong{color:var(--y)}
+
+/* ── STATS CARDS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
+@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.stats-grid{grid-template-columns:1fr}}
+.stat-card{background:var(--gl);border:1px solid var(--border);border-radius:12px;padding:20px 24px;transition:border-color .2s}
+.stat-card:hover{border-color:rgba(255,255,255,.12)}
+.stat-label{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
+.stat-val{font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--w);line-height:1}
+.stat-val.green{color:var(--ok)}
+.stat-val.yellow{color:var(--y)}
+.stat-sub{font-size:12px;color:var(--g);margin-top:6px}
+
+/* ── TABLE ── */
+.section-title{font-family:'Oswald',sans-serif;font-size:18px;font-weight:600;color:var(--w);margin-bottom:16px}
+.table-wrap{background:var(--gl);border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:600px}
+thead th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+td{padding:14px 16px;font-size:13px;vertical-align:middle}
+.empty-row td{text-align:center;color:var(--g);padding:40px;font-style:italic}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge.starter{background:rgba(255,209,0,.1);color:var(--y)}
+.badge.staff{background:rgba(99,179,237,.1);color:#63b3ed}
+.badge.enterprise{background:rgba(159,122,234,.1);color:#9f7aea}
+.badge.active{background:rgba(0,200,117,.12);color:var(--ok)}
+.badge.trial{background:rgba(255,145,0,.15);color:var(--or)}
+.badge.expired{background:rgba(255,67,67,.12);color:var(--r)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+.commission-cell{font-family:'Oswald',sans-serif;font-size:15px;font-weight:600;color:var(--ok)}
+.commission-cell.none{font-family:'Barlow',sans-serif;font-size:14px;font-weight:400;color:var(--g)}
+
+/* ── PANEL SPINNER ── */
+#panel-loading{text-align:center;padding:80px 0}
+#panel-loading .spinner{display:block;margin:0 auto 16px}
+#panel-loading p{color:var(--g);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">FILO</div>
+    <div class="login-subtitle">Portal Vendedores</div>
+    <input class="input" type="email" id="login-email" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    <input class="input" type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-y" id="login-btn" onclick="doLogin()">Ingresar</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="spinner" id="login-spinner"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="panel">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">FILO</span>
+      <div class="topbar-sep"></div>
+      <span class="topbar-vendor" id="topbar-name">Cargando...</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-ghost" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content" id="panel-content" style="display:none">
+    <div class="page-title" id="dash-title">Mi Dashboard</div>
+    <div class="page-sub">Resumen de referidos y comisiones</div>
+
+    <div class="commission-banner" id="commission-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--y);flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Tu comisión: <strong id="commission-pct-label">20%</strong> del primer pago de cada cuenta que referís
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Comisiones este mes</div>
+        <div class="stat-val green" id="s-month">$0</div>
+        <div class="stat-sub" id="s-new-sub">0 nuevas conversiones</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Nuevas conversiones (mes)</div>
+        <div class="stat-val yellow" id="s-new">0</div>
+        <div class="stat-sub">cuentas que pagaron este mes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Comisiones totales</div>
+        <div class="stat-val yellow" id="s-total">$0</div>
+        <div class="stat-sub">acumulado histórico</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cuentas activas</div>
+        <div class="stat-val green" id="s-paying">0</div>
+        <div class="stat-sub" id="s-referred-sub">de 0 referidas en total</div>
+      </div>
+    </div>
+
+    <!-- Accounts table -->
+    <div class="section-title">Mis cuentas referidas</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Barbería</th>
+            <th>Plan</th>
+            <th>Estado</th>
+            <th>Comisión ganada</th>
+            <th>Fecha de registro</th>
+          </tr>
+        </thead>
+        <tbody id="accounts-tbody">
+          <tr class="empty-row"><td colspan="5">Cargando cuentas...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Panel loading spinner -->
+  <div id="panel-loading">
+    <div class="spinner" style="display:block"></div>
+    <p>Cargando datos...</p>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'vendorToken';
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function fmtDate(s) {
+  if (!s) return '—';
+  return new Date(s).toLocaleDateString('es-AR');
+}
+
+function fmtMoney(n) {
+  if (!n && n !== 0) return '$0';
+  return '$' + Number(n).toLocaleString('es-AR');
+}
+
+function labelStatus(s) {
+  if (s === 'active')   return 'Activo';
+  if (s === 'trial')    return 'Trial';
+  if (s === 'expired')  return 'Vencido';
+  if (s === 'cancelled') return 'Cancelado';
+  return s || '—';
+}
+
+function badgeStatus(s) {
+  const cls = s === 'active' ? 'active' : s === 'trial' ? 'trial' : 'expired';
+  const dot = `<span class="dot"></span>`;
+  return `<span class="badge ${cls}">${dot}${esc(labelStatus(s))}</span>`;
+}
+
+function badgePlan(p) {
+  const cls = p === 'enterprise' ? 'enterprise' : p === 'staff' ? 'staff' : 'starter';
+  const label = p ? (p.charAt(0).toUpperCase() + p.slice(1)) : 'Starter';
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('panel').style.display = 'none';
+}
+
+function showPanel() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+}
+
+async function loadStats(token) {
+  showPanel();
+  document.getElementById('panel-loading').style.display = 'block';
+  document.getElementById('panel-content').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/vendor/stats', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      showLogin();
+      return;
+    }
+    if (!res.ok) throw new Error('Error al cargar datos');
+    const data = await res.json();
+    renderDash(data);
+  } catch (e) {
+    document.getElementById('panel-loading').innerHTML =
+      `<p style="color:var(--r);padding:60px;text-align:center">Error al cargar: ${esc(e.message)}</p>`;
+  }
+}
+
+function renderDash(data) {
+  const { vendor, referred_count, paying_count, commission_total, commission_month, new_this_month, accounts } = data;
+
+  // Topbar
+  document.getElementById('topbar-name').innerHTML = `Hola, <span>${esc(vendor.name)}</span>`;
+
+  // Commission info
+  document.getElementById('commission-pct-label').textContent = (vendor.commission_pct || 20) + '%';
+
+  // Stats
+  document.getElementById('s-month').textContent   = fmtMoney(commission_month);
+  document.getElementById('s-new').textContent     = new_this_month;
+  document.getElementById('s-total').textContent   = fmtMoney(commission_total);
+  document.getElementById('s-paying').textContent  = paying_count;
+  document.getElementById('s-new-sub').textContent = new_this_month + ' nueva' + (new_this_month !== 1 ? 's' : '') + ' conversión' + (new_this_month !== 1 ? 'es' : '');
+  document.getElementById('s-referred-sub').textContent = 'de ' + referred_count + ' referida' + (referred_count !== 1 ? 's' : '') + ' en total';
+
+  // Accounts table
+  const tbody = document.getElementById('accounts-tbody');
+  if (!accounts || accounts.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Todavía no tenés cuentas referidas</td></tr>';
+  } else {
+    tbody.innerHTML = accounts.map(a => {
+      const commCell = a.is_paying
+        ? `<span class="commission-cell">${fmtMoney(a.commission_earned)}</span>`
+        : `<span class="commission-cell none">—</span>`;
+      return `<tr>
+        <td style="font-weight:600">${esc(a.name)}<br><span style="color:var(--g);font-size:12px;font-weight:400">${esc(a.email)}</span></td>
+        <td>${badgePlan(a.filo_plan)}</td>
+        <td>${badgeStatus(a.subscription_status)}</td>
+        <td>${commCell}</td>
+        <td style="color:var(--g)">${fmtDate(a.created_at)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('panel-loading').style.display = 'none';
+  document.getElementById('panel-content').style.display = 'block';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  const btn   = document.getElementById('login-btn');
+  const spin  = document.getElementById('login-spinner');
+
+  errEl.style.display = 'none';
+  if (!email || !pass) {
+    errEl.textContent = 'Completá email y contraseña';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  spin.style.display = 'block';
+
+  try {
+    const res = await fetch('/api/vendor/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Error al iniciar sesión';
+      errEl.style.display = 'block';
+      return;
+    }
+    localStorage.setItem(TOKEN_KEY, data.token);
+    await loadStats(data.token);
+  } catch (e) {
+    errEl.textContent = 'Error de conexión. Intentá de nuevo.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    spin.style.display = 'none';
+  }
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  showLogin();
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-pass').value  = '';
+}
+
+// Init
+(async function init() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    await loadStats(token);
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>

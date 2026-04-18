@@ -152,15 +152,16 @@ router.get('/vendors/:id/accounts', adminAuth, async (req, res) => {
 
 // POST /api/admin/vendors
 router.post('/vendors', adminAuth, async (req, res) => {
-  const { name, email, code, commission_pct } = req.body;
+  const { name, email, code, commission_pct, password } = req.body;
   if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
   const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
   try {
     const exists = await pool.query('SELECT id FROM vendors WHERE code=$1', [codeNorm]);
     if (exists.rows.length) return res.status(400).json({ error: 'Ya existe un vendedor con ese código' });
+    const passwordHash = password ? await bcrypt.hash(password, 12) : null;
     const result = await pool.query(
-      'INSERT INTO vendors (name, email, code, commission_pct) VALUES ($1,$2,$3,$4) RETURNING *',
-      [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20]
+      'INSERT INTO vendors (name, email, code, commission_pct, password) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20, passwordHash]
     );
     res.json({ vendor: result.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -168,16 +169,24 @@ router.post('/vendors', adminAuth, async (req, res) => {
 
 // PUT /api/admin/vendors/:id
 router.put('/vendors/:id', adminAuth, async (req, res) => {
-  const { name, email, code, commission_pct } = req.body;
+  const { name, email, code, commission_pct, password } = req.body;
   if (!name || !code) return res.status(400).json({ error: 'Nombre y código son requeridos' });
   const codeNorm = code.trim().toUpperCase().replace(/\s+/g, '');
   try {
     const conflict = await pool.query('SELECT id FROM vendors WHERE code=$1 AND id<>$2', [codeNorm, req.params.id]);
     if (conflict.rows.length) return res.status(400).json({ error: 'Ese código ya está en uso por otro vendedor' });
-    const result = await pool.query(
-      'UPDATE vendors SET name=$1, email=$2, code=$3, commission_pct=$4 WHERE id=$5 RETURNING *',
-      [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20, req.params.id]
-    );
+    const params = [name.trim(), email?.trim() || null, codeNorm, commission_pct || 20];
+    let query;
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      params.push(passwordHash);
+      params.push(req.params.id);
+      query = 'UPDATE vendors SET name=$1, email=$2, code=$3, commission_pct=$4, password=$5 WHERE id=$6 RETURNING *';
+    } else {
+      params.push(req.params.id);
+      query = 'UPDATE vendors SET name=$1, email=$2, code=$3, commission_pct=$4 WHERE id=$5 RETURNING *';
+    }
+    const result = await pool.query(query, params);
     if (!result.rows.length) return res.status(404).json({ error: 'Vendedor no encontrado' });
     res.json({ vendor: result.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
