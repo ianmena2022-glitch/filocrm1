@@ -83,6 +83,12 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .form-field input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;transition:border-color .2s;outline:none}
 .form-field input:focus{border-color:var(--y);background:rgba(255,209,0,.05)}
 .form-field input::placeholder{color:#4a5a75}
+/* Phone prefix row */
+.phone-input-row{display:flex;gap:8px;align-items:stretch}
+.phone-input-row input{width:auto;flex:1}
+.phone-prefix-select{flex-shrink:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:0 10px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none;cursor:pointer;transition:border-color .2s;-webkit-appearance:none;appearance:none;text-align:center}
+.phone-prefix-select:focus{border-color:var(--y);background:rgba(255,209,0,.05)}
+.phone-prefix-select option{background:#1a1a2e;color:var(--w)}
 
 /* RESUMEN */
 .summary{background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.2);border-radius:12px;padding:18px}
@@ -206,8 +212,23 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         </div>
         <div class="form-field">
           <label>Tu WhatsApp</label>
-          <input type="tel" id="member-phone" placeholder="5491100000000" inputmode="numeric"
-            style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .2s">
+          <div class="phone-input-row">
+            <select id="member-phone-prefix" class="phone-prefix-select">
+              <option value="54">🇦🇷 +54</option>
+              <option value="55">🇧🇷 +55</option>
+              <option value="56">🇨🇱 +56</option>
+              <option value="598">🇺🇾 +598</option>
+              <option value="595">🇵🇾 +595</option>
+              <option value="591">🇧🇴 +591</option>
+              <option value="51">🇵🇪 +51</option>
+              <option value="57">🇨🇴 +57</option>
+              <option value="58">🇻🇪 +58</option>
+              <option value="593">🇪🇨 +593</option>
+              <option value="52">🇲🇽 +52</option>
+            </select>
+            <input type="tel" id="member-phone" placeholder="9 11 XXXX XXXX" inputmode="numeric"
+              style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;color:var(--w);font-size:15px;font-family:'Barlow',sans-serif;outline:none;transition:border-color .2s">
+          </div>
         </div>
         <div id="member-verify-error" class="error-banner"></div>
       </div>
@@ -254,8 +275,22 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         <div class="card-title">👤 Tus datos</div>
         <div class="form-field">
           <label>Tu WhatsApp</label>
-          <input type="tel" id="client-phone" placeholder="5491100000000" autocomplete="tel" inputmode="numeric" oninput="formatPhoneInput(this)">
-          <div style="font-size:11px;color:#4a5a75;margin-top:5px">Formato: <strong style="color:rgba(255,255,255,.5)">+54 9 11 XXXX-XXXX</strong> — ingresá solo números sin espacios ni guiones</div>
+          <div class="phone-input-row">
+            <select id="phone-prefix" class="phone-prefix-select">
+              <option value="54">🇦🇷 +54</option>
+              <option value="55">🇧🇷 +55</option>
+              <option value="56">🇨🇱 +56</option>
+              <option value="598">🇺🇾 +598</option>
+              <option value="595">🇵🇾 +595</option>
+              <option value="591">🇧🇴 +591</option>
+              <option value="51">🇵🇪 +51</option>
+              <option value="57">🇨🇴 +57</option>
+              <option value="58">🇻🇪 +58</option>
+              <option value="593">🇪🇨 +593</option>
+              <option value="52">🇲🇽 +52</option>
+            </select>
+            <input type="tel" id="client-phone" placeholder="9 11 XXXX XXXX" autocomplete="tel" inputmode="numeric" oninput="formatPhoneInput(this)">
+          </div>
           <div id="phone-error" style="font-size:12px;color:#FF4343;margin-top:4px;display:none"></div>
         </div>
         <div class="form-field">
@@ -501,10 +536,10 @@ function goToMemberLogin() {
 }
 
 async function verifyMember() {
-  const phone = document.getElementById('member-phone').value.trim().replace(/\D/g, '');
+  const phone = getFullPhone('member-phone', 'member-phone-prefix');
   const errEl = document.getElementById('member-verify-error');
   errEl.style.display = 'none';
-  if (phone.length < 10) {
+  if (phone.replace(/\D/g,'').length < 10) {
     errEl.textContent = 'Ingresá un número de WhatsApp válido';
     errEl.style.display = 'block';
     return;
@@ -691,13 +726,13 @@ function goToForm() {
   // Pre-completar datos si es flujo miembro
   if (isMemberFlow && memberData) {
     document.getElementById('client-name').value = memberData.name || '';
-    document.getElementById('client-phone').value = memberData.phone || '';
+    setPhoneInputValue(memberData.phone || '', 'client-phone', 'phone-prefix');
   }
 
   // Si ya tiene teléfono cargado (autocomplete), chequear puntos automáticamente
   setTimeout(async () => {
-    const phone = document.getElementById('client-phone').value.trim().replace(/\D/g, '');
-    if (phone.length >= 8 && slug && !clientPointsData && !isMemberFlow) {
+    const phone = getFullPhone('client-phone', 'phone-prefix');
+    if (phone.replace(/\D/g,'').length >= 8 && slug && !clientPointsData && !isMemberFlow) {
       await checkPhonePoints(phone);
     }
   }, 500);
@@ -720,10 +755,10 @@ let _pendingReserveData = null;
 
 async function confirmReservation() {
   const name = document.getElementById('client-name').value.trim();
-  const phone = document.getElementById('client-phone').value.trim();
+  const phone = getFullPhone('client-phone', 'phone-prefix');
   const address = document.getElementById('client-address')?.value.trim() || '';
-  if (!phone) { showError('El número de WhatsApp es obligatorio'); return; }
   const phoneClean = phone.replace(/\D/g, '');
+  if (!phoneClean) { showError('El número de WhatsApp es obligatorio'); return; }
   if (phoneClean.length < 10) { showError('Ingresá un número de WhatsApp válido'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
   if (shopData?.home_service && !address) { showError('El domicilio es obligatorio para servicio a domicilio'); return; }
@@ -967,34 +1002,54 @@ function goBackFromForm() {
 }
 
 // Check points when phone is entered
-document.getElementById('client-phone')?.addEventListener('blur'
-, async function() {
-  const phone = this.value.trim().replace(/\D/g, '');
+document.getElementById('client-phone')?.addEventListener('blur', async function() {
+  const phone = getFullPhone('client-phone', 'phone-prefix');
   const activeSlug = currentBranchSlug || slug;
-  if (phone.length < 8 || !activeSlug) return;
+  if (phone.replace(/\D/g,'').length < 8 || !activeSlug) return;
   clientPointsData = null;
   await checkPhonePoints(phone);
 });
 
+// Construye el número completo: prefijo del select + número local
+function getFullPhone(inputId, prefixId) {
+  prefixId = prefixId || 'phone-prefix';
+  const prefix = (document.getElementById(prefixId)?.value || '54');
+  const local  = (document.getElementById(inputId)?.value || '').replace(/\D/g, '');
+  return prefix + local;
+}
+
+// Llena el input dividiendo el teléfono almacenado en prefijo + número local
+function setPhoneInputValue(fullPhone, inputId, prefixId) {
+  inputId  = inputId  || 'client-phone';
+  prefixId = prefixId || 'phone-prefix';
+  const digits = (fullPhone || '').replace(/\D/g, '');
+  // Intentar prefijos LATAM, más largos primero
+  const PREFIXES = ['598','595','593','591','54','55','56','57','58','52','51'];
+  for (const p of PREFIXES) {
+    if (digits.startsWith(p)) {
+      const sel = document.getElementById(prefixId);
+      if (sel) sel.value = p;
+      const inp = document.getElementById(inputId);
+      if (inp) inp.value = digits.slice(p.length);
+      return;
+    }
+  }
+  // Sin prefijo conocido: poner todo en el input
+  const inp = document.getElementById(inputId);
+  if (inp) inp.value = digits;
+}
+
 function formatPhoneInput(input) {
-  // Permitir solo dígitos y el + al inicio
-  let val = input.value.replace(/[^\d+]/g, '');
-  // Si empieza con 0, sugerir reemplazar con 549
+  // Solo dígitos (el código de país ya está en el select)
   const phoneErr = document.getElementById('phone-error');
-  if (val.startsWith('0')) {
-    phoneErr.textContent = 'No incluyas el 0 inicial. Ejemplo: 5491100000000';
-    phoneErr.style.display = 'block';
-  } else if (val.startsWith('+')) {
-    val = val.slice(1); // quitar el + para normalizar
-    input.value = val;
-    phoneErr.style.display = 'none';
-  } else if (val.length > 0 && !val.startsWith('54')) {
-    phoneErr.textContent = 'Debe empezar con 549 (código país + área). Ejemplo: 5491100000000';
-    phoneErr.style.display = 'block';
-  } else {
-    phoneErr.style.display = 'none';
+  let val = input.value.replace(/\D/g, '');
+  // Si pegaron el número completo con el prefijo argentino, quitarlo
+  const prefix = document.getElementById('phone-prefix')?.value || '54';
+  if (val.startsWith(prefix) && val.length > prefix.length + 5) {
+    val = val.slice(prefix.length);
   }
   input.value = val;
+  if (phoneErr) phoneErr.style.display = 'none';
 }
 
 document.getElementById('client-phone')?.addEventListener('input', function() {
