@@ -416,13 +416,15 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
             const today = new Date().toISOString().split('T')[0];
             const apptRow = await pool.query('SELECT shop_id, client_name FROM appointments WHERE id=$1', [pending.id]);
             if (apptRow.rows.length) {
+              const shopCfg = await pool.query('SELECT sena_payment_method FROM shops WHERE id=$1', [apptRow.rows[0].shop_id]);
+              const senaPayMethod = shopCfg.rows[0]?.sena_payment_method || 'transfer';
               await pool.query(
                 `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
-                 VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')
+                 VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, $6)
                  ON CONFLICT DO NOTHING`,
                 [apptRow.rows[0].shop_id, pending.amount,
                  `Seña - ${apptRow.rows[0].client_name || 'Sin nombre'}`,
-                 today, pending.id]
+                 today, pending.id, senaPayMethod]
               );
             }
           } catch (cajaErr) {

@@ -2496,6 +2496,13 @@ select.form-input { padding-right: 32px; }
                 <label>Porcentaje de seña (% del servicio)</label>
                 <input type="number" id="cfg-sena-pct" placeholder="30" min="5" max="100" style="max-width:120px">
               </div>
+              <div class="form-field" style="margin-bottom:0">
+                <label>Método de pago en caja</label>
+                <select id="cfg-sena-payment-method" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none;cursor:pointer;transition:border-color .2s">
+                  <option value="transfer">📲 Transferencia</option>
+                </select>
+                <div style="font-size:11px;color:var(--gray);margin-top:4px">Con qué método queda registrada la seña en la caja del día.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -4779,7 +4786,7 @@ function showPaymentPopup(apptId) {
   const remaining = parseFloat(appt.price || 0) - senaAmt;
   const senaNote = hasSena
     ? `<div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:16px">
-        💸 Seña cobrada: <strong>$${senaAmt.toLocaleString('es-AR')}</strong> (transfer)<br>
+        💸 Seña cobrada: <strong>$${senaAmt.toLocaleString('es-AR')}</strong> (${(() => { const m = (window._paymentMethods||[]).find(x=>x.key===(currentShop?.sena_payment_method||'transfer')); return m ? m.icon+' '+m.label : 'transfer'; })()})<br>
         <span style="color:var(--yellow);font-weight:700">Cobrar ahora: $${remaining.toLocaleString('es-AR')}</span>
        </div>`
     : '';
@@ -5812,6 +5819,17 @@ async function loadSettings() {
     const pctEl   = document.getElementById('cfg-sena-pct');
     if (aliasEl) aliasEl.value = settings.sena_alias || '';
     if (pctEl)   pctEl.value   = settings.sena_pct   || 30;
+    // Poblar select de método de pago para señas
+    const senaPaySel = document.getElementById('cfg-sena-payment-method');
+    if (senaPaySel) {
+      const methods = window._paymentMethods || [];
+      if (methods.length) {
+        senaPaySel.innerHTML = methods.map(m =>
+          `<option value="${m.key}">${m.icon} ${escHtml(m.label)}</option>`
+        ).join('');
+      }
+      senaPaySel.value = settings.sena_payment_method || 'transfer';
+    }
 
     // Horarios
     const schedule = settings.schedule ? JSON.parse(settings.schedule) : null;
@@ -5943,9 +5961,10 @@ async function saveSettings() {
       completado:   document.getElementById('tpl-completado').value.trim()
     }),
     home_service: document.getElementById('toggle-home-service').checked,
-    sena_enabled: document.getElementById('toggle-sena')?.checked || false,
-    sena_pct:     parseInt(document.getElementById('cfg-sena-pct')?.value) || 30,
-    sena_alias:   document.getElementById('cfg-sena-alias')?.value.trim() || null
+    sena_enabled:          document.getElementById('toggle-sena')?.checked || false,
+    sena_pct:              parseInt(document.getElementById('cfg-sena-pct')?.value) || 30,
+    sena_alias:            document.getElementById('cfg-sena-alias')?.value.trim() || null,
+    sena_payment_method:   document.getElementById('cfg-sena-payment-method')?.value || 'transfer'
   };
   try {
     const res = await api('PUT', '/settings', body);
@@ -6001,12 +6020,13 @@ async function toggleSenaEnabled() {
   if (enabled) { slider.style.background = 'var(--yellow)'; thumb.style.left = '29px'; thumb.style.background = 'var(--dark)'; }
   else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
 
-  // Guardar enabled + alias + pct juntos en una sola llamada
-  const alias = (document.getElementById('cfg-sena-alias')?.value.trim().replace(/\D/g, '')) || null;
-  const pct   = parseInt(document.getElementById('cfg-sena-pct')?.value) || 30;
+  // Guardar enabled + alias + pct + método juntos en una sola llamada
+  const alias          = (document.getElementById('cfg-sena-alias')?.value.trim().replace(/\D/g, '')) || null;
+  const pct            = parseInt(document.getElementById('cfg-sena-pct')?.value) || 30;
+  const senaPayMethod  = document.getElementById('cfg-sena-payment-method')?.value || 'transfer';
   try {
-    await api('PUT', '/settings', { sena_enabled: enabled, sena_alias: alias, sena_pct: pct });
-    if (currentShop) { currentShop.sena_enabled = enabled; currentShop.sena_alias = alias; currentShop.sena_pct = pct; }
+    await api('PUT', '/settings', { sena_enabled: enabled, sena_alias: alias, sena_pct: pct, sena_payment_method: senaPayMethod });
+    if (currentShop) { currentShop.sena_enabled = enabled; currentShop.sena_alias = alias; currentShop.sena_pct = pct; currentShop.sena_payment_method = senaPayMethod; }
     showToast(enabled ? '💸' : '✂️', enabled ? 'Señas activadas' : 'Señas desactivadas', '');
   } catch(e) { showToast('❌', 'Error', e.message); }
 }

@@ -435,17 +435,20 @@ router.put('/:id/sena', auth, async (req, res) => {
 
     const appt = result.rows[0];
 
-    // Al confirmar seña → registrar como ingreso en caja (transfer del día)
+    // Al confirmar seña → registrar como ingreso en caja
     if (action === 'confirm' && appt.sena_amount > 0) {
       try {
         const today = new Date().toISOString().split('T')[0];
+        // Usar el método de pago configurado para señas, o 'transfer' como default
+        const shopCfg = await pool.query('SELECT sena_payment_method FROM shops WHERE id=$1', [appt.shop_id]);
+        const senaPayMethod = shopCfg.rows[0]?.sena_payment_method || 'transfer';
         await pool.query(
           `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
-           VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, 'transfer')
+           VALUES ($1, $2, 'otros', $3, $4, TRUE, 'sena', $5, $6)
            ON CONFLICT DO NOTHING`,
           [appt.shop_id, parseFloat(appt.sena_amount),
            `Seña - ${appt.client_name || 'Sin nombre'}`,
-           today, appt.id]
+           today, appt.id, senaPayMethod]
         );
       } catch (senaErr) {
         // No fallar la confirmación si el registro en caja falla
