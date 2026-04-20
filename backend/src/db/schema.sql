@@ -372,3 +372,17 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS first_payment_at TIMESTAMPTZ DEFAULT 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_shops_vendor ON shops(vendor_id);
 
+-- Fila digital
+CREATE TABLE IF NOT EXISTS queue_entries (
+  id           SERIAL PRIMARY KEY,
+  shop_id      INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  client_name  VARCHAR(255) NOT NULL,
+  client_phone VARCHAR(50),
+  status       VARCHAR(20) DEFAULT 'waiting',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  called_at    TIMESTAMPTZ,
+  served_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_queue_shop ON queue_entries(shop_id, status, created_at);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS queue_paused BOOLEAN DEFAULT FALSE;
+

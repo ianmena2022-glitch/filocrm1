@@ -1346,6 +1346,10 @@ select.form-input { padding-right: 32px; }
       <div class="nav-item" onclick="showSection('membresias')" title="Membresías">
         <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       </div>
+      <div class="nav-item" id="nav-fila" onclick="showSection('fila')" title="Fila Digital" style="position:relative">
+        <div id="nav-fila-badge" style="display:none;position:absolute;top:5px;right:5px;background:#ff4343;color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px"></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+      </div>
     </div>
       <div class="nav-item" id="nav-equipo" onclick="showSection('equipo')" title="Mi Equipo" style="display:none">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
@@ -2115,6 +2119,53 @@ select.form-input { padding-right: 32px; }
         </div>
       </div>
     </div>
+
+    <!-- ─── FILA DIGITAL ─── -->
+    <section id="sec-fila" class="section" style="display:none">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1 class="topbar-title">Fila Digital</h1>
+          <p class="topbar-sub">Gestioná la fila de clientes sin turno</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="fila-pause-btn" onclick="toggleQueuePause()" class="btn-add" style="background:rgba(255,255,255,.07);color:var(--white);border:1px solid rgba(255,255,255,.12)">⏸ Pausar fila</button>
+          <button onclick="callNextInQueue()" class="btn-add" id="fila-next-btn" style="font-size:15px;padding:10px 22px">▶ Llamar siguiente</button>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Esperando</div>
+          <div id="fila-count-waiting" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--yellow)">0</div>
+        </div>
+        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Atendidos hoy</div>
+          <div id="fila-count-served" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#4ade80">0</div>
+        </div>
+        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Espera promedio</div>
+          <div id="fila-avg-wait" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div id="fila-link-card" style="flex:2;min-width:200px;background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.2);border-radius:10px;padding:14px 18px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:6px">Link para clientes</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="fila-link-text" style="font-size:12px;color:var(--gray);word-break:break-all;flex:1"></span>
+            <button onclick="copyFilaLink()" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.08);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📋 Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue list -->
+      <div id="fila-list" style="display:flex;flex-direction:column;gap:8px">
+        <div style="text-align:center;padding:40px;color:var(--gray);font-size:14px">Cargando fila...</div>
+      </div>
+
+      <!-- Clear queue -->
+      <div style="margin-top:16px;text-align:right">
+        <button onclick="clearQueue()" style="padding:8px 16px;border-radius:8px;border:1px solid rgba(255,67,67,.25);background:rgba(255,67,67,.06);color:#ff8080;font-size:12px;font-weight:600;cursor:pointer">🗑 Limpiar fila</button>
+      </div>
+    </section>
 
     <!-- ─── ENTERPRISE ─── -->
     <section id="sec-enterprise" class="section" style="display:none">
@@ -3713,9 +3764,13 @@ function showSection(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name).classList.add('active');
 
-  const navMap = { agenda: 0, clientes: 1, dashboard: 2, motores: 3, membresias: 4, equipo: 5 };
-  const navItems = document.querySelectorAll('.nav-item');
-  if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
+  if (name === 'fila') {
+    document.getElementById('nav-fila')?.classList.add('active');
+  } else {
+    const navMap = { agenda: 0, clientes: 1, dashboard: 2, motores: 3, membresias: 4, equipo: 5 };
+    const navItems = document.querySelectorAll('.nav-item');
+    if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
+  }
 
   // Botón Ajustes: marcar activo solo en configuración
   document.querySelectorAll('.btn-ajustes').forEach(btn => {
@@ -3729,6 +3784,161 @@ function showSection(name) {
   if (name === 'configuracion') loadSubscriptionStatus();
   if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
   if (name === 'equipo') loadEquipo();
+  if (name === 'fila') loadQueue();
+}
+
+// ─── FILA DIGITAL ───
+let _queuePollInterval = null;
+let _queuePaused = false;
+let _queueSlug = '';
+
+async function loadQueue() {
+  try {
+    const data = await api('GET', '/queue');
+    _queuePaused = data.paused || false;
+    _queueSlug   = data.shop_slug || '';
+    renderQueueList(data);
+    updateQueuePauseBtn();
+    // badge nav
+    const waiting = (data.entries || []).filter(e => e.status === 'waiting').length;
+    const badge = document.getElementById('nav-fila-badge');
+    if (badge) {
+      if (waiting > 0) { badge.textContent = waiting; badge.style.display = 'flex'; }
+      else badge.style.display = 'none';
+    }
+    // link
+    if (_queueSlug) {
+      const link = `${window.location.origin}/fila/${_queueSlug}`;
+      const el = document.getElementById('fila-link-text');
+      if (el) el.textContent = link;
+    }
+    // start polling if not already
+    if (!_queuePollInterval) {
+      _queuePollInterval = setInterval(() => {
+        if (document.getElementById('sec-fila')?.classList.contains('active')) loadQueue();
+        else { clearInterval(_queuePollInterval); _queuePollInterval = null; }
+      }, 10000);
+    }
+  } catch(e) { console.error('loadQueue error', e); }
+}
+
+function renderQueueList(data) {
+  const container = document.getElementById('fila-list');
+  if (!container) return;
+  const entries = data.entries || [];
+  const waiting = entries.filter(e => e.status === 'waiting');
+  const called  = entries.filter(e => e.status === 'called');
+  const served  = (data.served_today || 0);
+  document.getElementById('fila-count-waiting').textContent = waiting.length;
+  document.getElementById('fila-count-served').textContent  = served;
+  const avg = data.avg_wait_min ? Math.round(data.avg_wait_min) + ' min' : '—';
+  document.getElementById('fila-avg-wait').textContent = avg;
+
+  if (!entries.length) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray);font-size:14px">La fila está vacía. Compartí el link con tus clientes.</div>`;
+    return;
+  }
+
+  let html = '';
+  if (called.length) {
+    html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4ade80;margin-bottom:4px;padding:0 4px">EN ATENCIÓN</div>`;
+    html += called.map(e => queueEntryHtml(e, true)).join('');
+    html += `<div style="height:8px"></div>`;
+  }
+  if (waiting.length) {
+    html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:4px;padding:0 4px">ESPERANDO</div>`;
+    html += waiting.map((e, i) => queueEntryHtml(e, false, i + 1)).join('');
+  }
+  container.innerHTML = html;
+}
+
+function queueEntryHtml(entry, isCalled, position) {
+  const mins = Math.round((Date.now() - new Date(entry.created_at).getTime()) / 60000);
+  const waitStr = mins < 1 ? 'Ahora mismo' : mins === 1 ? '1 min' : `${mins} min`;
+  const phoneHtml = entry.client_phone
+    ? `<span style="font-size:11px;color:var(--gray)">${entry.client_phone}</span>`
+    : `<span style="font-size:11px;color:rgba(255,255,255,.2)">Sin teléfono</span>`;
+  const posHtml = isCalled
+    ? `<span style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80;font-weight:700">✂</span>`
+    : `<span style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--yellow);min-width:24px;text-align:center">${position}</span>`;
+
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${isCalled ? 'rgba(74,222,128,.07)' : 'rgba(255,255,255,.03)'};border:1px solid ${isCalled ? 'rgba(74,222,128,.2)' : 'rgba(255,255,255,.07)'};border-radius:10px">
+      ${posHtml}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${escHtml(entry.client_name)}</div>
+        ${phoneHtml}
+      </div>
+      <div style="font-size:11px;color:var(--gray);text-align:right;flex-shrink:0">
+        <div>${waitStr} esperando</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${isCalled
+          ? `<button onclick="serveQueueEntry(${entry.id})" title="Atendido" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.08);color:#4ade80;font-size:11px;font-weight:700;cursor:pointer">✓ Listo</button>`
+          : ''
+        }
+        <button onclick="removeQueueEntry(${entry.id})" title="Quitar de la fila" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,67,67,.2);background:rgba(255,67,67,.06);color:#ff8080;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+    </div>`;
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function callNextInQueue() {
+  const btn = document.getElementById('fila-next-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const data = await api('POST', '/queue/next');
+    if (!data.ok) { showToast(data.message || 'No hay nadie en la fila'); }
+    else { showToast(`📣 Llamando a ${data.entry?.client_name}`); }
+    loadQueue();
+  } catch(e) { showToast('Error al llamar siguiente'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Llamar siguiente'; } }
+}
+
+async function serveQueueEntry(id) {
+  try { await api('POST', `/queue/serve/${id}`); loadQueue(); } catch(e) {}
+}
+
+async function removeQueueEntry(id) {
+  try { await api('POST', `/queue/remove/${id}`); loadQueue(); } catch(e) {}
+}
+
+async function toggleQueuePause() {
+  try {
+    const data = await api('POST', '/queue/pause');
+    _queuePaused = data.paused;
+    updateQueuePauseBtn();
+    loadQueue();
+  } catch(e) {}
+}
+
+function updateQueuePauseBtn() {
+  const btn = document.getElementById('fila-pause-btn');
+  if (!btn) return;
+  if (_queuePaused) {
+    btn.textContent = '▶ Reanudar fila';
+    btn.style.background = 'rgba(255,209,0,.12)';
+    btn.style.color = 'var(--yellow)';
+    btn.style.borderColor = 'rgba(255,209,0,.3)';
+  } else {
+    btn.textContent = '⏸ Pausar fila';
+    btn.style.background = 'rgba(255,255,255,.07)';
+    btn.style.color = 'var(--white)';
+    btn.style.borderColor = 'rgba(255,255,255,.12)';
+  }
+}
+
+async function clearQueue() {
+  if (!confirm('¿Limpiar toda la fila? Se marcarán todos como "salió".')) return;
+  try { await api('DELETE', '/queue'); loadQueue(); } catch(e) {}
+}
+
+function copyFilaLink() {
+  const slug = _queueSlug;
+  if (!slug) return;
+  const link = `${window.location.origin}/fila/${slug}`;
+  navigator.clipboard.writeText(link).then(() => showToast('Link copiado ✓'));
 }
 
 // ─── DASHBOARD ───

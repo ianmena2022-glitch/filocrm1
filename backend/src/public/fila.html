@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fila Digital — FILO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --yellow: #FFD100;
+      --dark:   #050d18;
+      --white:  #fff;
+      --gray:   #7a8fa8;
+      --card:   #0d1929;
+      --border: rgba(255,255,255,.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--dark);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+      overflow: hidden;
+    }
+    .shop-name {
+      font-family: 'Oswald', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--yellow);
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .logo-bar {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .logo-bar svg {
+      width: 32px;
+      height: 32px;
+      fill: var(--yellow);
+    }
+    h2 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--gray);
+      text-align: center;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+    /* Inputs */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 12px 14px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 10px;
+      color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field input::placeholder { color: rgba(255,255,255,.25); }
+    .field input:focus { border-color: rgba(255,209,0,.5); }
+    .field .hint {
+      font-size: 11px;
+      color: var(--gray);
+      margin-top: 5px;
+    }
+    /* Buttons */
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: var(--yellow);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      margin-top: 8px;
+    }
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary:active { transform: scale(.98); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary {
+      width: 100%;
+      padding: 11px;
+      background: rgba(255,255,255,.05);
+      color: var(--gray);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Barlow', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background .15s;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,.09); color: var(--white); }
+    /* Spinner */
+    .spinner-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 0;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,209,0,.2);
+      border-top-color: var(--yellow);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Big position number */
+    .pos-number {
+      font-family: 'Oswald', sans-serif;
+      font-size: 88px;
+      font-weight: 700;
+      color: var(--yellow);
+      line-height: 1;
+      text-align: center;
+    }
+    .pos-label {
+      text-align: center;
+      font-size: 14px;
+      color: var(--gray);
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+    /* Dots progress indicator */
+    .dots-wrap {
+      display: flex;
+      justify-content: center;
+      gap: 7px;
+      margin: 18px 0;
+      flex-wrap: wrap;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.12);
+    }
+    .dot.dot-you { background: var(--yellow); box-shadow: 0 0 6px rgba(255,209,0,.5); }
+    .dot.dot-ahead { background: rgba(255,255,255,.3); }
+    /* Wait info */
+    .wait-info {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--white);
+      margin-bottom: 6px;
+    }
+    .wait-sub {
+      text-align: center;
+      font-size: 13px;
+      color: var(--gray);
+      margin-bottom: 24px;
+    }
+    /* Called state */
+    .called-wrap {
+      text-align: center;
+      padding: 10px 0;
+    }
+    .called-icon {
+      font-size: 56px;
+      display: block;
+      margin-bottom: 10px;
+      animation: pop .4s cubic-bezier(.17,.67,.83,.67) both;
+    }
+    @keyframes pop {
+      0% { transform: scale(0.5); opacity: 0; }
+      70% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .called-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 38px;
+      font-weight: 700;
+      color: #4ade80;
+      margin-bottom: 8px;
+    }
+    .called-sub {
+      font-size: 15px;
+      color: var(--gray);
+    }
+    /* Confetti */
+    .confetti-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .confetti-piece {
+      position: absolute;
+      top: -12px;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      animation: confetti-fall linear forwards;
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+      90%  { opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+    /* Paused */
+    .paused-icon {
+      font-size: 48px;
+      text-align: center;
+      display: block;
+      margin-bottom: 12px;
+    }
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+    /* Poll indicator */
+    .poll-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .3; }
+    }
+    .polling-text {
+      font-size: 11px;
+      color: var(--gray);
+      text-align: center;
+      margin-top: 16px;
+    }
+    /* Served / left */
+    .end-icon {
+      font-size: 52px;
+      text-align: center;
+      display: block;
+      margin-bottom: 14px;
+    }
+    .end-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .end-sub {
+      text-align: center;
+      font-size: 14px;
+      color: var(--gray);
+    }
+    .err-msg {
+      text-align: center;
+      font-size: 14px;
+      color: #ff8080;
+      padding: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="confetti-container" id="confetti-container"></div>
+
+  <div class="card" id="card">
+    <div class="logo-bar">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 2a.5.5 0 0 0-.5.5v19a.5.5 0 0 0 1 0V2.5a.5.5 0 0 0-.5-.5zM6 7H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zm9 0h-3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/>
+      </svg>
+    </div>
+    <div class="shop-name" id="shop-name-display">FILO</div>
+
+    <!-- LOADING -->
+    <div id="state-loading">
+      <div class="spinner-wrap">
+        <div class="spinner"></div>
+        <span style="font-size:13px;color:var(--gray)">Cargando fila...</span>
+      </div>
+    </div>
+
+    <!-- JOIN -->
+    <div id="state-join" style="display:none">
+      <h2>Anotate en la fila</h2>
+      <p class="subtitle">Sin turno, sin esperar parado. Te avisamos cuando es tu momento.</p>
+      <div class="field">
+        <label>Tu nombre *</label>
+        <input type="text" id="input-name" placeholder="Ej: Lucas García" autocomplete="given-name" maxlength="80">
+      </div>
+      <div class="field">
+        <label>Teléfono (WhatsApp)</label>
+        <input type="tel" id="input-phone" placeholder="Ej: 1155667788" autocomplete="tel" maxlength="30">
+        <div class="hint">Para recibir aviso por WhatsApp cuando sea tu turno</div>
+      </div>
+      <button class="btn-primary" id="btn-join" onclick="joinQueue()">Anotarme en la fila ✂️</button>
+    </div>
+
+    <!-- PAUSED -->
+    <div id="state-paused" style="display:none">
+      <span class="paused-icon">🕐</span>
+      <h2 style="margin-bottom:10px">Fila pausada</h2>
+      <p class="subtitle">La fila está pausada momentáneamente.<br>Volvé en unos minutos.</p>
+    </div>
+
+    <!-- WAITING -->
+    <div id="state-waiting" style="display:none">
+      <p style="text-align:center;font-size:12px;color:var(--gray);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;font-weight:700">Tu posición</p>
+      <div class="pos-number" id="pos-number">—</div>
+      <div class="pos-label" id="pos-label">personas adelante</div>
+
+      <div class="dots-wrap" id="dots-wrap"></div>
+
+      <div class="divider"></div>
+
+      <div class="wait-info" id="wait-info">—</div>
+      <div class="wait-sub">de espera estimado</div>
+
+      <div class="divider"></div>
+
+      <button class="btn-secondary" onclick="leaveQueue()">Salir de la fila</button>
+
+      <div class="polling-text">
+        <span class="poll-dot"></span>Actualizando automáticamente cada 15 seg.
+      </div>
+    </div>
+
+    <!-- CALLED -->
+    <div id="state-called" style="display:none">
+      <div class="called-wrap">
+        <span class="called-icon">💈</span>
+        <div class="called-title">¡Es tu turno!</div>
+        <p class="called-sub">Andá para la barbería ahora.<br>¡Te estamos esperando! ✂️</p>
+      </div>
+    </div>
+
+    <!-- SERVED -->
+    <div id="state-served" style="display:none">
+      <span class="end-icon">🙌</span>
+      <div class="end-title">¡Listo!</div>
+      <p class="end-sub">Gracias por tu visita.<br>¡Hasta la próxima!</p>
+    </div>
+
+    <!-- LEFT -->
+    <div id="state-left" style="display:none">
+      <span class="end-icon">👋</span>
+      <div class="end-title">Saliste de la fila</div>
+      <p class="end-sub">Podés anotarte de nuevo cuando quieras.</p>
+      <button class="btn-primary" style="margin-top:24px" onclick="resetToJoin()">Volver a anotarme</button>
+    </div>
+
+    <!-- ERROR -->
+    <div id="state-error" style="display:none">
+      <span class="end-icon">⚠️</span>
+      <div class="end-title" style="color:#ff8080">Ups</div>
+      <p class="err-msg" id="error-msg">Ocurrió un error. Intentá de nuevo.</p>
+      <button class="btn-primary" style="margin-top:16px" onclick="location.reload()">Reintentar</button>
+    </div>
+  </div>
+
+  <script>
+    // ─── State ───────────────────────────────────────────────────────────────
+    const pathParts = window.location.pathname.split('/');
+    const slug      = pathParts[pathParts.length - 1];
+    const LS_KEY    = 'filaEntry_' + slug;
+
+    let pollInterval = null;
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    function setState(name) {
+      const states = ['loading','join','paused','waiting','called','served','left','error'];
+      states.forEach(s => {
+        const el = document.getElementById('state-' + s);
+        if (el) el.style.display = (s === name) ? 'block' : 'none';
+      });
+      if (name !== 'waiting' && pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      if (name === 'called') {
+        launchConfetti();
+      }
+    }
+
+    function setShopName(name) {
+      if (name) {
+        const el = document.getElementById('shop-name-display');
+        if (el) el.textContent = name;
+        document.title = name + ' — Fila Digital';
+      }
+    }
+
+    async function apiPost(path, body) {
+      const r = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      return r;
+    }
+
+    async function apiGet(path) {
+      return fetch(path);
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    async function init() {
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored) {
+        let parsed;
+        try { parsed = JSON.parse(stored); } catch(e) { parsed = null; }
+        if (parsed && parsed.entry_id) {
+          // Poll current status
+          await pollStatus(parsed.entry_id, true);
+          return;
+        }
+      }
+      // No stored entry — show join or paused
+      await checkQueueStatus();
+    }
+
+    async function checkQueueStatus() {
+      try {
+        const r = await apiGet(`/api/queue/${slug}/status`);
+        if (!r.ok) { setState('join'); return; }
+        const data = await r.json();
+        setShopName(data.shop_name);
+        if (data.queue_paused) {
+          setState('paused');
+        } else {
+          setState('join');
+        }
+      } catch(e) {
+        setState('join');
+      }
+    }
+
+    async function pollStatus(entryId, isInit) {
+      try {
+        const r = await apiGet(`/api/queue/${slug}/status?entry_id=${entryId}`);
+        if (!r.ok) {
+          if (r.status === 404) {
+            localStorage.removeItem(LS_KEY);
+            await checkQueueStatus();
+            return;
+          }
+          if (!isInit) return; // keep polling silently
+          setState('error');
+          return;
+        }
+        const data = await r.json();
+        setShopName(data.shop_name);
+
+        if (data.status === 'called') {
+          setState('called');
+          localStorage.removeItem(LS_KEY);
+          return;
+        }
+        if (data.status === 'served') {
+          setState('served');
+          localStorage.removeItem(LS_KEY);
+          return;
+        }
+        if (data.status === 'left') {
+          setState('left');
+          localStorage.removeItem(LS_KEY);
+          return;
+        }
+
+        // waiting
+        if (data.queue_paused) {
+          setState('paused');
+          return;
+        }
+        renderWaiting(data);
+        if (!pollInterval) {
+          pollInterval = setInterval(() => {
+            const s = localStorage.getItem(LS_KEY);
+            if (!s) { clearInterval(pollInterval); pollInterval = null; return; }
+            let p;
+            try { p = JSON.parse(s); } catch(e) { return; }
+            pollStatus(p.entry_id, false);
+          }, 15000);
+        }
+      } catch(e) {
+        if (isInit) setState('error');
+      }
+    }
+
+    function renderWaiting(data) {
+      setState('waiting');
+      const pos = data.position || 0;
+      const posEl = document.getElementById('pos-number');
+      const lblEl = document.getElementById('pos-label');
+      const waitEl = document.getElementById('wait-info');
+
+      if (posEl) posEl.textContent = pos + '°';
+      if (lblEl) lblEl.textContent = pos === 1 ? 'persona adelante' : 'personas adelante';
+      if (pos === 0 && lblEl) {
+        posEl.textContent = '1°';
+        lblEl.textContent = '¡Sos el siguiente!';
+      }
+
+      const mins = data.estimated_wait_min || 0;
+      if (waitEl) {
+        waitEl.textContent = mins > 0 ? `~${mins} min` : 'Pronto';
+      }
+
+      // Dots
+      const dotsWrap = document.getElementById('dots-wrap');
+      if (dotsWrap) {
+        const total = Math.min(pos + 1, 8);
+        let html = '';
+        for (let i = 0; i < total; i++) {
+          if (i < total - 1) {
+            html += `<div class="dot dot-ahead"></div>`;
+          } else {
+            html += `<div class="dot dot-you" title="Vos"></div>`;
+          }
+        }
+        dotsWrap.innerHTML = html;
+      }
+    }
+
+    // ─── Join ─────────────────────────────────────────────────────────────────
+    async function joinQueue() {
+      const nameEl  = document.getElementById('input-name');
+      const phoneEl = document.getElementById('input-phone');
+      const btn     = document.getElementById('btn-join');
+      const name    = (nameEl?.value || '').trim();
+      const phone   = (phoneEl?.value || '').trim();
+
+      if (!name) {
+        nameEl?.focus();
+        nameEl?.style.setProperty('border-color', '#ff8080');
+        setTimeout(() => nameEl?.style.setProperty('border-color', 'rgba(255,255,255,.1)'), 1500);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Anotando...';
+
+      try {
+        const r = await apiPost(`/api/queue/${slug}/join`, { name, phone: phone || undefined });
+        const data = await r.json();
+
+        if (r.status === 423) {
+          setState('paused');
+          return;
+        }
+        if (!r.ok) {
+          document.getElementById('error-msg').textContent = data.error || 'Error al anotarte. Intentá de nuevo.';
+          setState('error');
+          return;
+        }
+
+        setShopName(data.shop_name);
+        localStorage.setItem(LS_KEY, JSON.stringify({ entry_id: data.entry_id, client_name: data.client_name }));
+
+        renderWaiting({
+          position: data.position,
+          estimated_wait_min: data.estimated_wait_min
+        });
+
+        // Start polling
+        if (!pollInterval) {
+          pollInterval = setInterval(() => {
+            const s = localStorage.getItem(LS_KEY);
+            if (!s) { clearInterval(pollInterval); pollInterval = null; return; }
+            let p;
+            try { p = JSON.parse(s); } catch(e) { return; }
+            pollStatus(p.entry_id, false);
+          }, 15000);
+        }
+      } catch(e) {
+        document.getElementById('error-msg').textContent = 'Error de conexión. Verificá tu internet.';
+        setState('error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Anotarme en la fila ✂️';
+      }
+    }
+
+    // ─── Leave ────────────────────────────────────────────────────────────────
+    function leaveQueue() {
+      localStorage.removeItem(LS_KEY);
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      setState('left');
+    }
+
+    function resetToJoin() {
+      localStorage.removeItem(LS_KEY);
+      checkQueueStatus();
+    }
+
+    // ─── Confetti ─────────────────────────────────────────────────────────────
+    function launchConfetti() {
+      const container = document.getElementById('confetti-container');
+      if (!container) return;
+      container.innerHTML = '';
+      const colors = ['#FFD100','#4ade80','#60a5fa','#f472b6','#fb923c','#fff'];
+      for (let i = 0; i < 60; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + 'vw';
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.width  = (6 + Math.random() * 8) + 'px';
+        piece.style.height = (6 + Math.random() * 8) + 'px';
+        piece.style.animationDuration = (2 + Math.random() * 3) + 's';
+        piece.style.animationDelay    = (Math.random() * 1.5) + 's';
+        piece.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+        container.appendChild(piece);
+      }
+      setTimeout(() => { container.innerHTML = ''; }, 6000);
+    }
+
+    // ─── Boot ─────────────────────────────────────────────────────────────────
+    init();
+  </script>
+</body>
+</html>
