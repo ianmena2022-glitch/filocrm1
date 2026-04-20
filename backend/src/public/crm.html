@@ -3945,29 +3945,107 @@ function copyFilaLink() {
 function showFilaQR() {
   const slug = _queueSlug;
   if (!slug) return;
-  const link = encodeURIComponent(`${window.location.origin}/fila/${slug}`);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${link}`;
-  // Reuse or create modal
+  const rawLink = `${window.location.origin}/fila/${slug}`;
+  const qrUrl   = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=14&data=${encodeURIComponent(rawLink)}`;
+
   let overlay = document.getElementById('fila-qr-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'fila-qr-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
     overlay.innerHTML = `
-      <div style="background:#0a1828;border:1px solid rgba(255,209,0,.2);border-radius:16px;padding:28px;text-align:center;max-width:320px;width:90%">
-        <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;color:var(--yellow);margin-bottom:4px">QR FILA DIGITAL</div>
-        <div style="font-size:12px;color:var(--gray);margin-bottom:18px">Mostrá este QR en tu barbería para que los clientes se anoten</div>
-        <img id="fila-qr-img" src="" alt="QR" style="width:260px;height:260px;border-radius:10px;background:#fff;display:block;margin:0 auto">
-        <div id="fila-qr-link" style="font-size:11px;color:var(--gray);margin-top:12px;word-break:break-all"></div>
-        <button onclick="document.getElementById('fila-qr-overlay').style.display='none'" style="margin-top:18px;padding:9px 28px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:var(--white);font-size:13px;font-weight:600;cursor:pointer">Cerrar</button>
+      <div style="background:#0a1828;border:1px solid rgba(255,209,0,.2);border-radius:20px;padding:28px 28px 22px;text-align:center;max-width:360px;width:92%">
+        <div style="font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:rgba(255,209,0,.8);margin-bottom:4px;text-transform:uppercase">QR Fila Digital</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:18px">Mostralo en la barbería para que los clientes se anoten</div>
+        <img id="fila-qr-img" src="" alt="QR" style="width:300px;height:300px;border-radius:14px;background:#fff;display:block;margin:0 auto">
+        <div id="fila-qr-link" style="font-size:11px;color:var(--gray);margin-top:10px;word-break:break-all"></div>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button onclick="document.getElementById('fila-qr-overlay').style.display='none'"
+            style="flex:1;padding:10px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:var(--white);font-size:13px;font-weight:600;cursor:pointer">
+            Cerrar
+          </button>
+          <button onclick="printFilaQR()"
+            style="flex:1;padding:10px;border-radius:9px;border:none;background:var(--yellow);color:#050d18;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+            🖨️ Imprimir
+          </button>
+        </div>
       </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
     document.body.appendChild(overlay);
   }
   document.getElementById('fila-qr-img').src = qrUrl;
-  document.getElementById('fila-qr-link').textContent = decodeURIComponent(link);
+  document.getElementById('fila-qr-link').textContent = rawLink;
   overlay.style.display = 'flex';
+}
 
+function printFilaQR() {
+  const slug     = _queueSlug;
+  if (!slug) return;
+  const shopName = currentShop?.name || 'Tu Barbería';
+  const rawLink  = `${window.location.origin}/fila/${slug}`;
+  // QR más grande para impresión de calidad
+  const qrUrl    = `https://api.qrserver.com/v1/create-qr-code/?size=700x700&margin=20&data=${encodeURIComponent(rawLink)}`;
+  const logoUrl  = `${window.location.origin}/logo_filo.png`;
+
+  const win = window.open('', '_blank', 'width=700,height=900');
+  if (!win) { showToast('Permitir popups para imprimir'); return; }
+  win.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Fila Digital — ${shopName}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4 portrait; margin: 0; }
+    html, body {
+      width: 210mm; min-height: 297mm;
+      background: #050d18;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 32px;
+      font-family: 'Barlow', sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .logo {
+      width: 180px;
+      margin-bottom: 36px;
+    }
+    .title {
+      font-size: 38px; font-weight: 800;
+      color: #ffffff; text-align: center;
+      line-height: 1.15; margin-bottom: 10px;
+    }
+    .shop {
+      font-size: 38px; font-weight: 800;
+      color: #ffffff; text-align: center;
+      margin-bottom: 44px;
+    }
+    .qr-card {
+      background: #e8edf5;
+      border-radius: 28px;
+      padding: 30px;
+    }
+    .qr-card img {
+      width: 380px; height: 380px;
+      display: block;
+    }
+    @media print {
+      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <img class="logo" src="${logoUrl}" alt="FILO CRM">
+  <div class="title">Unite a la cola virtual!</div>
+  <div class="shop">${shopName}</div>
+  <div class="qr-card">
+    <img src="${qrUrl}" alt="QR Code" onload="setTimeout(()=>{ window.print(); window.close(); }, 300)">
+  </div>
+</body>
+</html>`);
+  win.document.close();
 }
 
 // ─── DASHBOARD ───
