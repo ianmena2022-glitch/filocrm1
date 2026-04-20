@@ -2210,10 +2210,14 @@ select.form-input { padding-right: 32px; }
         </div>
       </div>
 
-      <!-- Botón principal — llamar siguiente -->
-      <button onclick="callNextInQueue()" class="btn-add fila-btn-next" id="fila-next-btn">
-        ✂️ Llamar siguiente
-      </button>
+      <!-- Los barberos llaman al siguiente desde su propio dashboard -->
+      <div style="background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">✂️</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--yellow)">Los barberos manejan su fila</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">Cada barbero llama y cobra desde su propio dashboard. La comisión se asigna automáticamente.</div>
+        </div>
+      </div>
 
       <!-- Stats row -->
       <div class="fila-stats-bar">
