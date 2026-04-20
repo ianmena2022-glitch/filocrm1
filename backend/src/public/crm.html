@@ -2786,7 +2786,13 @@ select.form-input { padding-right: 32px; }
         <label>Hora</label>
         <input type="time" id="t-time">
       </div>
-      <!-- barbero y comision se asignan automaticamente -->
+      <!-- Barbero (visible solo si el plan tiene comisiones activas) -->
+      <div class="form-field" id="t-barber-field" style="display:none">
+        <label>Barbero</label>
+        <select id="t-barber-select" onchange="onTurnoBarberChange()">
+          <option value="">— Sin asignar —</option>
+        </select>
+      </div>
       <input type="hidden" id="t-barber" value="">
       <input type="hidden" id="t-commission" value="50">
     </div>
@@ -5081,6 +5087,13 @@ async function deleteService(id) {
 }
 
 // ─── TURNO ───
+function onTurnoBarberChange() {
+  const sel = document.getElementById('t-barber-select');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('t-barber').value = opt?.dataset?.name || opt?.text?.split(' (')[0] || '';
+  document.getElementById('t-commission').value = opt?.dataset?.pct || 50;
+}
+
 async function createAppointment() {
   const clientId = document.getElementById('t-client').value;
   const clientName = document.getElementById('t-client-name').value.trim();
@@ -5088,7 +5101,12 @@ async function createAppointment() {
   const price = document.getElementById('t-price').value;
   const date = document.getElementById('t-date').value || agendaDate;
   const time = document.getElementById('t-time').value;
-  const barber = document.getElementById('t-barber').value.trim();
+  // Barbero: preferir select si está visible, sino hidden input
+  const barberSel = document.getElementById('t-barber-select');
+  const barberId  = barberSel?.value || null;
+  const barber    = barberId
+    ? (barberSel.options[barberSel.selectedIndex]?.text?.split(' (')[0] || '')
+    : document.getElementById('t-barber').value.trim();
   const commission = document.getElementById('t-commission').value || 50;
 
   // Premio a canjear
@@ -5111,6 +5129,7 @@ async function createAppointment() {
       service_id: serviceId || null,
       price: parseFloat(price) || 0,
       date, time_start: time,
+      barber_id: barberId ? parseInt(barberId) : null,
       barber_name: barber || null,
       commission_pct: parseInt(commission),
       redeem_item_id: redeemId ? parseInt(redeemId) : null,
@@ -6110,6 +6129,25 @@ function openModal(id) {
   // Set defaults for turno modal
   if (id === 'modal-turno') {
     document.getElementById('t-date').value = agendaDate;
+    // Cargar barberos si hay comisiones activas
+    const barberField = document.getElementById('t-barber-field');
+    const barberSel   = document.getElementById('t-barber-select');
+    if (currentShop?.commission_enabled) {
+      const barbers = window._barbersList || [];
+      barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+        barbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+      barberField.style.display = '';
+      // Si no hay lista cacheada, intentar cargar
+      if (!barbers.length) {
+        api('GET', '/barbers').then(list => {
+          window._barbersList = list;
+          barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+            list.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+        }).catch(() => {});
+      }
+    } else {
+      barberField.style.display = 'none';
+    }
   }
   document.getElementById(id).classList.add('open');
 }
@@ -6121,6 +6159,10 @@ function closeModal(id) {
     document.getElementById('t-redeem-item').value = '';
     document.getElementById('t-redeem-warning').style.display = 'none';
     document.getElementById('t-client').value = '';
+    const bSel = document.getElementById('t-barber-select');
+    if (bSel) bSel.value = '';
+    document.getElementById('t-barber').value = '';
+    document.getElementById('t-commission').value = '50';
   }
 }
 
