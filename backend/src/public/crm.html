@@ -4002,7 +4002,7 @@ function walkInRowHtml(entry, isCalled, position) {
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${isCalled
-          ? `<button onclick="openWalkInPayment(${entry.id},'${escHtml(entry.client_name)}')" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.1);color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Cobrar</button>`
+          ? `<button onclick="openWalkInPayment(${entry.id},'${escHtml(entry.client_name)}','${escHtml(entry.service_name||'')}',${parseFloat(entry.price)||0})" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.1);color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Cobrar</button>`
           : ''}
         <button onclick="removeQueueEntry(${entry.id})" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,67,67,.2);background:rgba(255,67,67,.06);color:#ff8080;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
@@ -4033,7 +4033,7 @@ let _walkInPayMethod = null;
 let _walkInServices = [];
 let _walkInBarbers = [];
 
-async function openWalkInPayment(entryId, clientName) {
+async function openWalkInPayment(entryId, clientName, preServiceName='', prePrice=0) {
   _walkInPayEntryId = entryId;
   _walkInPayMethod = null;
 
@@ -4053,13 +4053,18 @@ async function openWalkInPayment(entryId, clientName) {
   const existing = document.getElementById('walkin-payment-popup');
   if (existing) existing.remove();
 
+  // Try to match pre-filled service against the list
+  const matchedSvc = preServiceName
+    ? _walkInServices.find(s => s.name.toLowerCase() === preServiceName.toLowerCase())
+    : null;
+
   const serviceOptions = _walkInServices.length
     ? `<select id="wip-service" onchange="onWalkInServiceChange()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
         <option value="">— Seleccionar servicio —</option>
-        ${_walkInServices.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost||0}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')}
-        <option value="custom">Otro (ingresar manualmente)</option>
+        ${_walkInServices.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost||0}"${matchedSvc && matchedSvc.id === s.id ? ' selected' : ''}>${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')}
+        <option value="custom"${!matchedSvc && preServiceName ? ' selected' : ''}>Otro (ingresar manualmente)</option>
       </select>`
-    : `<input type="text" id="wip-service-name" placeholder="Nombre del servicio" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">`;
+    : `<input type="text" id="wip-service-name" placeholder="Nombre del servicio" value="${escHtml(preServiceName)}" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">`;
 
   const barberSection = (_walkInBarbers.length > 0 && currentShop?.commission_enabled)
     ? `<div style="margin-bottom:16px">
@@ -4082,12 +4087,12 @@ async function openWalkInPayment(entryId, clientName) {
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Servicio</label>
         ${serviceOptions}
-        <input type="text" id="wip-service-name" placeholder="Nombre del servicio" style="display:none;width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
+        <input type="text" id="wip-service-name" placeholder="Nombre del servicio" value="${!matchedSvc && preServiceName ? escHtml(preServiceName) : ''}" style="display:${!matchedSvc && preServiceName ? 'block' : 'none'};width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
       </div>
 
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Precio</label>
-        <input type="number" id="wip-price" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <input type="number" id="wip-price" placeholder="$0" min="0" value="${matchedSvc ? matchedSvc.price : (prePrice || '')}" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
       </div>
 
       ${barberSection}

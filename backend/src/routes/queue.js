@@ -7,7 +7,7 @@ const auth = require('../middleware/auth');
 router.post('/:slug/join', async (req, res) => {
   try {
     const { slug } = req.params;
-    const { name, phone } = req.body;
+    const { name, phone, service_name, price } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'El nombre es obligatorio' });
@@ -28,11 +28,11 @@ router.post('/:slug/join', async (req, res) => {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
     }
 
-    // Insert entry
+    // Insert entry (with optional service pre-selection)
     const insertRes = await pool.query(
-      `INSERT INTO queue_entries (shop_id, client_name, client_phone, status)
-       VALUES ($1, $2, $3, 'waiting') RETURNING id`,
-      [shop.id, name.trim(), phone || null]
+      `INSERT INTO queue_entries (shop_id, client_name, client_phone, status, service_name, price)
+       VALUES ($1, $2, $3, 'waiting', $4, $5) RETURNING id`,
+      [shop.id, name.trim(), phone || null, service_name || null, parseFloat(price) || 0]
     );
     const entry_id = insertRes.rows[0].id;
 
@@ -152,6 +152,21 @@ router.get('/:slug/status', async (req, res) => {
   }
 });
 
+// ─── PUBLIC: get services for a shop (used by fila.html) ────────────────────
+router.get('/:slug/services', async (req, res) => {
+  try {
+    const shopRes = await pool.query(
+      'SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]
+    );
+    if (!shopRes.rows.length) return res.json([]);
+    const svcRes = await pool.query(
+      'SELECT id, name, price, duration_minutes FROM services WHERE shop_id=$1 AND active=true ORDER BY name ASC',
+      [shopRes.rows[0].id]
+    );
+    res.json(svcRes.rows);
+  } catch(e) { res.status(500).json([]); }
+});
+
 // ─── PUBLIC: leave queue ─────────────────────────────────────────────────────
 router.post('/:slug/leave', async (req, res) => {
   try {
@@ -188,6 +203,7 @@ router.get('/', auth, async (req, res) => {
     // entries (waiting + called)
     const entriesRes = await pool.query(
       `SELECT id, client_name, client_phone, status, created_at, called_at,
+              service_name, price,
               EXTRACT(EPOCH FROM (NOW() - created_at))/60 AS minutes_waiting
        FROM queue_entries
        WHERE shop_id=$1 AND status IN ('waiting','called')

@@ -81,7 +81,8 @@
       color: var(--gray);
       margin-bottom: 6px;
     }
-    .field input {
+    .field input,
+    .field select {
       width: 100%;
       padding: 12px 14px;
       background: rgba(255,255,255,.05);
@@ -92,9 +93,20 @@
       font-size: 15px;
       outline: none;
       transition: border-color .2s;
+      box-sizing: border-box;
     }
+    .field select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237a8fa8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+    .field select option { background: #0d1929; color: var(--white); }
     .field input::placeholder { color: rgba(255,255,255,.25); }
-    .field input:focus { border-color: rgba(255,209,0,.5); }
+    .field input:focus,
+    .field select:focus { border-color: rgba(255,209,0,.5); }
+    .service-price-tag {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--yellow);
+    }
     .field .hint {
       font-size: 11px;
       color: var(--gray);
@@ -339,6 +351,13 @@
         <input type="tel" id="input-phone" placeholder="Ej: 1155667788" autocomplete="tel" maxlength="30">
         <div class="hint">Para recibir aviso por WhatsApp cuando sea tu turno</div>
       </div>
+      <div class="field" id="field-service" style="display:none">
+        <label>Servicio ✂️</label>
+        <select id="input-service" onchange="onFilaServiceChange()">
+          <option value="">— Sin preferencia —</option>
+        </select>
+        <div class="service-price-tag" id="service-price-tag" style="display:none"></div>
+      </div>
       <button class="btn-primary" id="btn-join" onclick="joinQueue()">Anotarme en la fila ✂️</button>
     </div>
 
@@ -409,6 +428,7 @@
     const pathParts = window.location.pathname.split('/');
     const slug      = pathParts[pathParts.length - 1];
     const LS_KEY    = 'filaEntry_' + slug;
+    let _filaServices = [];
 
     let pollInterval = null;
 
@@ -477,10 +497,22 @@
 
     async function checkQueueStatus() {
       try {
-        const r = await apiGet(`/api/queue/${slug}/status`);
-        if (!r.ok) { setState('join'); return; }
-        const data = await r.json();
+        const [statusRes, svcRes] = await Promise.all([
+          apiGet(`/api/queue/${slug}/status`),
+          apiGet(`/api/queue/${slug}/services`)
+        ]);
+        if (!statusRes.ok) { setState('join'); return; }
+        const data = await statusRes.json();
         setShopName(data.shop_name);
+
+        // Populate services dropdown if available
+        if (svcRes.ok) {
+          try {
+            _filaServices = await svcRes.json();
+            populateServicesDropdown(_filaServices);
+          } catch(e) { _filaServices = []; }
+        }
+
         if (data.queue_paused) {
           setState('paused');
         } else {
@@ -489,6 +521,37 @@
       } catch(e) {
         setState('join');
       }
+    }
+
+    function populateServicesDropdown(services) {
+      const sel = document.getElementById('input-service');
+      const field = document.getElementById('field-service');
+      if (!sel || !field || !services.length) return;
+      // Clear existing options except the first placeholder
+      while (sel.options.length > 1) sel.remove(1);
+      services.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.dataset.price = s.price;
+        opt.dataset.name = s.name;
+        opt.textContent = `${s.name}  —  $${parseFloat(s.price).toLocaleString('es-AR')}`;
+        sel.appendChild(opt);
+      });
+      field.style.display = 'block';
+    }
+
+    function onFilaServiceChange() {
+      const sel = document.getElementById('input-service');
+      const tag = document.getElementById('service-price-tag');
+      if (!sel || !tag) return;
+      if (!sel.value) {
+        tag.style.display = 'none';
+        return;
+      }
+      const opt = sel.options[sel.selectedIndex];
+      const price = parseFloat(opt?.dataset?.price || 0);
+      tag.textContent = `$${price.toLocaleString('es-AR')}`;
+      tag.style.display = price > 0 ? 'inline-block' : 'none';
     }
 
     async function pollStatus(entryId, isInit) {
@@ -584,11 +647,12 @@
 
     // ─── Join ─────────────────────────────────────────────────────────────────
     async function joinQueue() {
-      const nameEl  = document.getElementById('input-name');
-      const phoneEl = document.getElementById('input-phone');
-      const btn     = document.getElementById('btn-join');
-      const name    = (nameEl?.value || '').trim();
-      const phone   = (phoneEl?.value || '').trim();
+      const nameEl    = document.getElementById('input-name');
+      const phoneEl   = document.getElementById('input-phone');
+      const serviceEl = document.getElementById('input-service');
+      const btn       = document.getElementById('btn-join');
+      const name      = (nameEl?.value || '').trim();
+      const phone     = (phoneEl?.value || '').trim();
 
       if (!name) {
         nameEl?.focus();
@@ -597,11 +661,24 @@
         return;
       }
 
+      // Get selected service (optional)
+      let service_name = null;
+      let price = 0;
+      if (serviceEl && serviceEl.value) {
+        const opt = serviceEl.options[serviceEl.selectedIndex];
+        service_name = opt?.dataset?.name || null;
+        price = parseFloat(opt?.dataset?.price || 0) || 0;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Anotando...';
 
       try {
-        const r = await apiPost(`/api/queue/${slug}/join`, { name, phone: phone || undefined });
+        const r = await apiPost(`/api/queue/${slug}/join`, {
+          name,
+          phone: phone || undefined,
+          ...(service_name ? { service_name, price } : {})
+        });
         const data = await r.json();
 
         if (r.status === 423) {

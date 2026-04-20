@@ -1072,7 +1072,9 @@ function goToAgendaDate(dateStr) {
 }
 
 // ── FILA ─────────────────────────────────────────────────
-let _filaCalledId = null; // id del entry que está en el sillón
+let _filaCalledId      = null; // id del entry que está en el sillón
+let _filaCalledService = '';
+let _filaCalledPrice   = 0;
 
 async function loadFila() {
   try {
@@ -1096,7 +1098,9 @@ async function loadFila() {
     const calledCard = document.getElementById('fila-called-card');
     if (called.length > 0) {
       const c = called[0];
-      _filaCalledId = c.id;
+      _filaCalledId      = c.id;
+      _filaCalledService = c.service_name || '';
+      _filaCalledPrice   = parseFloat(c.price) || 0;
       document.getElementById('fila-called-name').textContent  = c.client_name;
       document.getElementById('fila-called-phone').textContent = c.client_phone ? `📞 ${c.client_phone}` : '';
       calledCard.classList.add('show');
@@ -1162,13 +1166,13 @@ async function barberCallNext() {
 
 async function barberServe() {
   if (!_filaCalledId) return;
-  openBarberWalkInPayment(_filaCalledId);
+  openBarberWalkInPayment(_filaCalledId, _filaCalledService, _filaCalledPrice);
 }
 
 let _barberWipMethod = null;
 let _barberWipEntryId = null;
 
-async function openBarberWalkInPayment(entryId) {
+async function openBarberWalkInPayment(entryId, preServiceName='', prePrice=0) {
   _barberWipEntryId = entryId;
   _barberWipMethod = null;
 
@@ -1179,8 +1183,13 @@ async function openBarberWalkInPayment(entryId) {
   const existing = document.getElementById('barber-wip-popup');
   if (existing) existing.remove();
 
+  // Match pre-filled service against available list
+  const matchedSvc = preServiceName
+    ? services.find(s => s.name.toLowerCase() === preServiceName.toLowerCase())
+    : null;
+
   const serviceOpts = services.length
-    ? services.map(s => `<option value="${s.id}" data-price="${s.price}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
+    ? services.map(s => `<option value="${s.id}" data-price="${s.price}"${matchedSvc && matchedSvc.id === s.id ? ' selected' : ''}>${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
     : '';
 
   const popup = document.createElement('div');
@@ -1196,16 +1205,16 @@ async function openBarberWalkInPayment(entryId) {
         <select id="bwip-service" onchange="onBarberServiceChange()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
           <option value="">— Elegir servicio —</option>
           ${serviceOpts}
-          <option value="custom">Otro</option>
+          <option value="custom"${!matchedSvc && preServiceName ? ' selected' : ''}>Otro</option>
         </select>
-        <input type="text" id="bwip-service-name" placeholder="Nombre del servicio" style="display:none;width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
+        <input type="text" id="bwip-service-name" placeholder="Nombre del servicio" value="${!matchedSvc && preServiceName ? escHtml(preServiceName) : ''}" style="display:${!matchedSvc && preServiceName ? 'block' : 'none'};width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
       </div>` : `<div style="margin-bottom:14px">
-        <input type="text" id="bwip-service-name" placeholder="Servicio" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <input type="text" id="bwip-service-name" placeholder="Servicio" value="${escHtml(preServiceName)}" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
       </div>`}
 
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Precio</label>
-        <input type="number" id="bwip-price" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <input type="number" id="bwip-price" placeholder="$0" min="0" value="${matchedSvc ? matchedSvc.price : (prePrice || '')}" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
       </div>
 
       <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:10px">Método de pago</div>
