@@ -1350,13 +1350,18 @@ function renderBarberProductos() {
     return;
   }
   grid.innerHTML = _barberProductos.map(p => {
-    const stock = parseInt(p.stock || 0);
+    const stock    = parseInt(p.stock || 0);
     const sinStock = stock <= 0;
-    return `<div onclick="${sinStock ? '' : `openBarberVenta(${p.id})`}" style="background:var(--surface);border:1px solid ${sinStock ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.1)'};border-radius:10px;padding:12px;cursor:${sinStock ? 'default' : 'pointer'};opacity:${sinStock ? '.45' : '1'};transition:.15s">
-      <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}</div>
-      <div style="font-size:15px;font-weight:700;color:var(--yellow)">$${parseFloat(p.precio_venta||0).toLocaleString('es-AR')}</div>
-      <div style="font-size:11px;color:${stock <= (p.stock_min||3) ? 'var(--orange)' : 'var(--gray)'};margin-top:3px">Stock: ${stock}</div>
-    </div>`;
+    const onclick  = sinStock ? '' : ('openBarberVenta(' + p.id + ')');
+    const border   = sinStock ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.1)';
+    const cursor   = sinStock ? 'default' : 'pointer';
+    const opacity  = sinStock ? '.45' : '1';
+    const stockColor = stock <= (p.stock_min || 3) ? 'var(--orange)' : 'var(--gray)';
+    return '<div onclick="' + onclick + '" style="background:var(--surface);border:1px solid ' + border + ';border-radius:10px;padding:12px;cursor:' + cursor + ';opacity:' + opacity + ';transition:.15s">'
+      + '<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.nombre) + '</div>'
+      + '<div style="font-size:15px;font-weight:700;color:var(--yellow)">$' + parseFloat(p.precio_venta || 0).toLocaleString('es-AR') + '</div>'
+      + '<div style="font-size:11px;color:' + stockColor + ';margin-top:3px">Stock: ' + stock + '</div>'
+      + '</div>';
   }).join('');
 }
 
@@ -1439,8 +1444,6 @@ async function confirmarBarberVenta() {
     showToast('❌ ' + (e.message || 'Error'));
   }
 }
-
-function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── INIT ──────────────────────────────────────────────────
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
