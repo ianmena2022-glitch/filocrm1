@@ -628,9 +628,16 @@
     }
 
     // ─── Leave ────────────────────────────────────────────────────────────────
-    function leaveQueue() {
-      localStorage.removeItem(LS_KEY);
+    async function leaveQueue() {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored) {
+        try {
+          const { entry_id } = JSON.parse(stored);
+          if (entry_id) await apiPost(`/api/queue/${slug}/leave`, { entry_id });
+        } catch(e) { /* ignorar errores de red al salir */ }
+      }
+      localStorage.removeItem(LS_KEY);
       setState('left');
     }
 

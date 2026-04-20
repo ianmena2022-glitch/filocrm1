@@ -2152,6 +2152,7 @@ select.form-input { padding-right: 32px; }
           <div style="display:flex;align-items:center;gap:8px">
             <span id="fila-link-text" style="font-size:12px;color:var(--gray);word-break:break-all;flex:1"></span>
             <button onclick="copyFilaLink()" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.08);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📋 Copiar</button>
+            <button onclick="showFilaQR()" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.08);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📱 QR</button>
           </div>
         </div>
       </div>
@@ -3939,6 +3940,34 @@ function copyFilaLink() {
   if (!slug) return;
   const link = `${window.location.origin}/fila/${slug}`;
   navigator.clipboard.writeText(link).then(() => showToast('Link copiado ✓'));
+}
+
+function showFilaQR() {
+  const slug = _queueSlug;
+  if (!slug) return;
+  const link = encodeURIComponent(`${window.location.origin}/fila/${slug}`);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${link}`;
+  // Reuse or create modal
+  let overlay = document.getElementById('fila-qr-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'fila-qr-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
+    overlay.innerHTML = `
+      <div style="background:#0a1828;border:1px solid rgba(255,209,0,.2);border-radius:16px;padding:28px;text-align:center;max-width:320px;width:90%">
+        <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;color:var(--yellow);margin-bottom:4px">QR FILA DIGITAL</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:18px">Mostrá este QR en tu barbería para que los clientes se anoten</div>
+        <img id="fila-qr-img" src="" alt="QR" style="width:260px;height:260px;border-radius:10px;background:#fff;display:block;margin:0 auto">
+        <div id="fila-qr-link" style="font-size:11px;color:var(--gray);margin-top:12px;word-break:break-all"></div>
+        <button onclick="document.getElementById('fila-qr-overlay').style.display='none'" style="margin-top:18px;padding:9px 28px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:var(--white);font-size:13px;font-weight:600;cursor:pointer">Cerrar</button>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('fila-qr-img').src = qrUrl;
+  document.getElementById('fila-qr-link').textContent = decodeURIComponent(link);
+  overlay.style.display = 'flex';
+
 }
 
 // ─── DASHBOARD ───

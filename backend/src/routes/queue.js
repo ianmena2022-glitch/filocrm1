@@ -152,6 +152,21 @@ router.get('/:slug/status', async (req, res) => {
   }
 });
 
+// ─── PUBLIC: leave queue ─────────────────────────────────────────────────────
+router.post('/:slug/leave', async (req, res) => {
+  try {
+    const { entry_id } = req.body;
+    if (!entry_id) return res.status(400).json({ error: 'entry_id requerido' });
+    const shopRes = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
+    if (!shopRes.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    await pool.query(
+      `UPDATE queue_entries SET status='left' WHERE id=$1 AND shop_id=$2 AND status IN ('waiting','called')`,
+      [entry_id, shopRes.rows[0].id]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
 // ─── PROTECTED: get queue ────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
