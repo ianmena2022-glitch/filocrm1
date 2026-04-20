@@ -4087,7 +4087,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Servicio</label>
         ${serviceOptions}
-        <input type="text" id="wip-service-name" placeholder="Nombre del servicio" value="${!matchedSvc && preServiceName ? escHtml(preServiceName) : ''}" style="display:${!matchedSvc && preServiceName ? 'block' : 'none'};width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
+        ${_walkInServices.length ? `<input type="text" id="wip-service-name" placeholder="Nombre del servicio" value="${!matchedSvc && preServiceName ? escHtml(preServiceName) : ''}" style="display:${!matchedSvc && preServiceName ? 'block' : 'none'};width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">` : ''}
       </div>
 
       <div style="margin-bottom:14px">
