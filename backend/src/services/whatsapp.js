@@ -273,7 +273,13 @@ async function findAnyPendingPayment(shopId) {
 // Incluye sucursales del enterprise (shops con parent_enterprise_id = shopId)
 async function findPendingPayment(shopId, phone) {
   try {
-    const phoneSuffix = phone.replace(/[^0-9]/g, '').slice(-10);
+    const phoneDigits = phone.replace(/[^0-9]/g, '');
+    // WPP a veces resuelve @lid a números de 14 dígitos con un 0 al final
+    // (ej: 54911266042470 en vez de 5491126604247). Normalizamos quitando ese 0 extra.
+    const phoneNorm = (phoneDigits.length >= 14 && phoneDigits.endsWith('0'))
+      ? phoneDigits.slice(0, -1)
+      : phoneDigits;
+    const phoneSuffix = phoneNorm.slice(-10);
 
     const senaRes = await pool.query(
       `SELECT a.id, a.sena_amount, s.sena_cbu
