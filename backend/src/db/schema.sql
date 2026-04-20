@@ -226,8 +226,7 @@ CREATE INDEX IF NOT EXISTS idx_pending_mp_plan ON pending_registrations(mp_plan_
 -- ── SISTEMA DE CAJA ───────────────────────────────────────────────────────────
 
 -- Método de pago y propina por turno
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT NULL
-  CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(100) DEFAULT NULL;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
 
 -- Gastos/egresos
@@ -390,8 +389,7 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS queue_paused BOOLEAN DEFAULT FALSE;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS barber_id INT REFERENCES shops(id) ON DELETE SET NULL;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS service_name VARCHAR(255);
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0;
-ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT NULL
-  CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS payment_method VARCHAR(100) DEFAULT NULL;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL;
 
