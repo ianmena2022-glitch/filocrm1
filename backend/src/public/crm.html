@@ -806,6 +806,82 @@ body {
 }
 .btn-modal-secondary:hover { border-color: rgba(255,255,255,0.15); color: var(--white); }
 
+/* ─── FILA DIGITAL ─── */
+.fila-btn-next {
+  width: 100%; font-size: 17px !important;
+  padding: 15px !important; margin-bottom: 16px;
+  letter-spacing: .5px;
+}
+.fila-btn-pause {
+  background: rgba(255,255,255,.07) !important;
+  color: var(--white) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  white-space: nowrap;
+}
+.fila-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.fila-stat-box {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.fila-stat-lbl {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--gray); margin-bottom: 5px;
+}
+.fila-stat-val {
+  font-family: 'Oswald', sans-serif;
+  font-size: 26px; font-weight: 700; color: var(--white);
+  line-height: 1;
+}
+.fila-link-card {
+  background: rgba(255,209,0,.06);
+  border: 1px solid rgba(255,209,0,.2);
+  border-radius: 10px; padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.fila-link-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: rgba(255,209,0,.7); margin-bottom: 10px;
+}
+.fila-link-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.fila-link-url {
+  font-size: 11px; color: var(--gray);
+  word-break: break-all; flex: 1;
+}
+.fila-link-btns {
+  display: flex; gap: 8px; flex-shrink: 0;
+}
+.fila-action-btn {
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid rgba(255,209,0,.3);
+  background: rgba(255,209,0,.08);
+  color: var(--yellow); font-size: 12px;
+  font-weight: 700; cursor: pointer;
+  white-space: nowrap; transition: background .15s;
+}
+.fila-action-btn:hover { background: rgba(255,209,0,.15); }
+
+/* Mobile: stack link URL + botones verticalmente */
+@media (max-width: 768px) {
+  .fila-topbar-actions { gap: 0 !important; }
+  .fila-btn-next { font-size: 18px !important; padding: 17px !important; }
+  .fila-stat-val { font-size: 22px; }
+  .fila-link-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .fila-link-url { font-size: 12px; }
+  .fila-link-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fila-action-btn { padding: 11px; font-size: 13px; text-align: center; }
+}
+
 /* ─── TOAST ─── */
 .toast {
   position: fixed; bottom: 100px; right: 20px;
@@ -2122,43 +2198,53 @@ select.form-input { padding-right: 32px; }
 
     <!-- ─── FILA DIGITAL ─── -->
     <section id="sec-fila" class="section">
+
+      <!-- Header -->
       <div class="topbar">
         <div class="topbar-left">
           <h1 class="topbar-title">Fila Digital</h1>
           <p class="topbar-sub">Gestioná la fila de clientes sin turno</p>
         </div>
-        <div class="topbar-actions">
-          <button id="fila-pause-btn" onclick="toggleQueuePause()" class="btn-add" style="background:rgba(255,255,255,.07);color:var(--white);border:1px solid rgba(255,255,255,.12)">⏸ Pausar fila</button>
-          <button onclick="callNextInQueue()" class="btn-add" id="fila-next-btn" style="font-size:15px;padding:10px 22px">▶ Llamar siguiente</button>
+        <div class="topbar-actions fila-topbar-actions">
+          <button id="fila-pause-btn" onclick="toggleQueuePause()" class="btn-add fila-btn-pause">⏸ Pausar fila</button>
         </div>
       </div>
 
-      <!-- Status bar -->
-      <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Esperando</div>
-          <div id="fila-count-waiting" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--yellow)">0</div>
+      <!-- Botón principal — llamar siguiente -->
+      <button onclick="callNextInQueue()" class="btn-add fila-btn-next" id="fila-next-btn">
+        ✂️ Llamar siguiente
+      </button>
+
+      <!-- Stats row -->
+      <div class="fila-stats-bar">
+        <div class="fila-stat-box">
+          <div class="fila-stat-lbl">Esperando</div>
+          <div id="fila-count-waiting" class="fila-stat-val" style="color:var(--yellow)">0</div>
         </div>
-        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Atendidos hoy</div>
-          <div id="fila-count-served" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#4ade80">0</div>
+        <div class="fila-stat-box">
+          <div class="fila-stat-lbl">Atendidos hoy</div>
+          <div id="fila-count-served" class="fila-stat-val" style="color:#4ade80">0</div>
         </div>
-        <div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Espera promedio</div>
-          <div id="fila-avg-wait" style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:var(--white)">—</div>
+        <div class="fila-stat-box">
+          <div class="fila-stat-lbl">Espera prom.</div>
+          <div id="fila-avg-wait" class="fila-stat-val">—</div>
         </div>
-        <div id="fila-link-card" style="flex:2;min-width:200px;background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.2);border-radius:10px;padding:14px 18px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:6px">Link para clientes</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="fila-link-text" style="font-size:12px;color:var(--gray);word-break:break-all;flex:1"></span>
-            <button onclick="copyFilaLink()" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.08);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📋 Copiar</button>
-            <button onclick="showFilaQR()" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.08);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📱 QR</button>
+      </div>
+
+      <!-- Link card -->
+      <div id="fila-link-card" class="fila-link-card">
+        <div class="fila-link-label">Link para clientes</div>
+        <div class="fila-link-row">
+          <span id="fila-link-text" class="fila-link-url"></span>
+          <div class="fila-link-btns">
+            <button onclick="copyFilaLink()" class="fila-action-btn">📋 Copiar</button>
+            <button onclick="showFilaQR()"   class="fila-action-btn">📱 QR</button>
           </div>
         </div>
       </div>
 
       <!-- Queue list -->
-      <div id="fila-list" style="display:flex;flex-direction:column;gap:8px">
+      <div id="fila-list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
         <div style="text-align:center;padding:40px;color:var(--gray);font-size:14px">Cargando fila...</div>
       </div>
 
