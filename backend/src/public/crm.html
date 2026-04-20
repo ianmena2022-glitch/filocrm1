@@ -902,15 +902,13 @@ body {
 .toast-close { background: none; border: none; color: var(--gray); cursor: pointer; font-size: 15px; margin-left: auto; padding: 4px; }
 
 /* ─── PAYWALL ─── */
-#card-required-screen,
-#payment-pending-screen,
 #paywall-screen {
   display: none; position: fixed; inset: 0;
   background: var(--navy); z-index: 9000;
   flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 32px 20px; overflow-y: auto;
 }
-#card-required-screen.show, #payment-pending-screen.show, #paywall-screen.show { display: flex; }
+#paywall-screen.show { display: flex; }
 @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 .pw-logo { width:48px;height:48px;background:var(--yellow);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-family:Oswald,sans-serif;font-size:24px;font-weight:700;color:#050d18; }
 .pw-title { font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:7px; }
@@ -3421,8 +3419,6 @@ function logout() {
   localStorage.removeItem('barber_me');
   token = null; currentShop = null;
   document.getElementById('app').style.display = 'none';
-  document.getElementById('card-required-screen').classList.remove('show');
-  document.getElementById('payment-pending-screen').classList.remove('show');
   document.getElementById('paywall-screen').classList.remove('show');
   document.getElementById('auth-screen').style.display = 'flex';
 }
@@ -3459,7 +3455,7 @@ function openQRModal(plan) {
 }
 
 function openQRPaywall() {
-  // Llamado desde card-required o paywall — el botón "cerrar" debe ser "Cerrar sesión"
+  // Llamado desde el paywall — el botón "cerrar" debe ser "Cerrar sesión"
   openQRModal(currentShop?.filo_plan || 'staff');
   document.getElementById('btn-qr-cancel-plan').textContent = 'Cerrar sesión';
   document.getElementById('btn-qr-cancel-plan').onclick = logout;
@@ -3510,9 +3506,7 @@ function startQRPolling() {
         document.getElementById('qr-step-success').style.display = 'block';
         setTimeout(() => {
           closeQRModal();
-          ['card-required-screen','payment-pending-screen','paywall-screen'].forEach(id => {
-            document.getElementById(id).classList.remove('show');
-          });
+          document.getElementById('paywall-screen').classList.remove('show');
           startApp();
         }, 2500);
       }
@@ -3533,49 +3527,6 @@ function selectPwPlan(plan, el) {
   if (el) el.classList.add('selected');
 }
 async function paywallSubscribe() { openQRPaywall(); } // redirigir al nuevo flujo QR
-
-// ── CARD REQUIRED (legacy) ────────────────────────────────────────────────
-let selectedCrPlan = 'staff';
-function showCardRequired() { document.getElementById('card-required-screen').classList.add('show'); }
-
-let _pendingPollInterval = null;
-function showPendingCheck() {
-  document.getElementById('payment-pending-screen').classList.add('show');
-  let attempts = 0;
-  _pendingPollInterval = setInterval(async () => {
-    attempts++;
-    try {
-      const data = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } }).then(r => r.json());
-      if (data?.shop?.subscription_status === 'active') {
-        clearInterval(_pendingPollInterval);
-        currentShop = data.shop;
-        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-        document.getElementById('payment-pending-screen').classList.remove('show');
-        startApp();
-      }
-    } catch(e) { /* ignorar */ }
-    if (attempts >= 12) clearInterval(_pendingPollInterval);
-  }, 5000);
-}
-
-async function checkPaymentStatus() {
-  try {
-    const data = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } }).then(r => r.json());
-    if (data?.shop?.subscription_status === 'active') {
-      clearInterval(_pendingPollInterval);
-      currentShop = data.shop;
-      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-      document.getElementById('payment-pending-screen').classList.remove('show');
-      startApp();
-    } else {
-      showToast('⏳', 'Pago pendiente', 'Todavía no fue confirmado. Esperá unos segundos.');
-    }
-  } catch(e) {
-    showToast('❌', 'Error', 'No se pudo verificar. Revisá tu conexión.');
-  }
-}
-
-async function activateCardRequired() { openQRPaywall(); } // redirigir al flujo QR
 
 function checkPaywall() {
   if (!currentShop) return;
@@ -3647,31 +3598,6 @@ async function checkWppStatus() {
       showWppBanner(`El bot de WhatsApp se desconectó y no pudo reconectarse automáticamente. <a onclick="showSection('configuracion')">Ir a Configuración para reconectar →</a>`);
     }
   }
-}
-
-// Escuchar respuesta 402 de la API (trial expirado)
-const _originalApi = window.api;
-
-// Al volver de MP con ?pending=ID, completar el registro
-async function checkPendingRegistration() {
-  const params = new URLSearchParams(window.location.search);
-  const pendingId = params.get('pending');
-  if (!pendingId) return false;
-  window.history.replaceState({}, '', '/app');
-  try {
-    const res = await fetch('/api/auth/complete-registration', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pending_id: parseInt(pendingId) })
-    });
-    const data = await res.json();
-    if (!res.ok) return false;
-    token = data.token;
-    currentShop = data.shop;
-    localStorage.setItem('filo_token', token);
-    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-    return true;
-  } catch(e) { return false; }
 }
 
 async function startApp() {
@@ -6670,33 +6596,6 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async function() {
-  // Verificar si viene de MP con ?pending=ID o desde localStorage
-  const pendingParams = new URLSearchParams(window.location.search);
-  const pendingId = pendingParams.get('pending') || localStorage.getItem('filo_pending_id');
-  // MP agrega ?preapproval_id=xxx al callback — es el subscription_id real
-  const preapprovalId = pendingParams.get('preapproval_id') || null;
-  if (pendingId) {
-    localStorage.removeItem('filo_pending_id'); // limpiar siempre
-    window.history.replaceState({}, '', '/app');
-    try {
-      const res = await fetch('/api/auth/complete-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pending_id: parseInt(pendingId), subscription_id: preapprovalId })
-      });
-      const data = await res.json();
-      if (res.ok && data.token) {
-        token = data.token;
-        currentShop = data.shop;
-        localStorage.setItem('filo_token', token);
-        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-        console.log('[REGISTRO] Cuenta completada para', currentShop.email);
-        startApp();
-        return;
-      }
-    } catch(e) { console.error('complete-registration error:', e.message); }
-  }
-
   if (token && currentShop) {
     if (currentShop.is_barber) {
       localStorage.setItem('barber_token', token);
@@ -8928,34 +8827,6 @@ async function bcmSave(id) {
     <div style="font-size:52px;margin-bottom:16px">🎉</div>
     <div class="qr-title" style="color:var(--green)">¡Pago confirmado!</div>
     <div style="font-size:14px;color:rgba(255,255,255,.5);margin-top:8px;line-height:1.6">Tu plan fue activado.<br>En un momento abrirá el dashboard.</div>
-  </div>
-</div>
-
-<!-- CARD REQUIRED / PAYWALL — ahora solo muestra botón para abrir QR -->
-<div id="card-required-screen">
-  <div style="width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">✂️</div>
-  <div style="font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:8px">Activá tu acceso a FILO</div>
-  <div style="font-size:15px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:360px;line-height:1.6">Elegí un plan y pagá escaneando un QR desde cualquier billetera — Mercado Pago, Modo, Naranja X y más.</div>
-  <button onclick="openQRPaywall()" style="background:var(--yellow);color:#000d1f;border:none;padding:14px 36px;border-radius:12px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;margin-bottom:12px">
-    Pagar con QR
-  </button>
-  <div style="font-size:12px;color:rgba(255,255,255,.25);letter-spacing:.5px">PAGO SEGURO · CUALQUIER BILLETERA</div>
-  <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.2);font-size:12px;cursor:pointer;padding:12px;margin-top:8px">Cerrar sesión</button>
-</div>
-
-<!-- PAYMENT PENDING SCREEN (legacy, redirige al QR) -->
-<div id="payment-pending-screen">
-  <div style="width:56px;height:56px;background:var(--yellow);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">⏳</div>
-  <div style="font-family:Oswald,sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:8px">Verificando pago...</div>
-  <div style="font-size:15px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:380px;line-height:1.6">Estamos esperando confirmación de Mercado Pago.</div>
-  <div style="display:flex;gap:8px;margin-bottom:6px;justify-content:center">
-    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite 0s"></span>
-    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite .4s"></span>
-    <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);opacity:.4;animation:pulse 1.2s infinite .8s"></span>
-  </div>
-  <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:10px">
-    <button onclick="checkPaymentStatus()" style="background:var(--yellow);color:#000d1f;border:none;padding:13px 32px;border-radius:12px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer">Ya está confirmado, ingresar</button>
-    <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.2);font-size:12px;cursor:pointer;padding:10px">Cerrar sesión</button>
   </div>
 </div>
 

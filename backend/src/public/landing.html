@@ -290,6 +290,92 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
 .tyc-modal-body ul{padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .tyc-modal-body ul li{font-size:12px}
 
+/* ── NOISE GRAIN OVERLAY ── */
+#grain{position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:.035;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── CURSOR SPOTLIGHT (desktop) ── */
+#spotlight{position:fixed;width:560px;height:560px;top:0;left:0;pointer-events:none;z-index:9997;background:radial-gradient(circle,rgba(255,209,0,.045) 0%,transparent 62%);transform:translate(-50%,-50%);transition:opacity .45s;opacity:0;mix-blend-mode:screen;will-change:transform}
+@media(hover:hover){body.mouse-moved #spotlight{opacity:1}}
+@media(max-width:768px){#spotlight{display:none}}
+
+/* ── NAV BADGE "NOVEDAD" ── */
+.nav-new{background:linear-gradient(90deg,#4ade80,#22c55e);color:#042f13;font-size:9px;font-weight:800;padding:3px 7px;border-radius:3px;letter-spacing:.8px;text-transform:uppercase;margin-left:6px;display:inline-block;vertical-align:middle;animation:pulseNew 2.4s ease-in-out infinite}
+@keyframes pulseNew{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.45)}60%{box-shadow:0 0 0 8px rgba(74,222,128,0)}}
+
+/* ── THREE.JS CANVAS (hero 3D element) ── */
+.three-wrap{position:absolute;top:-5%;right:-3%;width:38%;height:110%;z-index:0;pointer-events:none;opacity:.9}
+#three-canvas{width:100%;height:100%;display:block}
+@media(max-width:1000px){.three-wrap{display:none}}
+
+/* ── 3D CARD TILT ── */
+.tilt{transform-style:preserve-3d;transform:perspective(900px);transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.tilt.tilting{transition:transform .06s linear}
+
+/* ── MAGNETIC BTN ── */
+.magnet{transition:transform .18s cubic-bezier(.25,1,.5,1);display:inline-flex;will-change:transform}
+
+/* ── SPLIT TEXT ── */
+.split-w{display:inline-block;overflow:hidden;vertical-align:top}
+.split-w>span{display:inline-block;will-change:transform}
+
+/* ── FILA DIGITAL SECTION ── */
+.fila-bg{background:var(--n);position:relative;overflow:hidden;padding-top:120px}
+.fila-bg::before{content:'';position:absolute;top:10%;left:-10%;width:55%;height:80%;background:radial-gradient(ellipse,rgba(255,209,0,.05) 0%,transparent 64%);pointer-events:none}
+.fila-bg::after{content:'';position:absolute;bottom:-10%;right:-5%;width:45%;height:60%;background:radial-gradient(ellipse,rgba(74,222,128,.04) 0%,transparent 65%);pointer-events:none}
+.fila-inner{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr 1.05fr;gap:72px;align-items:center;position:relative;z-index:1}
+@media(max-width:1000px){.fila-inner{grid-template-columns:1fr;gap:52px}}
+.fila-right{position:relative}
+.fila-nuevo{display:inline-flex;align-items:center;gap:7px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80;padding:5px 12px;border-radius:3px;font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;will-change:opacity,transform}
+.fila-nuevo-dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:livePulse 2s ease-in-out infinite}
+.fila-feats{display:flex;flex-direction:column;gap:12px;margin-top:28px}
+.fila-feat{display:flex;align-items:flex-start;gap:14px;padding:16px;background:rgba(10,24,40,.45);border:1px solid var(--border);border-radius:11px;transition:border-color .3s,transform .3s,background .3s}
+.fila-feat:hover{border-color:rgba(255,209,0,.2);background:rgba(10,24,40,.75);transform:translateY(-2px)}
+.fila-feat-ico{width:40px;height:40px;border-radius:10px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.fila-feat-t{font-size:13.5px;font-weight:700;margin-bottom:4px}
+.fila-feat-d{font-size:12.5px;color:var(--g);line-height:1.6}
+
+/* Phone-style mock for fila */
+.phone-mock{background:#030b14;border:1px solid rgba(255,209,0,.18);border-radius:34px;padding:14px;max-width:300px;margin:0 auto;box-shadow:0 48px 96px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.04);position:relative}
+.phone-notch{width:90px;height:22px;background:#020a12;border-radius:0 0 14px 14px;margin:-14px auto 10px;position:relative}
+.phone-screen{background:linear-gradient(180deg,#050d18,#0a1828);border-radius:22px;padding:24px 20px 28px;min-height:420px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden}
+.phone-logo{width:26px;height:26px;fill:var(--y);margin-bottom:6px}
+.phone-shop{font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.6px;color:var(--y);margin-bottom:22px}
+.phone-pos-lbl{font-size:9.5px;color:var(--g);letter-spacing:.8px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
+.phone-pos-num{font-family:'Oswald',sans-serif;font-size:72px;font-weight:700;color:var(--y);line-height:1;margin-bottom:2px}
+.phone-pos-sub{font-size:11px;color:var(--g);margin-bottom:14px}
+.phone-dots{display:flex;gap:5px;margin-bottom:16px}
+.phone-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.18)}
+.phone-dot.me{background:var(--y);box-shadow:0 0 6px rgba(255,209,0,.6)}
+.phone-wait{font-size:16px;font-weight:700;margin-bottom:2px}
+.phone-wait-sub{font-size:10px;color:var(--g);margin-bottom:18px}
+.phone-sep{width:50px;height:1px;background:var(--border);margin-bottom:14px}
+.phone-poll{font-size:9px;color:var(--gr);display:flex;align-items:center;gap:5px}
+.phone-poll-d{width:5px;height:5px;border-radius:50%;background:var(--gr);animation:livePulse 2s ease-in-out infinite}
+.phone-float{position:absolute;background:rgba(10,24,40,.95);border:1px solid var(--border-y);border-radius:10px;padding:9px 13px;box-shadow:0 8px 28px rgba(0,0,0,.6);backdrop-filter:blur(10px);font-size:11px;font-weight:600;display:flex;align-items:center;gap:8px;will-change:transform}
+.phone-float-1{top:34%;left:-60px}
+.phone-float-2{bottom:18%;right:-48px}
+.phone-float .pf-ico{font-size:14px}
+
+@media(max-width:1000px){
+  .phone-float-1{left:-8px}
+  .phone-float-2{right:-8px}
+}
+
+/* ── GIANT SCROLL TEXT ── */
+.giant-sec{padding:160px 6% 140px;background:var(--n);overflow:hidden;position:relative;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.giant-sec::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle at 50% 45%,rgba(255,209,0,.025) 0%,transparent 60%);pointer-events:none}
+.giant-inner{max-width:1800px;margin:0 auto;text-align:center;position:relative;z-index:1}
+.giant-eye{font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--y);margin-bottom:34px;display:block}
+.giant-text{font-family:'Oswald',sans-serif;font-size:clamp(58px,15vw,260px);font-weight:700;line-height:.86;letter-spacing:-4px;color:transparent;-webkit-text-stroke:1px rgba(255,209,0,.22);display:block;will-change:transform}
+.giant-text em{color:var(--y);-webkit-text-stroke:0;font-style:normal;display:block;text-shadow:0 0 60px rgba(255,209,0,.25)}
+.giant-sub{font-size:16px;color:var(--g);max-width:540px;margin:40px auto 0;font-weight:300;line-height:1.72}
+.giant-sub strong{color:rgba(255,255,255,.9);font-weight:600}
+
+@media(max-width:768px){
+  .giant-sec{padding:96px 5% 88px}
+  .giant-text{letter-spacing:-2px}
+}
+
 /* ── MOBILE REVEAL (IntersectionObserver, sin GSAP opacity:0) ── */
 @media(max-width:768px){
   .m-rv{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
@@ -334,24 +420,28 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
 </head>
 <body>
 
+<div id="grain"></div>
+<div id="spotlight"></div>
 <div id="progress"></div>
 
 <!-- NAV -->
 <nav id="nav">
   <a href="/" class="logo"><img src="/logo_filo.png" alt="FILO CRM"></a>
   <div class="nav-r nav-links">
+    <a href="#fila" class="nav-link">Fila Digital<span class="nav-new">Nuevo</span></a>
     <a href="#dolores" class="nav-link">Problema</a>
     <a href="#features" class="nav-link">Sistema</a>
     <a href="#planes" class="nav-link">Planes</a>
     <a href="#faq" class="nav-link">FAQ</a>
   </div>
-  <a href="/app" class="nav-cta">✂ Empezar gratis</a>
+  <a href="/app" class="nav-cta magnet">✂ Empezar gratis</a>
 </nav>
 
 <!-- HERO -->
 <section class="hero" id="hero">
   <div class="hero-glow"></div>
   <div class="hero-grid" id="hero-grid"></div>
+  <div class="three-wrap" id="three-wrap"><canvas id="three-canvas"></canvas></div>
   <div class="hero-inner">
     <div class="hero-left">
       <div class="hero-eyebrow" id="hero-eyebrow"><div class="live-dot"></div>Sistema activo en barberías AR</div>
@@ -362,8 +452,8 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
       </h1>
       <p class="hero-desc" id="hero-desc">FILO recupera clientes perdidos, llena huecos en tu agenda y genera <strong>ingresos fijos mensuales</strong> — mientras vos cortás o dormís.</p>
       <div class="hero-ctas" id="hero-ctas">
-        <a href="/app" class="btn-primary">✂ Crear mi cuenta</a>
-        <a href="#features" class="btn-ghost">Ver cómo funciona</a>
+        <a href="/app" class="btn-primary magnet">✂ Crear mi cuenta</a>
+        <a href="#features" class="btn-ghost magnet">Ver cómo funciona</a>
       </div>
       <div class="hero-proof" id="hero-proof">
         <div class="proof-stat"><span class="proof-val">7</span><span class="proof-lbl">días gratis</span></div>
@@ -456,6 +546,47 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   </div>
 </div>
 
+<!-- FILA DIGITAL — NUEVA SECCIÓN DESTACADA -->
+<section class="sec fila-bg" id="fila">
+  <div class="sec-in fila-inner">
+    <div class="fila-left" id="fila-left">
+      <div class="fila-nuevo" id="fila-nuevo"><span class="fila-nuevo-dot"></span>Lo último en FILO</div>
+      <h2 class="sec-title" id="fila-title">
+        <span class="split-w"><span>FILA DIGITAL —</span></span><br>
+        <span class="split-w"><span style="color:var(--y)">SIN ESPERAS PARADOS.</span></span>
+      </h2>
+      <p class="sec-sub" id="fila-sub" style="margin-top:22px">El cliente escanea el QR en la vidriera, se anota con su nombre y el servicio que quiere, y espera donde quiera. Cuando le toca, le llega un WhatsApp automático. El barbero lo llama desde su celular y la comisión se asigna sola.</p>
+      <div class="fila-feats" id="fila-feats">
+        <div class="fila-feat"><div class="fila-feat-ico">📱</div><div><div class="fila-feat-t">QR en la vidriera — se anotan solos</div><div class="fila-feat-d">Imprimís el cartel A4 desde el panel (template incluido). El cliente escanea, elige servicio y listo — sin app, sin registro.</div></div></div>
+        <div class="fila-feat"><div class="fila-feat-ico">💬</div><div><div class="fila-feat-t">WhatsApp automático cuando es su turno</div><div class="fila-feat-d">Tu cliente puede irse a dar una vuelta o tomar un café. Le avisamos por WhatsApp apenas lo llamás.</div></div></div>
+        <div class="fila-feat"><div class="fila-feat-ico">✂️</div><div><div class="fila-feat-t">El barbero llama y cobra</div><div class="fila-feat-d">Cada barbero maneja la fila desde su propio dashboard. El servicio ya viene pre-cargado — solo elegir método de pago.</div></div></div>
+        <div class="fila-feat"><div class="fila-feat-ico">💰</div><div><div class="fila-feat-t">Comisión al que atendió, automática</div><div class="fila-feat-d">Quien llama al cliente es quien lo atiende y cobra — la comisión se calcula sola. Sin discusiones, sin planillas.</div></div></div>
+      </div>
+    </div>
+    <div class="fila-right" id="fila-right">
+      <div class="phone-mock tilt" data-tilt-max="10">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <svg class="phone-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 2a.5.5 0 0 0-.5.5v19a.5.5 0 0 0 1 0V2.5a.5.5 0 0 0-.5-.5zM6 7H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zm9 0h-3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/></svg>
+          <div class="phone-shop">BARBERÍA FC</div>
+          <div class="phone-pos-lbl">Tu posición</div>
+          <div class="phone-pos-num">2°</div>
+          <div class="phone-pos-sub">personas adelante</div>
+          <div class="phone-dots">
+            <span class="phone-dot"></span><span class="phone-dot"></span><span class="phone-dot me"></span>
+          </div>
+          <div class="phone-sep"></div>
+          <div class="phone-wait">~14 min</div>
+          <div class="phone-wait-sub">de espera estimado</div>
+          <div class="phone-poll"><span class="phone-poll-d"></span>Actualizando cada 15s</div>
+        </div>
+      </div>
+      <div class="phone-float phone-float-1"><span class="pf-ico">✂️</span><span>Corte + barba</span></div>
+      <div class="phone-float phone-float-2"><span class="pf-ico">📲</span><span>¡Es tu turno!</span></div>
+    </div>
+  </div>
+</section>
+
 <!-- PAIN POINTS -->
 <section class="sec pains-bg" id="dolores">
   <div class="sec-in">
@@ -512,12 +643,27 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
       <div class="f-panel"><div class="f-num">10</div><span class="f-icon">🧾</span><div class="f-name">SEÑA & COMPROBANTE</div><p class="f-desc">Cobrá una seña antes del turno. FILO verifica automáticamente la transferencia contra tu CBU — el turno se confirma solo cuando el pago llega. Cero ausencias, cero excusas.</p><span class="f-pill live">Verificación auto</span></div>
       <div class="f-panel"><div class="f-num">11</div><span class="f-icon">📦</span><div class="f-name">PRODUCTOS & STOCK</div><p class="f-desc">Inventario de pomadas, tónicos y accesorios con precio de costo y venta. Registrá ventas, seguí los movimientos y recibí alerta cuando el stock esté bajo. Nunca más "se terminó en el peor momento".</p><span class="f-pill">Inventario real</span></div>
       <div class="f-panel"><div class="f-num">12</div><span class="f-icon">🗓️</span><div class="f-name">HORARIOS POR BARBERO</div><p class="f-desc">Cada barbero configura sus días y horarios propios. El sistema de reservas respeta esas reglas — si Lucas no trabaja los lunes, los clientes directamente no ven ese día disponible para él.</p><span class="f-pill staff">Solo en Staff</span></div>
+      <div class="f-panel"><div class="f-num">13</div><span class="f-icon">📲</span><div class="f-name">FILA DIGITAL</div><p class="f-desc">Cola virtual con QR en la vidriera. Los clientes se anotan desde su celular, eligen servicio y esperan donde quieran. Les llega un WhatsApp cuando es su turno — cero esperas parados, cero cuadernito.</p><span class="f-pill live">Nuevo</span></div>
+      <div class="f-panel"><div class="f-num">14</div><span class="f-icon">🤝</span><div class="f-name">COMISIONES WALK-IN</div><p class="f-desc">Cuando un barbero llama al siguiente de la fila, el sistema lo asigna como responsable. Cuando cobra, la comisión va a él automáticamente. Sin discusiones sobre quién atendió a quién.</p><span class="f-pill staff">Solo en Staff</span></div>
     </div>
     <div class="f-dots" id="f-dots">
       <div class="f-dot on"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
       <div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
       <div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
+      <div class="f-dot"></div><div class="f-dot"></div>
     </div>
+  </div>
+</section>
+
+<!-- GIANT SCROLL TEXT -->
+<section class="giant-sec" id="giant">
+  <div class="giant-inner">
+    <span class="giant-eye" id="giant-eye">Mientras vos cortás</span>
+    <div class="giant-text" id="giant-txt">
+      FILO
+      <em>TRABAJA POR VOS.</em>
+    </div>
+    <p class="giant-sub" id="giant-sub">Cada motor corre en segundo plano. <strong>Dormís, descansás, atendés a otro cliente</strong> — y la barbería sigue generando turnos, recuperando clientes y facturando.</p>
   </div>
 </section>
 
@@ -601,6 +747,9 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
       <div class="faq-item"><div class="faq-q">¿Los 7 días gratis requieren tarjeta de crédito?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Necesitás cargar una tarjeta para activar el trial, pero no se realiza ningún cobro hasta el día 8. Podés cancelar antes sin cargo desde Configuración.</p></div></div>
       <div class="faq-item"><div class="faq-q">¿Puedo gestionar varias sucursales desde una sola cuenta?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Sí, con el plan Enterprise. Creás cada sucursal como una unidad independiente y desde tu cuenta principal ves el dashboard unificado con todas las métricas de la red — turnos, facturación, membresías y equipo de cada local.</p></div></div>
       <div class="faq-item"><div class="faq-q">¿Cómo funciona el cobro de seña por WhatsApp?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Cuando un cliente reserva, FILO le puede pedir una seña. El cliente transfiere al CBU de tu barbería y manda el comprobante por WhatsApp. FILO verifica el pago automáticamente y confirma el turno — sin que toques nada.</p></div></div>
+      <div class="faq-item"><div class="faq-q">¿Cómo funciona la Fila Digital?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Generás un QR desde el panel e imprimís el cartel A4 (viene un template listo). Lo pegás en la vidriera. El cliente escanea, pone su nombre, elige el servicio y se anota. Desde el dashboard del barbero o del dueño ves la fila en tiempo real. Cuando el barbero aprieta "Llamar siguiente", al cliente le llega un WhatsApp automático avisándole que es su turno — puede estar tomando un café en la esquina.</p></div></div>
+      <div class="faq-item"><div class="faq-q">¿Se pueden usar turnos y walk-ins al mismo tiempo?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Sí, es un sistema híbrido. En la vista de la fila el barbero ve las tres listas: quién está en atención, los turnos agendados del día y los walk-ins esperando. Los walk-ins no eligen barbero — el primero que los llama queda asignado como responsable. Los turnos sí tienen barbero asignado desde la reserva.</p></div></div>
+      <div class="faq-item"><div class="faq-q">¿Cómo se asignan las comisiones en walk-ins?<span class="faq-arr">▾</span></div><div class="faq-a"><p>Automático. El barbero que aprieta "Llamar siguiente" queda registrado como el responsable. Cuando cobra el servicio desde su celular, la comisión se calcula con su porcentaje configurado y se registra en la caja. Cero planillas de Excel, cero "¿quién atendió a éste?" al final del día.</p></div></div>
     </div>
   </div>
 </section>
@@ -672,9 +821,10 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   </div>
 </footer>
 
-<!-- GSAP + ScrollTrigger -->
+<!-- GSAP + ScrollTrigger + Three.js -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 gsap.registerPlugin(ScrollTrigger);
 
@@ -776,9 +926,11 @@ if(IS_MOBILE){
   /* Agrega clase .rv a los elementos que queremos revelar */
   const mobileReveal=[
     '#si1','#si2','#si3',
+    '#fila-nuevo','#fila-title','#fila-sub','.fila-feat','#fila-right',
     '#pains-hd','#pains-grid .pain-card',
     '#how-hd','#hs1','#hs2','#hs3',
     '#f-track .f-panel',
+    '#giant-eye','#giant-txt','#giant-sub',
     '#wai-text','#wai-chat-wrap','.wai-feat',
     '#proof-hd','#proof-grid .proof-card',
     '#pricing-hd','#pricing-grid .plan',
@@ -812,6 +964,16 @@ if(IS_MOBILE){
   }
 
   fadeIn(['#si1','#si2','#si3'],{scale:.9,y:40,stagger:.12,ease:'back.out(1.4)',scrollTrigger:{trigger:'#stats',start:'top 88%',once:true}});
+
+  /* FILA DIGITAL */
+  fadeIn('#fila-nuevo',{y:24,scrollTrigger:{trigger:'#fila',start:'top 82%',once:true}});
+  gsap.from('#fila-title .split-w>span',{y:'110%',stagger:.1,duration:.85,ease:'power4.out',scrollTrigger:{trigger:'#fila-title',start:'top 85%',once:true}});
+  fadeIn('#fila-sub',{y:28,scrollTrigger:{trigger:'#fila-sub',start:'top 88%',once:true}});
+  fadeIn('.fila-feat',{y:32,stagger:.09,scrollTrigger:{trigger:'#fila-feats',start:'top 86%',once:true}});
+  gsap.from('#fila-right',{opacity:0,x:60,scale:.95,duration:.95,ease:'power3.out',scrollTrigger:{trigger:'#fila',start:'top 80%',once:true}});
+  /* Parallax sutil del phone mock */
+  gsap.to('#fila-right',{y:-50,ease:'none',scrollTrigger:{trigger:'#fila',start:'top bottom',end:'bottom top',scrub:1.4}});
+
   fadeIn('#pains-hd',{y:40,scrollTrigger:{trigger:'#pains-hd',start:'top 86%',once:true}});
   fadeIn('#pains-grid .pain-card',{y:60,stagger:.1,scrollTrigger:{trigger:'#pains-grid',start:'top 84%',once:true}});
   fadeIn('#how-hd',{scrollTrigger:{trigger:'#how-hd',start:'top 86%',once:true}});
@@ -832,6 +994,12 @@ if(IS_MOBILE){
       fDots.forEach((d,i)=>d.classList.toggle('on',i===idx));
     }
   });
+
+  /* GIANT SCROLL TEXT — scroll-driven parallax */
+  fadeIn('#giant-eye',{y:16,scrollTrigger:{trigger:'#giant',start:'top 86%',once:true}});
+  gsap.from('#giant-txt',{opacity:0,scale:.85,duration:1,ease:'power3.out',scrollTrigger:{trigger:'#giant',start:'top 75%',once:true}});
+  gsap.to('#giant-txt',{xPercent:-8,ease:'none',scrollTrigger:{trigger:'#giant',start:'top bottom',end:'bottom top',scrub:1.2}});
+  fadeIn('#giant-sub',{y:28,scrollTrigger:{trigger:'#giant-sub',start:'top 92%',once:true}});
 
   gsap.from('#wai-text',{opacity:0,x:-56,duration:.9,ease:'power3.out',scrollTrigger:{trigger:'#whatsapp',start:'top 100%',once:true}});
   gsap.from('#wai-chat-wrap',{opacity:0,x:56,duration:.9,ease:'power3.out',scrollTrigger:{trigger:'#whatsapp',start:'top 100%',once:true}});
@@ -865,6 +1033,171 @@ document.querySelectorAll('a[href^="#"]').forEach(a=>{
     if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}
   });
 });
+
+/* ══════════════════════════════════════════════════════════
+   CURSOR SPOTLIGHT (desktop)
+   ══════════════════════════════════════════════════════════ */
+if(!IS_MOBILE && window.matchMedia('(hover:hover)').matches){
+  const sp=document.getElementById('spotlight');
+  let cx=0,cy=0,tx=0,ty=0,raf;
+  function loop(){
+    cx+=(tx-cx)*.18; cy+=(ty-cy)*.18;
+    sp.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`;
+    raf=requestAnimationFrame(loop);
+  }
+  window.addEventListener('mousemove',e=>{
+    tx=e.clientX; ty=e.clientY;
+    if(!document.body.classList.contains('mouse-moved'))document.body.classList.add('mouse-moved');
+    if(!raf)loop();
+  },{passive:true});
+}
+
+/* ══════════════════════════════════════════════════════════
+   3D TILT on cards (desktop)
+   ══════════════════════════════════════════════════════════ */
+if(!IS_MOBILE && window.matchMedia('(hover:hover)').matches){
+  const tiltSelectors=['.pain-card','.f-panel','.plan','.proof-card','.phone-mock'];
+  tiltSelectors.forEach(sel=>{
+    document.querySelectorAll(sel).forEach(el=>{
+      if(!el.classList.contains('tilt'))el.classList.add('tilt');
+      const max=parseFloat(el.dataset.tiltMax||8);
+      el.addEventListener('mousemove',e=>{
+        const r=el.getBoundingClientRect();
+        const px=((e.clientX-r.left)/r.width-.5)*2;
+        const py=((e.clientY-r.top)/r.height-.5)*2;
+        el.classList.add('tilting');
+        el.style.transform=`perspective(900px) rotateY(${px*max}deg) rotateX(${-py*max}deg) translateZ(0)`;
+      });
+      el.addEventListener('mouseleave',()=>{
+        el.classList.remove('tilting');
+        el.style.transform='perspective(900px) rotateY(0) rotateX(0) translateZ(0)';
+      });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   MAGNETIC BUTTONS (desktop)
+   ══════════════════════════════════════════════════════════ */
+if(!IS_MOBILE && window.matchMedia('(hover:hover)').matches){
+  document.querySelectorAll('.magnet').forEach(btn=>{
+    btn.addEventListener('mousemove',e=>{
+      const r=btn.getBoundingClientRect();
+      const x=e.clientX-r.left-r.width/2;
+      const y=e.clientY-r.top-r.height/2;
+      btn.style.transform=`translate(${x*.22}px,${y*.32}px)`;
+    });
+    btn.addEventListener('mouseleave',()=>{ btn.style.transform=''; });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   THREE.JS — rotating barber pole in hero
+   ══════════════════════════════════════════════════════════ */
+(function(){
+  const canvas=document.getElementById('three-canvas');
+  if(!canvas||typeof THREE==='undefined'||IS_MOBILE)return;
+  const wrap=document.getElementById('three-wrap');
+
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(42,1,.1,100);
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+
+  /* Diagonal stripes texture (FILO yellow + navy) */
+  const tc=document.createElement('canvas');tc.width=256;tc.height=512;
+  const tctx=tc.getContext('2d');
+  // Base navy
+  tctx.fillStyle='#050d18';tctx.fillRect(0,0,256,512);
+  // Yellow stripes
+  tctx.fillStyle='#FFD100';
+  tctx.save();tctx.translate(0,0);
+  const stripeW=46, gap=56;
+  for(let y=-512;y<1024;y+=stripeW+gap){
+    tctx.beginPath();
+    tctx.moveTo(-100,y);
+    tctx.lineTo(256+100,y+240);
+    tctx.lineTo(256+100,y+240+stripeW);
+    tctx.lineTo(-100,y+stripeW);
+    tctx.closePath();tctx.fill();
+  }
+  tctx.restore();
+  const tex=new THREE.CanvasTexture(tc);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+
+  /* Pole (cylinder) */
+  const poleGeom=new THREE.CylinderGeometry(.9,.9,4.2,96,1,true);
+  const poleMat=new THREE.MeshStandardMaterial({map:tex,metalness:.45,roughness:.32,side:THREE.DoubleSide});
+  const pole=new THREE.Mesh(poleGeom,poleMat);
+  scene.add(pole);
+
+  /* Chrome caps */
+  const capGeom=new THREE.SphereGeometry(.96,48,24);
+  const capMat=new THREE.MeshStandardMaterial({color:0x1a2a42,metalness:.85,roughness:.18});
+  const capTop=new THREE.Mesh(capGeom,capMat);capTop.position.y=2.1;capTop.scale.y=.55;scene.add(capTop);
+  const capBot=new THREE.Mesh(capGeom,capMat);capBot.position.y=-2.1;capBot.scale.y=.55;scene.add(capBot);
+
+  /* Lights */
+  scene.add(new THREE.AmbientLight(0xffffff,.32));
+  const key=new THREE.DirectionalLight(0xffd100,1.35);key.position.set(4,4,6);scene.add(key);
+  const rim=new THREE.DirectionalLight(0x6ab8ff,.55);rim.position.set(-5,2,-4);scene.add(rim);
+  const fill=new THREE.PointLight(0xff9100,.4,12);fill.position.set(-3,-2,3);scene.add(fill);
+
+  camera.position.set(0,0,6.5);
+  pole.rotation.z=.12;
+
+  function resize(){
+    const w=wrap.clientWidth,h=wrap.clientHeight||window.innerHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h; camera.updateProjectionMatrix();
+  }
+  resize();window.addEventListener('resize',resize);
+
+  let mx=0,my=0,tmx=0,tmy=0;
+  window.addEventListener('mousemove',e=>{
+    tmx=(e.clientX/window.innerWidth-.5)*.4;
+    tmy=(e.clientY/window.innerHeight-.5)*.3;
+  },{passive:true});
+
+  /* Texture scroll speed */
+  let scrollFactor=0;
+  window.addEventListener('scroll',()=>{
+    scrollFactor=Math.min(window.scrollY/800,1);
+  },{passive:true});
+
+  function tick(){
+    mx+=(tmx-mx)*.06; my+=(tmy-my)*.06;
+    pole.rotation.y+=0.018;
+    pole.rotation.x=my*.3;
+    pole.rotation.z=.12+mx*.15;
+    tex.offset.y-=0.004+scrollFactor*.012;
+    renderer.render(scene,camera);
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  /* Fade out on scroll */
+  gsap.to('#three-wrap',{opacity:0,ease:'none',scrollTrigger:{trigger:'.hero',start:'top top',end:'bottom top',scrub:1}});
+})();
+
+/* ══════════════════════════════════════════════════════════
+   HERO H1 LETTER GLITCH (subtle, desktop only)
+   ══════════════════════════════════════════════════════════ */
+if(!IS_MOBILE){
+  const h1=document.getElementById('hero-h1');
+  if(h1){
+    const em=h1.querySelector('em .clip-inner');
+    if(em){
+      gsap.to(em,{
+        color:'#FFE066',
+        duration:2.2,
+        repeat:-1,
+        yoyo:true,
+        ease:'sine.inOut'
+      });
+    }
+  }
+}
 
 /* ── ESC close modal ── */
 window.addEventListener('keydown',e=>{
