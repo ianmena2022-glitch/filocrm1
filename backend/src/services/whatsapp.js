@@ -17,6 +17,13 @@ const statuses = {};
 const decryptErrors = {};
 const ciphertextLastWarning = {}; // debounce: última vez que se avisó por JID
 
+// Registrar una única vez el handler de unhandledRejection para errores de conexión no fatales
+process.on('unhandledRejection', (reason) => {
+  if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
+    console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
+  }
+});
+
 // Fix #15: limpiar entradas de ciphertextLastWarning con más de 10 minutos
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
@@ -495,11 +502,6 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   statuses[shopId] = 'connecting';
 
   sock.ev.on('CB:receipt', () => {});
-  process.on('unhandledRejection', (reason) => {
-    if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
-      console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
-    }
-  });
 
   sock.ev.on('creds.update', async () => {
     await saveCreds();
