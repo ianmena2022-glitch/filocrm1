@@ -540,8 +540,8 @@ async function loadAll() {
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
 function renderStats() {
-  // Solo cuentas raíz (no barberos ni sucursales hijo)
-  const roots  = allAccounts.filter(a => !a.is_barber && !a.is_branch);
+  // Solo cuentas raíz reales (excluye barberos, sucursales y cuentas test)
+  const roots  = allAccounts.filter(a => !a.is_barber && !a.is_branch && !a.is_test);
   const active = roots.filter(a => a.subscription_status === 'active');
   const trial  = roots.filter(a => a.subscription_status === 'trial');
   const expired = roots.filter(a => ['expired','cancelled'].includes(a.subscription_status));
