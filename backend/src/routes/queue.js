@@ -167,10 +167,16 @@ router.post('/:slug/leave', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
+// ─── Helper: si el usuario es un barbero, usar parent_shop_id ───────────────
+async function resolveShopId(authShopId) {
+  const r = await pool.query('SELECT parent_shop_id FROM shops WHERE id=$1', [authShopId]);
+  return r.rows[0]?.parent_shop_id || authShopId;
+}
+
 // ─── PROTECTED: get queue ────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
-    const shopId = req.shopId;
+    const shopId = await resolveShopId(req.shopId);
 
     // paused + slug
     const shopRes = await pool.query(
@@ -223,7 +229,7 @@ router.get('/', auth, async (req, res) => {
 // ─── PROTECTED: call next ────────────────────────────────────────────────────
 router.post('/next', auth, async (req, res) => {
   try {
-    const shopId = req.shopId;
+    const shopId = await resolveShopId(req.shopId);
 
     // Get shop name
     const shopRes = await pool.query('SELECT name FROM shops WHERE id=$1', [shopId]);
@@ -292,10 +298,11 @@ router.post('/next', auth, async (req, res) => {
 // ─── PROTECTED: mark served ──────────────────────────────────────────────────
 router.post('/serve/:id', auth, async (req, res) => {
   try {
+    const shopId = await resolveShopId(req.shopId);
     await pool.query(
       `UPDATE queue_entries SET status='served', served_at=NOW()
        WHERE id=$1 AND shop_id=$2`,
-      [req.params.id, req.shopId]
+      [req.params.id, shopId]
     );
     return res.json({ ok: true });
   } catch (e) {
@@ -307,9 +314,10 @@ router.post('/serve/:id', auth, async (req, res) => {
 // ─── PROTECTED: remove from queue ───────────────────────────────────────────
 router.post('/remove/:id', auth, async (req, res) => {
   try {
+    const shopId = await resolveShopId(req.shopId);
     await pool.query(
       `UPDATE queue_entries SET status='left' WHERE id=$1 AND shop_id=$2`,
-      [req.params.id, req.shopId]
+      [req.params.id, shopId]
     );
     return res.json({ ok: true });
   } catch (e) {
@@ -321,9 +329,10 @@ router.post('/remove/:id', auth, async (req, res) => {
 // ─── PROTECTED: toggle pause ─────────────────────────────────────────────────
 router.post('/pause', auth, async (req, res) => {
   try {
+    const shopId = await resolveShopId(req.shopId);
     const result = await pool.query(
       `UPDATE shops SET queue_paused = NOT queue_paused WHERE id=$1 RETURNING queue_paused`,
-      [req.shopId]
+      [shopId]
     );
     return res.json({ paused: result.rows[0].queue_paused });
   } catch (e) {
@@ -335,10 +344,11 @@ router.post('/pause', auth, async (req, res) => {
 // ─── PROTECTED: clear queue ──────────────────────────────────────────────────
 router.delete('/', auth, async (req, res) => {
   try {
+    const shopId = await resolveShopId(req.shopId);
     await pool.query(
       `UPDATE queue_entries SET status='left'
        WHERE shop_id=$1 AND status IN ('waiting','called')`,
-      [req.shopId]
+      [shopId]
     );
     return res.json({ ok: true });
   } catch (e) {

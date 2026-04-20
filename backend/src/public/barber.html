@@ -272,6 +272,78 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
 @media (min-width: 769px) {
   .appt-card-mobile { display: none; }
 }
+
+/* ── FILA ── */
+.fila-badge {
+  margin-left: auto;
+  background: var(--yellow); color: #050d18;
+  border-radius: 10px; padding: 1px 7px;
+  font-size: 10px; font-weight: 700; line-height: 18px;
+  display: none;
+}
+.fila-badge.show { display: inline-block; }
+
+.fila-called-card {
+  background: rgba(0,200,117,0.07);
+  border: 1px solid rgba(0,200,117,0.25);
+  border-radius: var(--radius); padding: 20px 22px;
+  margin-bottom: 20px; display: none;
+}
+.fila-called-card.show { display: block; }
+.fila-called-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--green); margin-bottom: 6px;
+}
+.fila-called-name {
+  font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700;
+  color: var(--white); margin-bottom: 4px;
+}
+.fila-called-phone { font-size: 12px; color: var(--gray); margin-bottom: 16px; }
+.btn-served {
+  background: var(--green); color: #050d18; border: none;
+  border-radius: 9px; padding: 11px 22px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px; cursor: pointer; transition: all .15s;
+}
+.btn-served:hover { box-shadow: 0 4px 14px rgba(0,200,117,0.35); }
+
+.btn-call-next {
+  width: 100%; padding: 16px;
+  background: var(--yellow); color: #050d18; border: none;
+  border-radius: var(--radius);
+  font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  cursor: pointer; margin-bottom: 20px; transition: all .2s;
+}
+.btn-call-next:hover { box-shadow: 0 4px 20px rgba(255,209,0,0.4); }
+.btn-call-next:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+.queue-list { display: flex; flex-direction: column; gap: 8px; }
+.queue-item {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px 16px;
+}
+.queue-pos {
+  font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700;
+  color: var(--yellow); width: 32px; text-align: center; flex-shrink: 0;
+}
+.queue-name { font-weight: 600; font-size: 14px; flex: 1; }
+.queue-meta { font-size: 11px; color: var(--gray); margin-top: 2px; }
+.queue-empty { text-align: center; padding: 48px 20px; color: var(--gray); font-size: 13px; }
+
+.fila-stats-row {
+  display: flex; gap: 10px; margin-bottom: 18px;
+}
+.fila-stat {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.fila-stat-val {
+  font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700;
+  color: var(--yellow); line-height: 1;
+}
+.fila-stat-lbl { font-size: 10px; color: var(--gray); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -322,7 +394,6 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
           Dashboard
         </div>
         <div class="nav-item" onclick="showTab('agenda')" id="nav-agenda">
-          <!-- Calendar icon -->
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2.5"/>
             <line x1="16" y1="2" x2="16" y2="6"/>
@@ -330,6 +401,17 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
             <line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
           Agenda
+        </div>
+        <div class="nav-item" onclick="showTab('fila')" id="nav-fila">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="7" r="3"/>
+            <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+            <line x1="16" y1="3" x2="22" y2="3"/>
+            <line x1="16" y1="8" x2="22" y2="8"/>
+            <line x1="19" y1="13" x2="22" y2="13"/>
+          </svg>
+          Fila
+          <span class="fila-badge" id="fila-badge">0</span>
         </div>
 
       </nav>
@@ -393,6 +475,49 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
 
       </div>
 
+      <!-- ── FILA ── -->
+      <div id="tab-fila" class="tab-section">
+
+        <!-- Cliente en el sillón ahora -->
+        <div class="fila-called-card" id="fila-called-card">
+          <div class="fila-called-label">💈 En el sillón ahora</div>
+          <div class="fila-called-name" id="fila-called-name">—</div>
+          <div class="fila-called-phone" id="fila-called-phone"></div>
+          <button class="btn-served" onclick="barberServe()">✓ Marcar atendido</button>
+        </div>
+
+        <!-- Stats rápidas -->
+        <div class="fila-stats-row">
+          <div class="fila-stat">
+            <div class="fila-stat-val" id="fila-stat-waiting">0</div>
+            <div class="fila-stat-lbl">Esperando</div>
+          </div>
+          <div class="fila-stat">
+            <div class="fila-stat-val" id="fila-stat-served">0</div>
+            <div class="fila-stat-lbl">Atendidos hoy</div>
+          </div>
+          <div class="fila-stat">
+            <div class="fila-stat-val" id="fila-stat-avg">—</div>
+            <div class="fila-stat-lbl">Min. promedio</div>
+          </div>
+        </div>
+
+        <!-- Botón principal -->
+        <button class="btn-call-next" id="btn-call-next" onclick="barberCallNext()">
+          ✂️ Llamar siguiente
+        </button>
+
+        <!-- Lista de espera -->
+        <div class="section-header" style="margin-bottom:10px">
+          <div class="section-title">En la fila</div>
+          <span onclick="loadFila()" style="font-size:12px;color:var(--gray);cursor:pointer">↺ Actualizar</span>
+        </div>
+        <div class="queue-list" id="fila-queue-list">
+          <div class="queue-empty">Cargando fila...</div>
+        </div>
+
+      </div>
+
       <!-- ── AGENDA ── -->
       <div id="tab-agenda" class="tab-section">
         <div class="date-nav">
@@ -442,6 +567,17 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
         <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
       <span>Agenda</span>
+    </div>
+    <div class="bottom-nav-item" onclick="showTab('fila')" id="mob-nav-fila" style="position:relative">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="7" r="3"/>
+        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <line x1="16" y1="3" x2="22" y2="3"/>
+        <line x1="16" y1="8" x2="22" y2="8"/>
+        <line x1="19" y1="13" x2="22" y2="13"/>
+      </svg>
+      <span>Fila</span>
+      <span id="mob-fila-badge" style="display:none;position:absolute;top:6px;right:calc(50% - 18px);background:#FFD100;color:#000;border-radius:8px;padding:0 5px;font-size:9px;font-weight:700;line-height:16px">0</span>
     </div>
 
   </div>
@@ -539,14 +675,24 @@ function startPolling() {
     if (document.getElementById('payment-popup')) return;
     try {
       const agendaActive = document.getElementById('tab-agenda')?.classList.contains('active');
+      const filaActive   = document.getElementById('tab-fila')?.classList.contains('active');
       if (agendaActive) await loadAgenda();
+      else if (filaActive) await loadFila();
       else await loadDashboard();
+      // Siempre actualizar badge de fila en segundo plano
+      if (!filaActive) {
+        try {
+          const qd = await api('GET', '/queue');
+          const total = qd.entries.filter(e => e.status === 'waiting' || e.status === 'called').length;
+          updateFilaBadge(total);
+        } catch(e) {}
+      }
     } catch(e) { console.warn('[polling] error:', e.message); }
   }, 15000);
 }
 
 // ── NAVIGATION ───────────────────────────────────────────
-const TABS = ['dashboard', 'agenda'];
+const TABS = ['dashboard', 'agenda', 'fila'];
 
 function showTab(tab) {
   TABS.forEach(t => {
@@ -563,10 +709,11 @@ function showTab(tab) {
   const mobEl = document.getElementById('mob-nav-' + tab);
   if (mobEl) mobEl.classList.add('active');
 
-  const titles = { dashboard: 'Dashboard', agenda: 'Agenda', clientes: 'Clientes' };
+  const titles = { dashboard: 'Dashboard', agenda: 'Agenda', fila: 'Fila Digital' };
   document.getElementById('topbar-title').textContent = titles[tab] || tab;
 
   if (tab === 'agenda') loadAgenda();
+  if (tab === 'fila') loadFila();
 }
 
 // ── DATE ─────────────────────────────────────────────────
@@ -873,6 +1020,107 @@ function goToAgendaDate(dateStr) {
   currentDate = dateStr;
   showTab("agenda");
   loadAgenda();
+}
+
+// ── FILA ─────────────────────────────────────────────────
+let _filaCalledId = null; // id del entry que está en el sillón
+
+async function loadFila() {
+  try {
+    const data = await api('GET', '/queue');
+
+    // Stats
+    const waiting = data.entries.filter(e => e.status === 'waiting').length;
+    const called  = data.entries.filter(e => e.status === 'called');
+    document.getElementById('fila-stat-waiting').textContent = waiting;
+    document.getElementById('fila-stat-served').textContent  = data.served_today ?? 0;
+    document.getElementById('fila-stat-avg').textContent     = data.avg_wait_min != null ? Math.round(data.avg_wait_min) : '—';
+
+    // Badge en nav
+    updateFilaBadge(waiting + called.length);
+
+    // Botón "Llamar siguiente"
+    const btn = document.getElementById('btn-call-next');
+    if (btn) btn.disabled = waiting === 0;
+
+    // Tarjeta "en el sillón"
+    const calledCard = document.getElementById('fila-called-card');
+    if (called.length > 0) {
+      const c = called[0];
+      _filaCalledId = c.id;
+      document.getElementById('fila-called-name').textContent  = c.client_name;
+      document.getElementById('fila-called-phone').textContent = c.client_phone ? `📞 ${c.client_phone}` : '';
+      calledCard.classList.add('show');
+    } else {
+      _filaCalledId = null;
+      calledCard.classList.remove('show');
+    }
+
+    // Lista de espera
+    const listEl = document.getElementById('fila-queue-list');
+    const waitingEntries = data.entries.filter(e => e.status === 'waiting');
+    if (!waitingEntries.length) {
+      listEl.innerHTML = `<div class="queue-empty">🎉 No hay nadie esperando</div>`;
+    } else {
+      listEl.innerHTML = waitingEntries.map((e, i) => {
+        const mins = Math.round(e.minutes_waiting || 0);
+        return `<div class="queue-item">
+          <div class="queue-pos">${i + 1}°</div>
+          <div>
+            <div class="queue-name">${e.client_name}</div>
+            <div class="queue-meta">${e.client_phone ? `📞 ${e.client_phone} · ` : ''}${mins}min esperando</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    console.error('[fila]', e);
+    document.getElementById('fila-queue-list').innerHTML =
+      `<div class="queue-empty" style="color:var(--red)">Error cargando fila</div>`;
+  }
+}
+
+function updateFilaBadge(count) {
+  const badge    = document.getElementById('fila-badge');
+  const mobBadge = document.getElementById('mob-fila-badge');
+  if (badge) {
+    badge.textContent = count;
+    badge.classList.toggle('show', count > 0);
+  }
+  if (mobBadge) {
+    mobBadge.textContent = count;
+    mobBadge.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+}
+
+async function barberCallNext() {
+  const btn = document.getElementById('btn-call-next');
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api('POST', '/queue/next');
+    if (data.ok) {
+      showToast(`✂️ Llamando a ${data.entry.client_name}`);
+      await loadFila();
+    } else {
+      showToast(data.message || 'No hay nadie en la fila');
+      if (btn) btn.disabled = false;
+    }
+  } catch(e) {
+    showToast('❌ ' + e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function barberServe() {
+  if (!_filaCalledId) return;
+  try {
+    await api('POST', `/queue/serve/${_filaCalledId}`);
+    showToast('✅ Cliente atendido');
+    _filaCalledId = null;
+    await loadFila();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────
