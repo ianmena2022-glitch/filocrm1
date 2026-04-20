@@ -170,18 +170,23 @@ router.get('/:slug/available', async (req, res) => {
     const dayKey = dayNames[dayOfWeek];
 
     // Si hay horario configurado, verificar si ese día trabajan
-    let workStart = 9 * 60;
-    let workEnd   = 20 * 60;
+    // workRanges: array de {from, to} en minutos — soporta franjas múltiples por día
+    let workRanges = [{ from: 9 * 60, to: 20 * 60 }];
 
     if (schedule) {
       const daySchedule = schedule[dayKey];
       if (!daySchedule || !daySchedule.active) {
         return res.json({ slots: [], duration, closed: true });
       }
-      const [startH, startM] = daySchedule.start.split(':').map(Number);
-      const [endH, endM]     = daySchedule.end.split(':').map(Number);
-      workStart = startH * 60 + startM;
-      workEnd   = endH * 60 + endM;
+      // Normalizar: formato viejo {start, end} → nuevo {ranges:[...]}
+      const ranges = daySchedule.ranges && Array.isArray(daySchedule.ranges)
+        ? daySchedule.ranges
+        : [{ start: daySchedule.start || '09:00', end: daySchedule.end || '20:00' }];
+      workRanges = ranges.map(r => {
+        const [sh, sm] = (r.start || '09:00').split(':').map(Number);
+        const [eh, em] = (r.end   || '20:00').split(':').map(Number);
+        return { from: sh * 60 + sm, to: eh * 60 + em };
+      });
     }
 
     // Cargar barberos (para cálculo de disponibilidad por barbero)
@@ -259,7 +264,15 @@ router.get('/:slug/available', async (req, res) => {
     const nowAR = new Date(Date.now() - AR_OFFSET_MS);
     const todayAR = nowAR.toISOString().split('T')[0];
 
-    for (let t = workStart; t + duration <= workEnd; t += 30) {
+    // Construir lista de slots válidos a partir de todas las franjas horarias
+    const validTimes = [];
+    for (const range of workRanges) {
+      for (let t = range.from; t + duration <= range.to; t += 30) {
+        validTimes.push(t);
+      }
+    }
+
+    for (const t of validTimes) {
       if (date === todayAR) {
         const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
         if (t <= nowMinsAR + 30) continue;

@@ -5020,36 +5020,56 @@ const DAYS = [
 ];
 
 const DEFAULT_SCHEDULE = {
-  lunes:     { active: true,  start: '09:00', end: '20:00' },
-  martes:    { active: true,  start: '09:00', end: '20:00' },
-  miercoles: { active: true,  start: '09:00', end: '20:00' },
-  jueves:    { active: true,  start: '09:00', end: '20:00' },
-  viernes:   { active: true,  start: '09:00', end: '20:00' },
-  sabado:    { active: true,  start: '09:00', end: '14:00' },
-  domingo:   { active: false, start: '09:00', end: '14:00' },
+  lunes:     { active: true,  ranges: [{ start: '09:00', end: '20:00' }] },
+  martes:    { active: true,  ranges: [{ start: '09:00', end: '20:00' }] },
+  miercoles: { active: true,  ranges: [{ start: '09:00', end: '20:00' }] },
+  jueves:    { active: true,  ranges: [{ start: '09:00', end: '20:00' }] },
+  viernes:   { active: true,  ranges: [{ start: '09:00', end: '20:00' }] },
+  sabado:    { active: true,  ranges: [{ start: '09:00', end: '14:00' }] },
+  domingo:   { active: false, ranges: [{ start: '09:00', end: '14:00' }] },
 };
+
+// Normaliza formato viejo {start, end} → nuevo {ranges:[...]}
+function normalizeDaySchedule(day) {
+  if (!day) return { active: false, ranges: [{ start: '09:00', end: '20:00' }] };
+  if (day.ranges && Array.isArray(day.ranges)) return day;
+  return { active: day.active || false, ranges: [{ start: day.start || '09:00', end: day.end || '20:00' }] };
+}
+
+function _rangeRowHtml(key, r) {
+  const timeStyle = `background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none;width:100px`;
+  return `
+    <div class="sch-range-row" style="display:flex;align-items:center;gap:8px">
+      <input type="time" class="sch-start" value="${r.start}" style="${timeStyle}">
+      <span style="color:var(--gray);font-size:12px">a</span>
+      <input type="time" class="sch-end" value="${r.end}" style="${timeStyle}">
+      <button onclick="removeRange(this,'${key}')" title="Eliminar franja"
+        style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,67,67,.4);background:rgba(255,67,67,.08);color:#ff8080;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0">−</button>
+    </div>`;
+}
 
 function renderSchedule(schedule) {
   const grid = document.getElementById('schedule-grid');
   if (!grid) return;
   const s = schedule || DEFAULT_SCHEDULE;
   grid.innerHTML = DAYS.map(({ key, label }) => {
-    const day = s[key] || { active: false, start: '09:00', end: '20:00' };
+    const day = normalizeDaySchedule(s[key]);
+    const rangesHtml = day.ranges.map(r => _rangeRowHtml(key, r)).join('');
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px">
-      <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;cursor:pointer">
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px">
+      <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;cursor:pointer;margin-top:2px">
         <input type="checkbox" id="sch-active-${key}" ${day.active ? 'checked' : ''} onchange="toggleDaySchedule('${key}')" style="opacity:0;width:0;height:0;position:absolute">
         <span id="sch-slider-${key}" style="position:absolute;inset:0;background:${day.active ? 'var(--yellow)' : 'rgba(255,255,255,0.12)'};border-radius:22px;transition:.2s">
           <span style="position:absolute;top:3px;left:${day.active ? '21px' : '3px'};width:16px;height:16px;background:${day.active ? '#000d1f' : '#8a9ab5'};border-radius:50%;transition:.2s" id="sch-thumb-${key}"></span>
         </span>
       </label>
-      <span style="width:90px;font-size:13px;font-weight:600">${label}</span>
-      <div id="sch-times-${key}" style="display:${day.active ? 'flex' : 'none'};align-items:center;gap:8px;flex:1">
-        <input type="time" id="sch-start-${key}" value="${day.start}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none">
-        <span style="color:var(--gray);font-size:12px">a</span>
-        <input type="time" id="sch-end-${key}" value="${day.end}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none">
+      <span style="width:90px;font-size:13px;font-weight:600;padding-top:4px;flex-shrink:0">${label}</span>
+      <div id="sch-ranges-${key}" style="display:${day.active ? 'flex' : 'none'};flex-direction:column;gap:6px;flex:1">
+        ${rangesHtml}
+        <button onclick="addRange('${key}')"
+          style="align-self:flex-start;margin-top:2px;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.06);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px">+ Franja</button>
       </div>
-      <div id="sch-closed-${key}" style="display:${day.active ? 'none' : 'flex'};align-items:center">
+      <div id="sch-closed-${key}" style="display:${day.active ? 'none' : 'flex'};align-items:center;padding-top:4px">
         <span style="font-size:12px;color:var(--gray)">Cerrado</span>
       </div>
     </div>`;
@@ -5060,23 +5080,41 @@ function toggleDaySchedule(key) {
   const active = document.getElementById(`sch-active-${key}`).checked;
   const slider = document.getElementById(`sch-slider-${key}`);
   const thumb  = document.getElementById(`sch-thumb-${key}`);
-  const times  = document.getElementById(`sch-times-${key}`);
+  const ranges = document.getElementById(`sch-ranges-${key}`);
   const closed = document.getElementById(`sch-closed-${key}`);
   slider.style.background = active ? 'var(--yellow)' : 'rgba(255,255,255,0.12)';
   thumb.style.background  = active ? '#000d1f' : '#8a9ab5';
   thumb.style.left        = active ? '21px' : '3px';
-  times.style.display     = active ? 'flex' : 'none';
+  ranges.style.display    = active ? 'flex' : 'none';
   closed.style.display    = active ? 'none' : 'flex';
+}
+
+function addRange(key) {
+  const container = document.getElementById(`sch-ranges-${key}`);
+  const addBtn = container.querySelector('button[onclick^="addRange"]');
+  const row = document.createElement('div');
+  row.innerHTML = _rangeRowHtml(key, { start: '09:00', end: '20:00' });
+  container.insertBefore(row.firstElementChild, addBtn);
+}
+
+function removeRange(btn, key) {
+  const container = document.getElementById(`sch-ranges-${key}`);
+  const rows = container.querySelectorAll('.sch-range-row');
+  if (rows.length <= 1) return; // mínimo 1 franja
+  btn.closest('.sch-range-row').remove();
 }
 
 function getScheduleFromUI() {
   const schedule = {};
   DAYS.forEach(({ key }) => {
-    schedule[key] = {
-      active: document.getElementById(`sch-active-${key}`)?.checked || false,
-      start:  document.getElementById(`sch-start-${key}`)?.value || '09:00',
-      end:    document.getElementById(`sch-end-${key}`)?.value || '20:00',
-    };
+    const active = document.getElementById(`sch-active-${key}`)?.checked || false;
+    const container = document.getElementById(`sch-ranges-${key}`);
+    const rows = container ? container.querySelectorAll('.sch-range-row') : [];
+    const ranges = Array.from(rows).map(row => ({
+      start: row.querySelector('.sch-start')?.value || '09:00',
+      end:   row.querySelector('.sch-end')?.value   || '20:00',
+    }));
+    schedule[key] = { active, ranges: ranges.length ? ranges : [{ start: '09:00', end: '20:00' }] };
   });
   return schedule;
 }
