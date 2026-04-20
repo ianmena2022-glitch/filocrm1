@@ -386,3 +386,12 @@ CREATE TABLE IF NOT EXISTS queue_entries (
 CREATE INDEX IF NOT EXISTS idx_queue_shop ON queue_entries(shop_id, status, created_at);
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS queue_paused BOOLEAN DEFAULT FALSE;
 
+-- Hybrid queue: walk-in tracking
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS barber_id INT REFERENCES shops(id) ON DELETE SET NULL;
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS service_name VARCHAR(255);
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT NULL
+  CHECK (payment_method IN ('cash','debit','credit','transfer','debt') OR payment_method IS NULL);
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL;
+

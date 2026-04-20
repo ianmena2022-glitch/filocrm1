@@ -213,12 +213,23 @@ router.get('/', auth, async (req, res) => {
       [shopId]
     );
 
+    // Today's appointments (for hybrid view)
+    const today = new Date().toISOString().split('T')[0];
+    const apptRes = await pool.query(
+      `SELECT id, client_name, service_name, price, time_start, barber_name, barber_id, status, commission_pct
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status IN ('pending','confirmed')
+       ORDER BY time_start ASC`,
+      [shopId, today]
+    );
+
     return res.json({
       paused: shop.queue_paused || false,
       shop_slug: shop.booking_slug || '',
       entries: entriesRes.rows,
       avg_wait_min,
-      served_today: servedRes.rows[0].cnt
+      served_today: servedRes.rows[0].cnt,
+      appointments_today: apptRes.rows
     });
   } catch (e) {
     console.error('queue GET error', e);
@@ -247,10 +258,13 @@ router.post('/next', auth, async (req, res) => {
     }
     const entry = entryRes.rows[0];
 
-    // Update to called
+    // Assign barber if caller is a barber (not owner)
+    const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
+    const isBarber = callerRes.rows[0]?.is_barber || false;
+    const assignedBarberId = isBarber ? req.shopId : null;
     await pool.query(
-      `UPDATE queue_entries SET status='called', called_at=NOW() WHERE id=$1`,
-      [entry.id]
+      `UPDATE queue_entries SET status='called', called_at=NOW(), barber_id=COALESCE(barber_id,$1) WHERE id=$2`,
+      [assignedBarberId, entry.id]
     );
 
     // Count remaining waiting
@@ -307,6 +321,84 @@ router.post('/serve/:id', auth, async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('queue serve error', e);
+    return res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── PROTECTED: complete walk-in with payment (hybrid) ──────────────────────
+router.post('/complete/:id', auth, async (req, res) => {
+  try {
+    const shopId = await resolveShopId(req.shopId);
+    const { price, cost, service_name, payment_method, tip, barber_id, commission_pct } = req.body;
+
+    const entryRes = await pool.query(
+      'SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2',
+      [req.params.id, shopId]
+    );
+    if (!entryRes.rows.length) return res.status(404).json({ error: 'No encontrado' });
+    const entry = entryRes.rows[0];
+
+    const today = new Date().toISOString().split('T')[0];
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const p = parseFloat(price) || 0;
+    const t = parseFloat(tip) || 0;
+    const pct = parseInt(commission_pct) || 50;
+    const c = parseFloat(cost) || 0;
+
+    // Get barber name if assigned
+    let barberName = null;
+    const finalBarberId = barber_id || entry.barber_id || null;
+    if (finalBarberId) {
+      const bRes = await pool.query('SELECT name FROM shops WHERE id=$1', [finalBarberId]);
+      barberName = bRes.rows[0]?.name || null;
+    }
+
+    // Create appointment record (for caja + reporting)
+    const apptRes = await pool.query(
+      `INSERT INTO appointments
+         (shop_id, client_name, service_name, price, cost, date, time_start,
+          barber_id, barber_name, commission_pct, payment_method, tip, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'completed')
+       RETURNING id`,
+      [shopId, entry.client_name, service_name || 'Walk-in', p, c, today, nowTime,
+       finalBarberId, barberName, pct, payment_method || 'cash', t]
+    );
+    const apptId = apptRes.rows[0].id;
+
+    // Mark queue entry as served
+    await pool.query(
+      `UPDATE queue_entries
+       SET status='served', served_at=NOW(),
+           service_name=$1, price=$2, payment_method=$3, tip=$4,
+           barber_id=$5, appointment_id=$6
+       WHERE id=$7`,
+      [service_name, p, payment_method, t, finalBarberId, apptId, req.params.id]
+    );
+
+    // Commission split if barber assigned + price > 0
+    if (finalBarberId && p > 0) {
+      const barberAmt = p * pct / 100;
+      const ownerAmt  = p * (100 - pct) / 100;
+      await pool.query(
+        `INSERT INTO commission_splits
+           (shop_id, barber_id, appointment_id, total_price, barber_pct, barber_amount, owner_amount)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [shopId, finalBarberId, apptId, p, pct, barberAmt, ownerAmt]
+      );
+    }
+
+    // Register debt if fiado
+    if (payment_method === 'debt') {
+      await pool.query(
+        `INSERT INTO client_debts (shop_id, client_name, appointment_id, amount, description)
+         VALUES ($1,$2,$3,$4,'Walk-in — fiado')`,
+        [shopId, entry.client_name, apptId, p]
+      );
+    }
+
+    return res.json({ ok: true, appointment_id: apptId });
+  } catch (e) {
+    console.error('queue complete error', e);
     return res.status(500).json({ error: 'Error interno' });
   }
 });

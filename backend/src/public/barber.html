@@ -1162,13 +1162,128 @@ async function barberCallNext() {
 
 async function barberServe() {
   if (!_filaCalledId) return;
+  openBarberWalkInPayment(_filaCalledId);
+}
+
+let _barberWipMethod = null;
+let _barberWipEntryId = null;
+
+async function openBarberWalkInPayment(entryId) {
+  _barberWipEntryId = entryId;
+  _barberWipMethod = null;
+
+  // Fetch services
+  let services = [];
+  try { services = (await api('GET', '/services')).filter(s => s.active); } catch(e) {}
+
+  const existing = document.getElementById('barber-wip-popup');
+  if (existing) existing.remove();
+
+  const serviceOpts = services.length
+    ? services.map(s => `<option value="${s.id}" data-price="${s.price}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
+    : '';
+
+  const popup = document.createElement('div');
+  popup.id = 'barber-wip-popup';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.innerHTML = `
+    <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:26px;width:100%;max-width:360px;max-height:90vh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">💰 ¿Cómo terminó este turno?</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:18px">Registrá el servicio y el cobro</div>
+
+      ${serviceOpts ? `<div style="margin-bottom:14px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Servicio</label>
+        <select id="bwip-service" onchange="onBarberServiceChange()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+          <option value="">— Elegir servicio —</option>
+          ${serviceOpts}
+          <option value="custom">Otro</option>
+        </select>
+        <input type="text" id="bwip-service-name" placeholder="Nombre del servicio" style="display:none;width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
+      </div>` : `<div style="margin-bottom:14px">
+        <input type="text" id="bwip-service-name" placeholder="Servicio" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+      </div>`}
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Precio</label>
+        <input type="number" id="bwip-price" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+      </div>
+
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:10px">Método de pago</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <button class="bwip-pay-btn" onclick="selectBarberWipMethod('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💵 Efectivo</button>
+        <button class="bwip-pay-btn" onclick="selectBarberWipMethod('debit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Débito</button>
+        <button class="bwip-pay-btn" onclick="selectBarberWipMethod('credit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Crédito</button>
+        <button class="bwip-pay-btn" onclick="selectBarberWipMethod('transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">📲 Transfer</button>
+        <button class="bwip-pay-btn" onclick="selectBarberWipMethod('debt')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;grid-column:1/-1">📋 Fiado</button>
+      </div>
+
+      <div style="margin-bottom:18px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Propina (opcional)</label>
+        <input type="number" id="bwip-tip" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+      </div>
+
+      <button onclick="confirmBarberWipPayment()" style="width:100%;background:#FFD100;color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">✅ Confirmar cobro</button>
+      <button onclick="document.getElementById('barber-wip-popup').remove()" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,.4);padding:10px;cursor:pointer;font-size:13px;margin-top:6px">Cancelar</button>
+    </div>`;
+  document.body.appendChild(popup);
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function onBarberServiceChange() {
+  const sel = document.getElementById('bwip-service');
+  const nameInput = document.getElementById('bwip-service-name');
+  const priceInput = document.getElementById('bwip-price');
+  if (!sel) return;
+  if (sel.value === 'custom') { if (nameInput) nameInput.style.display = 'block'; return; }
+  if (nameInput) nameInput.style.display = 'none';
+  const opt = sel.options[sel.selectedIndex];
+  if (opt?.dataset?.price && priceInput) priceInput.value = parseFloat(opt.dataset.price);
+}
+
+function selectBarberWipMethod(method) {
+  _barberWipMethod = method;
+  document.querySelectorAll('.bwip-pay-btn').forEach(b => {
+    b.style.borderColor = 'rgba(255,255,255,.1)';
+    b.style.background = b.textContent.includes('Fiado') ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
+  });
+  const map = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transfer', debt:'Fiado' };
+  const btn = [...document.querySelectorAll('.bwip-pay-btn')].find(b => b.textContent.trim().includes(map[method]));
+  if (btn) { btn.style.borderColor = '#FFD100'; btn.style.background = 'rgba(255,209,0,.15)'; }
+}
+
+async function confirmBarberWipPayment() {
+  if (!_barberWipMethod) { showToast('Seleccioná un método de pago'); return; }
+
+  const selEl   = document.getElementById('bwip-service');
+  const nameEl  = document.getElementById('bwip-service-name');
+  const priceEl = document.getElementById('bwip-price');
+  const tipEl   = document.getElementById('bwip-tip');
+
+  let serviceName = 'Walk-in';
+  if (selEl && selEl.value && selEl.value !== 'custom') {
+    serviceName = selEl.options[selEl.selectedIndex].text.split(' — ')[0];
+  } else if (nameEl?.value?.trim()) {
+    serviceName = nameEl.value.trim();
+  }
+
+  const price = parseFloat(priceEl?.value) || 0;
+  const tip   = parseFloat(tipEl?.value)   || 0;
+
+  document.getElementById('barber-wip-popup')?.remove();
+
   try {
-    await api('POST', `/queue/serve/${_filaCalledId}`);
-    showToast('✅ Cliente atendido');
+    await api('POST', `/queue/complete/${_barberWipEntryId}`, {
+      price, service_name: serviceName,
+      payment_method: _barberWipMethod, tip,
+      commission_pct: me?.barber_commission_pct || 50
+    });
+    showToast('✅ Walk-in registrado');
     _filaCalledId = null;
     await loadFila();
+    if (document.getElementById('tab-dashboard')?.classList.contains('active')) loadDashboard();
   } catch(e) {
-    showToast('❌ ' + e.message);
+    showToast('❌ ' + (e.message || 'Error'));
   }
 }
 

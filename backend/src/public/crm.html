@@ -3878,12 +3878,14 @@ function showSection(name) {
 let _queuePollInterval = null;
 let _queuePaused = false;
 let _queueSlug = '';
+let _appointmentsToday = [];
 
 async function loadQueue() {
   try {
     const data = await api('GET', '/queue');
     _queuePaused = data.paused || false;
     _queueSlug   = data.shop_slug || '';
+    _appointmentsToday = data.appointments_today || [];
     renderQueueList(data);
     updateQueuePauseBtn();
     // badge nav
@@ -3912,59 +3914,97 @@ async function loadQueue() {
 function renderQueueList(data) {
   const container = document.getElementById('fila-list');
   if (!container) return;
-  const entries = data.entries || [];
-  const waiting = entries.filter(e => e.status === 'waiting');
-  const called  = entries.filter(e => e.status === 'called');
-  const served  = (data.served_today || 0);
-  document.getElementById('fila-count-waiting').textContent = waiting.length;
+  const entries  = data.entries || [];
+  const appts    = data.appointments_today || [];
+  const waiting  = entries.filter(e => e.status === 'waiting');
+  const called   = entries.filter(e => e.status === 'called');
+  const served   = data.served_today || 0;
+
+  document.getElementById('fila-count-waiting').textContent = waiting.length + appts.length;
   document.getElementById('fila-count-served').textContent  = served;
   const avg = data.avg_wait_min ? Math.round(data.avg_wait_min) + ' min' : '—';
   document.getElementById('fila-avg-wait').textContent = avg;
 
-  if (!entries.length) {
+  let html = '';
+
+  // EN ATENCIÓN (called walk-ins)
+  if (called.length) {
+    html += sectionLabel('✂️ EN ATENCIÓN', '#4ade80');
+    html += called.map(e => walkInRowHtml(e, true)).join('');
+    html += '<div style="height:8px"></div>';
+  }
+
+  // TURNOS DE HOY (appointments)
+  if (appts.length) {
+    html += sectionLabel('🗓 TURNOS DE HOY', '#7ab8ff');
+    html += appts.map(a => apptRowHtml(a)).join('');
+    html += '<div style="height:8px"></div>';
+  }
+
+  // FILA (waiting walk-ins)
+  if (waiting.length) {
+    html += sectionLabel('👥 FILA — ORDEN DE LLEGADA', 'var(--gray)');
+    html += waiting.map((e, i) => walkInRowHtml(e, false, i + 1)).join('');
+  }
+
+  if (!called.length && !appts.length && !waiting.length) {
     container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--gray);font-size:14px">La fila está vacía. Compartí el link con tus clientes.</div>`;
     return;
   }
 
-  let html = '';
-  if (called.length) {
-    html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4ade80;margin-bottom:4px;padding:0 4px">EN ATENCIÓN</div>`;
-    html += called.map(e => queueEntryHtml(e, true)).join('');
-    html += `<div style="height:8px"></div>`;
-  }
-  if (waiting.length) {
-    html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:4px;padding:0 4px">ESPERANDO</div>`;
-    html += waiting.map((e, i) => queueEntryHtml(e, false, i + 1)).join('');
-  }
   container.innerHTML = html;
 }
 
-function queueEntryHtml(entry, isCalled, position) {
+function sectionLabel(text, color) {
+  return `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${color};margin-bottom:4px;padding:0 4px">${text}</div>`;
+}
+
+function apptRowHtml(appt) {
+  const time = String(appt.time_start || '').slice(0,5);
+  const barberBadge = appt.barber_name
+    ? `<span style="font-size:10px;background:rgba(122,184,255,.1);color:#7ab8ff;border-radius:4px;padding:2px 6px">${appt.barber_name}</span>`
+    : '';
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(122,184,255,.05);border:1px solid rgba(122,184,255,.15);border-radius:10px;margin-bottom:6px">
+      <span style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:#7ab8ff;min-width:44px">${time}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${escHtml(appt.client_name)}</div>
+        <div style="font-size:11px;color:var(--gray)">${escHtml(appt.service_name || '')} · $${parseFloat(appt.price||0).toLocaleString('es-AR')}</div>
+      </div>
+      ${barberBadge}
+      <span style="font-size:10px;background:rgba(255,145,0,.1);color:var(--orange);border-radius:4px;padding:2px 7px;font-weight:700;text-transform:uppercase">${appt.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}</span>
+    </div>`;
+}
+
+function walkInRowHtml(entry, isCalled, position) {
   const mins = Math.round((Date.now() - new Date(entry.created_at).getTime()) / 60000);
-  const waitStr = mins < 1 ? 'Ahora mismo' : mins === 1 ? '1 min' : `${mins} min`;
+  const waitStr = mins < 1 ? 'Ahora' : `${mins} min`;
   const phoneHtml = entry.client_phone
     ? `<span style="font-size:11px;color:var(--gray)">${entry.client_phone}</span>`
-    : `<span style="font-size:11px;color:rgba(255,255,255,.2)">Sin teléfono</span>`;
+    : '';
+  const barberBadge = entry.barber_id
+    ? `<span style="font-size:10px;background:rgba(0,200,117,.08);color:#4ade80;border-radius:4px;padding:2px 6px" id="barber-badge-${entry.id}">Asignado</span>`
+    : '';
   const posHtml = isCalled
-    ? `<span style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80;font-weight:700">✂</span>`
-    : `<span style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--yellow);min-width:24px;text-align:center">${position}</span>`;
+    ? `<span style="font-family:'Oswald',sans-serif;font-size:18px;color:#4ade80;font-weight:700">✂</span>`
+    : `<span style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--yellow);min-width:24px;text-align:center">${position}</span>`;
 
   return `
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${isCalled ? 'rgba(74,222,128,.07)' : 'rgba(255,255,255,.03)'};border:1px solid ${isCalled ? 'rgba(74,222,128,.2)' : 'rgba(255,255,255,.07)'};border-radius:10px">
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${isCalled ? 'rgba(74,222,128,.07)' : 'rgba(255,255,255,.03)'};border:1px solid ${isCalled ? 'rgba(74,222,128,.2)' : 'rgba(255,255,255,.07)'};border-radius:10px;margin-bottom:6px">
       ${posHtml}
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:14px">${escHtml(entry.client_name)}</div>
         ${phoneHtml}
       </div>
-      <div style="font-size:11px;color:var(--gray);text-align:right;flex-shrink:0">
-        <div>${waitStr} esperando</div>
+      <div style="font-size:11px;color:var(--gray);text-align:right;flex-shrink:0;margin-right:4px">
+        ${barberBadge}
+        <div style="margin-top:3px">${waitStr} esperando</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${isCalled
-          ? `<button onclick="serveQueueEntry(${entry.id})" title="Atendido" style="padding:5px 10px;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.08);color:#4ade80;font-size:11px;font-weight:700;cursor:pointer">✓ Listo</button>`
-          : ''
-        }
-        <button onclick="removeQueueEntry(${entry.id})" title="Quitar de la fila" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,67,67,.2);background:rgba(255,67,67,.06);color:#ff8080;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+          ? `<button onclick="openWalkInPayment(${entry.id},'${escHtml(entry.client_name)}')" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.1);color:#4ade80;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Cobrar</button>`
+          : ''}
+        <button onclick="removeQueueEntry(${entry.id})" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,67,67,.2);background:rgba(255,67,67,.06);color:#ff8080;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
     </div>`;
 }
@@ -3983,12 +4023,165 @@ async function callNextInQueue() {
   finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Llamar siguiente'; } }
 }
 
-async function serveQueueEntry(id) {
-  try { await api('POST', `/queue/serve/${id}`); loadQueue(); } catch(e) {}
-}
-
 async function removeQueueEntry(id) {
   try { await api('POST', `/queue/remove/${id}`); loadQueue(); } catch(e) {}
+}
+
+// ─── WALK-IN PAYMENT ────────────────────────────────────────────────────────
+let _walkInPayEntryId = null;
+let _walkInPayMethod = null;
+let _walkInServices = [];
+let _walkInBarbers = [];
+
+async function openWalkInPayment(entryId, clientName) {
+  _walkInPayEntryId = entryId;
+  _walkInPayMethod = null;
+
+  // Fetch services and barbers in parallel
+  try {
+    const [svcData, barbersData] = await Promise.all([
+      api('GET', '/services'),
+      currentShop?.commission_enabled ? api('GET', '/barbers') : Promise.resolve([])
+    ]);
+    _walkInServices = Array.isArray(svcData) ? svcData.filter(s => s.active) : [];
+    _walkInBarbers  = Array.isArray(barbersData) ? barbersData : [];
+  } catch(e) {
+    _walkInServices = [];
+    _walkInBarbers  = [];
+  }
+
+  const existing = document.getElementById('walkin-payment-popup');
+  if (existing) existing.remove();
+
+  const serviceOptions = _walkInServices.length
+    ? `<select id="wip-service" onchange="onWalkInServiceChange()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <option value="">— Seleccionar servicio —</option>
+        ${_walkInServices.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost||0}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')}
+        <option value="custom">Otro (ingresar manualmente)</option>
+      </select>`
+    : `<input type="text" id="wip-service-name" placeholder="Nombre del servicio" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">`;
+
+  const barberSection = (_walkInBarbers.length > 0 && currentShop?.commission_enabled)
+    ? `<div style="margin-bottom:16px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Barbero que atendió</label>
+        <select id="wip-barber" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+          <option value="">— Sin asignar —</option>
+          ${_walkInBarbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('')}
+        </select>
+      </div>`
+    : '';
+
+  const popup = document.createElement('div');
+  popup.id = 'walkin-payment-popup';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.innerHTML = `
+    <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">💈 Walk-in: ${escHtml(clientName)}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px">Registrá el servicio y cobro</div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Servicio</label>
+        ${serviceOptions}
+        <input type="text" id="wip-service-name" placeholder="Nombre del servicio" style="display:none;width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box;margin-top:8px">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Precio</label>
+        <input type="number" id="wip-price" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
+      </div>
+
+      ${barberSection}
+
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:10px">Método de pago</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <button class="wip-pay-btn" onclick="selectWalkInMethod('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💵 Efectivo</button>
+        <button class="wip-pay-btn" onclick="selectWalkInMethod('debit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Débito</button>
+        <button class="wip-pay-btn" onclick="selectWalkInMethod('credit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Crédito</button>
+        <button class="wip-pay-btn" onclick="selectWalkInMethod('transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">📲 Transfer</button>
+        <button class="wip-pay-btn" onclick="selectWalkInMethod('debt')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;grid-column:1/-1">📋 Fiado</button>
+      </div>
+
+      <div style="margin-bottom:18px">
+        <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Propina (opcional)</label>
+        <input type="number" id="wip-tip" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+      </div>
+
+      <button onclick="confirmWalkInPayment()" style="width:100%;background:#FFD100;color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">✅ Confirmar cobro</button>
+      <button onclick="document.getElementById('walkin-payment-popup').remove()" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,.4);padding:10px;cursor:pointer;font-size:13px;margin-top:6px">Cancelar</button>
+    </div>`;
+  document.body.appendChild(popup);
+}
+
+function onWalkInServiceChange() {
+  const sel = document.getElementById('wip-service');
+  const nameInput = document.getElementById('wip-service-name');
+  const priceInput = document.getElementById('wip-price');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  if (sel.value === 'custom') {
+    if (nameInput) nameInput.style.display = 'block';
+    return;
+  }
+  if (nameInput) nameInput.style.display = 'none';
+  const p = opt?.dataset?.price;
+  if (p && priceInput) priceInput.value = parseFloat(p);
+}
+
+function selectWalkInMethod(method) {
+  _walkInPayMethod = method;
+  document.querySelectorAll('.wip-pay-btn').forEach(b => {
+    b.style.borderColor = 'rgba(255,255,255,.1)';
+    b.style.background = b.textContent.includes('Fiado') ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
+  });
+  const map = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transfer', debt:'Fiado' };
+  const btn = [...document.querySelectorAll('.wip-pay-btn')].find(b => b.textContent.trim().includes(map[method]));
+  if (btn) { btn.style.borderColor = '#FFD100'; btn.style.background = 'rgba(255,209,0,.15)'; }
+}
+
+async function confirmWalkInPayment() {
+  if (!_walkInPayMethod) { showToast('Seleccioná un método de pago'); return; }
+
+  const selEl   = document.getElementById('wip-service');
+  const nameEl  = document.getElementById('wip-service-name');
+  const priceEl = document.getElementById('wip-price');
+  const barberEl = document.getElementById('wip-barber');
+  const tipEl   = document.getElementById('wip-tip');
+
+  let serviceName = '';
+  let cost = 0;
+  if (selEl && selEl.value && selEl.value !== 'custom') {
+    const opt = selEl.options[selEl.selectedIndex];
+    serviceName = opt.text.split(' — ')[0];
+    cost = parseFloat(opt.dataset?.cost || 0);
+  } else {
+    serviceName = nameEl?.value?.trim() || 'Walk-in';
+  }
+
+  const price    = parseFloat(priceEl?.value) || 0;
+  const tip      = parseFloat(tipEl?.value) || 0;
+  const barberId = barberEl?.value || null;
+
+  // Get commission_pct from selected barber
+  let commissionPct = 50;
+  if (barberEl && barberEl.value) {
+    const opt = barberEl.options[barberEl.selectedIndex];
+    commissionPct = parseInt(opt.dataset?.pct || 50);
+  }
+
+  document.getElementById('walkin-payment-popup')?.remove();
+
+  try {
+    await api('POST', `/queue/complete/${_walkInPayEntryId}`, {
+      price, cost, service_name: serviceName,
+      payment_method: _walkInPayMethod,
+      tip, barber_id: barberId || undefined,
+      commission_pct: commissionPct
+    });
+    showToast('✅ Walk-in cobrado y registrado');
+    loadQueue();
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Error al cobrar'));
+  }
 }
 
 async function toggleQueuePause() {
