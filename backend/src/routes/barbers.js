@@ -108,8 +108,11 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
   COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
   COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes,
-  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0) AS pending_commission,
-  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments
+  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
+  + COALESCE((SELECT SUM(ps.barber_commission_amount) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0)
+  AS pending_commission,
+  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments,
+  COALESCE((SELECT COUNT(*) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0) AS pending_product_sales
 FROM shops s
 LEFT JOIN appointments a ON a.barber_id = s.id
   AND (a.shop_id = $1 OR a.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))
@@ -192,17 +195,30 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
     );
 
     const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
-    const commissionAmount = appts.rows.reduce((s, a) => {
+    const apptCommission = appts.rows.reduce((s, a) => {
       const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
+
+    const productSalesQ = await pool.query(
+      `SELECT id, product_name, total_price, barber_commission_pct, barber_commission_amount, sold_at
+       FROM product_sales
+       WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE
+       ORDER BY sold_at DESC`,
+      [barber.id, req.shopId]
+    );
+    const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
+    const totalCommission = apptCommission + productCommission;
 
     res.json({
       barber,
       appointments: appts.rows,
       count: appts.rows.length,
       total_price: totalPrice,
-      commission_amount: commissionAmount
+      appt_commission: apptCommission,
+      product_sales: productSalesQ.rows,
+      product_commission: productCommission,
+      commission_amount: totalCommission
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -224,33 +240,60 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
          AND (commission_settled IS NULL OR commission_settled=FALSE)`,
       [req.shopId, barber.id]
     );
-    if (!appts.rows.length) return res.status(400).json({ error: 'No hay comisiones pendientes para liquidar' });
+
+    const productSalesQ = await pool.query(
+      `SELECT id, barber_commission_amount FROM product_sales
+       WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
+      [barber.id, req.shopId]
+    );
+
+    if (!appts.rows.length && !productSalesQ.rows.length) {
+      return res.status(400).json({ error: 'No hay comisiones pendientes para liquidar' });
+    }
 
     const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
-    const commissionAmount = appts.rows.reduce((s, a) => {
+    const apptCommission = appts.rows.reduce((s, a) => {
       const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
+    const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
+    const commissionAmount = apptCommission + productCommission;
+
+    const notesExtra = [
+      appts.rows.length ? `${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}` : null,
+      productSalesQ.rows.length ? `${productSalesQ.rows.length} venta${productSalesQ.rows.length !== 1 ? 's' : ''} de producto` : null,
+    ].filter(Boolean).join(' · ');
 
     const settlement = await pool.query(
       `INSERT INTO barber_settlements (shop_id, barber_id, barber_name, appointments_count, total_price, commission_pct_avg, commission_amount, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [req.shopId, barber.id, barber.name, appts.rows.length, totalPrice, barber.barber_commission_pct, commissionAmount, notes || null]
+      [req.shopId, barber.id, barber.name, appts.rows.length, totalPrice, barber.barber_commission_pct, commissionAmount,
+       notes ? `${notes} — ${notesExtra}` : notesExtra]
     );
 
-    const apptIds = appts.rows.map(a => a.id);
-    await pool.query(
-      `UPDATE appointments SET commission_settled=TRUE, commission_settled_at=NOW(), settlement_id=$1
-       WHERE id = ANY($2::int[])`,
-      [settlement.rows[0].id, apptIds]
-    );
+    if (appts.rows.length) {
+      const apptIds = appts.rows.map(a => a.id);
+      await pool.query(
+        `UPDATE appointments SET commission_settled=TRUE, commission_settled_at=NOW(), settlement_id=$1
+         WHERE id = ANY($2::int[])`,
+        [settlement.rows[0].id, apptIds]
+      );
+    }
+
+    if (productSalesQ.rows.length) {
+      await pool.query(
+        `UPDATE product_sales SET commission_settled=TRUE, settlement_id=$1
+         WHERE barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE`,
+        [settlement.rows[0].id, barber.id, req.shopId]
+      );
+    }
 
     // Registrar egreso en caja
     await pool.query(
       `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
        VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4)`,
       [req.shopId, commissionAmount,
-       `Comisión ${barber.name} — ${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}`,
+       `Comisión ${barber.name} — ${notesExtra}`,
        settlement.rows[0].id]
     );
 

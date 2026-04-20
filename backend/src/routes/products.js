@@ -20,9 +20,11 @@ router.get('/ventas', auth, async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   try {
     const result = await pool.query(
-      `SELECT * FROM product_sales
-       WHERE shop_id=$1
-       ORDER BY sold_at DESC
+      `SELECT ps.*, s.name AS barber_name
+       FROM product_sales ps
+       LEFT JOIN shops s ON s.id = ps.barber_id
+       WHERE ps.shop_id=$1
+       ORDER BY ps.sold_at DESC
        LIMIT $2`,
       [req.shopId, limit]
     );
@@ -118,7 +120,7 @@ router.delete('/:id', auth, async (req, res) => {
 
 // ── POST /api/products/:id/sell — registrar venta ─────────────────────────
 router.post('/:id/sell', auth, async (req, res) => {
-  const { quantity, unit_price, payment_method, client_name } = req.body;
+  const { quantity, unit_price, payment_method, client_name, barber_id, barber_commission_pct } = req.body;
   const qty = parseInt(quantity) || 1;
   try {
     // Verificar stock
@@ -137,14 +139,21 @@ router.post('/:id/sell', auth, async (req, res) => {
     const stockAntes   = parseInt(p.stock);
     const stockDespues = stockAntes - qty;
 
+    // Calcular comisión de barbero si corresponde
+    const barberId = barber_id ? parseInt(barber_id) : null;
+    const commPct  = barberId ? (parseFloat(barber_commission_pct) || 0) : 0;
+    const commAmt  = barberId ? (total * commPct / 100) : 0;
+
     // Registrar venta
     const venta = await pool.query(
       `INSERT INTO product_sales
-         (shop_id, product_id, product_name, quantity, unit_price, total_price, payment_method, client_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (shop_id, product_id, product_name, quantity, unit_price, total_price, payment_method, client_name,
+          barber_id, barber_commission_pct, barber_commission_amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [req.shopId, req.params.id, p.nombre, qty, precio, total,
-       payment_method||'cash', client_name||null]
+       payment_method||'cash', client_name||null,
+       barberId, commPct, commAmt]
     );
 
     // Descontar stock

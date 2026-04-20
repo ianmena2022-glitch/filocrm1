@@ -6454,7 +6454,8 @@ async function loadEquipo() {
       const stat = stats.find(s => s.id === b.id) || {};
       const pendingComm = parseFloat(stat.pending_commission || 0);
       const pendingAppts = parseInt(stat.pending_appointments || 0);
-      const hasPending = pendingAppts > 0;
+      const pendingProdSales = parseInt(stat.pending_product_sales || 0);
+      const hasPending = pendingAppts > 0 || pendingProdSales > 0;
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
         <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f">${b.name.charAt(0).toUpperCase()}</div>
         <div class="client-info">
@@ -6468,7 +6469,7 @@ async function loadEquipo() {
           ${hasPending ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:8px;padding:4px 10px;font-size:12px">
             <span style="color:rgba(255,209,0,0.9)">💸 Pendiente de liquidar:</span>
             <strong style="color:#FFD100">$${pendingComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
-            <span style="color:rgba(255,255,255,0.4)">(${pendingAppts} turno${pendingAppts !== 1 ? 's' : ''})</span>
+            <span style="color:rgba(255,255,255,0.4)">(${pendingAppts > 0 ? `${pendingAppts} turno${pendingAppts !== 1 ? 's' : ''}` : ''}${pendingAppts > 0 && pendingProdSales > 0 ? ' · ' : ''}${pendingProdSales > 0 ? `${pendingProdSales} producto${pendingProdSales !== 1 ? 's' : ''}` : ''})</span>
           </div>` : `<div style="margin-top:6px;font-size:12px;color:rgba(255,255,255,0.3)">✅ Todo liquidado</div>`}
         </div>
         <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end">
@@ -6636,7 +6637,7 @@ async function openSettlementModal(barberId, barberName) {
   try {
     const data = await api('GET', `/barbers/${barberId}/pending-settlement`);
     _settlementData = data;
-    if (!data.count) {
+    if (!data.count && !(data.product_sales && data.product_sales.length)) {
       document.getElementById('settlement-preview').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">✅ No hay comisiones pendientes para este barbero.</div>';
       return;
     }
@@ -6644,6 +6645,12 @@ async function openSettlementModal(barberId, barberName) {
       `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${a.date} ${a.time_start || ''}</td><td style="padding:6px 4px;font-size:12px">${a.service_name || 'Servicio'}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
     ).join('');
     const extra = data.count > 8 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.count - 8} turno${data.count-8!==1?'s':''} más</td></tr>` : '';
+    const prodRows = (data.product_sales || []).slice(0, 5).map(ps =>
+      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${new Date(ps.sold_at).toLocaleDateString('es-AR')}</td><td style="padding:6px 4px;font-size:12px">${escHtml(ps.product_name||'Producto')}</td><td style="padding:6px 4px;font-size:12px;color:#c084fc">$${parseFloat(ps.barber_commission_amount||0).toLocaleString('es-AR')}</td></tr>`
+    ).join('');
+    const prodExtra = (data.product_sales||[]).length > 5 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.product_sales.length - 5} venta${data.product_sales.length-5!==1?'s':''} más</td></tr>` : '';
+    const apptComm = parseFloat(data.appt_commission || 0);
+    const prodComm = parseFloat(data.product_commission || 0);
     document.getElementById('settlement-preview').innerHTML = `
       <div style="margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -6658,21 +6665,31 @@ async function openSettlementModal(barberId, barberName) {
           <span style="color:rgba(255,255,255,0.6);font-size:13px">Total facturado</span>
           <strong>$${data.total_price.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
         </div>
+        ${apptComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:rgba(255,255,255,0.5);font-size:12px">Comisión turnos (${data.count})</span>
+          <span style="color:rgba(255,255,255,0.7);font-size:12px">$${apptComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</span>
+        </div>` : ''}
+        ${prodComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:rgba(192,132,252,0.8);font-size:12px">Comisión productos (${(data.product_sales||[]).length})</span>
+          <span style="color:#c084fc;font-size:12px">$${prodComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</span>
+        </div>` : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:10px;margin:12px 0">
-          <span style="color:var(--yellow);font-size:14px;font-weight:700">💸 A pagar (${data.barber.barber_commission_pct}%)</span>
+          <span style="color:var(--yellow);font-size:14px;font-weight:700">💸 Total a pagar</span>
           <strong style="color:#FFD100;font-size:20px">$${data.commission_amount.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
         </div>
       </div>
-      <div style="background:rgba(255,255,255,0.02);border-radius:8px;overflow:hidden;margin-bottom:16px">
+      ${rows ? `<div style="background:rgba(255,255,255,0.02);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:6px 8px;font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;background:rgba(255,255,255,0.03)">TURNOS</div>
         <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:rgba(255,255,255,0.04)">
-            <th style="padding:8px 4px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">FECHA</th>
-            <th style="padding:8px 4px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">SERVICIO</th>
-            <th style="padding:8px 4px;text-align:right;font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">PRECIO</th>
-          </tr></thead>
           <tbody>${rows}${extra}</tbody>
         </table>
-      </div>
+      </div>` : ''}
+      ${prodRows ? `<div style="background:rgba(168,85,247,0.04);border:1px solid rgba(168,85,247,0.12);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:6px 8px;font-size:11px;color:rgba(192,132,252,0.7);font-weight:600;background:rgba(168,85,247,0.06)">VENTAS DE PRODUCTOS</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tbody>${prodRows}${prodExtra}</tbody>
+        </table>
+      </div>` : ''}
       <div>
         <label style="font-size:12px;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px">Nota (opcional)</label>
         <input id="settlement-notes" type="text" placeholder="Ej: Efectivo, transferencia..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;box-sizing:border-box">
@@ -8836,36 +8853,101 @@ async function saveProducto() {
 }
 
 function openVentaProducto(id, nombre, precio, stock) {
-  document.getElementById('venta-prod-id').value=id;
-  document.getElementById('venta-prod-nombre').textContent=nombre;
-  document.getElementById('venta-precio-unit').value=precio;
-  document.getElementById('venta-cantidad').value=1;
-  document.getElementById('venta-cliente').value='';
-  document.getElementById('venta-metodo').value='cash';
-  window._ventaStock=stock; ventaPreview(); openModal('modal-venta-producto');
+  document.getElementById('venta-prod-id').value = id;
+  document.getElementById('venta-prod-nombre').textContent = nombre;
+  document.getElementById('venta-precio-unit').value = precio;
+  document.getElementById('venta-cantidad').value = 1;
+  document.getElementById('venta-cliente').value = '';
+
+  // Populate payment methods dynamically
+  const metodoSel = document.getElementById('venta-metodo');
+  const methods = window._paymentMethods || [];
+  if (methods.length) {
+    metodoSel.innerHTML = methods.filter(m => !m.is_debt).map(m =>
+      `<option value="${m.key}">${m.icon} ${m.label}</option>`
+    ).join('');
+  }
+  metodoSel.value = 'cash';
+  if (!metodoSel.value) metodoSel.selectedIndex = 0;
+
+  // Populate barbers if commission enabled
+  const barberField = document.getElementById('venta-barber-field');
+  if (currentShop?.commission_enabled && barberField) {
+    barberField.style.display = '';
+    const barbers = window._barbersList || [];
+    const barberSel = document.getElementById('venta-barber');
+    barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+      barbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+    barberSel.value = '';
+    if (!barbers.length) {
+      api('GET', '/barbers').then(list => {
+        window._barbersList = list;
+        barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+          list.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+      }).catch(() => {});
+    }
+  } else if (barberField) {
+    barberField.style.display = 'none';
+  }
+  document.getElementById('venta-commission-preview').style.display = 'none';
+
+  window._ventaStock = stock;
+  ventaPreview();
+  openModal('modal-venta-producto');
 }
 
 function ventaPreview() {
-  const cant=parseInt(document.getElementById('venta-cantidad')?.value||1);
-  const prec=parseFloat(document.getElementById('venta-precio-unit')?.value||0);
-  const tv=document.getElementById('venta-total-val'), warn=document.getElementById('venta-stock-warn');
-  if (tv) tv.textContent='$'+(cant*prec).toLocaleString('es-AR');
-  if (warn) warn.textContent=cant>(window._ventaStock||0)?`⚠️ Stock insuficiente (disponible: ${window._ventaStock||0})`:'';
+  const cant = parseInt(document.getElementById('venta-cantidad')?.value || 1);
+  const prec = parseFloat(document.getElementById('venta-precio-unit')?.value || 0);
+  const tv = document.getElementById('venta-total-val'), warn = document.getElementById('venta-stock-warn');
+  if (tv) tv.textContent = '$' + (cant * prec).toLocaleString('es-AR');
+  if (warn) warn.textContent = cant > (window._ventaStock || 0) ? `⚠️ Stock insuficiente (disponible: ${window._ventaStock || 0})` : '';
+  // Update commission preview if a barber is selected
+  const barberSel = document.getElementById('venta-barber');
+  if (barberSel?.value) onVentaBarberChange();
+}
+
+function onVentaBarberChange() {
+  const sel = document.getElementById('venta-barber');
+  const opt = sel?.options[sel.selectedIndex];
+  const pct = parseFloat(opt?.dataset?.pct || 0);
+  const preview = document.getElementById('venta-commission-preview');
+  const val = document.getElementById('venta-commission-val');
+  if (sel?.value && pct > 0) {
+    const cant = parseInt(document.getElementById('venta-cantidad').value || 1);
+    const precio = parseFloat(document.getElementById('venta-precio-unit').value || 0);
+    const commission = cant * precio * pct / 100;
+    if (val) val.textContent = '$' + commission.toLocaleString('es-AR');
+    if (preview) preview.style.display = '';
+  } else {
+    if (preview) preview.style.display = 'none';
+  }
 }
 
 async function confirmarVentaProducto() {
-  const id=document.getElementById('venta-prod-id').value;
-  const cant=parseInt(document.getElementById('venta-cantidad').value||1);
-  const precio=parseFloat(document.getElementById('venta-precio-unit').value||0);
-  const metodo=document.getElementById('venta-metodo').value;
-  const cli=document.getElementById('venta-cliente').value.trim();
-  if (cant>(window._ventaStock||0)) return showToast('❌','Sin stock',`Disponible: ${window._ventaStock||0}`);
+  const id = document.getElementById('venta-prod-id').value;
+  const cant = parseInt(document.getElementById('venta-cantidad').value || 1);
+  const precio = parseFloat(document.getElementById('venta-precio-unit').value || 0);
+  const metodo = document.getElementById('venta-metodo').value;
+  const cli = document.getElementById('venta-cliente').value.trim();
+  const barberSel = document.getElementById('venta-barber');
+  const barberId = barberSel?.value ? parseInt(barberSel.value) : null;
+  const barberOpt = barberSel?.options[barberSel?.selectedIndex];
+  const commissionPct = barberId ? parseFloat(barberOpt?.dataset?.pct || 0) : 0;
+  if (cant > (window._ventaStock || 0)) return showToast('❌', 'Sin stock', `Disponible: ${window._ventaStock || 0}`);
   try {
-    await api('POST',`/products/${id}/sell`,{quantity:cant,unit_price:precio,payment_method:metodo,client_name:cli});
-    showToast('✅','Venta registrada','Stock actualizado'); closeModal('modal-venta-producto');
+    await api('POST', `/products/${id}/sell`, {
+      quantity: cant,
+      unit_price: precio,
+      payment_method: metodo,
+      client_name: cli,
+      ...(barberId ? { barber_id: barberId, barber_commission_pct: commissionPct } : {})
+    });
+    showToast('✅', 'Venta registrada', barberId ? 'Comisión asignada al barbero' : 'Stock actualizado');
+    closeModal('modal-venta-producto');
     await loadProductos();
     if (document.getElementById('sec-dashboard')?.classList.contains('active')) loadDashboard();
-  } catch(e) { showToast('❌','Error',e.message); }
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 function openAjusteStock(id, nombre) {
@@ -9137,6 +9219,15 @@ async function bcmSave(id) {
       <div class="form-field" style="margin-bottom:0">
         <label>Cliente (opcional)</label>
         <input type="text" id="venta-cliente" placeholder="Nombre del cliente">
+      </div>
+      <div class="form-field" id="venta-barber-field" style="display:none;margin-bottom:0">
+        <label>Barbero (comisión)</label>
+        <select id="venta-barber" onchange="onVentaBarberChange()">
+          <option value="">— Sin asignar —</option>
+        </select>
+      </div>
+      <div id="venta-commission-preview" style="display:none;font-size:12px;color:#c084fc;padding:6px 10px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);border-radius:8px">
+        Comisión: <strong id="venta-commission-val">$0</strong>
       </div>
       <div id="venta-preview-box" style="padding:10px 14px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:9px;font-size:13px">
         Total: <strong id="venta-total-val" style="color:var(--yellow)">$0</strong>
