@@ -456,7 +456,17 @@
         let parsed;
         try { parsed = JSON.parse(stored); } catch(e) { parsed = null; }
         if (parsed && parsed.entry_id) {
-          // Poll current status
+          // Mostrar estado waiting INMEDIATAMENTE sin esperar red (evita perder posición en F5)
+          if (parsed.shop_name) setShopName(parsed.shop_name);
+          const posEl  = document.getElementById('pos-number');
+          const lblEl  = document.getElementById('pos-label');
+          const waitEl = document.getElementById('wait-info');
+          if (posEl)  posEl.textContent  = '...';
+          if (lblEl)  lblEl.textContent  = 'actualizando...';
+          if (waitEl) waitEl.textContent = '...';
+          document.getElementById('dots-wrap').innerHTML = '';
+          setState('waiting');
+          // Luego verificar con el servidor y actualizar datos
           await pollStatus(parsed.entry_id, true);
           return;
         }
@@ -486,12 +496,12 @@
         const r = await apiGet(`/api/queue/${slug}/status?entry_id=${entryId}`);
         if (!r.ok) {
           if (r.status === 404) {
+            // Entrada no existe más en el servidor → limpiar y mostrar join
             localStorage.removeItem(LS_KEY);
             await checkQueueStatus();
             return;
           }
-          if (!isInit) return; // keep polling silently
-          setState('error');
+          // Cualquier otro error: no borrar estado, seguir intentando silenciosamente
           return;
         }
         const data = await r.json();
@@ -529,7 +539,11 @@
           }, 15000);
         }
       } catch(e) {
-        if (isInit) setState('error');
+        // Error de red: si es init y NO había estado previo (spinner), mostrar error
+        // Si ya estábamos mostrando waiting (F5), quedarse así y seguir reintentando
+        const currentlyWaiting = document.getElementById('state-waiting')?.style.display !== 'none';
+        if (isInit && !currentlyWaiting) setState('error');
+        // Si ya hay un estado waiting visible, no hacer nada — el polling automático reintentará
       }
     }
 
@@ -601,7 +615,7 @@
         }
 
         setShopName(data.shop_name);
-        localStorage.setItem(LS_KEY, JSON.stringify({ entry_id: data.entry_id, client_name: data.client_name }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ entry_id: data.entry_id, client_name: data.client_name, shop_name: data.shop_name }));
 
         renderWaiting({
           position: data.position,
