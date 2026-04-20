@@ -13,7 +13,7 @@ function ownerOnly(req, res, next) {
 router.get('/', auth, ownerOnly, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, barber_commission_pct, barber_color, barber_schedule, created_at,
+      `SELECT id, name, email, barber_commission_pct, product_sale_commission_pct, barber_color, barber_schedule, created_at,
          (SELECT COUNT(*) FROM appointments WHERE barber_id=s.id AND date=CURRENT_DATE AND status NOT IN ('cancelled','noshow')) AS turnos_hoy
        FROM shops s WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name`,
       [req.shopId]
@@ -54,29 +54,37 @@ router.post('/invite', auth, ownerOnly, async (req, res) => {
 
 // PUT /api/barbers/:id — editar barbero (comisión, color, horarios)
 router.put('/:id', auth, ownerOnly, async (req, res) => {
-  const { barber_commission_pct, barber_color, name, barber_schedule } = req.body;
+  const { barber_commission_pct, product_sale_commission_pct, barber_color, name, barber_schedule } = req.body;
   try {
     // barber_schedule puede ser null (sin restricciones) o un objeto con días
     const scheduleVal = barber_schedule !== undefined
       ? (barber_schedule ? JSON.stringify(barber_schedule) : null)
       : undefined;
 
+    // product_sale_commission_pct puede ser null (usa barber_commission_pct como fallback) o un número
+    const prodCommPct = product_sale_commission_pct !== undefined
+      ? (product_sale_commission_pct === '' || product_sale_commission_pct === null ? null : parseFloat(product_sale_commission_pct))
+      : undefined;
+
     const result = await pool.query(
       `UPDATE shops SET
-         barber_commission_pct = COALESCE($1, barber_commission_pct),
-         barber_color = COALESCE($2, barber_color),
-         name = COALESCE($3, name),
-         barber_schedule = CASE WHEN $6 THEN $5::jsonb ELSE barber_schedule END
+         barber_commission_pct         = COALESCE($1, barber_commission_pct),
+         product_sale_commission_pct   = CASE WHEN $8 THEN $9 ELSE product_sale_commission_pct END,
+         barber_color                  = COALESCE($2, barber_color),
+         name                          = COALESCE($3, name),
+         barber_schedule               = CASE WHEN $6 THEN $5::jsonb ELSE barber_schedule END
        WHERE id=$4 AND parent_shop_id=$7
-       RETURNING id, name, barber_commission_pct, barber_color, barber_schedule`,
+       RETURNING id, name, barber_commission_pct, product_sale_commission_pct, barber_color, barber_schedule`,
       [
-        barber_commission_pct || null,
-        barber_color || null,
-        name || null,
-        req.params.id,
-        scheduleVal || null,
-        barber_schedule !== undefined, // $6: si se envió el campo
-        req.shopId
+        barber_commission_pct != null ? parseFloat(barber_commission_pct) : null,  // $1
+        barber_color || null,                   // $2
+        name || null,                           // $3
+        req.params.id,                          // $4
+        scheduleVal || null,                    // $5
+        barber_schedule !== undefined,          // $6: si se envió el campo schedule
+        req.shopId,                             // $7
+        product_sale_commission_pct !== undefined, // $8: si se envió el campo
+        prodCommPct !== undefined ? prodCommPct : null // $9
       ]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
@@ -103,7 +111,7 @@ router.delete('/:id', auth, ownerOnly, async (req, res) => {
 router.get('/stats', auth, ownerOnly, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.id, s.name, s.barber_color, s.barber_commission_pct,
+      `SELECT s.id, s.name, s.barber_color, s.barber_commission_pct, s.product_sale_commission_pct,
   COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
   COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
   COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
@@ -117,7 +125,7 @@ FROM shops s
 LEFT JOIN appointments a ON a.barber_id = s.id
   AND (a.shop_id = $1 OR a.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))
 WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE
-GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct
+GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct, s.product_sale_commission_pct
 ORDER BY s.name`,
       [req.shopId]
     );

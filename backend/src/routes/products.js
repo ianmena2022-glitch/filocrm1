@@ -149,15 +149,22 @@ router.post('/:id/sell', auth, async (req, res) => {
     const stockDespues = stockAntes - qty;
 
     // Resolver comisión del barbero
+    // product_sale_commission_pct tiene prioridad; si es null, cae a barber_commission_pct
     let barberId = autoBarberId;
     let commPct  = autoCommPct;
-    // Si es barbero y no tenemos su %, buscarlo en la BD
-    if (isBarber && barberId) {
-      const barberRow = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [barberId]);
-      commPct = parseFloat(barberRow.rows[0]?.barber_commission_pct || 0);
-    } else if (!isBarber && barberId && commPct === null) {
-      const barberRow = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [barberId]);
-      commPct = parseFloat(barberRow.rows[0]?.barber_commission_pct || 0);
+    let barberName = null;
+    if (barberId) {
+      const barberRow = await pool.query(
+        'SELECT name, barber_commission_pct, product_sale_commission_pct FROM shops WHERE id=$1',
+        [barberId]
+      );
+      barberName = barberRow.rows[0]?.name || null;
+      if (isBarber || commPct === null) {
+        // Usar product_sale_commission_pct si está definido, si no barber_commission_pct
+        const prodPct    = barberRow.rows[0]?.product_sale_commission_pct;
+        const apptPct    = barberRow.rows[0]?.barber_commission_pct;
+        commPct = prodPct != null ? parseFloat(prodPct) : parseFloat(apptPct || 0);
+      }
     }
     commPct = commPct || 0;
     const commAmt = barberId ? (total * commPct / 100) : 0;
@@ -190,12 +197,14 @@ router.post('/:id/sell', auth, async (req, res) => {
     );
 
     // Registrar ingreso en caja
+    const ventaDesc = `Venta ${p.nombre} x${qty}`
+      + (client_name ? ' — ' + client_name : '')
+      + (barberName  ? ' · ✂️ ' + barberName : '')
+      + (commAmt > 0 ? ' · Comisión $' + commAmt.toFixed(0) : '');
     await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
-       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4)`,
-      [shopId, total,
-       `Venta ${p.nombre} x${qty}${client_name ? ' — ' + client_name : ''}`,
-       venta.rows[0].id]
+      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
+       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5)`,
+      [shopId, total, ventaDesc, venta.rows[0].id, payment_method || 'cash']
     );
 
     res.json({ ok: true, venta: venta.rows[0], stock_restante: stockDespues });

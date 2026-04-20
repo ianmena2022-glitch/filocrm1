@@ -815,7 +815,7 @@ async function loadDashboard() {
   try {
     const today = new Date().toISOString().split('T')[0];
     const appts = await api('GET', `/appointments?date=${today}`);
-    allAppts = appts.filter(a => !a.barber_id || a.barber_id === me.id);
+    allAppts = appts.filter(a => !a.barber_id || parseInt(a.barber_id) === parseInt(me.id));
 
     const completados = allAppts.filter(a => a.status === 'completed').length;
     const pendientes = allAppts.filter(a => a.status === 'pending' || a.status === 'confirmed').length;
@@ -888,7 +888,7 @@ async function loadAgenda() {
   document.getElementById('date-label').textContent = formatDateLabel(currentDate);
   try {
     const appts = await api('GET', `/appointments?date=${currentDate}`);
-    const myAppts = appts.filter(a => !a.barber_id || a.barber_id === me.id);
+    const myAppts = appts.filter(a => !a.barber_id || parseInt(a.barber_id) === parseInt(me.id));
 
     const completados = myAppts.filter(a => a.status === 'completed').length;
     const facturado = myAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
@@ -1325,7 +1325,7 @@ async function loadBarberProductos() {
     const ventas = await api('GET', '/products/ventas?limit=20').catch(() => []);
     const misVentas = ventas.filter(v => {
       const d = (v.sold_at || '').split('T')[0];
-      return d === today && v.barber_id === me.id;
+      return d === today && parseInt(v.barber_id) === parseInt(me.id);
     });
     renderBarberMisVentas(misVentas);
     // Actualizar comisión en stat card (incluir producto)

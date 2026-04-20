@@ -371,11 +371,19 @@ router.get('/cash', auth, async (req, res) => {
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
 
-    // Dynamic breakdown by payment method key
+    // Dynamic breakdown by payment method key (turnos + ventas de productos)
     const breakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
-       FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+      `SELECT payment_method AS key, COALESCE(SUM(total),0) AS total
+       FROM (
+         SELECT payment_method, price AS total
+         FROM appointments
+         WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+         UNION ALL
+         SELECT payment_method, amount AS total
+         FROM expenses
+         WHERE shop_id=$1 AND date=$2 AND is_income=TRUE
+           AND source_type='product_sale' AND payment_method IS NOT NULL
+       ) sub
        GROUP BY payment_method
        ORDER BY payment_method`,
       [shopId, date]

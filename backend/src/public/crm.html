@@ -1792,9 +1792,18 @@ select.form-input { padding-right: 32px; }
         <div class="modal-title">✏️ Editar barbero</div>
         <div class="modal-sub" id="edit-barber-name-title"></div>
 
-        <div class="form-field" style="margin-bottom:16px">
-          <label>Comisión (%)</label>
-          <input type="number" id="edit-barber-commission" min="0" max="100" style="max-width:120px">
+        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+          <div class="form-field" style="flex:1;min-width:120px">
+            <label>Comisión turnos (%)</label>
+            <input type="number" id="edit-barber-commission" min="0" max="100" style="width:100%">
+          </div>
+          <div class="form-field" style="flex:1;min-width:120px">
+            <label style="display:flex;flex-direction:column;gap:2px">
+              Comisión ventas (%)
+              <span style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:400">Vacío = igual a turnos</span>
+            </label>
+            <input type="number" id="edit-barber-product-commission" min="0" max="100" placeholder="—" style="width:100%">
+          </div>
         </div>
 
         <div style="margin-bottom:8px;font-size:13px;font-weight:600;color:var(--gray)">DÍAS Y HORARIOS DE TRABAJO</div>
@@ -6559,6 +6568,8 @@ function editBarber(id) {
   _editBarberId = id;
   document.getElementById('edit-barber-name-title').textContent = b.name;
   document.getElementById('edit-barber-commission').value = b.barber_commission_pct || 50;
+  const prodPctEl = document.getElementById('edit-barber-product-commission');
+  if (prodPctEl) prodPctEl.value = b.product_sale_commission_pct != null ? b.product_sale_commission_pct : '';
   const schedule = b.barber_schedule || {};
   const days = [
     { key: 'mon', label: 'Lunes' }, { key: 'tue', label: 'Martes' },
@@ -6589,6 +6600,8 @@ async function saveBarberEdit() {
   const id = _editBarberId;
   if (!id) return;
   const commission = parseInt(document.getElementById('edit-barber-commission').value);
+  const prodCommRaw = document.getElementById('edit-barber-product-commission')?.value.trim();
+  const productCommission = prodCommRaw !== '' ? parseFloat(prodCommRaw) : null;
   const days = ['mon','tue','wed','thu','fri','sat','sun'];
   const schedule = {};
   let hasAnySchedule = false;
@@ -6603,6 +6616,7 @@ async function saveBarberEdit() {
   try {
     await api('PUT', `/barbers/${id}`, {
       barber_commission_pct: commission,
+      product_sale_commission_pct: productCommission,
       barber_schedule: hasAnySchedule ? schedule : null
     });
     showToast('✅', 'Barbero actualizado', '');
@@ -8877,13 +8891,19 @@ function openVentaProducto(id, nombre, precio, stock) {
     const barbers = window._barbersList || [];
     const barberSel = document.getElementById('venta-barber');
     barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-      barbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+      barbers.map(b => {
+        const pct = b.product_sale_commission_pct != null ? b.product_sale_commission_pct : (b.barber_commission_pct || 50);
+        return '<option value="' + b.id + '" data-pct="' + pct + '">' + escHtml(b.name) + ' (' + pct + '%)</option>';
+      }).join('');
     barberSel.value = '';
     if (!barbers.length) {
       api('GET', '/barbers').then(list => {
         window._barbersList = list;
         barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-          list.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
+          list.map(b => {
+            const pct = b.product_sale_commission_pct != null ? b.product_sale_commission_pct : (b.barber_commission_pct || 50);
+            return '<option value="' + b.id + '" data-pct="' + pct + '">' + escHtml(b.name) + ' (' + pct + '%)</option>';
+          }).join('');
       }).catch(() => {});
     }
   } else if (barberField) {
@@ -8977,9 +8997,12 @@ async function confirmarAjusteStock() {
 
 function bcmLabel(b) {
   const mode=b.commission_mode||'pct', pct=b.barber_commission_pct||0, fixed=b.commission_fixed||0;
-  if (mode==='fixed') return '$'+parseFloat(fixed).toLocaleString('es-AR')+' fijo/turno';
-  if (mode==='mixed') return pct+'% + $'+parseFloat(fixed).toLocaleString('es-AR')+' mixto';
-  return pct+'% comisión';
+  let label;
+  if (mode==='fixed') label = '$'+parseFloat(fixed).toLocaleString('es-AR')+' fijo/turno';
+  else if (mode==='mixed') label = pct+'% + $'+parseFloat(fixed).toLocaleString('es-AR')+' mixto';
+  else label = pct+'% turnos';
+  if (b.product_sale_commission_pct != null) label += ' · ' + b.product_sale_commission_pct + '% ventas';
+  return label;
 }
 function bcmSelect(mode) {
   document.querySelectorAll('.bcm-mode-btn').forEach(btn => {
