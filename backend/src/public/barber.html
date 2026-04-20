@@ -590,33 +590,6 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
   <!-- Mobile bottom nav -->
   <div class="bottom-nav">
 
-    <!-- Dashboard -->
-    <div class="bottom-nav-item active" onclick="showTab('dashboard')" id="mob-nav-dashboard">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-      </svg>
-      <span>Dashboard</span>
-    </div>
-
-    <!-- FILA — botón central FAB -->
-    <div class="bottom-nav-fab" onclick="showTab('fila')" id="mob-nav-fila">
-      <div class="fab-circle">
-        <!-- scissors icon -->
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#050d18" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="6" cy="6" r="3"/>
-          <circle cx="6" cy="18" r="3"/>
-          <line x1="20" y1="4" x2="8.12" y2="15.88"/>
-          <line x1="14.47" y1="14.48" x2="20" y2="20"/>
-          <line x1="8.12" y1="8.12" x2="12" y2="12"/>
-        </svg>
-        <span class="fab-badge" id="mob-fila-badge">0</span>
-      </div>
-      <span class="fab-label">FILA</span>
-    </div>
-
     <!-- Agenda -->
     <div class="bottom-nav-item" onclick="showTab('agenda')" id="mob-nav-agenda">
       <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -626,6 +599,32 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
         <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
       <span>Agenda</span>
+    </div>
+
+    <!-- DASHBOARD — botón central FAB -->
+    <div class="bottom-nav-fab" onclick="showTab('dashboard')" id="mob-nav-dashboard">
+      <div class="fab-circle">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#050d18" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+      </div>
+      <span class="fab-label">INICIO</span>
+    </div>
+
+    <!-- Fila -->
+    <div class="bottom-nav-item" onclick="showTab('fila')" id="mob-nav-fila" style="position:relative">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="7" r="3"/>
+        <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <line x1="16" y1="3" x2="22" y2="3"/>
+        <line x1="16" y1="8" x2="22" y2="8"/>
+        <line x1="19" y1="13" x2="22" y2="13"/>
+      </svg>
+      <span>Fila</span>
+      <span id="mob-fila-badge" class="fab-badge" style="position:absolute;top:4px;right:calc(50% - 20px)">0</span>
     </div>
 
   </div>
