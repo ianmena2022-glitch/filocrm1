@@ -196,6 +196,38 @@ function extractTextFromMessage(msgContent) {
   return null;
 }
 
+// Extraer imageMessage o documentMessage desenrollando wrappers de WPP (viewOnce, ephemeral, etc.)
+// Devuelve { mediaType: 'image'|'pdf', mediaMsg: <imageMessage|documentMessage> } o null
+function extractMediaFromMessage(msgContent) {
+  if (!msgContent) return null;
+
+  // Imagen directa
+  if (msgContent.imageMessage) return { mediaType: 'image', mediaMsg: msgContent.imageMessage };
+
+  // Documento (PDF u otro)
+  if (msgContent.documentMessage) {
+    const mime = msgContent.documentMessage.mimetype || '';
+    const name = msgContent.documentMessage.fileName || '';
+    if (mime.includes('pdf') || name.toLowerCase().endsWith('.pdf')) {
+      return { mediaType: 'pdf', mediaMsg: msgContent.documentMessage };
+    }
+    return null;
+  }
+
+  // Desenrollar wrappers comunes
+  const inner =
+    msgContent.viewOnceMessage?.message ||
+    msgContent.viewOnceMessageV2?.message ||
+    msgContent.ephemeralMessage?.message ||
+    msgContent.documentWithCaptionMessage?.message ||
+    msgContent.editedMessage?.message ||
+    null;
+
+  if (inner) return extractMediaFromMessage(inner);
+
+  return null;
+}
+
 // Buscar pago pendiente (seña o membresía) exactamente si es 1 solo cliente
 // Retorna resultado solo si hay exactamente 1 pendiente — evita notificar a múltiples clientes
 // Incluye sucursales del enterprise (shops con parent_enterprise_id = shopId)
@@ -287,12 +319,12 @@ async function findPendingPayment(shopId, phone) {
 }
 
 // Verificar y procesar comprobante recibido (imagen o PDF)
-async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
+// mediaMsg = el objeto imageMessage o documentMessage ya desenvuelto
+async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType, mediaMsg) {
   try {
     let pending = await findPendingPayment(shopId, phone);
     console.log(`[WPP] findPendingPayment(${phone}): ${pending ? `${pending.type} #${pending.id}` : 'null'}`);
-    // Fix #4 + #12: solo usar fallback sin phone cuando no tenemos teléfono del cliente
-    // Si tenemos el teléfono y no se encontró pago, no aplicar fallback (evita verificar cliente incorrecto)
+    // Solo usar fallback sin phone cuando no tenemos teléfono del cliente
     if (!pending && !phone) {
       pending = await findAnyPendingPayment(shopId);
       console.log(`[WPP] findAnyPendingPayment fallback: ${pending ? `${pending.type} #${pending.id} clientPhone=${pending.clientPhone}` : 'null'}`);
@@ -305,29 +337,29 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
     let result = null;
 
     if (mediaType === 'image') {
-      const buffer = await downloadMediaBuffer(msg.message.imageMessage, 'image');
+      const buffer = await downloadMediaBuffer(mediaMsg, 'image');
       const base64 = buffer.toString('base64');
-      const mime = msg.message?.imageMessage?.mimetype || 'image/jpeg';
+      const mime = mediaMsg?.mimetype || 'image/jpeg';
       result = await verifyComprobante(base64, mime, pending);
     } else if (mediaType === 'pdf') {
-      const buffer = await downloadMediaBuffer(msg.message.documentMessage, 'document');
+      const buffer = await downloadMediaBuffer(mediaMsg, 'document');
       try {
         const pdfParse = require('pdf-parse');
         const pdfData = await pdfParse(buffer);
         if (!pdfData.text?.trim()) {
-          await sock.sendMessage(msg.key.remoteJid, { text: 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.' });
+          await sock.sendMessage(remoteJid, { text: 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.' });
           return true;
         }
         result = await verifyComprobanteFromText(pdfData.text, pending);
       } catch (pdfErr) {
         console.error('[WPP] pdf-parse error:', pdfErr.message);
-        await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos leer el PDF. Por favor mandá una foto del comprobante.' });
+        await sock.sendMessage(remoteJid, { text: 'No pudimos leer el PDF. Por favor mandá una foto del comprobante.' });
         return true;
       }
     }
 
     if (!result) {
-      await sock.sendMessage(msg.key.remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
+      await sock.sendMessage(remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
       return true;
     }
 
@@ -384,13 +416,13 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
             console.error('[SENA] Error registrando en caja:', cajaErr.message);
           }
         }
-        await sock.sendMessage(msg.key.remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
+        await sock.sendMessage(remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
       } else {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
         if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
-        await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+        await sock.sendMessage(remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
       }
     } else if (pending.type === 'membership') {
       await pool.query(
@@ -399,13 +431,13 @@ async function handleComprobanteMedia(shopId, phone, msg, sock, mediaType) {
       );
       if (verified) {
         await pool.query(`UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1`, [pending.id]);
-        await sock.sendMessage(msg.key.remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
+        await sock.sendMessage(remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
       } else {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
         if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
-        await sock.sendMessage(msg.key.remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+        await sock.sendMessage(remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
       }
     }
 
@@ -652,20 +684,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           continue;
         }
 
-        // Interceptar imágenes como posibles comprobantes
-        if (msgContent?.imageMessage) {
-          const handled = await handleComprobanteMedia(shopId, phone, msg, sock, 'image');
+        // Interceptar imágenes y PDFs como posibles comprobantes (desenvuelve viewOnce, ephemeral, etc.)
+        const extracted = extractMediaFromMessage(msgContent);
+        if (extracted) {
+          console.log(`[WPP] Media detectada tipo=${extracted.mediaType} de ${phone}`);
+          const handled = await handleComprobanteMedia(shopId, phone, msg.key.remoteJid, sock, extracted.mediaType, extracted.mediaMsg);
           if (handled) continue;
-        }
-
-        // Interceptar PDFs como posibles comprobantes
-        if (msgContent?.documentMessage) {
-          const mime = msgContent.documentMessage.mimetype || '';
-          console.log(`[WPP] documentMessage mime="${mime}" fileName="${msgContent.documentMessage.fileName || ''}"`);
-          if (mime === 'application/pdf' || mime.includes('pdf') || (msgContent.documentMessage.fileName || '').toLowerCase().endsWith('.pdf')) {
-            const handled = await handleComprobanteMedia(shopId, phone, msg, sock, 'pdf');
-            if (handled) continue;
-          }
         }
 
         const text = extractTextFromMessage(msgContent);

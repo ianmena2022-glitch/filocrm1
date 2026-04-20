@@ -308,9 +308,14 @@ Solo el JSON, sin texto extra.`;
         temperature: 0,
       })
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error(`[AI] verifyComprobante API error ${response.status}: ${errBody}`);
+      return null;
+    }
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content?.trim();
+    console.log(`[AI] verifyComprobante respuesta: ${text}`);
     const match = text?.match(/\{[\s\S]*\}/);
     if (!match) return null;
     return JSON.parse(match[0]);
@@ -355,9 +360,14 @@ Solo el JSON, sin texto extra.`;
         temperature: 0,
       })
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error(`[AI] verifyComprobanteFromText API error ${response.status}: ${errBody}`);
+      return null;
+    }
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content?.trim();
+    console.log(`[AI] verifyComprobanteFromText respuesta: ${text}`);
     const match = text?.match(/\{[\s\S]*\}/);
     if (!match) return null;
     return JSON.parse(match[0]);
