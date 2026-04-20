@@ -501,8 +501,18 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
           </div>
         </div>
 
+        <!-- Ventas de productos -->
+        <div id="barber-productos-section" style="display:none;margin-top:20px">
+          <div class="section-header">
+            <div class="section-title">🛒 Vender producto</div>
+            <span onclick="loadBarberProductos()" style="font-size:12px;color:var(--gray);cursor:pointer">↺</span>
+          </div>
+          <div id="barber-productos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px"></div>
+          <div id="barber-mis-ventas" style="margin-top:14px"></div>
+        </div>
+
         <!-- Calendario semanal -->
-        <div class="section-header">
+        <div class="section-header" style="margin-top:20px">
           <div class="section-title">Próximas 2 semanas</div>
           <div style="display:flex;gap:8px">
             <button class="date-btn" onclick="weekOffset--; renderCalendar()" style="width:28px;height:28px;font-size:13px">←</button>
@@ -793,6 +803,13 @@ async function loadDashboard() {
 
   const commCard = document.getElementById('commission-card');
   if (commCard) commCard.style.display = me.commission_enabled ? 'block' : 'none';
+
+  // Mostrar sección de productos si el shop padre tiene productos
+  const prodSection = document.getElementById('barber-productos-section');
+  if (prodSection) {
+    prodSection.style.display = '';
+    loadBarberProductos();
+  }
 
   // Load today's appointments for dashboard
   try {
@@ -1296,6 +1313,135 @@ async function confirmBarberWipPayment() {
   }
 }
 
+// ── VENTAS DE PRODUCTOS ───────────────────────────────────
+let _barberProductos = [];
+
+async function loadBarberProductos() {
+  try {
+    _barberProductos = await api('GET', '/products');
+    renderBarberProductos();
+    // Mis ventas de hoy
+    const today = new Date().toISOString().split('T')[0];
+    const ventas = await api('GET', '/products/ventas?limit=20').catch(() => []);
+    const misVentas = ventas.filter(v => {
+      const d = (v.sold_at || '').split('T')[0];
+      return d === today && v.barber_id === me.id;
+    });
+    renderBarberMisVentas(misVentas);
+    // Actualizar comisión en stat card (incluir producto)
+    if (me.commission_enabled) {
+      const commProd = misVentas.reduce((s, v) => s + parseFloat(v.barber_commission_amount || 0), 0);
+      if (commProd > 0) {
+        const comEl = document.getElementById('stat-comision');
+        const subEl = document.getElementById('stat-comision-sub');
+        const currentVal = parseFloat((comEl?.textContent || '0').replace(/[^0-9.]/g,'')) || 0;
+        if (comEl) comEl.textContent = '$' + (currentVal + commProd).toLocaleString('es-AR');
+        if (subEl) subEl.textContent = 'Turnos + productos';
+      }
+    }
+  } catch(e) { console.error('loadBarberProductos', e); }
+}
+
+function renderBarberProductos() {
+  const grid = document.getElementById('barber-productos-grid');
+  if (!grid) return;
+  if (!_barberProductos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;font-size:13px;color:var(--gray)">Sin productos disponibles</div>';
+    return;
+  }
+  grid.innerHTML = _barberProductos.map(p => {
+    const stock = parseInt(p.stock || 0);
+    const sinStock = stock <= 0;
+    return `<div onclick="${sinStock ? '' : `openBarberVenta(${p.id})`}" style="background:var(--surface);border:1px solid ${sinStock ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.1)'};border-radius:10px;padding:12px;cursor:${sinStock ? 'default' : 'pointer'};opacity:${sinStock ? '.45' : '1'};transition:.15s">
+      <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}</div>
+      <div style="font-size:15px;font-weight:700;color:var(--yellow)">$${parseFloat(p.precio_venta||0).toLocaleString('es-AR')}</div>
+      <div style="font-size:11px;color:${stock <= (p.stock_min||3) ? 'var(--orange)' : 'var(--gray)'};margin-top:3px">Stock: ${stock}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBarberMisVentas(ventas) {
+  const el = document.getElementById('barber-mis-ventas');
+  if (!el) return;
+  if (!ventas.length) { el.innerHTML = ''; return; }
+  const total = ventas.reduce((s,v) => s + parseFloat(v.total_price||0), 0);
+  const comm  = ventas.reduce((s,v) => s + parseFloat(v.barber_commission_amount||0), 0);
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:8px">Mis ventas de hoy</div>
+    ${ventas.map(v => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:6px;font-size:13px">
+        <div>
+          <div style="font-weight:600">${escHtml(v.product_name)}</div>
+          <div style="font-size:11px;color:var(--gray)">x${v.quantity}${v.client_name ? ' · ' + escHtml(v.client_name) : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="color:var(--yellow);font-weight:700">$${parseFloat(v.total_price||0).toLocaleString('es-AR')}</div>
+          ${parseFloat(v.barber_commission_amount||0)>0 ? `<div style="font-size:11px;color:#c084fc">+$${parseFloat(v.barber_commission_amount).toLocaleString('es-AR')} com.</div>` : ''}
+        </div>
+      </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;padding:8px 10px;border-top:1px solid rgba(255,255,255,.08);margin-top:4px;font-size:13px">
+      <span style="color:var(--gray)">Total vendido</span>
+      <span style="font-weight:700;color:var(--yellow)">$${total.toLocaleString('es-AR')}</span>
+    </div>
+    ${comm>0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:13px">
+      <span style="color:var(--gray)">Mi comisión</span>
+      <span style="font-weight:700;color:#c084fc">$${comm.toLocaleString('es-AR')}</span>
+    </div>` : ''}`;
+}
+
+let _barberVentaProdId = null;
+function openBarberVenta(prodId) {
+  const p = _barberProductos.find(x => x.id === prodId);
+  if (!p) return;
+  _barberVentaProdId = prodId;
+  document.getElementById('bv-nombre').textContent = p.nombre;
+  document.getElementById('bv-precio').value = p.precio_venta || 0;
+  document.getElementById('bv-cantidad').value = 1;
+  document.getElementById('bv-cliente').value = '';
+  document.getElementById('bv-metodo').value = 'cash';
+  bvPreview(p);
+  document.getElementById('modal-barber-venta').style.display = 'flex';
+}
+
+function bvPreview(p) {
+  p = p || _barberProductos.find(x => x.id === _barberVentaProdId);
+  if (!p) return;
+  const cant  = parseInt(document.getElementById('bv-cantidad')?.value || 1);
+  const prec  = parseFloat(document.getElementById('bv-precio')?.value  || 0);
+  const total = cant * prec;
+  const pct   = parseFloat(me?.barber_commission_pct || 0);
+  const comm  = total * pct / 100;
+  const tv = document.getElementById('bv-total-val');
+  const cv = document.getElementById('bv-comm-val');
+  const cr = document.getElementById('bv-comm-row');
+  if (tv) tv.textContent = '$' + total.toLocaleString('es-AR');
+  if (cr) cr.style.display = (me.commission_enabled && comm > 0) ? '' : 'none';
+  if (cv) cv.textContent  = '$' + comm.toLocaleString('es-AR') + ` (${pct}%)`;
+}
+
+async function confirmarBarberVenta() {
+  const id    = _barberVentaProdId;
+  const cant  = parseInt(document.getElementById('bv-cantidad').value || 1);
+  const prec  = parseFloat(document.getElementById('bv-precio').value || 0);
+  const metod = document.getElementById('bv-metodo').value;
+  const cli   = document.getElementById('bv-cliente').value.trim();
+  if (!id) return;
+  try {
+    await api('POST', `/products/${id}/sell`, {
+      quantity: cant, unit_price: prec,
+      payment_method: metod, client_name: cli || undefined
+      // barber_id y comisión se resuelven automáticamente en el backend (isBarber=true)
+    });
+    document.getElementById('modal-barber-venta').style.display = 'none';
+    showToast('✅ Venta registrada');
+    await loadBarberProductos();
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Error'));
+  }
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 // ── INIT ──────────────────────────────────────────────────
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
@@ -1305,5 +1451,49 @@ if (token && me?.is_barber) {
   startApp();
 }
 </script>
+
+<!-- MODAL: Venta de producto (barbero) -->
+<div id="modal-barber-venta" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0a1828;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:340px;padding:20px">
+    <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px">💰 Registrar venta</div>
+    <div id="bv-nombre" style="font-size:14px;color:var(--yellow);margin-bottom:16px"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Cantidad</label>
+        <input type="number" id="bv-cantidad" value="1" min="1" step="1" oninput="bvPreview()"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:15px;font-family:'Barlow',sans-serif;outline:none">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Precio ($)</label>
+        <input type="number" id="bv-precio" min="0" step="1" oninput="bvPreview()"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:15px;font-family:'Barlow',sans-serif;outline:none">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Método de pago</label>
+        <select id="bv-metodo" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;cursor:pointer">
+          <option value="cash">💵 Efectivo</option>
+          <option value="debit">💳 Débito</option>
+          <option value="credit">💳 Crédito</option>
+          <option value="transfer">📲 Transferencia</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Cliente (opcional)</label>
+        <input type="text" id="bv-cliente" placeholder="Nombre"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+      </div>
+      <div style="padding:10px 14px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:8px;font-size:13px">
+        Total: <strong id="bv-total-val" style="color:var(--yellow)">$0</strong>
+      </div>
+      <div id="bv-comm-row" style="display:none;padding:8px 12px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:8px;font-size:12px;color:#c084fc">
+        Mi comisión: <strong id="bv-comm-val"></strong>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="confirmarBarberVenta()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Confirmar</button>
+      <button onclick="document.getElementById('modal-barber-venta').style.display='none'" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

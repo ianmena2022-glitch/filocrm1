@@ -4,12 +4,14 @@ const auth   = require('../middleware/auth');
 
 // ── GET /api/products — listar productos activos ───────────────────────────
 router.get('/', auth, async (req, res) => {
+  // Los barberos ven los productos del shop padre
+  const shopId = req.isBarber && req.parentShopId ? req.parentShopId : req.shopId;
   try {
     const result = await pool.query(
       `SELECT * FROM products
        WHERE shop_id=$1 AND active=TRUE
        ORDER BY categoria, nombre`,
-      [req.shopId]
+      [shopId]
     );
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -122,11 +124,18 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/sell', auth, async (req, res) => {
   const { quantity, unit_price, payment_method, client_name, barber_id, barber_commission_pct } = req.body;
   const qty = parseInt(quantity) || 1;
+
+  // Si el que vende es un barbero, la venta va al shop padre y el barbero se asigna automáticamente
+  const isBarber  = req.isBarber && req.parentShopId;
+  const shopId    = isBarber ? req.parentShopId : req.shopId;
+  const autoBarberId   = isBarber ? req.shopId : (barber_id ? parseInt(barber_id) : null);
+  const autoCommPct    = isBarber ? null : (barber_commission_pct ? parseFloat(barber_commission_pct) : null);
+
   try {
     // Verificar stock
     const prod = await pool.query(
-      'SELECT nombre, stock, precio_venta FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
-      [req.params.id, req.shopId]
+      'SELECT nombre, stock, precio_venta, precio_costo FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
+      [req.params.id, shopId]
     );
     if (!prod.rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
     const p = prod.rows[0];
@@ -139,10 +148,19 @@ router.post('/:id/sell', auth, async (req, res) => {
     const stockAntes   = parseInt(p.stock);
     const stockDespues = stockAntes - qty;
 
-    // Calcular comisión de barbero si corresponde
-    const barberId = barber_id ? parseInt(barber_id) : null;
-    const commPct  = barberId ? (parseFloat(barber_commission_pct) || 0) : 0;
-    const commAmt  = barberId ? (total * commPct / 100) : 0;
+    // Resolver comisión del barbero
+    let barberId = autoBarberId;
+    let commPct  = autoCommPct;
+    // Si es barbero y no tenemos su %, buscarlo en la BD
+    if (isBarber && barberId) {
+      const barberRow = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [barberId]);
+      commPct = parseFloat(barberRow.rows[0]?.barber_commission_pct || 0);
+    } else if (!isBarber && barberId && commPct === null) {
+      const barberRow = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [barberId]);
+      commPct = parseFloat(barberRow.rows[0]?.barber_commission_pct || 0);
+    }
+    commPct = commPct || 0;
+    const commAmt = barberId ? (total * commPct / 100) : 0;
 
     // Registrar venta
     const venta = await pool.query(
@@ -151,7 +169,7 @@ router.post('/:id/sell', auth, async (req, res) => {
           barber_id, barber_commission_pct, barber_commission_amount)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
-      [req.shopId, req.params.id, p.nombre, qty, precio, total,
+      [shopId, req.params.id, p.nombre, qty, precio, total,
        payment_method||'cash', client_name||null,
        barberId, commPct, commAmt]
     );
@@ -159,7 +177,7 @@ router.post('/:id/sell', auth, async (req, res) => {
     // Descontar stock
     await pool.query(
       'UPDATE products SET stock=stock-$1 WHERE id=$2 AND shop_id=$3',
-      [qty, req.params.id, req.shopId]
+      [qty, req.params.id, shopId]
     );
 
     // Movimiento de stock
@@ -167,7 +185,7 @@ router.post('/:id/sell', auth, async (req, res) => {
       `INSERT INTO product_stock_movements
          (shop_id, product_id, tipo, cantidad, stock_antes, stock_despues, nota)
        VALUES ($1,$2,'venta',$3,$4,$5,$6)`,
-      [req.shopId, req.params.id, qty, stockAntes, stockDespues,
+      [shopId, req.params.id, qty, stockAntes, stockDespues,
        `Venta a ${client_name||'cliente'}`]
     );
 
@@ -175,7 +193,7 @@ router.post('/:id/sell', auth, async (req, res) => {
     await pool.query(
       `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
        VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4)`,
-      [req.shopId, total,
+      [shopId, total,
        `Venta ${p.nombre} x${qty}${client_name ? ' — ' + client_name : ''}`,
        venta.rows[0].id]
     );
