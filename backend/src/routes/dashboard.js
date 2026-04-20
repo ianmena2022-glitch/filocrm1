@@ -371,6 +371,16 @@ router.get('/cash', auth, async (req, res) => {
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
 
+    // Dynamic breakdown by payment method key
+    const breakdownQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+       GROUP BY payment_method
+       ORDER BY payment_method`,
+      [shopId, date]
+    );
+
     res.json({
       date,
       cash_total:        parseFloat(a.cash_total)     + parseFloat(dc.cash_col),
@@ -388,6 +398,7 @@ router.get('/cash', auth, async (req, res) => {
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
+      method_breakdown:  breakdownQ.rows,
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

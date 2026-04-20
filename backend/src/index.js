@@ -16,6 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(require('./middleware/paywall'));
 
 // ── Rutas API ──────────────────────────────────────────
+app.use('/api/payment-methods', require('./routes/paymentMethods'));
 app.use('/api/auth',         require('./routes/auth'));
 app.use('/api/dashboard',    require('./routes/dashboard'));
 app.use('/api/appointments', require('./routes/appointments'));
@@ -94,6 +95,13 @@ async function initDB() {
   const schemaPath = path.join(__dirname, 'db', 'schema.sql');
   const schema     = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schema);
+  // Run incremental migrations
+  const migrationsDir = path.join(__dirname, 'db', 'migrations');
+  const migrationFiles = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+  for (const file of migrationFiles) {
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    await pool.query(sql);
+  }
   console.log('✅ Base de datos sincronizada');
 }
 

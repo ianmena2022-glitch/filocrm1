@@ -2716,6 +2716,18 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        <!-- Métodos de pago -->
+        <div class="settings-section" id="payment-methods-section">
+          <div class="settings-section-title">💳 Métodos de pago</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">
+            Personalizá los métodos de pago disponibles al cobrar un turno.
+          </div>
+          <div id="payment-methods-list" style="margin-bottom:12px"></div>
+          <button onclick="openAddPaymentMethod()" style="width:100%;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:10px;padding:10px;color:rgba(255,255,255,.6);cursor:pointer;font-size:13px;font-family:'Barlow',sans-serif">
+            + Agregar método
+          </button>
+        </div>
+
         <!-- Zona de peligro -->
         <div style="padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
           <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,67,67,0.6);margin-bottom:16px">Zona de peligro</div>
@@ -3699,6 +3711,8 @@ async function startApp() {
 
   // Preservar flag is_test si el plan original era test
   if (currentShop?.plan === 'test') { currentShop.is_test = true; localStorage.setItem('filo_shop', JSON.stringify(currentShop)); }
+  // Load payment methods cache
+  window._paymentMethods = await api('GET', '/payment-methods').catch(() => []);
   loadDashboard();
   loadServices();
   loadClients();
@@ -4034,13 +4048,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
       ${barberSection}
 
       <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:10px">Método de pago</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-        <button class="wip-pay-btn" onclick="selectWalkInMethod('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💵 Efectivo</button>
-        <button class="wip-pay-btn" onclick="selectWalkInMethod('debit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Débito</button>
-        <button class="wip-pay-btn" onclick="selectWalkInMethod('credit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Crédito</button>
-        <button class="wip-pay-btn" onclick="selectWalkInMethod('transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">📲 Transfer</button>
-        <button class="wip-pay-btn" onclick="selectWalkInMethod('debt')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;grid-column:1/-1">📋 Fiado</button>
-      </div>
+      <div id="wip-pay-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"></div>
 
       <div style="margin-bottom:18px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Propina (opcional)</label>
@@ -4051,6 +4059,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
       <button onclick="document.getElementById('walkin-payment-popup').remove()" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,.4);padding:10px;cursor:pointer;font-size:13px;margin-top:6px">Cancelar</button>
     </div>`;
   document.body.appendChild(popup);
+  renderPayMethodButtons('wip-pay-buttons', 'selectWalkInMethod');
 }
 
 function onWalkInServiceChange() {
@@ -4068,16 +4077,6 @@ function onWalkInServiceChange() {
   if (p && priceInput) priceInput.value = parseFloat(p);
 }
 
-function selectWalkInMethod(method) {
-  _walkInPayMethod = method;
-  document.querySelectorAll('.wip-pay-btn').forEach(b => {
-    b.style.borderColor = 'rgba(255,255,255,.1)';
-    b.style.background = b.textContent.includes('Fiado') ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
-  });
-  const map = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transfer', debt:'Fiado' };
-  const btn = [...document.querySelectorAll('.wip-pay-btn')].find(b => b.textContent.trim().includes(map[method]));
-  if (btn) { btn.style.borderColor = '#FFD100'; btn.style.background = 'rgba(255,209,0,.15)'; }
-}
 
 async function confirmWalkInPayment() {
   if (!_walkInPayMethod) { showToast('Seleccioná un método de pago'); return; }
@@ -4793,23 +4792,7 @@ function showPaymentPopup(apptId) {
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo pagó el cliente?</div>
       <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">Elegí el método de pago para registrar en caja</div>
       ${senaNote}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-        <button class="pay-btn" onclick="selectPayMethod('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600;transition:.2s">
-          💵 Efectivo
-        </button>
-        <button class="pay-btn" onclick="selectPayMethod('debit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600;transition:.2s">
-          💳 Débito
-        </button>
-        <button class="pay-btn" onclick="selectPayMethod('credit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600;transition:.2s">
-          💳 Crédito
-        </button>
-        <button class="pay-btn" onclick="selectPayMethod('transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:white;cursor:pointer;font-size:13px;font-weight:600;transition:.2s">
-          📲 Transferencia
-        </button>
-        <button class="pay-btn" onclick="selectPayMethod('debt')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:12px;padding:14px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;transition:.2s;grid-column:1/-1">
-          📋 Fiado (registrar deuda)
-        </button>
-      </div>
+      <div id="complete-pay-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px"></div>
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">Propina (opcional)</label>
         <input type="number" id="tip-input" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
@@ -4823,16 +4806,52 @@ function showPaymentPopup(apptId) {
     </div>`;
   document.body.appendChild(popup);
   window._selectedPayMethod = null;
+  renderPayMethodButtons('complete-pay-buttons', 'selectPayMethod');
+}
+
+function renderPayMethodButtons(containerId, onSelectFn) {
+  const methods = window._paymentMethods || [];
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!methods.length) {
+    // fallback to hardcoded defaults if API not loaded yet
+    container.innerHTML = [
+      `<button class="${containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn'}" data-key="cash" onclick="${onSelectFn}('cash')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💵 Efectivo</button>`,
+      `<button class="${containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn'}" data-key="debit" onclick="${onSelectFn}('debit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Débito</button>`,
+      `<button class="${containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn'}" data-key="credit" onclick="${onSelectFn}('credit')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">💳 Crédito</button>`,
+      `<button class="${containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn'}" data-key="transfer" onclick="${onSelectFn}('transfer')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">📲 Transferencia</button>`,
+      `<button class="${containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn'}" data-key="debt" onclick="${onSelectFn}('debt')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;grid-column:1/-1">📋 Fiado</button>`,
+    ].join('');
+    return;
+  }
+  const cls = containerId === 'wip-pay-buttons' ? 'wip-pay-btn' : 'pay-btn';
+  const regular = methods.filter(m => !m.is_debt);
+  const debt = methods.filter(m => m.is_debt);
+  container.innerHTML = [
+    ...regular.map(m => `<button class="${cls}" data-key="${m.key}" onclick="${onSelectFn}('${m.key}')" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:white;cursor:pointer;font-size:13px;font-weight:600">${m.icon} ${m.label}</button>`),
+    ...debt.map(m => `<button class="${cls}" data-key="${m.key}" onclick="${onSelectFn}('${m.key}')" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px;color:#FF4343;cursor:pointer;font-size:13px;font-weight:600;grid-column:1/-1">${m.icon} ${m.label}</button>`)
+  ].join('');
+}
+
+function selectWalkInMethod(method) {
+  _walkInPayMethod = method;
+  document.querySelectorAll('.wip-pay-btn').forEach(b => {
+    const isDebt = b.dataset.key && (window._paymentMethods||[]).find(m=>m.key===b.dataset.key)?.is_debt;
+    b.style.borderColor = 'rgba(255,255,255,.1)';
+    b.style.background = isDebt ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
+  });
+  const btn = document.querySelector(`.wip-pay-btn[data-key="${method}"]`);
+  if (btn) { btn.style.borderColor = '#FFD100'; btn.style.background = 'rgba(255,209,0,.15)'; }
 }
 
 function selectPayMethod(method) {
   window._selectedPayMethod = method;
   document.querySelectorAll('.pay-btn').forEach(b => {
+    const isDebt = b.dataset.key && (window._paymentMethods||[]).find(m=>m.key===b.dataset.key)?.is_debt;
     b.style.borderColor = 'rgba(255,255,255,.1)';
-    b.style.background = b.textContent.includes('Fiado') ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
+    b.style.background = isDebt ? 'rgba(255,67,67,.1)' : 'rgba(255,255,255,.05)';
   });
-  const labels = { cash:'💵 Efectivo', debit:'💳 Débito', credit:'💳 Crédito', transfer:'📲 Transferencia', debt:'📋 Fiado (registrar deuda)' };
-  const btn = [...document.querySelectorAll('.pay-btn')].find(b => b.textContent.trim().includes(labels[method]?.split(' ')[1] || method));
+  const btn = document.querySelector(`.pay-btn[data-key="${method}"]`);
   if (btn) { btn.style.borderColor = 'var(--yellow)'; btn.style.background = 'rgba(255,209,0,.15)'; }
 }
 
@@ -5739,6 +5758,8 @@ async function saveClosedDays() {
 
 async function loadSettings() {
   try {
+    window._paymentMethods = await api('GET', '/payment-methods').catch(() => window._paymentMethods || []);
+    loadPaymentMethodsSettings();
     const settings = await api('GET', '/settings');
     document.getElementById('cfg-name').value = settings.name || '';
     document.getElementById('cfg-city').value = settings.city || '';
@@ -5848,6 +5869,64 @@ async function loadSettings() {
   } catch (e) {
     console.error(e);
   }
+}
+
+// ── Payment Methods Settings ──────────────────────────────
+async function loadPaymentMethodsSettings() {
+  const methods = await api('GET', '/payment-methods').catch(() => []);
+  window._paymentMethods = methods;
+  const list = document.getElementById('payment-methods-list');
+  if (!list) return;
+  if (!methods.length) {
+    list.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin métodos configurados</div>';
+    return;
+  }
+  list.innerHTML = methods.map(m => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:8px">
+      <span style="font-size:20px">${m.icon}</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${escHtml(m.label)}</div>
+        ${m.is_debt ? '<div style="font-size:11px;color:#FF4343">Registra deuda (fiado)</div>' : ''}
+      </div>
+      <button onclick="openEditPaymentMethod(${m.id})" style="background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:rgba(255,255,255,.6);cursor:pointer;font-size:12px;font-family:Barlow,sans-serif">✏️</button>
+      <button onclick="deletePaymentMethod(${m.id})" style="background:rgba(255,67,67,.1);border:1px solid rgba(255,67,67,.2);border-radius:6px;padding:5px 10px;color:#FF4343;cursor:pointer;font-size:12px;font-family:Barlow,sans-serif">🗑</button>
+    </div>
+  `).join('');
+}
+
+function openAddPaymentMethod() {
+  const icon = prompt('Emoji del ícono (ej: 💵):', '💳');
+  if (icon === null) return;
+  const label = prompt('Nombre del método de pago (ej: Mercado Pago):');
+  if (!label?.trim()) return;
+  const isDebtStr = prompt('¿Es tipo "fiado" (deuda)? (s/n):', 'n');
+  const is_debt = isDebtStr?.toLowerCase() === 's';
+  api('POST', '/payment-methods', { label: label.trim(), icon: icon.trim() || '💳', is_debt })
+    .then(() => loadPaymentMethodsSettings())
+    .catch(e => showToast('❌', 'Error', e.message));
+}
+
+function openEditPaymentMethod(id) {
+  const m = (window._paymentMethods || []).find(x => x.id === id);
+  if (!m) return;
+  const icon = prompt('Emoji del ícono:', m.icon);
+  if (icon === null) return;
+  const label = prompt('Nombre:', m.label);
+  if (!label?.trim()) return;
+  const isDebtStr = prompt('¿Es tipo "fiado"? (s/n):', m.is_debt ? 's' : 'n');
+  const is_debt = isDebtStr?.toLowerCase() === 's';
+  api('PUT', `/payment-methods/${id}`, { label: label.trim(), icon: icon.trim() || '💳', is_debt })
+    .then(() => loadPaymentMethodsSettings())
+    .catch(e => showToast('❌', 'Error', e.message));
+}
+
+async function deletePaymentMethod(id) {
+  if (!confirm('¿Eliminar este método de pago?')) return;
+  try {
+    await api('DELETE', `/payment-methods/${id}`);
+    await loadPaymentMethodsSettings();
+    showToast('🗑', 'Eliminado', '');
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 async function saveSettings() {
@@ -7294,7 +7373,8 @@ function renderCashSummary(c) {
   const expList  = document.getElementById('expenses-list');
 
   // Cerrar detalles de método abiertos (datos pueden haber cambiado)
-  ['cash','debit','credit','transfer'].forEach(m => {
+  const _allMethodKeys = (window._paymentMethods||[]).map(m=>m.key).concat(['cash','debit','credit','transfer']);
+  _allMethodKeys.forEach(m => {
     const d = document.getElementById(`method-detail-${m}`);
     const chv = document.getElementById(`method-chevron-${m}`);
     if (d) { d.style.display = 'none'; d.innerHTML = ''; }
@@ -7327,30 +7407,46 @@ function renderCashSummary(c) {
   `;
 
   // ── Métodos de pago — formato filas expandibles ──
-  const payMethods = [
-    { key:'cash_total',     label:'💵 Efectivo',      color:'#4CAF50',  method:'cash'     },
-    { key:'debit_total',    label:'💳 Débito',         color:'#2196F3',  method:'debit'    },
-    { key:'credit_total',   label:'💳 Crédito',        color:'#9C27B0',  method:'credit'   },
-    { key:'transfer_total', label:'📲 Transferencia',  color:'#FF9800',  method:'transfer' },
-    { key:'debt_total',     label:'🤝 Fiado',           color:'#FF4343',  method:'debt'     },
-  ];
+  const shopMethods = window._paymentMethods || [];
+  // Use method_breakdown from API for dynamic totals; fall back to legacy fields
+  const breakdown = c.method_breakdown || [];
+  const breakdownMap = {};
+  breakdown.forEach(b => { breakdownMap[b.key] = parseFloat(b.total || 0); });
+  // Legacy field map for backwards compatibility when method_breakdown is absent
+  const legacyMap = { cash: parseFloat(c.cash_total||0), debit: parseFloat(c.debit_total||0), credit: parseFloat(c.credit_total||0), transfer: parseFloat(c.transfer_total||0), debt: parseFloat(c.debt_total||0) };
+  const defaultColors = { cash:'#4CAF50', debit:'#2196F3', credit:'#9C27B0', transfer:'#FF9800' };
+
   if (methods) {
-    methods.innerHTML = payMethods.map(m => {
-      const val = parseFloat(c[m.key] || 0);
-      const isDebt = m.key === 'debt_total';
-      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
+    // Render rows for each shop method
+    const methodRows = shopMethods.map(m => {
+      const val = breakdown.length > 0
+        ? (breakdownMap[m.key] || 0)
+        : (legacyMap[m.key] !== undefined ? legacyMap[m.key] : 0);
+      const isDebt = m.is_debt;
+      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)')
+        : (defaultColors[m.key] || '#FF9800');
       const canExpand = !isDebt && val > 0;
       return `
         <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
-             ${canExpand ? `onclick="toggleMethodDetail('${m.method}')"` : ''}>
-          <div class="caja-method-label">${m.label}</div>
+             ${canExpand ? `onclick="toggleMethodDetail('${m.key}')"` : ''}>
+          <div class="caja-method-label">${m.icon} ${m.label}</div>
           <div style="display:flex;align-items:center;gap:6px">
             <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
-            ${canExpand ? `<span id="method-chevron-${m.method}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
+            ${canExpand ? `<span id="method-chevron-${m.key}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
           </div>
         </div>
-        <div id="method-detail-${m.method}" style="display:none"></div>`;
-    }).join('');
+        <div id="method-detail-${m.key}" style="display:none"></div>`;
+    });
+    // Show orphan methods (have data but not in active shop list, e.g. legacy data)
+    const knownKeys = new Set(shopMethods.map(m => m.key));
+    const orphanRows = breakdown
+      .filter(b => !knownKeys.has(b.key) && parseFloat(b.total) > 0)
+      .map(b => `
+        <div class="caja-method-row">
+          <div class="caja-method-label">💳 ${b.key}</div>
+          <div class="caja-method-val">${fmt(b.total)}</div>
+        </div>`);
+    methods.innerHTML = [...methodRows, ...orphanRows].join('');
   }
 
   // ── Gastos (egresos) ──
