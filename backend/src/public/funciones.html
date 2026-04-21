@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Funciones — FILO CRM</title>
+<meta name="description" content="Todo lo que FILO puede hacer por tu barbería. Sin tecnicismos.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --y:#FFD100;--n:#050d18;--nm:#0a1828;--nk:#002043;
+  --w:#fff;--g:#7a8fa8;--gl:#0f2035;
+  --gr:#00C875;--or:#FF9100;--r:#FF4343;
+  --border:rgba(255,255,255,0.06);--border-y:rgba(255,209,0,0.18);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+html{scroll-behavior:smooth}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 6%;background:rgba(5,13,24,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none}
+.logo img{height:36px;object-fit:contain}
+.nav-r{display:flex;align-items:center;gap:28px}
+.nav-link{color:var(--g);font-size:13px;font-weight:500;text-decoration:none;letter-spacing:.3px;transition:color .2s}
+.nav-link:hover{color:var(--w)}
+.nav-link.active{color:var(--y)}
+.nav-cta{background:var(--y);color:#050d18;padding:9px 22px;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.8px;text-transform:uppercase;transition:all .25s}
+.nav-cta:hover{box-shadow:0 0 28px rgba(255,209,0,.5);transform:translateY(-1px)}
+@media(max-width:768px){.nav-links{display:none}}
+
+/* ── HERO HEADER ── */
+.page-hero{padding:120px 6% 72px;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+.page-hero::before{content:'';position:absolute;top:-20%;left:50%;transform:translateX(-50%);width:80%;height:100%;background:radial-gradient(ellipse,rgba(255,209,0,.04) 0%,transparent 65%);pointer-events:none}
+.page-hero-in{max-width:1240px;margin:0 auto;position:relative;z-index:1}
+.ph-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:3px;padding:5px 13px;margin-bottom:20px;font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--y)}
+.ph-title{font-family:'Oswald',sans-serif;font-size:clamp(44px,6vw,80px);font-weight:700;line-height:.9;letter-spacing:-1.5px;margin-bottom:18px}
+.ph-title em{color:var(--y);font-style:normal}
+.ph-sub{font-size:17px;color:var(--g);line-height:1.7;max-width:540px;font-weight:300}
+
+/* ── LAYOUT ── */
+.page-body{max-width:1240px;margin:0 auto;padding:0 6% 120px;display:grid;grid-template-columns:240px 1fr;gap:64px;align-items:start;padding-top:64px}
+@media(max-width:900px){.page-body{grid-template-columns:1fr}.sidebar{display:none}}
+
+/* ── SIDEBAR ── */
+.sidebar{position:sticky;top:88px;display:flex;flex-direction:column;gap:4px}
+.sb-group{font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:rgba(255,255,255,.2);padding:10px 12px 6px;margin-top:8px}
+.sb-group:first-child{margin-top:0}
+.sb-link{display:block;padding:8px 12px;border-radius:8px;font-size:13px;color:rgba(255,255,255,.4);text-decoration:none;font-weight:500;transition:all .18s;border-left:2px solid transparent}
+.sb-link:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.04)}
+.sb-link.on{color:var(--y);background:rgba(255,209,0,.06);border-left-color:var(--y)}
+
+/* ── FEATURE SECTION ── */
+.feat-section{margin-bottom:80px}
+.feat-section:last-child{margin-bottom:0}
+.feat-section-label{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y);margin-bottom:12px;display:block}
+.feat-section-title{font-family:'Oswald',sans-serif;font-size:clamp(28px,3.5vw,40px);font-weight:700;letter-spacing:-.3px;margin-bottom:10px;line-height:1}
+.feat-section-desc{font-size:15px;color:var(--g);line-height:1.72;max-width:640px;font-weight:300;margin-bottom:36px}
+
+/* ── FEATURE ROWS (detail table like Traceback) ── */
+.feat-table{border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.feat-row{display:grid;grid-template-columns:200px 1fr;border-bottom:1px solid var(--border);transition:background .2s}
+.feat-row:last-child{border-bottom:none}
+.feat-row:hover{background:rgba(255,255,255,.02)}
+.feat-row-label{padding:28px 24px;border-right:1px solid var(--border);display:flex;align-items:flex-start;gap:10px}
+.frl-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.frl-name{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.4px;color:var(--y);line-height:1.3}
+.feat-row-body{padding:28px 32px;font-size:14px;color:rgba(255,255,255,.72);line-height:1.78}
+.feat-row-body strong{color:rgba(255,255,255,.95);font-weight:600}
+.feat-row-body .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-left:6px;vertical-align:middle}
+.pill.g{background:rgba(0,200,117,.1);color:var(--gr)}
+.pill.y{background:rgba(255,209,0,.1);color:var(--y)}
+.pill.o{background:rgba(255,145,0,.1);color:var(--or)}
+.pill.r{background:rgba(255,67,67,.1);color:#ff8080}
+@media(max-width:700px){
+  .feat-row{grid-template-columns:1fr}
+  .feat-row-label{border-right:none;border-bottom:1px solid var(--border);padding:18px 20px 14px}
+  .feat-row-body{padding:18px 20px 22px}
+}
+
+/* ── DIVIDER ── */
+.page-divider{border:none;border-top:1px solid var(--border);margin:0 0 80px}
+
+/* ── CTA BANNER ── */
+.feat-cta{background:linear-gradient(135deg,rgba(255,209,0,.06) 0%,rgba(255,145,0,.04) 100%);border:1px solid rgba(255,209,0,.18);border-radius:16px;padding:48px;text-align:center;margin-top:80px}
+.feat-cta h2{font-family:'Oswald',sans-serif;font-size:clamp(28px,4vw,44px);font-weight:700;letter-spacing:-.3px;margin-bottom:10px}
+.feat-cta h2 em{color:var(--y);font-style:normal}
+.feat-cta p{font-size:15px;color:var(--g);margin-bottom:28px;line-height:1.65;max-width:440px;margin-left:auto;margin-right:auto}
+.feat-cta-btn{display:inline-block;background:var(--y);color:#050d18;padding:14px 36px;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:.8px;text-transform:uppercase;transition:all .3s}
+.feat-cta-btn:hover{box-shadow:0 8px 32px rgba(255,209,0,.45);transform:translateY(-2px)}
+
+/* ── FOOTER ── */
+footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-logo{display:flex;align-items:center;gap:10px}
+.footer-logo img{height:28px;opacity:.7}
+.footer-copy{font-size:12px;color:rgba(255,255,255,.25)}
+.footer-links{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.footer-links a{font-size:12px;color:rgba(255,255,255,.3);text-decoration:none;transition:color .2s}
+.footer-links a:hover{color:rgba(255,255,255,.7)}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  .page-hero{padding:100px 5% 52px}
+  .page-body{padding:40px 5% 80px;gap:0}
+  .feat-section{margin-bottom:56px}
+  .feat-cta{padding:32px 20px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="logo"><img src="/logo_filo.png" alt="FILO CRM"></a>
+  <div class="nav-r nav-links">
+    <a href="/funciones" class="nav-link active">Funciones</a>
+    <a href="/#dolores" class="nav-link">Problema</a>
+    <a href="/#planes" class="nav-link">Planes</a>
+    <a href="/#faq" class="nav-link">FAQ</a>
+  </div>
+  <a href="/app" class="nav-cta">✂ Empezar gratis</a>
+</nav>
+
+<!-- HERO HEADER -->
+<div class="page-hero">
+  <div class="page-hero-in">
+    <div class="ph-eyebrow">Funciones</div>
+    <h1 class="ph-title">Todo lo que FILO<br><em>hace por vos.</em></h1>
+    <p class="ph-sub">Sin tecnicismos. Cada función explicada como si te la contara un colega que ya la usa.</p>
+  </div>
+</div>
+
+<!-- PAGE BODY -->
+<div class="page-body">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-group">Reservas</div>
+    <a href="#turnos" class="sb-link on">Turnos online</a>
+    <a href="#agenda" class="sb-link">Agenda del día</a>
+    <a href="#fila" class="sb-link">Fila digital</a>
+    <a href="#senas" class="sb-link">Sistema de señas</a>
+
+    <div class="sb-group">Clientes</div>
+    <a href="#clientes" class="sb-link">Historial de clientes</a>
+    <a href="#puntos" class="sb-link">Puntos y premios</a>
+    <a href="#membresias" class="sb-link">Membresías</a>
+
+    <div class="sb-group">Negocio</div>
+    <a href="#caja" class="sb-link">Caja diaria</a>
+    <a href="#productos" class="sb-link">Productos y stock</a>
+    <a href="#equipo" class="sb-link">Equipo y comisiones</a>
+
+    <div class="sb-group">Automatización</div>
+    <a href="#whatsapp" class="sb-link">Bot de WhatsApp</a>
+    <a href="#motores" class="sb-link">Motores automáticos</a>
+  </aside>
+
+  <!-- CONTENT -->
+  <main>
+
+    <!-- ══ TURNOS ══ -->
+    <section class="feat-section" id="turnos">
+      <span class="feat-section-label">Reservas</span>
+      <h2 class="feat-section-title">Turnos online</h2>
+      <p class="feat-section-desc">Tus clientes reservan desde su celular, en cualquier momento, sin llamarte. Vos te enterás al instante.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔗</span>
+            <div class="frl-name">Link propio de reservas</div>
+          </div>
+          <div class="feat-row-body">
+            Cada barbería tiene su propia página de reservas con tu nombre, foto y servicios. La compartís por WhatsApp, Instagram o donde quieras. El cliente entra, elige el día, el horario y el servicio, y listo — sin descargar ninguna app.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📅</span>
+            <div class="frl-name">Horarios configurables</div>
+          </div>
+          <div class="feat-row-body">
+            Definís qué días trabajás, a qué hora abrís y cerrás, y cuánto dura cada servicio. FILO solo muestra horarios realmente disponibles — no pueden reservar un slot que ya está tomado o fuera de tu horario.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">✂️</span>
+            <div class="frl-name">Elección de barbero</div>
+          </div>
+          <div class="feat-row-body">
+            En barberías con equipo, el cliente puede elegir con qué barbero quiere atenderse. Cada barbero tiene su propio calendario y no hay cruces de horarios entre ellos. <span class="pill o">Staff / Enterprise</span>
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🚫</span>
+            <div class="frl-name">Días no laborables</div>
+          </div>
+          <div class="feat-row-body">
+            Marcás los días que no abrís — feriados, vacaciones, eventos. Esas fechas desaparecen del calendario de reservas automáticamente. Sin explicaciones, sin mensajes de "ese día no trabajo".
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">⚡</span>
+            <div class="frl-name">Confirmación inmediata</div>
+          </div>
+          <div class="feat-row-body">
+            Al completar la reserva, el cliente recibe un mensaje de WhatsApp con los datos del turno. Sin demoras, sin confirmar manualmente. Si tenés el sistema de señas activo, el mensaje incluye las instrucciones de pago.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ AGENDA ══ -->
+    <section class="feat-section" id="agenda">
+      <span class="feat-section-label">Reservas</span>
+      <h2 class="feat-section-title">Agenda del día</h2>
+      <p class="feat-section-desc">Todo lo que pasa en tu barbería hoy, en una sola pantalla. Sin papel, sin grupito de WhatsApp, sin nada.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📋</span>
+            <div class="frl-name">Vista de turnos del día</div>
+          </div>
+          <div class="feat-row-body">
+            Ves todos los turnos en orden cronológico: nombre del cliente, hora, servicio y precio. Podés tocar cada uno para ver el historial completo del cliente, cobrar el turno o marcarlo como no asistió.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💰</span>
+            <div class="frl-name">Cobrar y registrar en caja</div>
+          </div>
+          <div class="feat-row-body">
+            Al completar un turno elegís cómo cobró el cliente — efectivo, transferencia, tarjeta, o cualquier método que hayas configurado. Ese cobro queda registrado automáticamente en la caja del día.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">➕</span>
+            <div class="frl-name">Turno manual desde el panel</div>
+          </div>
+          <div class="feat-row-body">
+            Para clientes que te llaman o que entran por la puerta: cargás el turno directamente desde tu panel con nombre, horario y servicio. Queda en la agenda igual que si hubieran reservado online.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📆</span>
+            <div class="frl-name">Navegar por fechas</div>
+          </div>
+          <div class="feat-row-body">
+            Podés moverte al día siguiente, a la semana que viene o a cualquier fecha para ver qué turnos hay programados, cuántos lugares quedan libres o verificar un turno específico antes de que llegue.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ FILA ══ -->
+    <section class="feat-section" id="fila">
+      <span class="feat-section-label">Reservas</span>
+      <h2 class="feat-section-title">Fila digital</h2>
+      <p class="feat-section-desc">El cliente escanea un QR a la entrada, entra a la fila virtual y espera donde quiera. Le avisás por WhatsApp cuando es su turno.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📱</span>
+            <div class="frl-name">Fila desde el celular</div>
+          </div>
+          <div class="feat-row-body">
+            El cliente escanea el QR que tenés en la puerta o en el mostrador, pone su nombre y listo — está en la fila. Ve en tiempo real cuántas personas hay adelante y cuánto tiempo aproximado falta.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔔</span>
+            <div class="frl-name">Aviso por WhatsApp</div>
+          </div>
+          <div class="feat-row-body">
+            Cuando le queda poco tiempo, le mandás un aviso por WhatsApp con un toque. Puede ir tomando un café y volver justo a tiempo. Sin estar parado esperando en la silla.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🎯</span>
+            <div class="frl-name">Control total desde el panel</div>
+          </div>
+          <div class="feat-row-body">
+            Ves la fila completa, el nombre de cada persona y hace cuánto esperan. Llamás al siguiente, marcás que ya entró o removés a alguien si se fue. Todo desde tu celular o computadora.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SEÑAS ══ -->
+    <section class="feat-section" id="senas">
+      <span class="feat-section-label">Reservas</span>
+      <h2 class="feat-section-title">Sistema de señas</h2>
+      <p class="feat-section-desc">Terminá con los clientes que reservan y no aparecen. Exigí una seña y solo confirmás cuando el dinero llegó.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💸</span>
+            <div class="frl-name">Seña antes de confirmar</div>
+          </div>
+          <div class="feat-row-body">
+            Cuando alguien reserva online, el turno queda en estado <strong>"Esperando seña"</strong> y no se confirma hasta que vos marcás que la transferencia llegó. El cliente tiene 60 minutos para pagar o el turno se libera automáticamente.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📲</span>
+            <div class="frl-name">Instrucciones automáticas</div>
+          </div>
+          <div class="feat-row-body">
+            Al reservar, el cliente recibe por WhatsApp el CBU/CVU de tu cuenta y el monto exacto a transferir. Vos configurás cuánto cobrar como seña (por ejemplo, el 30% del servicio) y con qué método queda registrado en caja.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">✅</span>
+            <div class="frl-name">Confirmar con un toque</div>
+          </div>
+          <div class="feat-row-body">
+            Cuando ves que llegó la transferencia al banco, entrás al panel y confirmás el turno. El cliente recibe la confirmación por WhatsApp al instante. Si no paga en tiempo, el slot vuelve a estar disponible solo.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="page-divider">
+
+    <!-- ══ CLIENTES ══ -->
+    <section class="feat-section" id="clientes">
+      <span class="feat-section-label">Clientes</span>
+      <h2 class="feat-section-title">Historial de clientes</h2>
+      <p class="feat-section-desc">FILO recuerda a cada persona que pasó por tu barbería: cuándo vino, qué se hizo, cuánto gastó y cuándo volverá.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">👤</span>
+            <div class="frl-name">Ficha por cliente</div>
+          </div>
+          <div class="feat-row-body">
+            Cada cliente tiene su ficha con nombre, teléfono, todos sus turnos anteriores, lo que gastó en total y cuándo fue la última visita. Podés agregarle una nota interna que solo vos ves.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔥</span>
+            <div class="frl-name">Detección de clientes en fuga</div>
+          </div>
+          <div class="feat-row-body">
+            FILO marca automáticamente a los clientes que no volvieron en X días (vos definís cuántos). Los ves separados para que puedas mandarles un mensaje o una oferta antes de que se vayan del todo.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📊</span>
+            <div class="frl-name">Ranking de mejores clientes</div>
+          </div>
+          <div class="feat-row-body">
+            Sabés quiénes son los que más gastan, los más frecuentes y los que más referidos trajeron. Esa información te ayuda a saber a quién cuidar y dónde poner el foco.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🏠</span>
+            <div class="frl-name">Servicios a domicilio</div>
+          </div>
+          <div class="feat-row-body">
+            Si ofrecés servicios a domicilio, FILO pide la dirección al cliente cuando reserva. La dirección queda guardada en su ficha y aparece en la agenda del día para que sepas dónde ir.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ PUNTOS ══ -->
+    <section class="feat-section" id="puntos">
+      <span class="feat-section-label">Clientes</span>
+      <h2 class="feat-section-title">Puntos y premios</h2>
+      <p class="feat-section-desc">Tus clientes acumulan puntos con cada visita y los canjean por descuentos, cortes gratis o lo que vos quieras ofrecer.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">⭐</span>
+            <div class="frl-name">Puntos automáticos</div>
+          </div>
+          <div class="feat-row-body">
+            Cada vez que un cliente completa un turno, acumula puntos según lo que gastó. No necesita hacer nada — los puntos se cargan solos. Vos ves cuántos tiene cada uno desde su ficha.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🎁</span>
+            <div class="frl-name">Tienda de premios</div>
+          </div>
+          <div class="feat-row-body">
+            Creás los premios que querés ofrecer: un corte gratis, un producto con descuento, una barba sin cargo. Cada premio tiene un costo en puntos que vos definís. Los clientes los ven y canjeán desde su celular.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">👥</span>
+            <div class="frl-name">Puntos por referidos</div>
+          </div>
+          <div class="feat-row-body">
+            Cuando un cliente trae a alguien nuevo, gana puntos extra automáticamente. Es la forma más barata de crecer: tus clientes actuales traen clientes nuevos a cambio de un premio que vos controlás.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ MEMBRESIAS ══ -->
+    <section class="feat-section" id="membresias">
+      <span class="feat-section-label">Clientes</span>
+      <h2 class="feat-section-title">Membresías</h2>
+      <p class="feat-section-desc">Ingresos fijos cada mes. Tus mejores clientes pagan una membresía y reciben un número de cortes a precio especial o sin costo.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📋</span>
+            <div class="frl-name">Planes a medida</div>
+          </div>
+          <div class="feat-row-body">
+            Creás los planes que quieras: "2 cortes por mes", "cortes ilimitados", "corte + barba + tratamiento". Cada plan tiene su precio y sus beneficios. Podés tener varios activos al mismo tiempo.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔄</span>
+            <div class="frl-name">Créditos que se renuevan</div>
+          </div>
+          <div class="feat-row-body">
+            Los créditos de la membresía se descuentan automáticamente cada vez que el cliente reserva. Cuando los usa todos, sabe que tiene que renovar. Vos lo ves en tiempo real desde el panel.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💳</span>
+            <div class="frl-name">Reserva sin pago adicional</div>
+          </div>
+          <div class="feat-row-body">
+            Los miembros reservan online igual que cualquier cliente pero el turno se registra como ya pago. Sin fricción, sin tener que avisar nada. La membresía habla por sí sola.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="page-divider">
+
+    <!-- ══ CAJA ══ -->
+    <section class="feat-section" id="caja">
+      <span class="feat-section-label">Negocio</span>
+      <h2 class="feat-section-title">Caja diaria</h2>
+      <p class="feat-section-desc">Sabés exactamente cuánto ganaste hoy, cómo te pagaron y cuánto se llevó cada barbero. Sin hojas de cálculo.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📈</span>
+            <div class="frl-name">Resumen del día</div>
+          </div>
+          <div class="feat-row-body">
+            Al final del día ves todo junto: ingresos por turnos, propinas, ventas de productos, comisiones a pagar, gastos y la ganancia neta. Un solo número que te dice cómo te fue.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💳</span>
+            <div class="frl-name">Desglose por método de pago</div>
+          </div>
+          <div class="feat-row-body">
+            Ves cuánto entró en efectivo, cuánto por transferencia, cuánto con tarjeta. Si al cerrar caja el efectivo no coincide, sabés de dónde investigar. Sin adivinar.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🧾</span>
+            <div class="frl-name">Gastos del día</div>
+          </div>
+          <div class="feat-row-body">
+            Registrás los gastos del negocio — insumos, alquiler, cualquier cosa — y quedan descontados del resultado del día. Así el número que ves es la ganancia real, no solo lo que cobró.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🗓️</span>
+            <div class="frl-name">Historial y reportes</div>
+          </div>
+          <div class="feat-row-body">
+            Podés ver cualquier día del pasado, descargar el reporte y comparar semanas o meses. El dashboard principal muestra los números del mes en curso con gráficos simples.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ PRODUCTOS ══ -->
+    <section class="feat-section" id="productos">
+      <span class="feat-section-label">Negocio</span>
+      <h2 class="feat-section-title">Productos y stock</h2>
+      <p class="feat-section-desc">Vendés productos en el local y FILO lleva el inventario, registra las ventas y avisa cuando queda poco stock.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📦</span>
+            <div class="frl-name">Inventario en tiempo real</div>
+          </div>
+          <div class="feat-row-body">
+            Cada vez que vendés un producto el stock baja solo. Cada vez que cargás mercadería el stock sube. Siempre sabés cuánto tenés sin contar a mano.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">⚠️</span>
+            <div class="frl-name">Alertas de stock mínimo</div>
+          </div>
+          <div class="feat-row-body">
+            Definís cuántas unidades es el mínimo aceptable de cada producto. Cuando el stock baja de ese número, aparece una alerta. Nunca más te quedás sin stock justo cuando más lo necesitás.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🧾</span>
+            <div class="frl-name">Las ventas van a caja</div>
+          </div>
+          <div class="feat-row-body">
+            Cada venta de producto queda registrada automáticamente en la caja del día, con el método de pago que usó el cliente. El ingreso se suma solo al resultado del día.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">✂️</span>
+            <div class="frl-name">Comisión por venta de producto</div>
+          </div>
+          <div class="feat-row-body">
+            Si un barbero vende un producto, podés asignarle una comisión diferente a la de los cortes. Esa comisión aparece en su panel y queda registrada por separado en el cierre del día. <span class="pill o">Staff / Enterprise</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ EQUIPO ══ -->
+    <section class="feat-section" id="equipo">
+      <span class="feat-section-label">Negocio</span>
+      <h2 class="feat-section-title">Equipo y comisiones</h2>
+      <p class="feat-section-desc">Cada barbero tiene su propio acceso, su propia agenda y sus comisiones calculadas automáticamente.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🧑‍💼</span>
+            <div class="frl-name">Panel individual por barbero</div>
+          </div>
+          <div class="feat-row-body">
+            Cada integrante del equipo tiene su propio login. Ve sus turnos del día, sus comisiones acumuladas y puede registrar sus propias ventas de productos — sin ver los datos de los demás ni del dueño.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💵</span>
+            <div class="frl-name">Comisiones automáticas</div>
+          </div>
+          <div class="feat-row-body">
+            Definís el porcentaje de comisión de cada barbero y FILO lo calcula solo en cada turno y en cada venta. Al cerrar la caja del día ves cuánto le corresponde a cada uno, sin calculadora.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📊</span>
+            <div class="frl-name">Rendimiento del equipo</div>
+          </div>
+          <div class="feat-row-body">
+            Desde el panel del dueño ves el resumen de cada barbero: cuántos turnos hizo, cuánto facturó y cuánto le generó al negocio. Información clara para tomar decisiones sobre el equipo. <span class="pill o">Staff / Enterprise</span>
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🏢</span>
+            <div class="frl-name">Múltiples sucursales</div>
+          </div>
+          <div class="feat-row-body">
+            Si tenés más de un local, manejás todo desde una sola cuenta. Cada sucursal tiene su equipo, su caja y sus clientes. El dueño ve el consolidado completo de la empresa. <span class="pill r">Enterprise</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="page-divider">
+
+    <!-- ══ WHATSAPP ══ -->
+    <section class="feat-section" id="whatsapp">
+      <span class="feat-section-label">Automatización</span>
+      <h2 class="feat-section-title">Bot de WhatsApp</h2>
+      <p class="feat-section-desc">Un asistente que atiende a tus clientes por WhatsApp las 24 horas. Agenda turnos, responde preguntas y manda recordatorios sin que hagas nada.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🤖</span>
+            <div class="frl-name">Agendado por WhatsApp</div>
+          </div>
+          <div class="feat-row-body">
+            Un cliente te escribe a las 11 de la noche preguntando si hay lugar el viernes. El bot le responde, le muestra los horarios disponibles y agenda el turno — sin que vos estés mirando el celular.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📅</span>
+            <div class="frl-name">Recordatorio de turno</div>
+          </div>
+          <div class="feat-row-body">
+            El día antes del turno, el bot le manda un mensaje al cliente para recordarle. Reducís los "me olvidé" y los clientes que no aparecen sin avisar. Podés personalizar el mensaje.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💬</span>
+            <div class="frl-name">Respuestas automáticas</div>
+          </div>
+          <div class="feat-row-body">
+            El bot responde las preguntas más comunes: precio de los servicios, ubicación, horarios de atención, cómo reservar. Las respuestas salen de la información que vos cargaste en FILO.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">✅</span>
+            <div class="frl-name">Confirmación de seña</div>
+          </div>
+          <div class="feat-row-body">
+            Si tenés señas activadas, el bot le manda al cliente los datos de pago justo después de que reserva, y le avisa cuando vos confirmás la transferencia. El proceso completo sin intervención tuya.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ MOTORES ══ -->
+    <section class="feat-section" id="motores">
+      <span class="feat-section-label">Automatización</span>
+      <h2 class="feat-section-title">Motores automáticos</h2>
+      <p class="feat-section-desc">Acciones que FILO ejecuta solo cuando se dan ciertas condiciones. Vos los configurás una vez y trabaján solos.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔥</span>
+            <div class="frl-name">Rescate de clientes</div>
+          </div>
+          <div class="feat-row-body">
+            Cuando un cliente no volvió en la cantidad de días que definiste, FILO le manda un mensaje automático de WhatsApp con un incentivo para que vuelva. Sin que vos hagas nada. <strong>La mayoría de los que responden vuelven en la semana siguiente.</strong>
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">💈</span>
+            <div class="frl-name">Sillón libre</div>
+          </div>
+          <div class="feat-row-body">
+            Se te cancela un turno y queda un hueco en la agenda. FILO puede avisarle automáticamente a clientes que suela venir a esa hora o que estaban en lista de espera. El sillón se llena solo.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🎂</span>
+            <div class="frl-name">Mensaje de cumpleaños</div>
+          </div>
+          <div class="feat-row-body">
+            El día del cumpleaños de un cliente, FILO le manda un saludo por WhatsApp. Podés agregar un descuento o una oferta especial. Un detalle que los fideliza y los hace sentir parte.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📣</span>
+            <div class="frl-name">Campaña manual</div>
+          </div>
+          <div class="feat-row-body">
+            Tenés una promo especial y querés avisarle a toda tu base de clientes. Escribís el mensaje, elegís a quiénes mandarlo (todos, solo los que no vinieron en X días, solo los frecuentes) y listo — FILO los contacta a todos.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <div class="feat-cta">
+      <h2>Probalo sin costo.<br><em>14 días gratis.</em></h2>
+      <p>Sin tarjeta de crédito. Sin compromiso. Empezás hoy y ves los resultados esta misma semana.</p>
+      <a href="/app" class="feat-cta-btn">✂ Empezar gratis</a>
+    </div>
+
+  </main>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">
+    <img src="/logo_filo.png" alt="FILO CRM">
+    <span class="footer-copy">© 2025 FILO CRM</span>
+  </div>
+  <div class="footer-links">
+    <a href="/funciones">Funciones</a>
+    <a href="/#planes">Precios</a>
+    <a href="/#faq">FAQ</a>
+    <a href="/app">Ingresar</a>
+  </div>
+</footer>
+
+<script>
+// Sidebar active link on scroll
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.sb-link');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('on'));
+      const active = document.querySelector(`.sb-link[href="#${e.target.id}"]`);
+      if (active) active.classList.add('on');
+    }
+  });
+}, { threshold: 0.3, rootMargin: '-60px 0px -40% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

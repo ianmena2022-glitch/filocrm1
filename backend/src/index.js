@@ -85,6 +85,11 @@ app.get('/app', (req, res) => {
   res.sendFile(path.join(publicDir, 'crm.html'));
 });
 
+// Página de funciones
+app.get('/funciones', (req, res) => {
+  res.sendFile(path.join(publicDir, 'funciones.html'));
+});
+
 // Cualquier otra ruta → CRM
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicDir, 'crm.html'));
