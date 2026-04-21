@@ -831,6 +831,7 @@ async function loadDashboard() {
     document.getElementById('stat-turnos').textContent = allAppts.length;
     document.getElementById('stat-completados').textContent = completados;
     document.getElementById('stat-pendientes').textContent = pendientes;
+    window._dashApptComision = comision;
     document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
     const subEl = document.getElementById('stat-comision-sub'); if (subEl && propinas > 0) subEl.textContent = `Comisión + $${propinas.toLocaleString('es-AR')} propinas`;
 
@@ -1334,8 +1335,9 @@ async function loadBarberProductos() {
       if (commProd > 0) {
         const comEl = document.getElementById('stat-comision');
         const subEl = document.getElementById('stat-comision-sub');
-        const currentVal = parseFloat((comEl?.textContent || '0').replace(/[^0-9.]/g,'')) || 0;
-        if (comEl) comEl.textContent = '$' + (currentVal + commProd).toLocaleString('es-AR');
+        // Usar la variable guardada por loadDashboard para evitar parsing de formato AR
+        const apptComision = window._dashApptComision || 0;
+        if (comEl) comEl.textContent = '$' + (apptComision + commProd).toLocaleString('es-AR');
         if (subEl) subEl.textContent = 'Turnos + productos';
       }
     }
@@ -1414,7 +1416,9 @@ function bvPreview(p) {
   const cant  = parseInt(document.getElementById('bv-cantidad')?.value || 1);
   const prec  = parseFloat(document.getElementById('bv-precio')?.value  || 0);
   const total = cant * prec;
-  const pct   = parseFloat(me?.barber_commission_pct || 0);
+  const pct   = me?.product_sale_commission_pct != null
+    ? parseFloat(me.product_sale_commission_pct)
+    : parseFloat(me?.barber_commission_pct || 0);
   const comm  = total * pct / 100;
   const tv = document.getElementById('bv-total-val');
   const cv = document.getElementById('bv-comm-val');
