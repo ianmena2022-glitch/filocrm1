@@ -390,8 +390,6 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
 
-    console.log(`[CASH ${date}] appt_breakdown:`, apptBreakdownQ.rows, '| prod_breakdown:', prodBreakdownQ.rows);
-
     // Merge ambos en un único mapa
     const breakdownMap = {};
     apptBreakdownQ.rows.forEach(r => {

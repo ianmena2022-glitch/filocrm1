@@ -212,14 +212,12 @@ router.post('/:id/sell', auth, async (req, res) => {
       + (barberName  ? ' - ' + barberName : '')
       + (commAmt > 0 ? ' - Comision $' + commAmt.toFixed(0) : '')).slice(0, 250);
     const pmValue = payment_method || 'cash';
-    console.log(`[SELL-EXPENSE] shopId=${shopId} pm=${pmValue} desc_len=${ventaDesc.length} ventaId=${venta.rows[0].id}`);
     try {
       await pool.query(
         `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
          VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
         [shopId, total, ventaDesc, venta.rows[0].id, pmValue]
       );
-      console.log(`[SELL-EXPENSE] OK`);
     } catch(expErr) {
       console.error(`[SELL-EXPENSE-ERROR] ${expErr.message}`);
     }
