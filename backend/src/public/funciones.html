@@ -42,7 +42,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;height:64px;display:flex;al
 
 /* ── LAYOUT ── */
 .page-body{max-width:1240px;margin:0 auto;padding:0 6% 120px;display:grid;grid-template-columns:240px 1fr;gap:64px;align-items:start;padding-top:64px}
-@media(max-width:900px){.page-body{grid-template-columns:1fr}.sidebar{display:none}}
+@media(max-width:900px){.page-body{grid-template-columns:1fr;gap:0}.sidebar{display:none !important}}
 
 /* ── SIDEBAR ── */
 .sidebar{position:sticky;top:88px;display:flex;flex-direction:column;gap:4px}
@@ -108,19 +108,16 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   .feat-cta{padding:32px 20px}
 }
 
-/* ── MOBILE BOTTOM NAV (funciones) ── */
+/* ── MOBILE SECTION NAV ── */
 .mob-sec-nav{display:none}
 @media(max-width:900px){
-  .mob-sec-nav{display:flex;position:sticky;top:64px;z-index:900;background:rgba(5,13,24,.95);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);overflow-x:auto;gap:0;padding:0 4%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .mob-sec-nav{display:flex;position:sticky;top:64px;z-index:900;background:rgba(5,13,24,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);overflow-x:auto;padding:0 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:4px}
   .mob-sec-nav::-webkit-scrollbar{display:none}
-  .mob-sec-a{flex-shrink:0;padding:10px 14px;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-decoration:none;letter-spacing:.4px;text-transform:uppercase;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+  .mob-sec-a{flex-shrink:0;padding:9px 12px;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-decoration:none;letter-spacing:.3px;text-transform:uppercase;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
   .mob-sec-a:hover,.mob-sec-a.on{color:var(--y);border-bottom-color:var(--y)}
+  .page-body{padding:28px 16px 80px}
 }
 
-/* ── NAV FUNC MOB ── */
-.nav-func-mob{display:none;color:var(--g);font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.3px;transition:color .2s}
-.nav-func-mob:hover{color:var(--w)}
-@media(max-width:768px){.nav-func-mob{display:block}}
 </style>
 </head>
 <body>
@@ -134,7 +131,6 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
     <a href="/#planes" class="nav-link">Planes</a>
     <a href="/#faq" class="nav-link">FAQ</a>
   </div>
-  <a href="/" class="nav-func-mob">← Inicio</a>
   <a href="/app" class="nav-cta">✂ Empezar gratis</a>
 </nav>
 
@@ -149,19 +145,19 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
 
 <!-- MOBILE SECTION NAV -->
 <nav class="mob-sec-nav">
-  <a href="#turnos" class="mob-sec-a">📅 Turnos</a>
-  <a href="#recurrentes" class="mob-sec-a">🔁 Fijos</a>
-  <a href="#agenda" class="mob-sec-a">📋 Agenda</a>
-  <a href="#fila" class="mob-sec-a">📱 Fila</a>
-  <a href="#senas" class="mob-sec-a">💸 Señas</a>
-  <a href="#clientes" class="mob-sec-a">👤 Clientes</a>
-  <a href="#puntos" class="mob-sec-a">⭐ Puntos</a>
-  <a href="#membresias" class="mob-sec-a">💳 Membresías</a>
-  <a href="#caja" class="mob-sec-a">📈 Caja</a>
-  <a href="#productos" class="mob-sec-a">📦 Productos</a>
-  <a href="#equipo" class="mob-sec-a">🧑‍💼 Equipo</a>
-  <a href="#whatsapp" class="mob-sec-a">🤖 WhatsApp</a>
-  <a href="#motores" class="mob-sec-a">💈 Motores</a>
+  <a href="#turnos" class="mob-sec-a">Turnos</a>
+  <a href="#recurrentes" class="mob-sec-a">Fijos</a>
+  <a href="#agenda" class="mob-sec-a">Agenda</a>
+  <a href="#fila" class="mob-sec-a">Fila</a>
+  <a href="#senas" class="mob-sec-a">Señas</a>
+  <a href="#clientes" class="mob-sec-a">Clientes</a>
+  <a href="#puntos" class="mob-sec-a">Puntos</a>
+  <a href="#membresias" class="mob-sec-a">Membresías</a>
+  <a href="#caja" class="mob-sec-a">Caja</a>
+  <a href="#productos" class="mob-sec-a">Productos</a>
+  <a href="#equipo" class="mob-sec-a">Equipo</a>
+  <a href="#whatsapp" class="mob-sec-a">WhatsApp</a>
+  <a href="#motores" class="mob-sec-a">Motores</a>
 </nav>
 
 <!-- PAGE BODY -->
