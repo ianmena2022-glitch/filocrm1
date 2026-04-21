@@ -809,13 +809,6 @@ async function loadDashboard() {
   const commCard = document.getElementById('commission-card');
   if (commCard) commCard.style.display = me.commission_enabled ? 'block' : 'none';
 
-  // Mostrar sección de productos si el shop padre tiene productos
-  const prodSection = document.getElementById('barber-productos-section');
-  if (prodSection) {
-    prodSection.style.display = '';
-    loadBarberProductos();
-  }
-
   // Load today's appointments for dashboard
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -842,6 +835,13 @@ async function loadDashboard() {
 
     renderCalendar();
   } catch(e) { console.error(e); }
+
+  // Mostrar sección de productos DESPUÉS de setear _dashApptComision para evitar race condition
+  const prodSection = document.getElementById('barber-productos-section');
+  if (prodSection) {
+    prodSection.style.display = '';
+    loadBarberProductos();
+  }
 }
 
 function renderUpcoming(appts) {

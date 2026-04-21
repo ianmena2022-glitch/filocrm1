@@ -497,15 +497,19 @@ router.post('/cash/close', auth, async (req, res) => {
       [shopId, date]
     );
     const exps = await pool.query(
-      `SELECT COALESCE(SUM(amount),0) AS expenses_total FROM expenses WHERE shop_id=$1 AND date=$2`,
+      `SELECT
+         COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
+         COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income
+       FROM expenses WHERE shop_id=$1 AND date=$2`,
       [shopId, date]
     );
     const a = appts.rows[0];
     const revenue = parseFloat(a.revenue_total);
     const expenses = parseFloat(exps.rows[0].expenses_total);
+    const allIncome = parseFloat(exps.rows[0].all_income || 0);
     const tips = parseFloat(a.tips_total);
     const commissions = parseFloat(a.commissions_total);
-    const net = revenue + tips - expenses - commissions;
+    const net = revenue + tips + allIncome - expenses - commissions;
 
     await pool.query(
       `INSERT INTO cash_registers
