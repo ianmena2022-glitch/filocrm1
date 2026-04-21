@@ -37,6 +37,8 @@ app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));
 app.use('/api/payments/filo-cancel',  require('./routes/payments'));
 app.use('/api/payments',              require('./routes/payments'));
+const recurringRouter = require('./routes/recurring');
+app.use('/api/recurring', recurringRouter);
 
 // Panel admin
 app.get('/admin', (req, res) => {
@@ -123,6 +125,15 @@ async function start() {
         console.log('📱 WhatsApp: reconexión iniciada');
       } catch(e) {
         console.error('WhatsApp reconnect error:', e.message);
+      }
+      // Generación inicial de turnos recurrentes + job diario (cada 24h)
+      try {
+        const { runDailyGeneration } = require('./routes/recurring');
+        runDailyGeneration();
+        setInterval(runDailyGeneration, 24 * 60 * 60 * 1000);
+        console.log('🔄 Turnos recurrentes: generación diaria activa');
+      } catch(e) {
+        console.error('Recurring generation error:', e.message);
       }
       // Arrancar scheduler de tareas periódicas (cierre automático de caja, etc.)
       try {

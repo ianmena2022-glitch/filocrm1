@@ -980,6 +980,18 @@ body {
   margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
 }
 
+/* ─── RECURRING ─── */
+.rf-day-btn{padding:8px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-family:'Barlow',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .18s}
+.rf-day-btn:hover{border-color:rgba(255,209,0,.4);color:rgba(255,255,255,.8)}
+.rf-day-btn.sel{background:rgba(255,209,0,.15);border-color:var(--yellow);color:var(--yellow)}
+.rf-cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,.03);color:rgba(255,255,255,.25);font-size:10px;font-weight:600}
+.rf-cal-day.hdr{background:transparent;color:rgba(255,255,255,.3);font-size:9px;letter-spacing:.5px}
+.rf-cal-day.hit{background:rgba(255,209,0,.18);color:var(--yellow);font-weight:700;border:1px solid rgba(255,209,0,.35)}
+.rf-cal-day.today{border:1px solid rgba(255,255,255,.15)}
+.recur-card{background:var(--navy-mid);border:1px solid var(--navy-border);border-radius:14px;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;transition:border-color .2s}
+.recur-card:hover{border-color:rgba(255,209,0,.2)}
+.recur-card.paused{opacity:.5}
+
 /* ─── CONFIG TABS ─── */
 .cfg-tabs-nav {
   display: flex; gap: 4px; margin-bottom: 20px;
@@ -1449,6 +1461,9 @@ select.form-input { padding-right: 32px; }
       <div class="nav-item" id="nav-equipo" onclick="showSection('equipo')" title="Mi Equipo" style="display:none">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
       </div>
+      <div class="nav-item" id="nav-recurrentes" onclick="showSection('recurrentes')" title="Turnos fijos">
+        <svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </div>
   </nav>
 
   <main class="main">
@@ -1673,6 +1688,21 @@ select.form-input { padding-right: 32px; }
       </div>
 
       <div id="agenda-list"></div>
+    </section>
+
+    <!-- ─── TURNOS FIJOS ─── -->
+    <section id="sec-recurrentes" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>🔄 TURNOS FIJOS</h1>
+          <p>Clientes con horario programado de forma automática</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-add" onclick="openRecurringModal()">+ Programar turno fijo</button>
+          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+        </div>
+      </div>
+      <div id="recurrentes-list" style="display:flex;flex-direction:column;gap:10px;max-width:860px"></div>
     </section>
 
     <!-- ─── CLIENTES ─── -->
@@ -2835,6 +2865,95 @@ select.form-input { padding-right: 32px; }
 
 <!-- ═══ MODALES ═══ -->
 
+<!-- Modal: Turno fijo / recurrente -->
+<div class="modal-overlay" id="modal-turno-fijo" onclick="if(event.target===this)closeModal('modal-turno-fijo')">
+  <div class="modal" style="max-width:680px;width:100%">
+    <div class="modal-title">🔄 Programar turno fijo</div>
+    <div class="modal-sub">El turno se agendará automáticamente en los próximos meses</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
+      <!-- Cliente -->
+      <div class="form-field" style="grid-column:1/-1;margin-bottom:0">
+        <label>Cliente <span style="color:var(--red)">*</span></label>
+        <select id="rf-client" onchange="rfClientSelected()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+          <option value="">-- Seleccionar cliente --</option>
+        </select>
+      </div>
+      <!-- Nombre manual (si no existe en BD) -->
+      <div class="form-field" style="grid-column:1/-1;margin-bottom:0" id="rf-manual-wrap">
+        <label>O escribir nombre</label>
+        <input type="text" id="rf-client-name" placeholder="Nombre del cliente">
+        <div style="font-size:11px;color:var(--gray);margin-top:4px">Solo si el cliente no está en la lista de arriba</div>
+      </div>
+
+      <!-- Barbero -->
+      <div class="form-field" id="rf-barber-wrap" style="margin-bottom:0">
+        <label>Barbero</label>
+        <select id="rf-barber" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+          <option value="">-- Sin asignar --</option>
+        </select>
+      </div>
+
+      <!-- Servicio -->
+      <div class="form-field" style="margin-bottom:0">
+        <label>Servicio</label>
+        <select id="rf-service" onchange="rfServiceSelected()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+          <option value="">-- Sin servicio --</option>
+        </select>
+      </div>
+
+      <!-- Día de la semana -->
+      <div class="form-field" style="grid-column:1/-1;margin-bottom:0">
+        <label>Día de la semana <span style="color:var(--red)">*</span></label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="rf-days">
+          <button type="button" class="rf-day-btn" data-day="1" onclick="rfSelectDay(this)">Lun</button>
+          <button type="button" class="rf-day-btn" data-day="2" onclick="rfSelectDay(this)">Mar</button>
+          <button type="button" class="rf-day-btn" data-day="3" onclick="rfSelectDay(this)">Mié</button>
+          <button type="button" class="rf-day-btn" data-day="4" onclick="rfSelectDay(this)">Jue</button>
+          <button type="button" class="rf-day-btn" data-day="5" onclick="rfSelectDay(this)">Vie</button>
+          <button type="button" class="rf-day-btn" data-day="6" onclick="rfSelectDay(this)">Sáb</button>
+          <button type="button" class="rf-day-btn" data-day="0" onclick="rfSelectDay(this)">Dom</button>
+        </div>
+      </div>
+
+      <!-- Hora -->
+      <div class="form-field" style="margin-bottom:0">
+        <label>Horario <span style="color:var(--red)">*</span></label>
+        <input type="time" id="rf-time" oninput="rfUpdatePreview()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;font-family:'Barlow',sans-serif;outline:none;width:100%">
+      </div>
+
+      <!-- Frecuencia -->
+      <div class="form-field" style="margin-bottom:0">
+        <label>Repetir cada</label>
+        <select id="rf-freq" onchange="rfUpdatePreview()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+          <option value="1">1 semana</option>
+          <option value="2">2 semanas</option>
+          <option value="3">3 semanas</option>
+          <option value="4">4 semanas (mensual)</option>
+        </select>
+      </div>
+
+      <!-- Notas -->
+      <div class="form-field" style="grid-column:1/-1;margin-bottom:0">
+        <label>Nota interna (opcional)</label>
+        <input type="text" id="rf-notes" placeholder="Ej: siempre quiere el mismo servicio...">
+      </div>
+    </div>
+
+    <!-- Preview del mes -->
+    <div id="rf-preview-wrap" style="margin-top:20px;display:none">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--yellow);margin-bottom:12px">Vista previa — próximas 8 semanas</div>
+      <div id="rf-preview-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:11px"></div>
+      <div id="rf-preview-list" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end">
+      <button class="btn-cancel" onclick="closeModal('modal-turno-fijo')">Cancelar</button>
+      <button class="btn-primary" onclick="saveRecurring()" id="rf-save-btn">🔄 Programar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Nuevo turno -->
 <div class="modal-overlay" id="modal-turno">
   <div class="modal">
@@ -3898,6 +4017,9 @@ function showSection(name) {
   }
   if (name === 'equipo') loadEquipo();
   if (name === 'fila') loadQueue();
+  if (name === 'recurrentes') loadRecurrentes();
+  // Nav item recurrentes (fuera del grupo de 5 del bottom nav)
+  if (name === 'recurrentes') document.getElementById('nav-recurrentes')?.classList.add('active');
 }
 
 // ─── FILA DIGITAL ───
@@ -6501,6 +6623,247 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
   }
 });
+
+// ─── TURNOS FIJOS / RECURRENTES ───────────────────────────────────────────
+
+const DAY_NAMES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DAY_NAMES_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+let _rfSelectedDay = null;
+let _rfClients = [];
+let _rfBarbers = [];
+let _rfServices = [];
+
+async function loadRecurrentes() {
+  const list = document.getElementById('recurrentes-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:20px 0">Cargando...</div>';
+  try {
+    const rules = await api('GET', '/recurring');
+    if (!rules.length) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:60px 20px;color:var(--gray)">
+          <div style="font-size:40px;margin-bottom:12px">🔄</div>
+          <div style="font-size:15px;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:6px">Sin turnos fijos programados</div>
+          <div style="font-size:13px">Usá el botón "+ Programar turno fijo" para empezar</div>
+        </div>`;
+      return;
+    }
+    list.innerHTML = rules.map(r => {
+      const freqLabel = r.every_weeks === 1 ? 'Semanal' : `Cada ${r.every_weeks} semanas`;
+      const dayName   = DAY_NAMES_FULL[r.day_of_week];
+      const barber    = r.barber_display ? `<span style="color:var(--gray);font-size:12px">· ${r.barber_display}</span>` : '';
+      const svc       = r.service_name ? `<span style="background:rgba(255,209,0,.1);color:var(--yellow);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700">${r.service_name}</span>` : '';
+      const badge     = r.active
+        ? `<span style="background:rgba(0,200,117,.1);color:var(--green);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:.5px">ACTIVO</span>`
+        : `<span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px">PAUSADO</span>`;
+      return `
+        <div class="recur-card${r.active ? '' : ' paused'}">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+              <span style="font-size:15px;font-weight:700">${r.client_name}</span>
+              ${badge}
+              ${svc}
+            </div>
+            <div style="font-size:13px;color:rgba(255,255,255,.6);display:flex;gap:16px;flex-wrap:wrap">
+              <span>📅 ${dayName} ${r.time_start}</span>
+              <span>🔁 ${freqLabel}</span>
+              ${r.client_phone ? `<span>📱 ${r.client_phone}</span>` : ''}
+              ${barber}
+            </div>
+            ${r.notes ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;font-style:italic">💬 ${r.notes}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button onclick="toggleRecurrente(${r.id}, ${!r.active})"
+              style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+              ${r.active ? '⏸ Pausar' : '▶ Reanudar'}
+            </button>
+            <button onclick="deleteRecurrente(${r.id})"
+              style="background:rgba(255,67,67,.08);border:1px solid rgba(255,67,67,.2);color:#ff8080;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+              🗑
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function openRecurringModal() {
+  // Cargar datos frescos
+  try {
+    [_rfClients, _rfBarbers, _rfServices] = await Promise.all([
+      api('GET', '/clients').catch(() => []),
+      api('GET', '/barbers').catch(() => []),
+      api('GET', '/settings/services').catch(() => [])
+    ]);
+  } catch(e) { _rfClients = []; _rfBarbers = []; _rfServices = []; }
+
+  // Poblar selects
+  const cSel = document.getElementById('rf-client');
+  cSel.innerHTML = '<option value="">-- Seleccionar cliente --</option>'
+    + _rfClients.map(c => `<option value="${c.id}" data-name="${c.name}" data-phone="${c.phone||''}">${c.name}${c.phone ? ' · '+c.phone : ''}</option>`).join('');
+
+  const bSel = document.getElementById('rf-barber');
+  bSel.innerHTML = '<option value="">-- Sin asignar --</option>'
+    + _rfBarbers.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+
+  // Ocultar barbero si no hay
+  document.getElementById('rf-barber-wrap').style.display = _rfBarbers.length ? '' : 'none';
+
+  const sSel = document.getElementById('rf-service');
+  sSel.innerHTML = '<option value="">-- Sin servicio --</option>'
+    + _rfServices.map(s => `<option value="${s.id}" data-name="${s.name}" data-price="${s.price||0}" data-dur="${s.duration_minutes||30}">${s.name}${s.price ? ' · $'+Number(s.price).toLocaleString('es-AR') : ''}</option>`).join('');
+
+  // Reset
+  _rfSelectedDay = null;
+  document.querySelectorAll('.rf-day-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('rf-time').value = '';
+  document.getElementById('rf-freq').value = '1';
+  document.getElementById('rf-notes').value = '';
+  document.getElementById('rf-client-name').value = '';
+  document.getElementById('rf-preview-wrap').style.display = 'none';
+
+  openModal('modal-turno-fijo');
+}
+
+function rfClientSelected() {
+  const sel = document.getElementById('rf-client');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt.value) {
+    document.getElementById('rf-client-name').value = opt.dataset.name || '';
+    document.getElementById('rf-manual-wrap').style.display = 'none';
+  } else {
+    document.getElementById('rf-client-name').value = '';
+    document.getElementById('rf-manual-wrap').style.display = '';
+  }
+}
+
+function rfServiceSelected() {
+  const sel = document.getElementById('rf-service');
+  // noop — price/duration will be read at save time
+}
+
+function rfSelectDay(btn) {
+  document.querySelectorAll('.rf-day-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  _rfSelectedDay = parseInt(btn.dataset.day);
+  rfUpdatePreview();
+}
+
+function rfUpdatePreview() {
+  if (_rfSelectedDay === null) return;
+  const time = document.getElementById('rf-time').value;
+  if (!time) return;
+  const freq = parseInt(document.getElementById('rf-freq').value) || 1;
+
+  // Calcular fechas client-side
+  const dates = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  let cur = new Date(today);
+  while (cur.getDay() !== _rfSelectedDay) cur.setDate(cur.getDate() + 1);
+  const end = new Date(today); end.setDate(end.getDate() + 56); // 8 semanas
+  while (cur <= end) {
+    dates.push(new Date(cur));
+    cur = new Date(cur);
+    cur.setDate(cur.getDate() + freq * 7);
+  }
+
+  // Renderizar mini calendario
+  const wrap = document.getElementById('rf-preview-wrap');
+  wrap.style.display = '';
+  const cal = document.getElementById('rf-preview-calendar');
+  const listEl = document.getElementById('rf-preview-list');
+
+  // Calcular inicio del calendario (lunes de la semana actual)
+  const calStart = new Date(today);
+  const dow = calStart.getDay(); // 0=dom
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  calStart.setDate(calStart.getDate() + diffToMon);
+
+  const dateHits = new Set(dates.map(d => d.toISOString().split('T')[0]));
+  const todayStr = today.toISOString().split('T')[0];
+
+  let html = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d =>
+    `<div class="rf-cal-day hdr">${d}</div>`).join('');
+
+  let d = new Date(calStart);
+  for (let i = 0; i < 8 * 7; i++) {
+    const ds = d.toISOString().split('T')[0];
+    const isHit = dateHits.has(ds);
+    const isToday = ds === todayStr;
+    html += `<div class="rf-cal-day${isHit ? ' hit' : ''}${isToday ? ' today' : ''}">${d.getDate()}</div>`;
+    d.setDate(d.getDate() + 1);
+  }
+  cal.innerHTML = html;
+
+  // Lista de fechas
+  listEl.innerHTML = dates.map(d => {
+    const ds = d.toISOString().split('T')[0];
+    const label = d.toLocaleDateString('es-AR', { weekday:'short', day:'numeric', month:'short' });
+    return `<span style="background:rgba(255,209,0,.1);color:var(--yellow);font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.2)">${label} ${time}</span>`;
+  }).join('');
+}
+
+async function saveRecurring() {
+  const btn = document.getElementById('rf-save-btn');
+  const clientSel = document.getElementById('rf-client');
+  const clientOpt = clientSel.options[clientSel.selectedIndex];
+  const clientId   = clientSel.value ? parseInt(clientSel.value) : null;
+  const clientName = clientId ? clientOpt.dataset.name : document.getElementById('rf-client-name').value.trim();
+  const clientPhone= clientId ? clientOpt.dataset.phone : '';
+
+  if (!clientName) return alert('Escribí o seleccioná un cliente');
+  if (_rfSelectedDay === null) return alert('Seleccioná un día de la semana');
+  const time = document.getElementById('rf-time').value;
+  if (!time) return alert('Ingresá el horario');
+
+  const svcSel  = document.getElementById('rf-service');
+  const svcOpt  = svcSel.options[svcSel.selectedIndex];
+  const svcId   = svcSel.value ? parseInt(svcSel.value) : null;
+  const svcName = svcOpt.value ? svcOpt.text.split(' · ')[0] : null;
+  const svcPri  = svcOpt.value ? parseFloat(svcOpt.dataset.price || 0) : 0;
+  const svcDur  = svcOpt.value ? parseInt(svcOpt.dataset.dur || 30) : 30;
+
+  const barberId = document.getElementById('rf-barber').value
+    ? parseInt(document.getElementById('rf-barber').value) : null;
+  const freq  = parseInt(document.getElementById('rf-freq').value);
+  const notes = document.getElementById('rf-notes').value.trim();
+
+  btn.disabled = true; btn.textContent = 'Programando...';
+  try {
+    const res = await api('POST', '/recurring', {
+      client_id: clientId, client_name: clientName, client_phone: clientPhone,
+      barber_id: barberId, service_id: svcId,
+      service_name: svcName, service_price: svcPri, duration_mins: svcDur,
+      day_of_week: _rfSelectedDay, time_start: time,
+      every_weeks: freq, notes: notes || null
+    });
+    closeModal('modal-turno-fijo');
+    loadRecurrentes();
+    showToast(`✅ Turno fijo programado. ${res.appointments_created} turnos generados.`);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔄 Programar';
+  }
+}
+
+async function toggleRecurrente(id, active) {
+  try {
+    await api('PATCH', `/recurring/${id}`, { active });
+    loadRecurrentes();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function deleteRecurrente(id) {
+  if (!confirm('¿Eliminar este turno fijo?\nSe cancelarán los turnos futuros pendientes.')) return;
+  try {
+    await api('DELETE', `/recurring/${id}?cancel_future=true`);
+    loadRecurrentes();
+    showToast('🗑 Turno fijo eliminado');
+  } catch(e) { alert('Error: ' + e.message); }
+}
 
 // ─── EQUIPO (STAFF) ───
 async function loadEquipo() {
