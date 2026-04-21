@@ -980,6 +980,27 @@ body {
   margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
 }
 
+/* ─── CONFIG TABS ─── */
+.cfg-tabs-nav {
+  display: flex; gap: 4px; margin-bottom: 20px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px; padding: 5px; flex-wrap: wrap;
+}
+.cfg-tab-btn {
+  flex: 1; min-width: 0; padding: 9px 10px; border: none; border-radius: 10px;
+  background: transparent; color: rgba(255,255,255,.45);
+  font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
+  letter-spacing: .5px; cursor: pointer; transition: background .18s, color .18s;
+  white-space: nowrap; text-align: center;
+}
+.cfg-tab-btn:hover { color: rgba(255,255,255,.75); background: rgba(255,255,255,.05); }
+.cfg-tab-btn.active { background: rgba(255,209,0,.14); color: var(--yellow); }
+.cfg-tab-pane { display: none; flex-direction: column; gap: 16px; }
+.cfg-tab-pane.active { display: flex; }
+@media (max-width: 600px) {
+  .cfg-tab-btn { font-size: 11px; padding: 8px 6px; }
+}
+
 .wpp-status {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px;
@@ -2421,7 +2442,19 @@ select.form-input { padding-right: 32px; }
         <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:16px;max-width:720px">
+      <div style="max-width:760px">
+
+        <!-- ── Tabs nav ── -->
+        <nav class="cfg-tabs-nav" id="cfg-tabs-nav">
+          <button class="cfg-tab-btn active" onclick="switchCfgTab('general',this)">🏠 General</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('reservas',this)">📅 Turnos</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('whatsapp',this)">💬 WhatsApp</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('negocio',this)">📦 Servicios</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('cuenta',this)">⚙️ Cuenta</button>
+        </nav>
+
+        <!-- ══ TAB: General ══ -->
+        <div class="cfg-tab-pane active" id="cfg-tab-general">
 
         <!-- Mi barbería -->
         <div class="settings-section">
@@ -2472,6 +2505,11 @@ select.form-input { padding-right: 32px; }
             </label>
           </div>
         </div>
+
+        </div><!-- /cfg-tab-general -->
+
+        <!-- ══ TAB: Reservas ══ -->
+        <div class="cfg-tab-pane" id="cfg-tab-reservas">
 
         <!-- Señas -->
         <div class="settings-section" style="padding:0;overflow:hidden">
@@ -2548,6 +2586,11 @@ select.form-input { padding-right: 32px; }
             <div id="closed-days-list" style="display:flex;flex-direction:column;gap:7px"></div>
           </div>
         </div>
+
+        </div><!-- /cfg-tab-reservas -->
+
+        <!-- ══ TAB: WhatsApp ══ -->
+        <div class="cfg-tab-pane" id="cfg-tab-whatsapp">
 
         <!-- WhatsApp -->
         <div class="settings-section">
@@ -2656,6 +2699,11 @@ select.form-input { padding-right: 32px; }
           <div id="booking-link-placeholder" style="font-size:13px;color:var(--gray)">Guardá tu configuración primero para generar tu link.</div>
         </div>
 
+        </div><!-- /cfg-tab-whatsapp -->
+
+        <!-- ══ TAB: Negocio ══ -->
+        <div class="cfg-tab-pane" id="cfg-tab-negocio">
+
         <!-- Servicios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-services-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -2744,8 +2792,13 @@ select.form-input { padding-right: 32px; }
           </button>
         </div>
 
+        </div><!-- /cfg-tab-negocio -->
+
+        <!-- ══ TAB: Cuenta ══ -->
+        <div class="cfg-tab-pane" id="cfg-tab-cuenta">
+
         <!-- Zona de peligro -->
-        <div style="padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="padding-top:0">
           <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,67,67,0.6);margin-bottom:16px">Zona de peligro</div>
           <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;margin-bottom:12px">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -2772,7 +2825,9 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
-      </div>
+        </div><!-- /cfg-tab-cuenta -->
+
+      </div><!-- /max-width wrapper -->
     </section>
 
   </main>
@@ -3836,6 +3891,11 @@ function showSection(name) {
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') loadSubscriptionStatus();
   if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
+  if (name === 'configuracion') {
+    // Reset to first tab when opening config
+    const firstBtn = document.querySelector('.cfg-tab-btn');
+    switchCfgTab('general', firstBtn);
+  }
   if (name === 'equipo') loadEquipo();
   if (name === 'fila') loadQueue();
 }
@@ -6059,6 +6119,21 @@ function toggleTpl(id) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+function switchCfgTab(name, btn) {
+  // Hide all panes
+  document.querySelectorAll('.cfg-tab-pane').forEach(p => p.classList.remove('active'));
+  // Deactivate all buttons
+  document.querySelectorAll('.cfg-tab-btn').forEach(b => b.classList.remove('active'));
+  // Show target pane
+  const pane = document.getElementById('cfg-tab-' + name);
+  if (pane) pane.classList.add('active');
+  // Activate clicked button
+  if (btn) btn.classList.add('active');
+  // Show/hide "Guardar cambios" only on General tab
+  const saveBtn = document.querySelector('#sec-configuracion .btn-add');
+  if (saveBtn) saveBtn.style.display = (name === 'general') ? '' : 'none';
 }
 
 async function renderQR(qrData) {
@@ -8749,7 +8824,7 @@ function renderDashProductos(ventas) {
           </div>
         </div>`;
       });
-      if (prods.length > 5) html += `<div style="font-size:11px;color:var(--gray);text-align:center;margin-top:8px;cursor:pointer" onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)">Ver todos (${prods.length}) →</div>`;
+      if (prods.length > 5) html += `<div style="font-size:11px;color:var(--gray);text-align:center;margin-top:8px;cursor:pointer" onclick="showSection('configuracion');setTimeout(()=>{switchCfgTab('negocio',document.querySelectorAll('.cfg-tab-btn')[3]);toggleTpl('cfg-productos-body');},300)">Ver todos (${prods.length}) →</div>`;
       html += `</div>`;
     }
 
@@ -8767,7 +8842,7 @@ function renderDashProductos(ventas) {
       });
       html += `</div>`;
     } else if (!prods.length) {
-      html += `<div style="font-size:13px;color:var(--gray);text-align:center;padding:12px 0">Sin productos · <span onclick="showSection('configuracion');setTimeout(()=>toggleTpl('cfg-productos-body'),300)" style="color:var(--yellow);cursor:pointer">Agregar →</span></div>`;
+      html += `<div style="font-size:13px;color:var(--gray);text-align:center;padding:12px 0">Sin productos · <span onclick="showSection('configuracion');setTimeout(()=>{switchCfgTab('negocio',document.querySelectorAll('.cfg-tab-btn')[3]);toggleTpl('cfg-productos-body');},300)" style="color:var(--yellow);cursor:pointer">Agregar →</span></div>`;
     }
 
     html += `<button onclick="openProductoModal()" style="width:100%;margin-top:12px;background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.2);color:var(--yellow);border-radius:9px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase">+ Agregar producto</button>`;
