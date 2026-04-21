@@ -20,15 +20,25 @@ router.get('/', auth, async (req, res) => {
 // ── GET /api/products/ventas — historial de ventas ─────────────────────────
 router.get('/ventas', auth, async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
+  // Los barberos ven solo sus propias ventas (registradas en el shop padre)
+  const isBarber = req.isBarber && req.parentShopId;
+  const shopId   = isBarber ? req.parentShopId : req.shopId;
   try {
     const result = await pool.query(
-      `SELECT ps.*, s.name AS barber_name
-       FROM product_sales ps
-       LEFT JOIN shops s ON s.id = ps.barber_id
-       WHERE ps.shop_id=$1
-       ORDER BY ps.sold_at DESC
-       LIMIT $2`,
-      [req.shopId, limit]
+      isBarber
+        ? `SELECT ps.*, s.name AS barber_name
+           FROM product_sales ps
+           LEFT JOIN shops s ON s.id = ps.barber_id
+           WHERE ps.shop_id=$1 AND ps.barber_id=$3
+           ORDER BY ps.sold_at DESC
+           LIMIT $2`
+        : `SELECT ps.*, s.name AS barber_name
+           FROM product_sales ps
+           LEFT JOIN shops s ON s.id = ps.barber_id
+           WHERE ps.shop_id=$1
+           ORDER BY ps.sold_at DESC
+           LIMIT $2`,
+      isBarber ? [shopId, limit, req.shopId] : [shopId, limit]
     );
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -202,8 +212,8 @@ router.post('/:id/sell', auth, async (req, res) => {
       + (barberName  ? ' · ✂️ ' + barberName : '')
       + (commAmt > 0 ? ' · Comisión $' + commAmt.toFixed(0) : '');
     await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
-       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5)`,
+      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
+       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
       [shopId, total, ventaDesc, venta.rows[0].id, payment_method || 'cash']
     );
 
