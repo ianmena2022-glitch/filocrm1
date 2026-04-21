@@ -107,6 +107,20 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   .feat-section{margin-bottom:56px}
   .feat-cta{padding:32px 20px}
 }
+
+/* ── MOBILE BOTTOM NAV (funciones) ── */
+.mob-sec-nav{display:none}
+@media(max-width:900px){
+  .mob-sec-nav{display:flex;position:sticky;top:64px;z-index:900;background:rgba(5,13,24,.95);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);overflow-x:auto;gap:0;padding:0 4%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .mob-sec-nav::-webkit-scrollbar{display:none}
+  .mob-sec-a{flex-shrink:0;padding:10px 14px;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-decoration:none;letter-spacing:.4px;text-transform:uppercase;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+  .mob-sec-a:hover,.mob-sec-a.on{color:var(--y);border-bottom-color:var(--y)}
+}
+
+/* ── NAV FUNC MOB ── */
+.nav-func-mob{display:none;color:var(--g);font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.3px;transition:color .2s}
+.nav-func-mob:hover{color:var(--w)}
+@media(max-width:768px){.nav-func-mob{display:block}}
 </style>
 </head>
 <body>
@@ -120,6 +134,7 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
     <a href="/#planes" class="nav-link">Planes</a>
     <a href="/#faq" class="nav-link">FAQ</a>
   </div>
+  <a href="/" class="nav-func-mob">← Inicio</a>
   <a href="/app" class="nav-cta">✂ Empezar gratis</a>
 </nav>
 
@@ -132,6 +147,23 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   </div>
 </div>
 
+<!-- MOBILE SECTION NAV -->
+<nav class="mob-sec-nav">
+  <a href="#turnos" class="mob-sec-a">📅 Turnos</a>
+  <a href="#recurrentes" class="mob-sec-a">🔁 Fijos</a>
+  <a href="#agenda" class="mob-sec-a">📋 Agenda</a>
+  <a href="#fila" class="mob-sec-a">📱 Fila</a>
+  <a href="#senas" class="mob-sec-a">💸 Señas</a>
+  <a href="#clientes" class="mob-sec-a">👤 Clientes</a>
+  <a href="#puntos" class="mob-sec-a">⭐ Puntos</a>
+  <a href="#membresias" class="mob-sec-a">💳 Membresías</a>
+  <a href="#caja" class="mob-sec-a">📈 Caja</a>
+  <a href="#productos" class="mob-sec-a">📦 Productos</a>
+  <a href="#equipo" class="mob-sec-a">🧑‍💼 Equipo</a>
+  <a href="#whatsapp" class="mob-sec-a">🤖 WhatsApp</a>
+  <a href="#motores" class="mob-sec-a">💈 Motores</a>
+</nav>
+
 <!-- PAGE BODY -->
 <div class="page-body">
 
@@ -139,6 +171,7 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
   <aside class="sidebar">
     <div class="sb-group">Reservas</div>
     <a href="#turnos" class="sb-link on">Turnos online</a>
+    <a href="#recurrentes" class="sb-link">Turnos fijos</a>
     <a href="#agenda" class="sb-link">Agenda del día</a>
     <a href="#fila" class="sb-link">Fila digital</a>
     <a href="#senas" class="sb-link">Sistema de señas</a>
@@ -210,6 +243,60 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
           </div>
           <div class="feat-row-body">
             Al completar la reserva, el cliente recibe un mensaje de WhatsApp con los datos del turno. Sin demoras, sin confirmar manualmente. Si tenés el sistema de señas activo, el mensaje incluye las instrucciones de pago.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ TURNOS FIJOS ══ -->
+    <section class="feat-section" id="recurrentes">
+      <span class="feat-section-label">Reservas</span>
+      <h2 class="feat-section-title">Turnos fijos</h2>
+      <p class="feat-section-desc">Para los clientes de siempre. Programás el turno una vez y FILO lo agenda automáticamente semana a semana, sin que vos ni ellos hagan nada más.</p>
+      <div class="feat-table">
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🔁</span>
+            <div class="frl-name">Programación única</div>
+          </div>
+          <div class="feat-row-body">
+            Elegís el cliente, el barbero, el servicio, el día de la semana y la frecuencia (cada semana, cada 2 semanas, cada mes…). FILO genera todos los turnos automáticamente para las próximas semanas — sin que tengas que crear cada uno a mano.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">📅</span>
+            <div class="frl-name">Preview antes de confirmar</div>
+          </div>
+          <div class="feat-row-body">
+            Antes de guardar, ves un calendario con todas las fechas que se van a generar. Podés verificar que no haya conflictos y ajustar la configuración hasta que quede exactamente como querés.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">⚡</span>
+            <div class="frl-name">Reposición automática</div>
+          </div>
+          <div class="feat-row-body">
+            FILO revisa cada día los turnos fijos activos y completa automáticamente las semanas siguientes. Siempre hay turnos generados por adelante — el cliente y el barbero saben que ese slot ya está reservado.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">🚫</span>
+            <div class="frl-name">Detección de conflictos</div>
+          </div>
+          <div class="feat-row-body">
+            Si en alguna fecha ya hay un turno del mismo barbero en ese horario, FILO lo salta automáticamente. Sin superposiciones, sin errores — solo los días que realmente están disponibles.
+          </div>
+        </div>
+        <div class="feat-row">
+          <div class="feat-row-label">
+            <span class="frl-icon">⏸️</span>
+            <div class="frl-name">Pausar o cancelar</div>
+          </div>
+          <div class="feat-row-body">
+            Si el cliente se va de vacaciones, pausás la regla con un toque. Los turnos futuros pendientes se cancelan solos. Cuando vuelva, reactivás y FILO retoma donde quedó — sin perder ninguna configuración.
           </div>
         </div>
       </div>

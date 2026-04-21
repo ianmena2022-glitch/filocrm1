@@ -33,6 +33,9 @@ nav.scrolled{background:rgba(5,13,24,.92);backdrop-filter:blur(20px);-webkit-bac
 .nav-cta{background:var(--y);color:#050d18;padding:9px 22px;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.8px;text-transform:uppercase;transition:all .25s}
 .nav-cta:hover{box-shadow:0 0 28px rgba(255,209,0,.5);transform:translateY(-1px)}
 @media(max-width:768px){.nav-links{display:none}}
+.nav-func-mob{color:var(--g);font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.3px;transition:color .2s;display:none}
+.nav-func-mob:hover{color:var(--w)}
+@media(max-width:768px){.nav-func-mob{display:block}}
 
 /* ── HERO ── */
 .hero{min-height:100vh;display:flex;align-items:center;padding:100px 6% 80px;position:relative;overflow:hidden}
@@ -434,6 +437,7 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
     <a href="#planes" class="nav-link">Planes</a>
     <a href="#faq" class="nav-link">FAQ</a>
   </div>
+  <a href="/funciones" class="nav-func-mob">Funciones</a>
   <a href="/app" class="nav-cta magnet">✂ Empezar gratis</a>
 </nav>
 
@@ -645,11 +649,12 @@ footer{background:var(--nm);border-top:1px solid var(--border);padding:28px 6%;d
       <div class="f-panel"><div class="f-num">12</div><span class="f-icon">🗓️</span><div class="f-name">HORARIOS POR BARBERO</div><p class="f-desc">Cada barbero configura sus días y horarios propios. El sistema de reservas respeta esas reglas — si Lucas no trabaja los lunes, los clientes directamente no ven ese día disponible para él.</p><span class="f-pill staff">Solo en Staff</span></div>
       <div class="f-panel"><div class="f-num">13</div><span class="f-icon">📲</span><div class="f-name">FILA DIGITAL</div><p class="f-desc">Cola virtual con QR en la vidriera. Los clientes se anotan desde su celular, eligen servicio y esperan donde quieran. Les llega un WhatsApp cuando es su turno — cero esperas parados, cero cuadernito.</p><span class="f-pill live">Nuevo</span></div>
       <div class="f-panel"><div class="f-num">14</div><span class="f-icon">🤝</span><div class="f-name">COMISIONES WALK-IN</div><p class="f-desc">Cuando un barbero llama al siguiente de la fila, el sistema lo asigna como responsable. Cuando cobra, la comisión va a él automáticamente. Sin discusiones sobre quién atendió a quién.</p><span class="f-pill staff">Solo en Staff</span></div>
+      <div class="f-panel"><div class="f-num">15</div><span class="f-icon">🔁</span><div class="f-name">TURNOS FIJOS</div><p class="f-desc">Tus clientes de siempre que vienen cada semana o cada quince días. Los programás una vez y FILO agenda todos sus turnos automáticamente — sin que vos ni ellos hagan nada más.</p><span class="f-pill live">Nuevo</span></div>
     </div>
     <div class="f-dots" id="f-dots">
       <div class="f-dot on"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
       <div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
-      <div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
+      <div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div><div class="f-dot"></div>
       <div class="f-dot"></div><div class="f-dot"></div>
     </div>
   </div>
