@@ -830,6 +830,7 @@ async function loadDashboard() {
     document.getElementById('stat-completados').textContent = completados;
     document.getElementById('stat-pendientes').textContent = pendientes;
     window._dashApptComision = comision;
+    console.log('[DASH] completados:', completados, 'comisionBase:', comisionBase, 'propinas:', propinas, 'comision:', comision);
     document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
     const subEl = document.getElementById('stat-comision-sub'); if (subEl && propinas > 0) subEl.textContent = `Comisión + $${propinas.toLocaleString('es-AR')} propinas`;
 
@@ -1337,11 +1338,11 @@ async function loadBarberProductos() {
     // Actualizar comisión en stat card (incluir producto)
     if (me.commission_enabled) {
       const commProd = misVentas.reduce((s, v) => s + parseFloat(v.barber_commission_amount || 0), 0);
+      const apptComision = window._dashApptComision || 0;
+      console.log('[COMM] misVentas:', misVentas.length, 'commProd:', commProd, 'apptComision:', apptComision, 'total:', apptComision + commProd);
       if (commProd > 0) {
         const comEl = document.getElementById('stat-comision');
         const subEl = document.getElementById('stat-comision-sub');
-        // Usar la variable guardada por loadDashboard para evitar parsing de formato AR
-        const apptComision = window._dashApptComision || 0;
         if (comEl) comEl.textContent = '$' + (apptComision + commProd).toLocaleString('es-AR');
         if (subEl) subEl.textContent = 'Turnos + productos';
       }
