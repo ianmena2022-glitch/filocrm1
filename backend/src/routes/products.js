@@ -133,7 +133,6 @@ router.delete('/:id', auth, async (req, res) => {
 // ── POST /api/products/:id/sell — registrar venta ─────────────────────────
 router.post('/:id/sell', auth, async (req, res) => {
   const { quantity, unit_price, payment_method, client_name, barber_id, barber_commission_pct } = req.body;
-  console.log(`[SELL] shopId=${req.shopId} isBarber=${req.isBarber} parentShopId=${req.parentShopId} payment_method=${JSON.stringify(payment_method)} body=${JSON.stringify(req.body)}`);
   const qty = parseInt(quantity) || 1;
 
   // Si el que vende es un barbero, la venta va al shop padre y el barbero se asigna automáticamente
