@@ -501,16 +501,6 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
           </div>
         </div>
 
-        <!-- Ventas de productos -->
-        <div id="barber-productos-section" style="display:none;margin-top:20px">
-          <div class="section-header">
-            <div class="section-title">🛒 Vender producto</div>
-            <span onclick="loadBarberProductos()" style="font-size:12px;color:var(--gray);cursor:pointer">↺</span>
-          </div>
-          <div id="barber-productos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px"></div>
-          <div id="barber-mis-ventas" style="margin-top:14px"></div>
-        </div>
-
         <!-- Calendario semanal -->
         <div class="section-header" style="margin-top:20px">
           <div class="section-title">Próximas 2 semanas</div>
@@ -521,6 +511,16 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
           </div>
         </div>
         <div id="week-calendar"></div>
+
+        <!-- Ventas de productos -->
+        <div id="barber-productos-section" style="display:none;margin-top:20px">
+          <div class="section-header">
+            <div class="section-title">🛒 Vender producto</div>
+            <span onclick="loadBarberProductos()" style="font-size:12px;color:var(--gray);cursor:pointer">↺</span>
+          </div>
+          <div id="barber-productos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px"></div>
+          <div id="barber-mis-ventas" style="margin-top:14px"></div>
+        </div>
 
       </div>
 
@@ -717,6 +717,11 @@ function startApp() {
   // Topbar date
   const now = new Date();
   document.getElementById('topbar-date').textContent = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // Cargar métodos de pago del shop padre para el modal de venta
+  api('GET', '/payment-methods').then(methods => {
+    window._barberPayMethods = methods;
+  }).catch(() => {});
 
   loadDashboard();
   startPolling();
@@ -1405,7 +1410,16 @@ function openBarberVenta(prodId) {
   document.getElementById('bv-precio').value = p.precio_venta || 0;
   document.getElementById('bv-cantidad').value = 1;
   document.getElementById('bv-cliente').value = '';
-  document.getElementById('bv-metodo').value = 'cash';
+  // Poblar métodos de pago dinámicamente si están disponibles
+  const metodoSel = document.getElementById('bv-metodo');
+  const payMethods = window._barberPayMethods;
+  if (payMethods && payMethods.length) {
+    const activeMethods = payMethods.filter(m => !m.is_debt);
+    metodoSel.innerHTML = activeMethods.map(m =>
+      '<option value="' + m.key + '">' + m.icon + ' ' + m.label + '</option>'
+    ).join('');
+  }
+  metodoSel.selectedIndex = 0;
   bvPreview(p);
   document.getElementById('modal-barber-venta').style.display = 'flex';
 }

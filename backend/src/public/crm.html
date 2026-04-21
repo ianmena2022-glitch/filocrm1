@@ -7848,6 +7848,17 @@ function renderMethodDetail(el, data) {
       </div>`);
   });
 
+  (data.product_sales || []).forEach(p => {
+    rows.push(`
+      <div class="method-detail-item">
+        <div>
+          <div style="font-size:12px;font-weight:600">🛒 Venta producto</div>
+          <div style="font-size:11px;color:var(--gray)">${p.description||''}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:10px">+${fmt(p.amount)}</div>
+      </div>`);
+  });
+
   if (!rows.length) {
     el.innerHTML = '<div style="padding:8px 12px;color:var(--gray);font-size:11px">Sin movimientos</div>';
     return;

@@ -438,15 +438,27 @@ router.get('/cash/method-detail', auth, async (req, res) => {
        ORDER BY created_at ASC`,
       [req.shopId, date, method]
     );
+    // Ventas de productos con ese método
+    const prodSales = await pool.query(
+      `SELECT id, description, amount, created_at
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND source_type='product_sale' AND payment_method=$3
+         AND is_income=TRUE
+       ORDER BY created_at ASC`,
+      [req.shopId, date, method]
+    );
     const apptTotal  = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
     const debtTotal  = debts.rows.reduce((s, d) => s + parseFloat(d.amount || 0), 0);
+    const prodTotal  = prodSales.rows.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
     res.json({
       method, date,
       appointments:       appts.rows,
       debt_payments:      debts.rows,
+      product_sales:      prodSales.rows,
       appointments_total: apptTotal,
       debt_total:         debtTotal,
-      grand_total:        apptTotal + debtTotal,
+      product_sales_total: prodTotal,
+      grand_total:        apptTotal + debtTotal + prodTotal,
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
