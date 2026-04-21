@@ -371,23 +371,38 @@ router.get('/cash', auth, async (req, res) => {
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
 
-    // Dynamic breakdown by payment method key (turnos + ventas de productos)
-    const breakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(total),0) AS total
-       FROM (
-         SELECT payment_method, price AS total
-         FROM appointments
-         WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
-         UNION ALL
-         SELECT payment_method, amount AS total
-         FROM expenses
-         WHERE shop_id=$1 AND date=$2 AND is_income=TRUE
-           AND source_type='product_sale' AND payment_method IS NOT NULL
-       ) sub
-       GROUP BY payment_method
-       ORDER BY payment_method`,
+    // Breakdown de turnos por método de pago
+    const apptBreakdownQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
+       FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+       GROUP BY payment_method`,
       [shopId, date]
     );
+
+    // Breakdown de ventas de productos por método de pago (consulta separada para debuggear)
+    const prodBreakdownQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='product_sale'
+         AND payment_method IS NOT NULL
+       GROUP BY payment_method`,
+      [shopId, date]
+    );
+
+    console.log(`[CASH ${date}] appt_breakdown:`, apptBreakdownQ.rows, '| prod_breakdown:', prodBreakdownQ.rows);
+
+    // Merge ambos en un único mapa
+    const breakdownMap = {};
+    apptBreakdownQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    prodBreakdownQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    const breakdownRows = Object.entries(breakdownMap)
+      .map(([key, total]) => ({ key, total: String(total) }))
+      .sort((a, b) => a.key.localeCompare(b.key));
 
     res.json({
       date,
@@ -406,7 +421,7 @@ router.get('/cash', auth, async (req, res) => {
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
-      method_breakdown:  breakdownQ.rows,
+      method_breakdown:  breakdownRows,
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
