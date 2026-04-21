@@ -207,15 +207,22 @@ router.post('/:id/sell', auth, async (req, res) => {
     );
 
     // Registrar ingreso en caja
-    const ventaDesc = `Venta ${p.nombre} x${qty}`
-      + (client_name ? ' — ' + client_name : '')
-      + (barberName  ? ' · ✂️ ' + barberName : '')
-      + (commAmt > 0 ? ' · Comisión $' + commAmt.toFixed(0) : '');
-    await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
-       VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
-      [shopId, total, ventaDesc, venta.rows[0].id, payment_method || 'cash']
-    );
+    const ventaDesc = ('Venta ' + p.nombre + ' x' + qty
+      + (client_name ? ' - ' + client_name : '')
+      + (barberName  ? ' - ' + barberName : '')
+      + (commAmt > 0 ? ' - Comision $' + commAmt.toFixed(0) : '')).slice(0, 250);
+    const pmValue = payment_method || 'cash';
+    console.log(`[SELL-EXPENSE] shopId=${shopId} pm=${pmValue} desc_len=${ventaDesc.length} ventaId=${venta.rows[0].id}`);
+    try {
+      await pool.query(
+        `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
+         VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
+        [shopId, total, ventaDesc, venta.rows[0].id, pmValue]
+      );
+      console.log(`[SELL-EXPENSE] OK`);
+    } catch(expErr) {
+      console.error(`[SELL-EXPENSE-ERROR] ${expErr.message}`);
+    }
 
     res.json({ ok: true, venta: venta.rows[0], stock_restante: stockDespues });
   } catch(e) { res.status(500).json({ error: e.message }); }
