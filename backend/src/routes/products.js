@@ -178,6 +178,7 @@ router.post('/:id/sell', auth, async (req, res) => {
     }
     commPct = commPct || 0;
     const commAmt = barberId ? (total * commPct / 100) : 0;
+    console.log(`[SELL-COMM] barberId=${barberId} commPct=${commPct} total=${total} commAmt=${commAmt}`);
 
     // Registrar venta
     const venta = await pool.query(
