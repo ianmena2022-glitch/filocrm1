@@ -1326,13 +1326,9 @@ async function loadBarberProductos() {
   try {
     _barberProductos = await api('GET', '/products');
     renderBarberProductos();
-    // Mis ventas de hoy
+    // Mis ventas de hoy — pedir solo las de hoy sin límite artificial
     const today = new Date().toISOString().split('T')[0];
-    const ventas = await api('GET', '/products/ventas?limit=20').catch(() => []);
-    const misVentas = ventas.filter(v => {
-      const d = (v.sold_at || '').split('T')[0];
-      return d === today && parseInt(v.barber_id) === parseInt(me.id);
-    });
+    const misVentas = await api('GET', `/products/ventas?date=${today}`).catch(() => []);
     renderBarberMisVentas(misVentas);
     // Actualizar comisión en stat card (incluir producto)
     if (me.commission_enabled) {

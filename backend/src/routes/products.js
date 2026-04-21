@@ -20,26 +20,46 @@ router.get('/', auth, async (req, res) => {
 // ── GET /api/products/ventas — historial de ventas ─────────────────────────
 router.get('/ventas', auth, async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
+  const date  = req.query.date || null; // si viene ?date=YYYY-MM-DD, filtra ese día sin límite
   // Los barberos ven solo sus propias ventas (registradas en el shop padre)
   const isBarber = req.isBarber && req.parentShopId;
   const shopId   = isBarber ? req.parentShopId : req.shopId;
   try {
-    const result = await pool.query(
-      isBarber
-        ? `SELECT ps.*, s.name AS barber_name
-           FROM product_sales ps
-           LEFT JOIN shops s ON s.id = ps.barber_id
-           WHERE ps.shop_id=$1 AND ps.barber_id=$3
-           ORDER BY ps.sold_at DESC
-           LIMIT $2`
-        : `SELECT ps.*, s.name AS barber_name
-           FROM product_sales ps
-           LEFT JOIN shops s ON s.id = ps.barber_id
-           WHERE ps.shop_id=$1
-           ORDER BY ps.sold_at DESC
-           LIMIT $2`,
-      isBarber ? [shopId, limit, req.shopId] : [shopId, limit]
-    );
+    let result;
+    if (date) {
+      // Pedir todas las ventas de un día específico (sin límite)
+      result = await pool.query(
+        isBarber
+          ? `SELECT ps.*, s.name AS barber_name
+             FROM product_sales ps
+             LEFT JOIN shops s ON s.id = ps.barber_id
+             WHERE ps.shop_id=$1 AND ps.barber_id=$2 AND ps.sold_at::date = $3
+             ORDER BY ps.sold_at DESC`
+          : `SELECT ps.*, s.name AS barber_name
+             FROM product_sales ps
+             LEFT JOIN shops s ON s.id = ps.barber_id
+             WHERE ps.shop_id=$1 AND ps.sold_at::date = $2
+             ORDER BY ps.sold_at DESC`,
+        isBarber ? [shopId, req.shopId, date] : [shopId, date]
+      );
+    } else {
+      result = await pool.query(
+        isBarber
+          ? `SELECT ps.*, s.name AS barber_name
+             FROM product_sales ps
+             LEFT JOIN shops s ON s.id = ps.barber_id
+             WHERE ps.shop_id=$1 AND ps.barber_id=$3
+             ORDER BY ps.sold_at DESC
+             LIMIT $2`
+          : `SELECT ps.*, s.name AS barber_name
+             FROM product_sales ps
+             LEFT JOIN shops s ON s.id = ps.barber_id
+             WHERE ps.shop_id=$1
+             ORDER BY ps.sold_at DESC
+             LIMIT $2`,
+        isBarber ? [shopId, limit, req.shopId] : [shopId, limit]
+      );
+    }
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
