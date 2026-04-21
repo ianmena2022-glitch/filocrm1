@@ -1136,11 +1136,18 @@ body {
   .nav-items { flex-direction: row; gap: 0; flex: 1; justify-content: space-evenly; align-items: center; padding: 0 4px; }
   .nav-item { width: 52px; height: 52px; border-radius: 14px; font-size: 20px; }
 
-  /* Ocultar items extra fuera de nav-items en mobile para no romper el centrado */
-  #nav-equipo, #nav-recurrentes { display: none !important; }
+  /* Nav mobile: scroll horizontal para mostrar todos los ítems */
+  .nav-items {
+    overflow-x: auto; overflow-y: visible;
+    justify-content: flex-start; gap: 2px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    padding: 0 6px; scroll-snap-type: x proximity;
+  }
+  .nav-items::-webkit-scrollbar { display: none; }
+  .nav-item { flex-shrink: 0; width: 48px; height: 48px; scroll-snap-align: start; }
 
-  /* Botón dashboard destacado en el centro */
-  .nav-item-dashboard { width: 62px; height: 62px; border-radius: 18px; background: var(--yellow); color: #050d18; border: none; box-shadow: 0 0 0 4px rgba(255,209,0,0.15); margin-bottom: 6px; flex-shrink: 0; }
+  /* Botón dashboard destacado */
+  .nav-item-dashboard { width: 58px; height: 58px; border-radius: 18px; background: var(--yellow); color: #050d18; border: none; box-shadow: 0 0 0 4px rgba(255,209,0,0.15); margin-bottom: 4px; flex-shrink: 0; }
   .nav-item-dashboard.active { background: var(--yellow); color: #050d18; }
   .nav-item-dashboard:not(.active) { background: rgba(255,209,0,0.15); color: var(--yellow); box-shadow: none; }
 
@@ -1460,13 +1467,13 @@ select.form-input { padding-right: 32px; }
         <div id="nav-fila-badge" style="display:none;position:absolute;top:5px;right:5px;background:#ff4343;color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px"></div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
       </div>
-    </div>
       <div class="nav-item" id="nav-equipo" onclick="showSection('equipo')" title="Mi Equipo" style="display:none">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
       </div>
       <div class="nav-item" id="nav-recurrentes" onclick="showSection('recurrentes')" title="Turnos fijos">
         <svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       </div>
+    </div>
   </nav>
 
   <main class="main">
