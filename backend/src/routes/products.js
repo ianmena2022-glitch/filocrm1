@@ -178,7 +178,6 @@ router.post('/:id/sell', auth, async (req, res) => {
     }
     commPct = commPct || 0;
     const commAmt = barberId ? (total * commPct / 100) : 0;
-    console.log(`[SELL-COMM] barberId=${barberId} commPct=${commPct} total=${total} commAmt=${commAmt}`);
 
     // Registrar venta
     const venta = await pool.query(
@@ -213,16 +212,14 @@ router.post('/:id/sell', auth, async (req, res) => {
       + (barberName  ? ' - ' + barberName : '')
       + (commAmt > 0 ? ' - Comision $' + commAmt.toFixed(0) : '')).slice(0, 250);
     const pmValue = payment_method || 'cash';
-    console.log(`[SELL] shopId=${shopId} product=${req.params.id} qty=${qty} total=${total} pm=${pmValue}`);
     try {
       await pool.query(
         `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
          VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
         [shopId, total, ventaDesc, venta.rows[0].id, pmValue]
       );
-      console.log(`[SELL] expense OK ventaId=${venta.rows[0].id}`);
     } catch(expErr) {
-      console.error(`[SELL] expense ERROR: ${expErr.message}`);
+      console.error(`[SELL-EXPENSE-ERROR] ${expErr.message}`);
     }
 
     res.json({ ok: true, venta: venta.rows[0], stock_restante: stockDespues });
