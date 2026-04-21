@@ -456,14 +456,23 @@ router.post('/:slug/reserve', async (req, res) => {
       await pgClient.query('SELECT pg_advisory_xact_lock($1, $2)', [shopData.id, dateInt]);
 
       // Verificar que el slot sigue disponible (dentro de la transacción con lock)
-      const conflict = await pgClient.query(
-        `SELECT id FROM appointments
-         WHERE shop_id=$1 AND date=$2
-           AND status NOT IN ('cancelled','noshow')
-           AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
-           AND time_start < $3 AND time_end > $4`,
-        [shopData.id, date, time_end, time_start]
-      );
+      // Si se eligió un barbero específico, solo verificar conflicto para ese barbero
+      const conflictQuery = chosen_barber_id
+        ? `SELECT id FROM appointments
+           WHERE shop_id=$1 AND date=$2
+             AND barber_id=$5
+             AND status NOT IN ('cancelled','noshow')
+             AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
+             AND time_start < $3 AND time_end > $4`
+        : `SELECT id FROM appointments
+           WHERE shop_id=$1 AND date=$2
+             AND status NOT IN ('cancelled','noshow')
+             AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
+             AND time_start < $3 AND time_end > $4`;
+      const conflictParams = chosen_barber_id
+        ? [shopData.id, date, time_end, time_start, parseInt(chosen_barber_id)]
+        : [shopData.id, date, time_end, time_start];
+      const conflict = await pgClient.query(conflictQuery, conflictParams);
       if (conflict.rows.length) {
         await pgClient.query('ROLLBACK');
         pgClient.release();
