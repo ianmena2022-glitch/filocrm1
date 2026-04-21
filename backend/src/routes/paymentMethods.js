@@ -25,12 +25,14 @@ async function seedDefaults(shopId) {
 }
 
 // GET /api/payment-methods — list all methods for this shop
+// Los barberos usan los métodos del shop padre (dueño)
 router.get('/', auth, async (req, res) => {
+  const shopId = (req.isBarber && req.parentShopId) ? req.parentShopId : req.shopId;
   try {
-    await seedDefaults(req.shopId);
+    await seedDefaults(shopId);
     const result = await pool.query(
       'SELECT * FROM payment_methods WHERE shop_id=$1 AND active=TRUE ORDER BY sort_order, id',
-      [req.shopId]
+      [shopId]
     );
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
