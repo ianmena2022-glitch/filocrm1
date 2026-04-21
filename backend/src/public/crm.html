@@ -1444,26 +1444,32 @@ select.form-input { padding-right: 32px; }
   <nav class="sidebar">
     <div class="sidebar-logo" onclick="showSection('dashboard')" title="Dashboard"><img src="/logo_f.png" alt="F" style="width:100%;height:100%;object-fit:contain;padding:4px"></div>
     <div class="nav-items">
+      <!-- 1 -->
       <div class="nav-item" onclick="showSection('agenda')" title="Agenda">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
       </div>
+      <!-- 2 -->
       <div class="nav-item" onclick="showSection('clientes')" title="Clientes">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
       </div>
-      <!-- DASHBOARD — posición 3 de 5 = centro exacto -->
-      <div class="nav-item nav-item-dashboard active" onclick="showSection('dashboard')" title="Dashboard">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      </div>
+      <!-- 3 -->
       <div class="nav-item" onclick="showSection('motores')" title="Motores">
         <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
       </div>
+      <!-- 4 — DASHBOARD CENTRO -->
+      <div class="nav-item nav-item-dashboard active" onclick="showSection('dashboard')" title="Dashboard">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </div>
+      <!-- 5 -->
       <div class="nav-item" id="nav-fila" onclick="showSection('fila')" title="Fila Digital" style="position:relative">
         <div id="nav-fila-badge" style="display:none;position:absolute;top:5px;right:5px;background:#ff4343;color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px"></div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
       </div>
+      <!-- 6 -->
       <div class="nav-item" id="nav-equipo" onclick="showSection('equipo')" title="Mi Equipo" style="display:none">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
       </div>
+      <!-- 7 -->
       <div class="nav-item" id="nav-recurrentes" onclick="showSection('recurrentes')" title="Turnos fijos">
         <svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       </div>
@@ -3998,7 +4004,7 @@ function showSection(name) {
   if (name === 'fila') {
     document.getElementById('nav-fila')?.classList.add('active');
   } else {
-    const navMap = { agenda: 0, clientes: 1, dashboard: 2, motores: 3, membresias: 4, equipo: 5 };
+    const navMap = { agenda: 0, clientes: 1, motores: 2, dashboard: 3, membresias: 4, equipo: 5, recurrentes: 6 };
     const navItems = document.querySelectorAll('.nav-item');
     if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
   }
