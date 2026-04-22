@@ -90,6 +90,12 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
 .phone-prefix-select:focus{border-color:var(--y);background:rgba(255,209,0,.05)}
 .phone-prefix-select option{background:#1a1a2e;color:var(--w)}
 
+/* Phone hint */
+.phone-hint{margin-top:6px;padding:8px 12px;background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.15);border-radius:8px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.5}
+.phone-hint strong{color:var(--y);font-weight:700}
+.phone-hint .ph-row{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:4px}
+.phone-hint .ph-ex{background:rgba(255,255,255,.06);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600;white-space:nowrap}
+
 /* RESUMEN */
 .summary{background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.2);border-radius:12px;padding:18px}
 .summary-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px}
@@ -291,6 +297,7 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
             </select>
             <input type="tel" id="client-phone" placeholder="9 11 XXXX XXXX" autocomplete="tel" inputmode="numeric" oninput="formatPhoneInput(this)">
           </div>
+          <div id="phone-hint" class="phone-hint"></div>
           <div id="phone-error" style="font-size:12px;color:#FF4343;margin-top:4px;display:none"></div>
         </div>
         <div class="form-field">
@@ -711,6 +718,7 @@ function goToForm() {
   }
   showScreen('form');
   setStep(shopData?.allow_barber_choice && barbers.length ? 5 : 4);
+  updatePhoneHint();
 
   const dateFormatted = new Date(selectedDate + 'T12:00:00')
     .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
@@ -1061,6 +1069,39 @@ function formatPhoneInput(input) {
   input.value = val;
   if (phoneErr) phoneErr.style.display = 'none';
 }
+
+const PHONE_HINTS = {
+  '54': {
+    label: 'Argentina — incluí el <strong>9</strong> antes del código de área:',
+    examples: ['9 11 XXXX-XXXX', '9 221 XXX-XXXX', '9 351 XXX-XXXX', '9 261 XXX-XXXX'],
+    note: 'AMBA · La Plata · Córdoba · Mendoza',
+    placeholder: '9 11 XXXX XXXX'
+  },
+  '55': { label: 'Brasil — código de área + número:', examples: ['11 9XXXX-XXXX', '21 9XXXX-XXXX'], note: 'São Paulo · Río', placeholder: '11 9XXXX XXXX' },
+  '56': { label: 'Chile — número sin código de ciudad para celulares:', examples: ['9 XXXX XXXX'], note: 'Celular', placeholder: '9 XXXX XXXX' },
+  '598': { label: 'Uruguay — código de área + número:', examples: ['9X XXX XXX'], note: 'Celular', placeholder: '9X XXX XXX' },
+  '595': { label: 'Paraguay — código de área + número:', examples: ['981 XXX XXX', '961 XXX XXX'], note: 'Celular', placeholder: '981 XXX XXX' },
+  '591': { label: 'Bolivia — código de área + número:', examples: ['7 XXX XXXX'], note: 'Celular', placeholder: '7 XXX XXXX' },
+  '51':  { label: 'Perú — código de área + número:', examples: ['9XX XXX XXX'], note: 'Celular', placeholder: '9XX XXX XXX' },
+  '57':  { label: 'Colombia — código de área + número:', examples: ['3XX XXX XXXX'], note: 'Celular', placeholder: '3XX XXX XXXX' },
+  '58':  { label: 'Venezuela — código de área + número:', examples: ['412 XXX XXXX', '414 XXX XXXX'], note: 'Celular', placeholder: '412 XXX XXXX' },
+  '593': { label: 'Ecuador — código de área + número:', examples: ['9X XXX XXXX'], note: 'Celular', placeholder: '9X XXX XXXX' },
+  '52':  { label: 'México — código de área + número:', examples: ['55 XXXX XXXX', '33 XXXX XXXX'], note: 'CDMX · Guadalajara', placeholder: '55 XXXX XXXX' },
+};
+
+function updatePhoneHint() {
+  const prefix = document.getElementById('phone-prefix')?.value || '54';
+  const hint = PHONE_HINTS[prefix];
+  const hintEl = document.getElementById('phone-hint');
+  const phoneInput = document.getElementById('client-phone');
+  if (!hintEl) return;
+  if (!hint) { hintEl.style.display = 'none'; return; }
+  hintEl.style.display = 'block';
+  hintEl.innerHTML = `${hint.label}<div class="ph-row">${hint.examples.map((e,i) => `<span class="ph-ex">${e}</span>`).join('')}<span style="font-size:11px;color:rgba(255,255,255,.3);align-self:center">${hint.note}</span></div>`;
+  if (phoneInput) phoneInput.placeholder = hint.placeholder;
+}
+
+document.getElementById('phone-prefix')?.addEventListener('change', updatePhoneHint);
 
 document.getElementById('client-phone')?.addEventListener('input', function() {
   // Reset prizes if phone changes
