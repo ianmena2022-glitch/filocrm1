@@ -893,6 +893,11 @@ function setStep(n) {
 }
 
 function goBack(toStep) {
+  // Limpiar estado de los pasos que se están abandonando
+  if (toStep <= 3) { selectedBarber = null; document.getElementById('btn-next-barber') && (document.getElementById('btn-next-barber').disabled = true); }
+  if (toStep <= 2) selectedTime = null;
+  if (toStep <= 1) { selectedDate = null; selectedService = null; }
+
   // Si hay eleccion de barbero activa, el flujo es: service(1) > date(2) > time(3) > barber(4) > form(5)
   // Si no, el flujo es: service(1) > date(2) > time(3) > form(4)
   if (shopData?.allow_barber_choice && barbers.length) {
@@ -993,9 +998,14 @@ function selectBarber(id) {
 
 function goBackFromForm() {
   if (shopData?.allow_barber_choice && barbers.length) {
+    selectedBarber = null;
+    const nb = document.getElementById('btn-next-barber');
+    if (nb) nb.disabled = true;
+    renderBarbers();
     showScreen('barber');
     setStep(4);
   } else {
+    selectedTime = null;
     showScreen('time');
     setStep(3);
   }
