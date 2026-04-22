@@ -161,24 +161,19 @@ router.patch('/:id', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── DELETE /api/recurring/:id — eliminar regla (+cancelar futuros pendientes)
+// ── DELETE /api/recurring/:id — eliminar regla + borrar futuros pendientes
 router.delete('/:id', auth, async (req, res) => {
-  const cancelFuture = req.query.cancel_future !== 'false';
   try {
     await pool.query(
       'UPDATE recurring_appointments SET active=FALSE WHERE id=$1 AND shop_id=$2',
       [req.params.id, req.shopId]
     );
-    let cancelled = 0;
-    if (cancelFuture) {
-      const r = await pool.query(
-        `UPDATE appointments SET status='cancelled'
-          WHERE recurring_id=$1 AND status='pending' AND date >= CURRENT_DATE`,
-        [req.params.id]
-      );
-      cancelled = r.rowCount;
-    }
-    res.json({ ok: true, appointments_cancelled: cancelled });
+    const r = await pool.query(
+      `DELETE FROM appointments
+        WHERE recurring_id=$1 AND status='pending' AND date >= CURRENT_DATE`,
+      [req.params.id]
+    );
+    res.json({ ok: true, appointments_deleted: r.rowCount });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
