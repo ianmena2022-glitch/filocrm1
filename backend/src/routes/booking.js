@@ -654,7 +654,7 @@ router.post('/:slug/reserve', async (req, res) => {
             hora: time_start,
             serviceName: svcName || null,
           });
-          if (!msg) msg = `📅 Hola ${client_name}! Tu reserva en ${shopData.name} para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''} fue recibida. Cuando el barbero la confirme te avisamos. ✂️`;
+          if (!msg) msg = `✅ ¡Hola ${client_name}! Tu turno en ${shopData.name} está confirmado para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''}. ¡Te esperamos! ✂️`;
           await wpp.sendText(wppShopId, client_phone, msg);
         } catch (e) {
           console.error('Error notificando al cliente:', e.message);
