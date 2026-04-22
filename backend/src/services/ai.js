@@ -222,25 +222,25 @@ async function getAIResponse(shopId, phone, userMessage) {
   }
 }
 
-const TONE = `Escribí en español rioplatense profesional. Usá "vos", sé cálido pero directo. Nada de "che" ni lunfardo exagerado. Emojis con criterio. Solo el mensaje final, sin comillas ni aclaraciones.`;
+const TONE = `Escribí en español rioplatense profesional. Usá "vos", sé cálido pero directo. Nada de "che" ni lunfardo exagerado. Emojis con criterio. IMPORTANTE: este mensaje se envía DIRECTAMENTE al cliente por WhatsApp — escribilo en segunda persona, hablándole a él/ella. Solo el mensaje final, sin comillas ni aclaraciones.`;
 
 async function generateMessage(shopId, type, context) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
 
   const prompts = {
-    sillon_libre: `${TONE}\n\nAvisale a ${context.clientName} que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}.${context.incentivo ? ` Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas.`,
-    rescate: `${TONE}\n\nEscribí un mensaje para ${context.clientName}, que no visita ${context.shopName} hace ${context.daysSince} días. Invitalo a que vuelva a reservar. Máximo 3 líneas.`,
-    rescate_auto: `${TONE}\n\nEscribí un mensaje para ${context.clientName}, un cliente de ${context.shopName} que hace ${context.daysSince} días que no viene. Invitalo a reservar su próximo turno.${context.bookingLink ? ` Link: ${context.bookingLink}` : ''} Máximo 3 líneas.`,
-    turno_completado: `${TONE}\n\nAvisale a ${context.clientName} que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Link de premios: ${context.tiendaLink}` : ''} Máximo 3 líneas.`,
-    turno_confirmado: `${TONE}\n\nAvisale a ${context.clientName} que su turno en ${context.shopName} fue confirmado para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Máximo 2 líneas.`,
-    reserva_recibida: `${TONE}\n\nAvisale a ${context.clientName} que su turno en ${context.shopName} está confirmado para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Máximo 3 líneas.`,
-    recordatorio: `${TONE}\n\nRecordále a ${context.clientName} su turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 2 líneas.`,
-    sena_instrucciones: `${TONE}\n\nInformale a ${context.clientName} que para confirmar su turno en ${context.shopName} debe abonar una seña de $${context.senaAmount} en los próximos ${context.minutesLimit} minutos.\n\nPaso a paso:\n1. Transferí $${context.senaAmount} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nSi no recibimos el pago en ese tiempo, el turno queda libre. Máximo 6 líneas.`,
-    sena_vencida: `${TONE}\n\nAvisale a ${context.clientName} que la seña para su turno en ${context.shopName} venció sin recibir el pago, por lo que el turno fue liberado. Invitalo a reservar nuevamente cuando quiera. Máximo 3 líneas.`,
-    membresia_bienvenida: `${TONE}\n\nDale la bienvenida a ${context.clientName} a la membresía de ${context.shopName} (${context.planName || 'plan mensual'}, ${context.credits} créditos).\n\nPaso a paso para activarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nUna vez confirmado el pago, los créditos quedan activos. Máximo 6 líneas.`,
-    membresia_recordatorio: `${TONE}\n\nRecordále a ${context.clientName} que su membresía en ${context.shopName} vence el ${context.fechaVencimiento}.\n\nPara renovarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nMáximo 5 líneas.`,
-    membresia_pago_confirmado: `${TONE}\n\nAvisale a ${context.clientName} que el pago de su membresía en ${context.shopName} fue confirmado. Ya tiene ${context.credits} créditos disponibles hasta el ${context.fechaVencimiento}. Máximo 2 líneas.`,
+    sillon_libre: `${TONE}\n\nEscribile a ${context.clientName} avisándole que hay un sillón libre hoy a las ${context.slot} en ${context.shopName}.${context.incentivo ? ` Mencioná este incentivo: ${context.incentivo}.` : ''} Máximo 3 líneas.`,
+    rescate: `${TONE}\n\nEscribile a ${context.clientName}, que no visita ${context.shopName} hace ${context.daysSince} días. Invitalo a que vuelva a reservar. Máximo 3 líneas.`,
+    rescate_auto: `${TONE}\n\nEscribile a ${context.clientName}, que hace ${context.daysSince} días que no viene a ${context.shopName}. Invitalo a reservar su próximo turno.${context.bookingLink ? ` Link: ${context.bookingLink}` : ''} Máximo 3 líneas.`,
+    turno_completado: `${TONE}\n\nEscribile a ${context.clientName} avisándole que su servicio fue completado. Ganó ${context.pointsEarned} puntos (total: ${context.totalPoints}).${context.tiendaLink ? ` Link de premios: ${context.tiendaLink}` : ''} Máximo 3 líneas.`,
+    turno_confirmado: `${TONE}\n\nEscribile a ${context.clientName} confirmándole su turno en ${context.shopName} para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Máximo 2 líneas.`,
+    reserva_recibida: `${TONE}\n\nEscribile a ${context.clientName} confirmándole que su turno en ${context.shopName} quedó agendado para el ${context.fecha} a las ${context.hora}${context.serviceName ? ` (${context.serviceName})` : ''}. Máximo 3 líneas.`,
+    recordatorio: `${TONE}\n\nEscribile a ${context.clientName} recordándole su turno en ${context.shopName} el ${context.fecha} a las ${context.hora}${context.serviceName ? ` para ${context.serviceName}` : ''}. Máximo 2 líneas.`,
+    sena_instrucciones: `${TONE}\n\nEscribile a ${context.clientName} indicándole que para confirmar su turno en ${context.shopName} debe abonar una seña de $${context.senaAmount} en los próximos ${context.minutesLimit} minutos.\n\nPaso a paso:\n1. Transferí $${context.senaAmount} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nSi no recibimos el pago en ese tiempo, el turno queda libre. Máximo 6 líneas.`,
+    sena_vencida: `${TONE}\n\nEscribile a ${context.clientName} avisándole que la seña para su turno en ${context.shopName} venció sin recibir el pago y el turno fue liberado. Invitalo a reservar nuevamente cuando quiera. Máximo 3 líneas.`,
+    membresia_bienvenida: `${TONE}\n\nEscribile a ${context.clientName} dándole la bienvenida a la membresía de ${context.shopName} (${context.planName || 'plan mensual'}, ${context.credits} créditos).\n\nPaso a paso para activarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nUna vez confirmado el pago, los créditos quedan activos. Máximo 6 líneas.`,
+    membresia_recordatorio: `${TONE}\n\nEscribile a ${context.clientName} recordándole que su membresía en ${context.shopName} vence el ${context.fechaVencimiento}.\n\nPara renovarla:\n1. Transferí $${context.price} al alias: *${context.alias}*\n2. Mandá el comprobante por este chat\n\nMáximo 5 líneas.`,
+    membresia_pago_confirmado: `${TONE}\n\nEscribile a ${context.clientName} confirmándole que el pago de su membresía en ${context.shopName} fue recibido. Ya tiene ${context.credits} créditos disponibles hasta el ${context.fechaVencimiento}. Máximo 2 líneas.`,
   };
 
   const prompt = prompts[type];
