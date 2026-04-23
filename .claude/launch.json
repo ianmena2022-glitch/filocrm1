@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "globe-landing",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "const http=require('http'),fs=require('fs'),path=require('path');http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});fs.createReadStream(path.join('C:/Users/HP/OneDrive/Escritorio/filocrm1','globe-landing-bundle.html')).pipe(res)}).listen(5174)"],
+      "port": 5174
+    }
+  ]
+}
