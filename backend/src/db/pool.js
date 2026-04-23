@@ -7,11 +7,22 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  // Matar queries que cuelguen más de 10s (diagnóstico + prevención de hang)
+  connectionTimeoutMillis: 8000,
   statement_timeout: 10000,
   query_timeout: 10000,
 });
+
+// ── Hard query timeout (cubre hangs TCP + lock-wait) ──────
+// Promise.race garantiza fallo en ≤ QUERY_TIMEOUT ms sin importar
+// el nivel del cuelgue (TCP, PostgreSQL handshake, lock-wait).
+const QUERY_TIMEOUT = 10000; // 10 segundos
+function withTimeout(promise, label) {
+  let tid;
+  const timeout = new Promise((_, reject) => {
+    tid = setTimeout(() => reject(new Error(`DB timeout (${label || 'query'})`)), QUERY_TIMEOUT);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(tid));
+}
 
 pool.on('error', (err) => {
   console.error('PostgreSQL pool error:', err.message);
@@ -45,12 +56,12 @@ const _query = pool.query.bind(pool);
 
 pool.query = async function shopAwareQuery(text, values) {
   const shopId = shopContext.getStore();
-  if (!shopId) return _query(text, values);   // no context → owner bypasses RLS
+  if (!shopId) return withTimeout(_query(text, values), text?.slice?.(0, 40));
 
-  const client = await pool.connect();
+  const client = await withTimeout(_connect(), 'connect');
   try {
     await setShopId(client, shopId);
-    return await client.query(text, values);
+    return await withTimeout(client.query(text, values), text?.slice?.(0, 40));
   } finally {
     await clearShopId(client);
     client.release();
@@ -63,7 +74,7 @@ pool.query = async function shopAwareQuery(text, values) {
 const _connect = pool.connect.bind(pool);
 
 pool.connect = async function shopAwareConnect() {
-  const client = await _connect();
+  const client = await withTimeout(_connect(), 'connect');
   const shopId = shopContext.getStore();
 
   if (shopId) {
