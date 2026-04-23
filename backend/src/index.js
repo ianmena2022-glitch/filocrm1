@@ -72,16 +72,19 @@ app.get('/barber', (req, res) => {
 
 // ── Health check ───────────────────────────────────────
 // IMPORTANTE: no hacer queries a la DB aquí — si la DB está lenta el healthcheck falla
-app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-e' }));
+app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-f' }));
 
 // ── DB ping diagnóstico ────────────────────────────────
 app.get('/healthdb', async (req, res) => {
   const t = Date.now();
+  // Mostrar si DATABASE_URL está seteada (sin credenciales)
+  const dbUrl = process.env.DATABASE_URL || '';
+  const dbHost = dbUrl ? (dbUrl.match(/@([^/:]+)/)?.[1] || 'unknown-host') : 'NO DATABASE_URL';
   try {
     await pool.query('SELECT 1 AS ok');
-    res.json({ db: 'ok', ms: Date.now() - t });
+    res.json({ db: 'ok', ms: Date.now() - t, host: dbHost });
   } catch(e) {
-    res.status(500).json({ db: 'error', ms: Date.now() - t, error: e.message });
+    res.status(500).json({ db: 'error', ms: Date.now() - t, host: dbHost, error: e.message });
   }
 });
 
