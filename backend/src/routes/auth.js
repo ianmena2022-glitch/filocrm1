@@ -184,10 +184,9 @@ router.post('/register-barber', async (req, res) => {
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
-
   try {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
     const result = await pool.query('SELECT * FROM shops WHERE email = $1', [email.toLowerCase().trim()]);
     const shop = result.rows[0];
     if (!shop) return res.status(401).json({ error: 'Email o contraseña incorrectos' });

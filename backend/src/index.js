@@ -97,17 +97,41 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(publicDir, 'crm.html'));
 });
 
+// ── Error handler global (SIEMPRE después de las rutas) ────────────────────
+// Evita que Express devuelva HTML <!DOCTYPE> en errores — siempre JSON
+app.use((err, req, res, next) => {
+  console.error('❌ Express error:', err.status || 500, err.message);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: err.message || 'Error interno del servidor' });
+});
+
 // ── Init DB + arrancar servidor ────────────────────────
 async function initDB() {
   const schemaPath = path.join(__dirname, 'db', 'schema.sql');
   const schema     = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schema);
-  // Run incremental migrations
+
+  // Crear tabla de tracking de migraciones (si no existe)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      filename   VARCHAR(255) PRIMARY KEY,
+      applied_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Correr solo migraciones que NO se hayan ejecutado antes
   const migrationsDir = path.join(__dirname, 'db', 'migrations');
   const migrationFiles = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
   for (const file of migrationFiles) {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM _migrations WHERE filename = $1', [file]
+    );
+    if (rows.length > 0) continue; // ya aplicada
+
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
     await pool.query(sql);
+    await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+    console.log(`  ✔ migración aplicada: ${file}`);
   }
   console.log('✅ Base de datos sincronizada');
 }
