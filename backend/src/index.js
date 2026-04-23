@@ -71,11 +71,8 @@ app.get('/barber', (req, res) => {
 });
 
 // ── Health check ───────────────────────────────────────
-app.get('/health', async (req, res) => {
-  let dbOk = false;
-  try { await pool.query('SELECT 1'); dbOk = true; } catch(e) { /* db not ready yet */ }
-  res.json({ ok: true, env: process.env.NODE_ENV, db: dbOk, v: '2025-04-23-c' });
-});
+// IMPORTANTE: no hacer queries a la DB aquí — si la DB está lenta el healthcheck falla
+app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-d' }));
 
 // ── Frontend estático ──────────────────────────────────
 const publicDir = path.join(__dirname, 'public');
