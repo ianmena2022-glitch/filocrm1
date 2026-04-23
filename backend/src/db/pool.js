@@ -89,25 +89,35 @@ pool.query = async function shopAwareQuery(text, values) {
 // ── Wrap pool.connect ──────────────────────────────────────
 // Handles transactions (BEGIN / COMMIT blocks).
 // The returned client has app.shop_id already set; release() resets it.
+//
+// IMPORTANT: pg's Pool.query calls pool.connect(callback) internally.
+// Must handle both callback form (pg internals) and promise form (our code).
 const _connect = pool.connect.bind(pool);
 
-pool.connect = async function shopAwareConnect() {
-  const client = await withTimeout(_connect(), 'connect');
+pool.connect = function shopAwareConnect(cb) {
   const shopId = shopContext.getStore();
 
-  if (shopId) {
-    await setShopId(client, shopId);
+  const promise = (async () => {
+    const client = await withTimeout(_connect(), 'connect');
+    if (shopId) {
+      await setShopId(client, shopId);
+      const _release = client.release.bind(client);
+      client.release = async function (err) {
+        await clearShopId(client);
+        return _release(err);
+      };
+    }
+    return client;
+  })();
 
-    // Wrap release so it clears app.shop_id before returning the
-    // connection to the pool — preventing context leaks.
-    const _release = client.release.bind(client);
-    client.release = async function (err) {
-      await clearShopId(client);
-      return _release(err);
-    };
+  if (typeof cb === 'function') {
+    promise
+      .then((client) => cb(null, client, (err) => client.release(err)))
+      .catch((err) => cb(err));
+    return; // callback style: no return value
   }
 
-  return client;
+  return promise;
 };
 
 // ── pool.connectAs (explicit override) ────────────────────

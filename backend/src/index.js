@@ -72,7 +72,7 @@ app.get('/barber', (req, res) => {
 
 // ── Health check ───────────────────────────────────────
 // IMPORTANTE: no hacer queries a la DB aquí — si la DB está lenta el healthcheck falla
-app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-q' }));
+app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-r' }));
 
 // ── DB ping diagnóstico ────────────────────────────────
 app.get('/healthdb', async (req, res) => {
