@@ -114,17 +114,18 @@
     }
     /* Phone prefix row */
     .phone-row { display: flex; gap: 8px; align-items: stretch; }
-    .phone-row input { flex: 1; width: auto; }
-    .phone-prefix-sel {
+    .phone-row input { flex: 1; width: 0 !important; min-width: 0; }
+    .phone-prefix-sel,
+    .field .phone-prefix-sel {
       flex-shrink: 0;
-      width: 88px;
+      width: 86px !important;
       min-width: 0;
       background: rgba(255,255,255,.05);
       border: 1px solid rgba(255,255,255,.1);
       border-radius: 10px;
-      padding: 0 8px;
+      padding: 0 6px;
       color: var(--white);
-      font-size: 14px;
+      font-size: 13px;
       font-family: 'Barlow', sans-serif;
       outline: none;
       cursor: pointer;
@@ -135,7 +136,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .phone-prefix-sel:focus { border-color: rgba(255,209,0,.5); }
+    .phone-prefix-sel:focus,
+    .field .phone-prefix-sel:focus { border-color: rgba(255,209,0,.5); }
     .phone-prefix-sel option { background: #0d1929; color: var(--white); }
     /* Phone hint */
     .phone-hint {
