@@ -117,10 +117,12 @@
     .phone-row input { flex: 1; width: auto; }
     .phone-prefix-sel {
       flex-shrink: 0;
+      width: 88px;
+      min-width: 0;
       background: rgba(255,255,255,.05);
       border: 1px solid rgba(255,255,255,.1);
       border-radius: 10px;
-      padding: 0 10px;
+      padding: 0 8px;
       color: var(--white);
       font-size: 14px;
       font-family: 'Barlow', sans-serif;
@@ -130,6 +132,8 @@
       -webkit-appearance: none;
       appearance: none;
       text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .phone-prefix-sel:focus { border-color: rgba(255,209,0,.5); }
     .phone-prefix-sel option { background: #0d1929; color: var(--white); }
