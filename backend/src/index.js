@@ -113,40 +113,49 @@ async function initDB() {
 }
 
 async function start() {
-  try {
-    await initDB();
-    app.listen(PORT, '0.0.0.0', async () => {
+  // ── 1. Escuchar el puerto PRIMERO para que el healthcheck pase ──────────────
+  await new Promise((resolve) => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 FILO CRM corriendo en puerto ${PORT}`);
       console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
-      // Reconectar WhatsApp de todos los shops que estaban conectados
-      try {
-        const wpp = require('./services/whatsapp');
-        await wpp.reconnectAllShops();
-        console.log('📱 WhatsApp: reconexión iniciada');
-      } catch(e) {
-        console.error('WhatsApp reconnect error:', e.message);
-      }
-      // Generación inicial de turnos recurrentes + job diario (cada 24h)
-      try {
-        const { runDailyGeneration } = require('./routes/recurring');
-        runDailyGeneration();
-        setInterval(runDailyGeneration, 24 * 60 * 60 * 1000);
-        console.log('🔄 Turnos recurrentes: generación diaria activa');
-      } catch(e) {
-        console.error('Recurring generation error:', e.message);
-      }
-      // Arrancar scheduler de tareas periódicas (cierre automático de caja, etc.)
-      try {
-        const { startScheduler } = require('./services/scheduler');
-        startScheduler();
-      } catch(e) {
-        console.error('Scheduler error:', e.message);
-      }
+      resolve();
     });
-  } catch (e) {
-    console.error('❌ Error al iniciar:', e.message);
-    process.exit(1);
-  }
+  });
+
+  // ── 2. Migrar DB en background (no bloquea el healthcheck) ─────────────────
+  (async () => {
+    try {
+      await initDB();
+    } catch (e) {
+      console.error('❌ Error en initDB:', e.message);
+      // No hacer process.exit — el servidor ya está levantado y sirviendo
+    }
+
+    // Reconectar WhatsApp de todos los shops que estaban conectados
+    try {
+      const wpp = require('./services/whatsapp');
+      await wpp.reconnectAllShops();
+      console.log('📱 WhatsApp: reconexión iniciada');
+    } catch(e) {
+      console.error('WhatsApp reconnect error:', e.message);
+    }
+    // Generación inicial de turnos recurrentes + job diario (cada 24h)
+    try {
+      const { runDailyGeneration } = require('./routes/recurring');
+      runDailyGeneration();
+      setInterval(runDailyGeneration, 24 * 60 * 60 * 1000);
+      console.log('🔄 Turnos recurrentes: generación diaria activa');
+    } catch(e) {
+      console.error('Recurring generation error:', e.message);
+    }
+    // Arrancar scheduler de tareas periódicas (cierre automático de caja, etc.)
+    try {
+      const { startScheduler } = require('./services/scheduler');
+      startScheduler();
+    } catch(e) {
+      console.error('Scheduler error:', e.message);
+    }
+  })();
 }
 
 start();
