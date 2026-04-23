@@ -312,7 +312,7 @@ router.post('/next', auth, async (req, res) => {
       }
       try {
         const wpp = require('../services/whatsapp');
-        wpp.sendMessage(entry.client_phone, msg).catch(() => {});
+        wpp.sendText(shopId, entry.client_phone, msg).catch(() => {});
       } catch (e) {
         // non-blocking, ignore
       }
