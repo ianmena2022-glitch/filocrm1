@@ -2,13 +2,16 @@ const { Pool }              = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
 
 // ── Connection pool ────────────────────────────────────────
-// Preferir URL pública si existe (evita cuelgue de internal networking de Railway)
-const DB_URL = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
-console.log(`[DB] conectando a: ${DB_URL ? DB_URL.replace(/:[^@]*@/, ':***@') : 'NO DATABASE_URL'}`);
+// postgres.railway.internal = red interna → no necesita SSL
+// URLs externas (proxy público, Neon, Supabase, etc.) → SSL requerido
+const DB_URL = process.env.DATABASE_URL || '';
+const isInternal = DB_URL.includes('.railway.internal') || DB_URL.includes('localhost');
+const sslConfig = isInternal ? false : { rejectUnauthorized: false };
+console.log(`[DB] host interno=${isInternal} | ssl=${JSON.stringify(sslConfig)} | url=${DB_URL.replace(/:[^@]*@/, ':***@')}`);
 
 const pool = new Pool({
   connectionString: DB_URL,
-  ssl: { rejectUnauthorized: false },  // siempre SSL — Railway lo requiere
+  ssl: sslConfig,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000,
