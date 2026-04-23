@@ -1,6 +1,7 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache git python3 make g++
+RUN apk add --no-cache git python3 make g++ && \
+    sed -i 's/@SECLEVEL=2/@SECLEVEL=1/g' /etc/ssl/openssl.cnf 2>/dev/null || true
 
 WORKDIR /app
 
