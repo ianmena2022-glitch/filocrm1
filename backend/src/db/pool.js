@@ -2,14 +2,22 @@ const { Pool }              = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
 
 // ── Connection pool ────────────────────────────────────────
-// Si se setea DATABASE_PUBLIC_URL o RAILWAY_PUBLIC_DOMAIN en las variables
-// del app, usamos la URL pública (proxy externo) que siempre funciona.
-// La URL interna postgres.railway.internal requiere private networking habilitado.
+// Node.js 20 / OpenSSL 3.0 es incompatible con el cert SSL de Railway.
+// Solución: deshabilitar SSL verification completamente para la conexión DB.
 const DB_URL = process.env.DATABASE_URL || '';
 const isInternal = DB_URL.includes('.railway.internal');
-// Interna: no SSL (red privada). Externa/proxy: SSL sin verificar cert.
-const sslConfig = isInternal ? false : { rejectUnauthorized: false };
-console.log(`[DB] ${isInternal ? 'INTERNAL' : 'EXTERNAL'} | ssl=${isInternal ? 'off' : 'on'} | host=${DB_URL.replace(/:[^@]*@/, ':***@').split('@')[1]?.split('/')[0] || 'unknown'}`);
+// Para la URL pública (proxy): rejectUnauthorized:false + checkServerIdentity bypass
+// Para internal: sin SSL (red privada de Railway)
+const sslConfig = isInternal
+  ? false
+  : {
+      rejectUnauthorized: false,
+      checkServerIdentity: () => undefined,
+      minVersion: 'TLSv1',          // permite TLS 1.0+ (Railway puede usar versiones viejas)
+      ciphers: 'DEFAULT@SECLEVEL=0', // OpenSSL 3.0 bajado a nivel permisivo
+    };
+const dbHost = DB_URL.replace(/:[^@]*@/, ':***@').split('@')[1]?.split('/')[0] || 'unknown';
+console.log(`[DB] ${isInternal ? 'INTERNAL(no-ssl)' : 'EXTERNAL(ssl-bypass)'} | host=${dbHost}`);
 
 const pool = new Pool({
   connectionString: DB_URL,
