@@ -72,20 +72,38 @@ app.get('/barber', (req, res) => {
 
 // ── Health check ───────────────────────────────────────
 // IMPORTANTE: no hacer queries a la DB aquí — si la DB está lenta el healthcheck falla
-app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-j' }));
+app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV, v: '2025-04-23-k' }));
 
 // ── DB ping diagnóstico ────────────────────────────────
 app.get('/healthdb', async (req, res) => {
-  const t = Date.now();
-  // Mostrar si DATABASE_URL está seteada (sin credenciales)
+  const net = require('net');
   const dbUrl = process.env.DATABASE_URL || '';
-  const dbHost = dbUrl ? (dbUrl.match(/@([^/:]+)/)?.[1] || 'unknown-host') : 'NO DATABASE_URL';
-  try {
-    await pool.query('SELECT 1 AS ok');
-    res.json({ db: 'ok', ms: Date.now() - t, host: dbHost });
-  } catch(e) {
-    res.status(500).json({ db: 'error', ms: Date.now() - t, host: dbHost, error: e.message });
+  const dbHost = dbUrl.match(/@([^/:]+)/)?.[1] || 'NO_HOST';
+  const dbPort = parseInt(dbUrl.match(/:(\d+)\//)?.[1] || '5432');
+
+  // Test 1: TCP connectivity (sin PostgreSQL)
+  const tcpMs = await new Promise(resolve => {
+    const t = Date.now();
+    const sock = net.createConnection({ host: dbHost, port: dbPort });
+    sock.setTimeout(5000);
+    sock.on('connect', () => { sock.destroy(); resolve(Date.now() - t); });
+    sock.on('error', (e) => resolve(`TCP_ERR:${e.message}`));
+    sock.on('timeout', () => { sock.destroy(); resolve('TCP_TIMEOUT'); });
+  });
+
+  // Test 2: PostgreSQL query (solo si TCP OK)
+  let pgResult = 'skipped';
+  if (typeof tcpMs === 'number') {
+    const t2 = Date.now();
+    try {
+      await pool.query('SELECT 1 AS ok');
+      pgResult = `ok(${Date.now()-t2}ms)`;
+    } catch(e) {
+      pgResult = `err(${Date.now()-t2}ms):${e.message.slice(0,80)}`;
+    }
   }
+
+  res.json({ host: dbHost, port: dbPort, tcp: tcpMs, pg: pgResult });
 });
 
 // ── Frontend estático ──────────────────────────────────
