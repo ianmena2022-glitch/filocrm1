@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
+const { getShopTz, shopDate } = require('../db/shopTz');
 
 // Retorna el shopId real (dueño), sea barbero o dueño
 function realShopId(req) {
@@ -49,8 +50,8 @@ async function autoAssignBarber(shopId, date) {
 // GET /api/appointments?date=YYYY-MM-DD
 router.get('/', auth, async (req, res) => {
   const { date } = req.query;
-  const d = date || new Date().toISOString().split('T')[0];
   const shopId = realShopId(req);
+  const d = date || shopDate(await getShopTz(shopId));
 
   console.log(`[GET appts] isBarber=${req.isBarber} shopId=${req.shopId} parentShopId=${req.parentShopId} realShopId=${shopId} date=${d}`);
 
@@ -438,9 +439,9 @@ router.put('/:id/sena', auth, async (req, res) => {
     // Al confirmar seña → registrar como ingreso en caja
     if (action === 'confirm' && appt.sena_amount > 0) {
       try {
-        const today = new Date().toISOString().split('T')[0];
         // Usar el método de pago configurado para señas, o 'transfer' como default
-        const shopCfg = await pool.query('SELECT sena_payment_method FROM shops WHERE id=$1', [appt.shop_id]);
+        const shopCfg = await pool.query('SELECT sena_payment_method, timezone FROM shops WHERE id=$1', [appt.shop_id]);
+        const today = shopDate(shopCfg.rows[0]?.timezone);
         const senaPayMethod = shopCfg.rows[0]?.sena_payment_method || 'transfer';
         await pool.query(
           `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)

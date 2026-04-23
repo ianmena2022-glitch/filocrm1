@@ -1,11 +1,12 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
+const { getShopTz, shopDate } = require('../db/shopTz');
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
   const shopId = req.shopId;
-  const today  = new Date().toISOString().split('T')[0];
+  const today  = shopDate(await getShopTz(shopId));
   const isEnterpriseOwner = req.isEnterpriseOwner || false;
 
   // Filtro de shop_id: enterprise owner incluye sus sucursales
@@ -281,7 +282,7 @@ router.post('/expenses', auth, async (req, res) => {
       `INSERT INTO expenses (shop_id, amount, category, description, date)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [req.shopId, parseFloat(amount), category, description || null,
-       date || new Date().toISOString().split('T')[0]]
+       date || shopDate(await getShopTz(req.shopId))]
     );
     res.status(201).json(result.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -289,7 +290,7 @@ router.post('/expenses', auth, async (req, res) => {
 
 // GET /api/dashboard/expenses?date=YYYY-MM-DD — gastos de un día
 router.get('/expenses', auth, async (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || shopDate(await getShopTz(req.shopId));
   try {
     const result = await pool.query(
       `SELECT * FROM expenses WHERE shop_id=$1 AND date=$2 ORDER BY created_at DESC`,
@@ -309,7 +310,7 @@ router.delete('/expenses/:id', auth, async (req, res) => {
 
 // GET /api/dashboard/cash?date=YYYY-MM-DD — resumen de caja del día
 router.get('/cash', auth, async (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || shopDate(await getShopTz(req.shopId));
   const shopId = req.shopId;
   try {
     // Ingresos por método de pago (precio completo — la seña se suma como income_item aparte)
@@ -427,7 +428,7 @@ router.get('/cash', auth, async (req, res) => {
 // GET /api/dashboard/cash/method-detail?date=&method= — detalle por método de pago
 router.get('/cash/method-detail', auth, async (req, res) => {
   const { method } = req.query;
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || shopDate(await getShopTz(req.shopId));
   if (!method) return res.status(400).json({ error: 'Se requiere method' });
   try {
     // Turnos completados con ese método
@@ -478,7 +479,7 @@ router.get('/cash/method-detail', auth, async (req, res) => {
 
 // POST /api/dashboard/cash/close — cerrar caja del día
 router.post('/cash/close', auth, async (req, res) => {
-  const date = req.body.date || new Date().toISOString().split('T')[0];
+  const date = req.body.date || shopDate(await getShopTz(req.shopId));
   const shopId = req.shopId;
   try {
     // Calcular todo
@@ -631,17 +632,20 @@ router.post('/cash/auto-close', async (req, res) => {
   try {
     // Obtener todos los shops con horario configurado
     const shops = await pool.query(
-      `SELECT id, schedule FROM shops WHERE is_barber=FALSE AND (is_barber IS NULL OR is_barber=FALSE) AND schedule IS NOT NULL`
+      `SELECT id, schedule, timezone FROM shops WHERE is_barber=FALSE AND (is_barber IS NULL OR is_barber=FALSE) AND schedule IS NOT NULL`
     );
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const { DEFAULT_TZ } = require('../db/shopTz');
     const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
-    const dayKey = dayNames[now.getDay()];
     let closed = 0;
 
     for (const shop of shops.rows) {
       try {
+        const tz = shop.timezone || DEFAULT_TZ;
+        const today = shopDate(tz);
+        const nowLocal = new Date().toLocaleString('en-US', { timeZone: tz });
+        const nowDate = new Date(nowLocal);
+        const nowMins = nowDate.getHours() * 60 + nowDate.getMinutes();
+        const dayKey = dayNames[nowDate.getDay()];
         const schedule = JSON.parse(shop.schedule);
         const daySchedule = schedule[dayKey];
         if (!daySchedule?.active || !daySchedule?.end) continue;
