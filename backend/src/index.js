@@ -181,15 +181,7 @@ async function initDB() {
 }
 
 async function start() {
-  // ── 1. initDB primero — es instantánea en DB existente (<1s) ──────────────
-  try {
-    await initDB();
-  } catch (e) {
-    console.error('❌ Error en initDB:', e.message);
-    // No hacer process.exit — seguir aunque falle (DB ya inicializada)
-  }
-
-  // ── 2. Escuchar puerto ────────────────────────────────────────────────────
+  // ── 1. Escuchar puerto PRIMERO — healthcheck de Railway debe pasar rápido ──
   await new Promise((resolve) => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 FILO CRM corriendo en puerto ${PORT}`);
@@ -198,8 +190,15 @@ async function start() {
     });
   });
 
-  // ── 3. Tareas en background (no bloquean el healthcheck) ─────────────────
+  // ── 2. Todo lo demás en background (no bloquea el healthcheck) ────────────
   (async () => {
+    // initDB: < 1 segundo en DB existente (salta schema.sql, solo tracking)
+    try {
+      await initDB();
+    } catch (e) {
+      console.error('❌ Error en initDB:', e.message);
+    }
+
     try {
       const wpp = require('./services/whatsapp');
       await wpp.reconnectAllShops();
