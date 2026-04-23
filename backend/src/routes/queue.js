@@ -229,14 +229,15 @@ router.get('/', auth, async (req, res) => {
       [shopId]
     );
 
-    // Today's appointments (for hybrid view)
-    const today = new Date().toISOString().split('T')[0];
+    // Today's appointments (for hybrid view) — use DB-side date in Argentina TZ
     const apptRes = await pool.query(
       `SELECT id, client_name, service_name, price, time_start, barber_name, barber_id, status, commission_pct
        FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status IN ('pending','confirmed')
+       WHERE shop_id=$1
+         AND date = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
+         AND status IN ('pending','confirmed')
        ORDER BY time_start ASC`,
-      [shopId, today]
+      [shopId]
     );
 
     return res.json({
@@ -354,8 +355,6 @@ router.post('/complete/:id', auth, async (req, res) => {
     if (!entryRes.rows.length) return res.status(404).json({ error: 'No encontrado' });
     const entry = entryRes.rows[0];
 
-    const today = new Date().toISOString().split('T')[0];
-    const nowTime = new Date().toTimeString().slice(0, 5);
     const p = parseFloat(price) || 0;
     const t = parseFloat(tip) || 0;
     const pct = parseInt(commission_pct) || 50;
@@ -370,13 +369,17 @@ router.post('/complete/:id', auth, async (req, res) => {
     }
 
     // Create appointment record (for caja + reporting)
+    // Use DB-side NOW() at Argentina timezone to avoid UTC offset from Railway server
     const apptRes = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_name, service_name, price, cost, date, time_start,
           barber_id, barber_name, commission_pct, payment_method, tip, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'completed')
+       VALUES ($1,$2,$3,$4,$5,
+         (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE,
+         TO_CHAR(NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires', 'HH24:MI'),
+         $6,$7,$8,$9,$10,'completed')
        RETURNING id`,
-      [shopId, entry.client_name, service_name || 'Walk-in', p, c, today, nowTime,
+      [shopId, entry.client_name, service_name || 'Walk-in', p, c,
        finalBarberId, barberName, pct, payment_method || 'cash', t]
     );
     const apptId = apptRes.rows[0].id;
