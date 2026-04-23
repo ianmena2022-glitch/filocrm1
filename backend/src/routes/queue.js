@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/pool');
 const auth    = require('../middleware/auth');
-const { getShopTz } = require('../db/shopTz');
+const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
 
 // ─── PUBLIC: join queue ──────────────────────────────────────────────────────
 router.post('/:slug/join', async (req, res) => {
@@ -371,19 +371,18 @@ router.post('/complete/:id', auth, async (req, res) => {
     }
 
     // Create appointment record (for caja + reporting)
-    // Use DB-side NOW() at shop timezone to avoid UTC offset from Railway server
+    // Pre-compute date/time in shop's timezone to avoid UTC offset from Railway server
     const tz = await getShopTz(shopId);
+    const localDate = shopDate(tz);
+    const localTime = shopTime(tz);
     const apptRes = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_name, service_name, price, cost, date, time_start,
           barber_id, barber_name, commission_pct, payment_method, tip, status)
-       VALUES ($1,$2,$3,$4,$5,
-         (NOW() AT TIME ZONE $11)::DATE,
-         TO_CHAR(NOW() AT TIME ZONE $11, 'HH24:MI'),
-         $6,$7,$8,$9,$10,'completed')
+       VALUES ($1,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
        RETURNING id`,
       [shopId, entry.client_name, service_name || 'Walk-in', p, c,
-       finalBarberId, barberName, pct, payment_method || 'cash', t, tz]
+       finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime]
     );
     const apptId = apptRes.rows[0].id;
 
@@ -420,7 +419,7 @@ router.post('/complete/:id', auth, async (req, res) => {
 
     return res.json({ ok: true, appointment_id: apptId });
   } catch (e) {
-    console.error('queue complete error', e);
+    console.error('queue complete error:', e.message, e.stack);
     return res.status(500).json({ error: 'Error interno' });
   }
 });

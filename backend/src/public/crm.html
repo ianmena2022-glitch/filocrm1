@@ -4200,14 +4200,16 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
   _walkInPayEntryId = entryId;
   _walkInPayMethod = null;
 
-  // Fetch services and barbers in parallel
+  // Fetch services, barbers, and payment methods in parallel
   try {
-    const [svcData, barbersData] = await Promise.all([
+    const [svcData, barbersData, payData] = await Promise.all([
       api('GET', '/services'),
-      currentShop?.commission_enabled ? api('GET', '/barbers') : Promise.resolve([])
+      currentShop?.commission_enabled ? api('GET', '/barbers') : Promise.resolve([]),
+      api('GET', '/payment-methods')
     ]);
     _walkInServices = Array.isArray(svcData) ? svcData.filter(s => s.active) : [];
     _walkInBarbers  = Array.isArray(barbersData) ? barbersData : [];
+    window._paymentMethods = Array.isArray(payData) ? payData : (window._paymentMethods || []);
   } catch(e) {
     _walkInServices = [];
     _walkInBarbers  = [];
