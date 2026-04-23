@@ -2,9 +2,13 @@ const { Pool }              = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
 
 // ── Connection pool ────────────────────────────────────────
+// Preferir URL pública si existe (evita cuelgue de internal networking de Railway)
+const DB_URL = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+console.log(`[DB] conectando a: ${DB_URL ? DB_URL.replace(/:[^@]*@/, ':***@') : 'NO DATABASE_URL'}`);
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString: DB_URL,
+  ssl: { rejectUnauthorized: false },  // siempre SSL — Railway lo requiere
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000,
