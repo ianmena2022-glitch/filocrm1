@@ -116,13 +116,32 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: err.message || 'Error interno del servidor' });
 });
 
-// ── Init DB + arrancar servidor ────────────────────────
+// ── Init DB ────────────────────────────────────────────
+// Estrategia:
+//   • DB existente → saltar schema.sql (evita ALTER TABLE locks), solo
+//     sincronizar migraciones nuevas vía _migrations tracking.
+//     Resultado: < 1 segundo en cada reinicio.
+//   • DB nueva     → correr schema.sql completo + todas las migraciones.
 async function initDB() {
-  const schemaPath = path.join(__dirname, 'db', 'schema.sql');
-  const schema     = fs.readFileSync(schemaPath, 'utf8');
-  await pool.query(schema);
+  const migrationsDir  = path.join(__dirname, 'db', 'migrations');
+  const migrationFiles = fs.readdirSync(migrationsDir)
+                           .filter(f => f.endsWith('.sql')).sort();
 
-  // Crear tabla de tracking de migraciones (si no existe)
+  // ── 1. ¿Existe la tabla shops? ────────────────────────
+  const { rows: shopsCheck } = await pool.query(`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='shops' LIMIT 1
+  `);
+  const isFreshDB = shopsCheck.length === 0;
+
+  if (isFreshDB) {
+    // DB vacía: crear esquema completo
+    const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
+    await pool.query(schema);
+    console.log('📦 Schema inicial aplicado');
+  }
+
+  // ── 2. Tabla de tracking ──────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS _migrations (
       filename   VARCHAR(255) PRIMARY KEY,
@@ -130,25 +149,47 @@ async function initDB() {
     )
   `);
 
-  // Correr solo migraciones que NO se hayan ejecutado antes
-  const migrationsDir = path.join(__dirname, 'db', 'migrations');
-  const migrationFiles = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
-  for (const file of migrationFiles) {
-    const { rows } = await pool.query(
-      'SELECT 1 FROM _migrations WHERE filename = $1', [file]
-    );
-    if (rows.length > 0) continue; // ya aplicada
+  // ── 3. Leer qué migraciones ya están aplicadas ────────
+  const { rows: applied } = await pool.query('SELECT filename FROM _migrations');
+  const appliedSet = new Set(applied.map(r => r.filename));
 
+  if (!isFreshDB && appliedSet.size === 0) {
+    // Primera vez con tracking en DB existente:
+    // asumir que todas las migraciones actuales ya corrieron
+    // (venían corriéndose en cada restart antes de este commit).
+    for (const file of migrationFiles) {
+      await pool.query(
+        'INSERT INTO _migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
+        [file]
+      );
+    }
+    console.log('✅ DB existente: migraciones marcadas como aplicadas');
+    return;
+  }
+
+  // ── 4. Correr solo migraciones nuevas ─────────────────
+  let ran = 0;
+  for (const file of migrationFiles) {
+    if (appliedSet.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
     await pool.query(sql);
     await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
-    console.log(`  ✔ migración aplicada: ${file}`);
+    console.log(`  ✔ migración: ${file}`);
+    ran++;
   }
-  console.log('✅ Base de datos sincronizada');
+  console.log(`✅ DB sincronizada (${ran} migracion${ran !== 1 ? 'es' : ''} nueva${ran !== 1 ? 's' : ''})`);
 }
 
 async function start() {
-  // ── 1. Escuchar el puerto PRIMERO para que el healthcheck pase ──────────────
+  // ── 1. initDB primero — es instantánea en DB existente (<1s) ──────────────
+  try {
+    await initDB();
+  } catch (e) {
+    console.error('❌ Error en initDB:', e.message);
+    // No hacer process.exit — seguir aunque falle (DB ya inicializada)
+  }
+
+  // ── 2. Escuchar puerto ────────────────────────────────────────────────────
   await new Promise((resolve) => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 FILO CRM corriendo en puerto ${PORT}`);
@@ -157,16 +198,8 @@ async function start() {
     });
   });
 
-  // ── 2. Migrar DB en background (no bloquea el healthcheck) ─────────────────
+  // ── 3. Tareas en background (no bloquean el healthcheck) ─────────────────
   (async () => {
-    try {
-      await initDB();
-    } catch (e) {
-      console.error('❌ Error en initDB:', e.message);
-      // No hacer process.exit — el servidor ya está levantado y sirviendo
-    }
-
-    // Reconectar WhatsApp de todos los shops que estaban conectados
     try {
       const wpp = require('./services/whatsapp');
       await wpp.reconnectAllShops();
@@ -174,7 +207,6 @@ async function start() {
     } catch(e) {
       console.error('WhatsApp reconnect error:', e.message);
     }
-    // Generación inicial de turnos recurrentes + job diario (cada 24h)
     try {
       const { runDailyGeneration } = require('./routes/recurring');
       runDailyGeneration();
@@ -183,7 +215,6 @@ async function start() {
     } catch(e) {
       console.error('Recurring generation error:', e.message);
     }
-    // Arrancar scheduler de tareas periódicas (cierre automático de caja, etc.)
     try {
       const { startScheduler } = require('./services/scheduler');
       startScheduler();
