@@ -8,13 +8,14 @@ const DB_URL = process.env.DATABASE_URL || '';
 const isInternal = DB_URL.includes('.railway.internal');
 // Para la URL pública (proxy): rejectUnauthorized:false + checkServerIdentity bypass
 // Para internal: sin SSL (red privada de Railway)
+// Node.js 20 / OpenSSL 3.0: TLS 1.3 hangs with Railway's PostgreSQL proxy.
+// Forcing maxVersion:'TLSv1.2' makes the handshake complete reliably.
 const sslConfig = isInternal
   ? false
   : {
       rejectUnauthorized: false,
       checkServerIdentity: () => undefined,
-      minVersion: 'TLSv1',          // permite TLS 1.0+ (Railway puede usar versiones viejas)
-      ciphers: 'DEFAULT@SECLEVEL=0', // OpenSSL 3.0 bajado a nivel permisivo
+      maxVersion: 'TLSv1.2',
     };
 const dbHost = DB_URL.replace(/:[^@]*@/, ':***@').split('@')[1]?.split('/')[0] || 'unknown';
 console.log(`[DB] ${isInternal ? 'INTERNAL(no-ssl)' : 'EXTERNAL(ssl-bypass)'} | host=${dbHost}`);
