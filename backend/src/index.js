@@ -4,6 +4,16 @@ const path    = require('path');
 const fs      = require('fs');
 const pool    = require('./db/pool');
 
+// ── Prevenir crash de Node.js 20 por unhandledRejection ────────────────────
+// Baileys / WhatsApp emite rechazos en segundo plano. Sin este handler,
+// Node.js 20 crashea el proceso y Railway devuelve su propia página HTML 502.
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️  unhandledRejection (no crash):', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  uncaughtException (no crash):', err.message);
+});
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
@@ -61,7 +71,11 @@ app.get('/barber', (req, res) => {
 });
 
 // ── Health check ───────────────────────────────────────
-app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV }));
+app.get('/health', async (req, res) => {
+  let dbOk = false;
+  try { await pool.query('SELECT 1'); dbOk = true; } catch(e) { /* db not ready yet */ }
+  res.json({ ok: true, env: process.env.NODE_ENV, db: dbOk, v: '2025-04-23-c' });
+});
 
 // ── Frontend estático ──────────────────────────────────
 const publicDir = path.join(__dirname, 'public');
