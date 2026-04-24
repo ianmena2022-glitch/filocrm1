@@ -348,7 +348,7 @@ router.post('/serve/:id', auth, async (req, res) => {
 router.post('/complete/:id', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
-    const { price, cost, service_name, payment_method, tip, barber_id, commission_pct } = req.body;
+    const { price, cost, service_name, payment_method, tip, barber_id, commission_pct, client_name } = req.body;
 
     const entryRes = await pool.query(
       'SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2',
@@ -381,7 +381,7 @@ router.post('/complete/:id', auth, async (req, res) => {
           barber_id, barber_name, commission_pct, payment_method, tip, status)
        VALUES ($1,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
        RETURNING id`,
-      [shopId, entry.client_name, service_name || 'Walk-in', p, c,
+      [shopId, client_name || entry.client_name, service_name || 'Walk-in', p, c,
        finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime]
     );
     const apptId = apptRes.rows[0].id;
