@@ -7226,31 +7226,29 @@ document.getElementById('login-pass').addEventListener('keydown', e => {
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async function() {
   if (token && currentShop) {
-    if (currentShop.is_barber) {
-      localStorage.setItem('barber_token', token);
-      localStorage.setItem('barber_me', JSON.stringify(currentShop));
-      window.location.href = '/barber';
-    } else {
-      // Siempre refrescar desde backend — nunca confiar en localStorage
-      try {
-        const fresh = await api('GET', '/auth/me');
-        if (fresh && fresh.shop) {
-          currentShop = fresh.shop;
-          localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-          startApp();
+    // Siempre verificar con backend — nunca confiar en is_barber de localStorage
+    try {
+      const fresh = await api('GET', '/auth/me');
+      if (fresh && fresh.shop) {
+        currentShop = fresh.shop;
+        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+        if (fresh.shop.is_barber) {
+          localStorage.setItem('barber_token', token);
+          localStorage.setItem('barber_me', JSON.stringify(fresh.shop));
+          window.location.href = '/barber';
         } else {
-          // Respuesta inválida — limpiar sesión
-          localStorage.removeItem('filo_token');
-          localStorage.removeItem('filo_shop');
-          location.reload();
+          startApp();
         }
-      } catch(e) {
-        // Si el token es inválido o expiró, limpiar sesión
-        console.warn('Sesion inválida:', e.message);
+      } else {
         localStorage.removeItem('filo_token');
         localStorage.removeItem('filo_shop');
         location.reload();
       }
+    } catch(e) {
+      console.warn('Sesion inválida:', e.message);
+      localStorage.removeItem('filo_token');
+      localStorage.removeItem('filo_shop');
+      location.reload();
     }
   } else {
     // No hay sesión — mostrar pantalla de login
