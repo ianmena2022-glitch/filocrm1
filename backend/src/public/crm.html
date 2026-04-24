@@ -3009,6 +3009,7 @@ select.form-input { padding-right: 32px; }
         <select id="t-barber-select" onchange="onTurnoBarberChange()">
           <option value="">— Sin asignar —</option>
         </select>
+        <button type="button" onclick="selectFirstAvailableBarber()" style="margin-top:6px;width:100%;padding:7px;border:1px dashed var(--gray);border-radius:8px;background:transparent;color:var(--gray);font-size:12px;cursor:pointer" onmouseover="this.style.borderColor='var(--yellow)';this.style.color='var(--yellow)'" onmouseout="this.style.borderColor='var(--gray)';this.style.color='var(--gray)'">⚡ Primer profesional disponible</button>
       </div>
       <input type="hidden" id="t-barber" value="">
       <input type="hidden" id="t-commission" value="50">
@@ -5328,6 +5329,34 @@ function onTurnoBarberChange() {
   const opt = sel.options[sel.selectedIndex];
   document.getElementById('t-barber').value = opt?.dataset?.name || opt?.text?.split(' (')[0] || '';
   document.getElementById('t-commission').value = opt?.dataset?.pct || 50;
+}
+
+async function selectFirstAvailableBarber() {
+  const barbers = window._barbersList || [];
+  if (!barbers.length) return showToast('⚠️', 'Sin barberos', 'No hay barberos cargados');
+  const date = document.getElementById('t-date').value || agendaDate;
+  const time = document.getElementById('t-time').value;
+  if (!time) return showToast('⚠️', 'Hora requerida', 'Seleccioná una hora primero');
+  try {
+    const appts = await api('GET', `/appointments?date=${date}`);
+    const counts = {};
+    const busy   = new Set();
+    for (const a of (appts || [])) {
+      if (!a.barber_id) continue;
+      counts[a.barber_id] = (counts[a.barber_id] || 0) + 1;
+      if (a.time && a.time.slice(0,5) === time.slice(0,5)) busy.add(String(a.barber_id));
+    }
+    const available = barbers.filter(b => !busy.has(String(b.id)));
+    if (!available.length) return showToast('⚠️', 'Sin disponibles', 'Todos tienen turno a esa hora');
+    available.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+    const best = available[0];
+    const sel = document.getElementById('t-barber-select');
+    sel.value = String(best.id);
+    onTurnoBarberChange();
+    showToast('⚡', 'Barbero asignado', `${best.name} — menos turnos hoy`);
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
 }
 
 async function createAppointment() {
