@@ -3,6 +3,47 @@ const auth   = require('../middleware/auth');
 const wpp    = require('../services/whatsapp');
 const pool   = require('../db/pool');
 
+// POST /api/prospector/leads
+// Workflow 1 (scraping semanal) — guarda leads en DB sin enviar nada
+router.post('/leads', auth, async (req, res) => {
+  try {
+    const { leads } = req.body;
+    if (!Array.isArray(leads) || !leads.length) return res.status(400).json({ error: 'leads debe ser un array' });
+    let saved = 0;
+    for (const lead of leads) {
+      const phone = String(lead.phone || '').replace(/\D/g, '');
+      if (!phone || phone.length < 12) continue;
+      await pool.query(
+        `INSERT INTO prospects (shop_id, phone, name, city, conversation)
+         VALUES ($1, $2, $3, $4, '[]'::jsonb)
+         ON CONFLICT (shop_id, phone) DO NOTHING`,
+        [req.shopId, phone, lead.name || null, lead.city || null]
+      );
+      saved++;
+    }
+    res.json({ ok: true, saved });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/prospector/leads/pending
+// Workflow 2 (envío) — devuelve leads guardados que aún no fueron contactados
+router.get('/leads/pending', auth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const result = await pool.query(
+      `SELECT phone, name, city FROM prospects
+       WHERE shop_id=$1 AND message_sent IS NULL
+       ORDER BY id ASC LIMIT $2`,
+      [req.shopId, limit]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/prospector/send
 // n8n llama esto para enviar el mensaje y registrar el prospecto
 router.post('/send', auth, async (req, res) => {
