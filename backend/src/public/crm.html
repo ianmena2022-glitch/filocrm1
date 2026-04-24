@@ -3504,15 +3504,17 @@ async function login() {
     const data = await api('POST', '/auth/login', { email, password: pass });
     token = data.token;
     currentShop = data.shop;
-    localStorage.setItem('filo_token', token);
-    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-    // Redirigir barberos a su dashboard
     if (data.shop?.is_barber) {
+      // Limpiar cualquier sesión de dueño previa para no contaminar filo_token
+      localStorage.removeItem('filo_token');
+      localStorage.removeItem('filo_shop');
       localStorage.setItem('barber_token', token);
       localStorage.setItem('barber_me', JSON.stringify(data.shop));
       window.location.href = '/barber';
       return;
     }
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     startApp();
   } catch (e) {
     showAuthError(e.message);
