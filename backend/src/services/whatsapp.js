@@ -466,7 +466,7 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
 // Conectar o reconectar WhatsApp
 async function connect(shopId, onQR, onConnected, onDisconnected) {
   // Cargar Baileys v7 (ESM)
-  const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = await getBaileys();
+  const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } = await getBaileys();
 
   await restoreSessionFromDB(shopId);
 
@@ -478,7 +478,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['FILO CRM', 'Chrome', '1.0'],
+    browser: Browsers.ubuntu('Chrome'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
