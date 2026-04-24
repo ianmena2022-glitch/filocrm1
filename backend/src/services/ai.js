@@ -156,9 +156,82 @@ Si quiere turno → mandá el link. Si pregunta puntos → informá saldo y mand
 Si no sabés algo → decí que consulte directo 📲. No inventes. Solo temas de la barbería.`.trim();
 }
 
+async function getProspectResponse(shopId, phone, userMessage, apiKey) {
+  const prospectRes = await pool.query(
+    'SELECT name, city, message_sent, conversation, reply_count FROM prospects WHERE shop_id=$1 AND phone=$2',
+    [shopId, phone]
+  );
+  if (!prospectRes.rows.length) return null;
+  const prospect = prospectRes.rows[0];
+
+  const now = new Date().toISOString();
+  const conv = Array.isArray(prospect.conversation) ? prospect.conversation : [];
+  conv.push({ role: 'user', content: userMessage, ts: now });
+
+  const systemPrompt = `Sos un representante comercial de FILO CRM, un sistema de gestión para barberías argentinas.
+Este dueño de barbería recibió un mensaje de prospección tuyo y te respondió. Tu objetivo es responder sus consultas y avanzar la conversación hacia una demo o prueba.
+
+FILO CRM ofrece:
+- Agenda online de turnos con reservas automáticas
+- Fidelización de clientes con sistema de puntos
+- Cobros integrados y control de caja
+- Panel para barberos con comisiones
+- Reportes y métricas del negocio
+
+Tono: profesional, directo, cercano. Usá "vos". Máximo 3 líneas por respuesta.
+Si muestran interés → proponé una llamada o demo rápida.
+Si preguntan precio → deciles que hay planes accesibles y que lo mejor es hablar para ver cuál se adapta.
+No inventes precios ni funciones. Solo respondé lo que sabés.`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...conv.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
+  ];
+
+  try {
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 200, temperature: 0.7 })
+      },
+      12000
+    );
+    if (!response.ok) return null;
+    const data  = await response.json();
+    const reply = data.choices?.[0]?.message?.content?.trim();
+    if (reply) {
+      conv.push({ role: 'assistant', content: reply, ts: new Date().toISOString() });
+      pool.query(
+        `UPDATE prospects SET reply_count=reply_count+1, replied_at=COALESCE(replied_at,$1), conversation=$2 WHERE shop_id=$3 AND phone=$4`,
+        [now, JSON.stringify(conv), shopId, phone]
+      ).catch(e => console.error('[Prospect] update error:', e.message));
+    }
+    console.log(`[Prospect] Auto-reply a ${phone}: "${reply}"`);
+    return reply || null;
+  } catch (e) {
+    console.error('[Prospect] AI error:', e.message);
+    return null;
+  }
+}
+
 async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
+
+  // Si el que escribe es un prospecto, usar el responder de ventas
+  try {
+    const isProspect = await pool.query(
+      'SELECT id FROM prospects WHERE shop_id=$1 AND phone=$2 LIMIT 1',
+      [shopId, phone]
+    );
+    if (isProspect.rows.length) {
+      return getProspectResponse(shopId, phone, userMessage, apiKey);
+    }
+  } catch (e) {
+    console.error('[AI] prospect check error:', e.message);
+  }
 
   // Rate limiting
   if (!checkRateLimit(shopId, phone)) {
