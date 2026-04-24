@@ -1,0 +1,186 @@
+{
+  "name": "FILO CRM — Prospector Argentina",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Iniciar prospección",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "token", "value": "={{$credentials.apifyToken}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "searchStringsArray",
+              "value": "=[\"barbería Buenos Aires\",\"barbería Córdoba\",\"barbería Rosario\",\"barbería Mendoza\",\"barbería Tucumán\",\"barbería La Plata\",\"barbería Mar del Plata\",\"barbería Salta\",\"barbería Santa Fe\",\"barbería San Juan\",\"barbería Resistencia\",\"barbería Corrientes\",\"barbería Posadas\",\"barbería Neuquén\",\"barbería Bahía Blanca\",\"barbería Formosa\",\"barbería San Luis\",\"barbería Catamarca\",\"barbería La Rioja\",\"barbería Jujuy\",\"barbería Río Gallegos\",\"barbería Ushuaia\",\"barbero independiente Buenos Aires\",\"barbero independiente Córdoba\",\"barbero independiente Rosario\"]"
+            },
+            { "name": "maxCrawledPlacesPerSearch", "value": "=20" },
+            { "name": "language", "value": "es" },
+            { "name": "countryCode", "value": "ar" }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "apify-scrape",
+      "name": "Apify — Google Maps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicar por teléfono y filtrar leads sin teléfono\nconst items = $input.all();\nconst seen = new Set();\nconst leads = [];\n\nfor (const item of items) {\n  const place = item.json;\n  const rawPhone = place.phone || place.phoneUnformatted || '';\n  const phone = rawPhone.replace(/\\D/g, '');\n  if (!phone || phone.length < 10) continue;\n  if (seen.has(phone)) continue;\n  seen.add(phone);\n  leads.push({\n    json: {\n      name:    place.title || place.name || 'Barbería',\n      phone,\n      address: place.address || place.street || '',\n      city:    place.city || place.neighborhood || '',\n      rating:  place.totalScore || place.rating || '',\n      url:     place.url || place.website || ''\n    }\n  });\n}\n\nreturn leads;"
+      },
+      "id": "filter-leads",
+      "name": "Filtrar y deduplicar leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "De a uno",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "TU_ANTHROPIC_API_KEY" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-haiku-4-5-20251001"
+            },
+            {
+              "name": "max_tokens",
+              "value": "=300"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\":\"user\",\"content\":\"Escribí un mensaje de WhatsApp corto y natural (máximo 4 líneas) para prospectar esta barbería/barbero. El objetivo es presentar FILO CRM, un sistema de gestión para barberías argentinas con agenda online, fidelización de clientes y cobros integrados. Sé amable, directo, con tono argentino informal (tuteo). NO uses emojis en exceso. No menciones precios. Terminá invitando a conocer más.\\n\\nNegocio: {{$json.name}}\\nCiudad: {{$json.city}}\\nDirección: {{$json.address}}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "claude-message",
+      "name": "Claude — Generar mensaje",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst claudeResp = item.json;\nconst lead = $('De a uno').first().json;\n\n// Extraer texto del response de Claude\nconst message = claudeResp?.content?.[0]?.text || 'Hola, te escribo de FILO CRM, un sistema para barberías. ¿Puedo contarte más?';\n\nreturn [{\n  json: {\n    phone:   lead.phone,\n    name:    lead.name,\n    city:    lead.city,\n    message: message.trim()\n  }\n}];"
+      },
+      "id": "extract-message",
+      "name": "Armar payload final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "id": "wait-antiblock",
+      "name": "Esperar 3 minutos (anti-bloqueo)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "webhookId": "wait-antiblock"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-APP.railway.app/api/prospector/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer TU_JWT_TOKEN_ADMIN" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            { "name": "message", "value": "={{$json.message}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Enviar WhatsApp via FILO CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Iniciar prospección": {
+      "main": [[{ "node": "Apify — Google Maps", "type": "main", "index": 0 }]]
+    },
+    "Apify — Google Maps": {
+      "main": [[{ "node": "Filtrar y deduplicar leads", "type": "main", "index": 0 }]]
+    },
+    "Filtrar y deduplicar leads": {
+      "main": [[{ "node": "De a uno", "type": "main", "index": 0 }]]
+    },
+    "De a uno": {
+      "main": [[{ "node": "Claude — Generar mensaje", "type": "main", "index": 0 }]]
+    },
+    "Claude — Generar mensaje": {
+      "main": [[{ "node": "Armar payload final", "type": "main", "index": 0 }]]
+    },
+    "Armar payload final": {
+      "main": [[{ "node": "Esperar 3 minutos (anti-bloqueo)", "type": "main", "index": 0 }]]
+    },
+    "Esperar 3 minutos (anti-bloqueo)": {
+      "main": [[{ "node": "Enviar WhatsApp via FILO CRM", "type": "main", "index": 0 }]]
+    },
+    "Enviar WhatsApp via FILO CRM": {
+      "main": [[{ "node": "De a uno", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}
