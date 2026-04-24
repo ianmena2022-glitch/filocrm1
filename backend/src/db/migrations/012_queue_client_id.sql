@@ -1,0 +1,1 @@
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS client_id INT REFERENCES clients(id) ON DELETE SET NULL;

@@ -29,11 +29,25 @@ router.post('/:slug/join', async (req, res) => {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
     }
 
+    // Look up client by phone — link if already registered
+    let clientId = null;
+    let resolvedName = name.trim();
+    if (phone) {
+      const clientRes = await pool.query(
+        'SELECT id, name FROM clients WHERE shop_id=$1 AND phone=$2 LIMIT 1',
+        [shop.id, phone.trim()]
+      );
+      if (clientRes.rows.length) {
+        clientId    = clientRes.rows[0].id;
+        resolvedName = clientRes.rows[0].name; // use the stored name for known clients
+      }
+    }
+
     // Insert entry (with optional service pre-selection)
     const insertRes = await pool.query(
-      `INSERT INTO queue_entries (shop_id, client_name, client_phone, status, service_name, price)
-       VALUES ($1, $2, $3, 'waiting', $4, $5) RETURNING id`,
-      [shop.id, name.trim(), phone || null, service_name || null, parseFloat(price) || 0]
+      `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price)
+       VALUES ($1, $2, $3, $4, 'waiting', $5, $6) RETURNING id`,
+      [shop.id, resolvedName, phone || null, clientId, service_name || null, parseFloat(price) || 0]
     );
     const entry_id = insertRes.rows[0].id;
 
@@ -375,14 +389,16 @@ router.post('/complete/:id', auth, async (req, res) => {
     const tz = await getShopTz(shopId);
     const localDate = shopDate(tz);
     const localTime = shopTime(tz);
+    const finalClientId   = entry.client_id || null;
+    const finalClientName = client_name || entry.client_name;
     const apptRes = await pool.query(
       `INSERT INTO appointments
-         (shop_id, client_name, service_name, price, cost, date, time_start,
+         (shop_id, client_id, client_name, service_name, price, cost, date, time_start,
           barber_id, barber_name, commission_pct, payment_method, tip, status)
-       VALUES ($1,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
+       VALUES ($1,$13,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
        RETURNING id`,
-      [shopId, client_name || entry.client_name, service_name || 'Walk-in', p, c,
-       finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime]
+      [shopId, finalClientName, service_name || 'Walk-in', p, c,
+       finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime, finalClientId]
     );
     const apptId = apptRes.rows[0].id;
 
@@ -413,8 +429,47 @@ router.post('/complete/:id', auth, async (req, res) => {
       await pool.query(
         `INSERT INTO client_debts (shop_id, client_name, appointment_id, amount, description)
          VALUES ($1,$2,$3,$4,'Walk-in — fiado')`,
-        [shopId, entry.client_name, apptId, p]
+        [shopId, finalClientName, apptId, p]
       );
+    }
+
+    // Award points + update client stats if linked to a known client
+    if (finalClientId && p > 0) {
+      try {
+        const shopData = (await pool.query(
+          'SELECT points_per_peso, wpp_connected, booking_slug FROM shops WHERE id=$1',
+          [shopId]
+        )).rows[0];
+        const pointsPerPeso = parseFloat(shopData?.points_per_peso || 0.01);
+        const pointsEarned  = Math.floor(p * pointsPerPeso);
+
+        const updatedClient = await pool.query(
+          `UPDATE clients SET
+             total_visits = total_visits + 1,
+             total_spent  = total_spent  + $1,
+             last_visit   = $2,
+             points       = points       + $3
+           WHERE id=$4
+           RETURNING id, name, phone, points`,
+          [p, localDate, pointsEarned, finalClientId]
+        );
+
+        // WhatsApp notification (non-blocking)
+        const client = updatedClient.rows[0];
+        if (client?.phone && shopData?.wpp_connected && pointsEarned > 0) {
+          try {
+            const wpp = require('../services/whatsapp');
+            const slug = shopData.booking_slug;
+            const tiendaLink = slug
+              ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
+              : null;
+            const msg = `✅ ¡Gracias ${client.name}! Sumaste *${pointsEarned} puntos* en tu visita de hoy.\n🎯 Total acumulado: *${client.points} puntos*${tiendaLink ? `\n🛍️ Canjealos en ${tiendaLink}` : ''}`;
+            wpp.sendText(shopId, client.phone, msg).catch(() => {});
+          } catch (_) {}
+        }
+      } catch (pointsErr) {
+        console.error('queue complete — points error (non-fatal):', pointsErr.message);
+      }
     }
 
     return res.json({ ok: true, appointment_id: apptId });
