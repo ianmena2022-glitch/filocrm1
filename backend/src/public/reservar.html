@@ -1005,23 +1005,55 @@ function selectBarber(id) {
   document.getElementById('btn-next-barber').disabled = false;
 }
 
+function showToastPublic(msg, isError) {
+  let t = document.getElementById('_toast-public');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast-public';
+    t.style = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = isError ? '#ff4343' : '#FFD100';
+  t.style.color = isError ? '#fff' : '#000';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.opacity = '0', 2500);
+}
+
 async function selectFirstAvailableBarberPublic() {
+  if (!selectedTime) return showToastPublic('⚠️ Seleccioná una hora primero', true);
   try {
     const activeSlug = currentBranchSlug || slug;
     const dur = selectedService?.duration_minutes || 30;
+
+    // 1. Barberos ocupados en ese slot exacto
     let busyIds = new Set();
     try {
       const r = await fetch(`${window.location.origin}/api/booking/${activeSlug}/barber-busy?date=${selectedDate}&time=${encodeURIComponent(selectedTime)}&duration=${dur}`);
-      if (r.ok) { const d = await r.json(); busyIds = new Set(d.busy || []); }
+      if (r.ok) { const d = await r.json(); busyIds = new Set((d.busy || []).map(String)); }
     } catch(e) {}
+
+    // 2. Filtrar disponibles (trabajan ese día y no están ocupados)
     const available = barbers.filter(b =>
-      isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime) && !busyIds.has(b.id)
+      isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime) && !busyIds.has(String(b.id))
     );
-    if (!available.length) return;
-    // Elegir al azar entre los disponibles para distribuir equitativamente
-    const chosen = available[Math.floor(Math.random() * available.length)];
+    if (!available.length) return showToastPublic('⚠️ Ningún profesional disponible a esa hora', true);
+
+    // 3. Conteo de turnos del día para elegir el menos cargado
+    let counts = {};
+    try {
+      const r = await fetch(`${window.location.origin}/api/booking/${activeSlug}/barber-counts?date=${selectedDate}`);
+      if (r.ok) counts = await r.json();
+    } catch(e) {}
+
+    available.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+    const chosen = available[0];
     selectBarber(chosen.id);
-  } catch(e) {}
+    showToastPublic(`⚡ ${chosen.name} asignado`);
+  } catch(e) {
+    showToastPublic('⚠️ Error al buscar disponibilidad', true);
+  }
 }
 
 

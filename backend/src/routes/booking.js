@@ -343,6 +343,28 @@ router.get('/:slug/barber-busy', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/booking/:slug/barber-counts?date=YYYY-MM-DD
+// Devuelve cuántos turnos tiene cada barbero ese día (para elegir el menos cargado)
+router.get('/:slug/barber-counts', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'Falta date' });
+  try {
+    const shop = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
+    if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    const shopId = shop.rows[0].id;
+    const result = await pool.query(
+      `SELECT barber_id, COUNT(*) as count FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL
+         AND status NOT IN ('cancelled','noshow')
+       GROUP BY barber_id`,
+      [shopId, date]
+    );
+    const counts = {};
+    for (const row of result.rows) counts[row.barber_id] = parseInt(row.count);
+    res.json(counts);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', async (req, res) => {
   const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
