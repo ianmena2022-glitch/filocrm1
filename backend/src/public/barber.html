@@ -327,8 +327,16 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
   border: 1px solid rgba(0,200,117,0.25);
   border-radius: var(--radius); padding: 20px 22px;
   margin-bottom: 20px; display: none;
+  transition: border-color 0.2s;
 }
 .fila-called-card.show { display: block; }
+/* Tarjeta de "pendiente de marcar" — naranja de alerta */
+.fila-called-card.show[style*="border-color:rgba(255,145,0"] {
+  background: rgba(255,145,0,0.07);
+}
+.fila-called-card.show[style*="border-color:rgba(255,145,0"] .fila-called-label {
+  color: var(--orange);
+}
 .fila-called-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--green); margin-bottom: 6px;
@@ -527,13 +535,8 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
       <!-- ── FILA ── -->
       <div id="tab-fila" class="tab-section">
 
-        <!-- Cliente en el sillón ahora -->
-        <div class="fila-called-card" id="fila-called-card">
-          <div class="fila-called-label">💈 En el sillón ahora</div>
-          <div class="fila-called-name" id="fila-called-name">—</div>
-          <div class="fila-called-phone" id="fila-called-phone"></div>
-          <button class="btn-served" onclick="barberServe()">✓ Marcar atendido</button>
-        </div>
+        <!-- Clientes llamados (puede haber más de uno si se llamó sin marcar atendido) -->
+        <div id="fila-called-list"></div>
 
         <!-- Stats rápidas -->
         <div class="fila-stats-row">
@@ -1125,20 +1128,28 @@ async function loadFila() {
     const btn = document.getElementById('btn-call-next');
     if (btn) btn.disabled = waiting === 0;
 
-    // Tarjeta "en el sillón"
-    const calledCard = document.getElementById('fila-called-card');
+    // Lista de clientes llamados (puede haber más de uno)
+    const calledListEl = document.getElementById('fila-called-list');
     if (called.length > 0) {
-      const c = called[0];
-      _filaCalledId      = c.id;
-      _filaCalledService = c.service_name || '';
-      _filaCalledPrice   = parseFloat(c.price) || 0;
-      _filaCalledName    = c.client_name || '';
-      document.getElementById('fila-called-name').textContent  = c.client_name;
-      document.getElementById('fila-called-phone').textContent = c.client_phone ? `📞 ${c.client_phone}` : '';
-      calledCard.classList.add('show');
+      // Guardar el primero como fallback para compatibilidad
+      const c0 = called[0];
+      _filaCalledId      = c0.id;
+      _filaCalledService = c0.service_name || '';
+      _filaCalledPrice   = parseFloat(c0.price) || 0;
+      _filaCalledName    = c0.client_name || '';
+
+      calledListEl.innerHTML = called.map((c, i) => `
+        <div class="fila-called-card show" style="${i > 0 ? 'margin-top:10px;border-color:rgba(255,145,0,0.35);' : ''}">
+          <div class="fila-called-label">${i === 0 ? '💈 En el sillón ahora' : '⏳ Pendiente de marcar'}</div>
+          <div class="fila-called-name">${c.client_name}</div>
+          <div class="fila-called-phone">${c.client_phone ? `📞 ${c.client_phone}` : ''}</div>
+          ${c.service_name ? `<div style="font-size:12px;color:var(--gray);margin-bottom:10px">✂️ ${c.service_name}</div>` : ''}
+          <button class="btn-served" onclick="barberServe(${c.id}, '${(c.client_name||'').replace(/'/g,"\\'")}', '${(c.service_name||'').replace(/'/g,"\\'")}', ${parseFloat(c.price)||0})">✓ Marcar atendido</button>
+        </div>
+      `).join('');
     } else {
       _filaCalledId = null;
-      calledCard.classList.remove('show');
+      calledListEl.innerHTML = '';
     }
 
     // Lista de espera
@@ -1196,9 +1207,14 @@ async function barberCallNext() {
   }
 }
 
-async function barberServe() {
-  if (!_filaCalledId) return;
-  openBarberWalkInPayment(_filaCalledId, _filaCalledName, _filaCalledService, _filaCalledPrice);
+async function barberServe(entryId, clientName, serviceName, price) {
+  // Si se llama sin parámetros (compatibilidad), usar los globals
+  const id  = entryId  ?? _filaCalledId;
+  const nm  = clientName  ?? _filaCalledName;
+  const svc = serviceName ?? _filaCalledService;
+  const prc = price       ?? _filaCalledPrice;
+  if (!id) return;
+  openBarberWalkInPayment(id, nm, svc, prc);
 }
 
 let _barberWipMethod = null;
