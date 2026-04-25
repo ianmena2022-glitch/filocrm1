@@ -102,6 +102,63 @@ async function runCajaAutoClose() {
   }
 }
 
+// ── Auto-cancelación de cuentas expiradas ─────────────────────────────────────
+// Después de CANCEL_AFTER_DAYS días en status 'expired', se desconecta WhatsApp
+// y se marca la cuenta como 'cancelled' para no consumir recursos del server.
+const CANCEL_AFTER_DAYS = 30;
+
+async function runExpiredCleanup() {
+  try {
+    // Buscar shops que deben cancelarse. Dos casos:
+    //   1. Ya marcados como 'expired' con expired_at registrado hace >30 días
+    //   2. Nunca volvieron a entrar (status sigue en trial/active) pero
+    //      trial_ends_at + 3 días de gracia + 30 días ya pasaron
+    const GRACE = 3;
+    const { rows } = await pool.query(
+      `SELECT id, email FROM shops
+       WHERE (is_test IS NULL OR is_test = FALSE)
+         AND (plan IS DISTINCT FROM 'test')
+         AND (
+           -- caso 1: ya marcado expired con fecha registrada
+           (subscription_status = 'expired'
+            AND expired_at IS NOT NULL
+            AND expired_at < NOW() - INTERVAL '${CANCEL_AFTER_DAYS} days')
+           OR
+           -- caso 2: trial/active pero hace mucho que venció y nunca entró
+           (subscription_status IN ('trial','active')
+            AND trial_ends_at IS NOT NULL
+            AND trial_ends_at < NOW() - INTERVAL '${GRACE + CANCEL_AFTER_DAYS} days')
+         )`
+    );
+
+    if (!rows.length) return;
+
+    // Import lazy para evitar circular dependency al arrancar
+    const wpp = require('./whatsapp');
+
+    for (const shop of rows) {
+      try {
+        // 1. Desconectar y limpiar sesión de WhatsApp (libera WebSocket + /tmp + DB)
+        await wpp.clearSession(shop.id);
+
+        // 2. Marcar como cancelado
+        await pool.query(
+          `UPDATE shops SET subscription_status='cancelled', wpp_connected=FALSE WHERE id=$1`,
+          [shop.id]
+        );
+
+        console.log(`[CLEANUP] Shop ${shop.id} (${shop.email}) cancelado automáticamente tras ${CANCEL_AFTER_DAYS} días expirado`);
+      } catch (e) {
+        console.error(`[CLEANUP] Error cancelando shop ${shop.id}:`, e.message);
+      }
+    }
+
+    console.log(`[CLEANUP] ${rows.length} cuenta(s) cancelada(s) automáticamente`);
+  } catch (e) {
+    console.error('[CLEANUP] Error general:', e.message);
+  }
+}
+
 // ── Arrancar scheduler ────────────────────────────────────────────────────────
 function startScheduler() {
   console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min)');
@@ -111,6 +168,10 @@ function startScheduler() {
 
   // Cada 30 minutos
   setInterval(runCajaAutoClose, 30 * 60 * 1000);
+
+  // Limpieza de cuentas expiradas: una vez al día (al arrancar + cada 24h)
+  setTimeout(runExpiredCleanup, 60_000); // 1 min después del arranque
+  setInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
 }
 
 module.exports = { startScheduler };

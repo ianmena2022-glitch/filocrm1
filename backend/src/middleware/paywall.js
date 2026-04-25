@@ -55,25 +55,36 @@ module.exports = async function paywall(req, res, next) {
     if (payload.isEnterpriseOwner) return next();
     if (payload.isBranch) return next();
 
+    // Gracia de 3 días: se suma al vencimiento antes de bloquear
+    const GRACE_DAYS = 3;
+
     // Verificar trial
     if (shop.subscription_status === 'trial') {
-      if (shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
-        // Trial expirado
-        await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
-        return res.status(402).json({
-          error: 'Tu período de prueba ha vencido',
-          code: 'TRIAL_EXPIRED',
-          message: 'Suscribite para continuar usando FILO'
-        });
+      if (shop.trial_ends_at) {
+        const graceLine = new Date(shop.trial_ends_at);
+        graceLine.setDate(graceLine.getDate() + GRACE_DAYS);
+        if (graceLine < new Date()) {
+          // Trial expirado + gracia agotada
+          await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
+          return res.status(402).json({
+            error: 'Tu período de prueba ha vencido',
+            code: 'TRIAL_EXPIRED',
+            message: 'Suscribite para continuar usando FILO'
+          });
+        }
       }
-      return next(); // Trial activo
+      return next(); // Trial activo (o dentro de los 3 días de gracia)
     }
 
     // Suscripción activa — verificar que no venció (QR paga 30 días)
     if (shop.subscription_status === 'active') {
-      if (shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
-        await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
-        return res.status(402).json({ error: 'Tu suscripción venció', code: 'SUBSCRIPTION_EXPIRED', message: 'Renovar tu plan para continuar usando FILO' });
+      if (shop.trial_ends_at) {
+        const graceLine = new Date(shop.trial_ends_at);
+        graceLine.setDate(graceLine.getDate() + GRACE_DAYS);
+        if (graceLine < new Date()) {
+          await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
+          return res.status(402).json({ error: 'Tu suscripción venció', code: 'SUBSCRIPTION_EXPIRED', message: 'Renovar tu plan para continuar usando FILO' });
+        }
       }
       return next();
     }

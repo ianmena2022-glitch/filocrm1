@@ -605,17 +605,20 @@ function renderTreeRow(a, depth, parentId) {
   else if (isBranch)  planBadge = `<span class="badge branch">SUCURSAL</span>`;
   else                planBadge = `<span class="badge ${a.filo_plan}">${(a.filo_plan||'').toUpperCase()}</span>`;
 
-  // Status badge
+  // Status badge — usa estado efectivo (expired días 4-29, cancelled día 30+)
+  const effStatus = effectiveStatus(a);
   const statusBadge = (isBarber || !a.subscription_status)
     ? `<span style="color:var(--g);font-size:12px">—</span>`
-    : `<span class="badge ${a.subscription_status}"><span class="dot"></span>${labelStatus(a.subscription_status)}</span>`;
+    : `<span class="badge ${effStatus}"><span class="dot"></span>${labelStatus(effStatus)}</span>`;
 
-  // Fecha
+  // Fecha / info extra
   const dateInfo = (isBarber || isBranch)
     ? '—'
-    : a.subscription_status === 'trial'
+    : a.subscription_status === 'trial' && daysUntil(a.trial_ends_at) > 0
       ? `<div style="font-size:12px;color:var(--or)">Trial: ${daysUntil(a.trial_ends_at)} días</div>`
-      : a.created_at ? `<div style="font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</div>` : '—';
+      : ['expired','cancelled'].includes(effStatus)
+        ? `<div style="font-size:12px;color:var(--r)">Expirado hace ${daysSince(a.expired_at || a.trial_ends_at)} días</div>`
+        : a.created_at ? `<div style="font-size:12px;color:var(--g)">${fmtDate(a.created_at)}</div>` : '—';
 
   // Barberos count
   const showBarberCount = !isBarber && (a.filo_plan === 'staff' || a.filo_plan === 'enterprise' || isBranch);
@@ -1260,6 +1263,31 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function fmtDate(d) { return new Date(d).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function daysUntil(d) { if(!d) return null; const diff = new Date(d)-new Date(); return Math.max(0,Math.ceil(diff/(1000*60*60*24))); }
 function labelStatus(s) { return {trial:'Trial',active:'Activo',expired:'Expirado',cancelled:'Cancelado'}[s]||s; }
+
+// Días transcurridos desde una fecha (para mostrar "expirado hace X días")
+function daysSince(d) { if(!d) return 0; const diff = new Date() - new Date(d); return Math.max(0, Math.floor(diff/(1000*60*60*24))); }
+
+// Estado efectivo para el badge: expired días 4-29, cancelled día 30+
+// Refleja la misma lógica del scheduler del backend (GRACE=3, CANCEL=30)
+const GRACE_DAYS   = 3;
+const CANCEL_DAYS  = 30;
+function effectiveStatus(a) {
+  const s = a.subscription_status;
+  if (s === 'cancelled') return 'cancelled';
+  if (s !== 'expired' && s !== 'trial' && s !== 'active') return s;
+
+  // Fecha de referencia: expired_at si existe, sino trial_ends_at
+  const refDate = a.expired_at || a.trial_ends_at;
+  if (!refDate) return s;
+
+  const graceEnd  = new Date(refDate); graceEnd.setDate(graceEnd.getDate() + GRACE_DAYS);
+  const cancelEnd = new Date(refDate); cancelEnd.setDate(cancelEnd.getDate() + GRACE_DAYS + CANCEL_DAYS);
+  const now = new Date();
+
+  if (now < graceEnd) return s;           // dentro de la gracia → status real
+  if (now >= cancelEnd) return 'cancelled'; // pasó el día 30 → cancelled
+  return 'expired';                         // días 4-29 → expired
+}
 
 // Cerrar modal clickando overlay
 document.querySelectorAll('.modal-overlay').forEach(o => {
