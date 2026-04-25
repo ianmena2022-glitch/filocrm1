@@ -102,9 +102,16 @@ router.put('/', auth, async (req, res) => {
 
 router.get('/services', auth, async (req, res) => {
   try {
+    // Los barberos heredan los servicios del shop padre
+    const shopRes = await pool.query(
+      'SELECT parent_shop_id FROM shops WHERE id=$1',
+      [req.shopId]
+    );
+    const effectiveShopId = shopRes.rows[0]?.parent_shop_id || req.shopId;
+
     const result = await pool.query(
       'SELECT * FROM services WHERE shop_id=$1 AND active=TRUE ORDER BY name',
-      [req.shopId]
+      [effectiveShopId]
     );
     res.json(result.rows);
   } catch (e) {
