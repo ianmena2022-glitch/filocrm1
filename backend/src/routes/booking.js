@@ -155,11 +155,11 @@ router.get('/:slug/available', async (req, res) => {
       [shopId]
     );
     const scheduleRaw = shopFull.rows[0]?.schedule;
-    const schedule = scheduleRaw ? JSON.parse(scheduleRaw) : null;
+    const schedule = scheduleRaw ? (() => { try { return JSON.parse(scheduleRaw); } catch { return null; } })() : null;
 
     // Verificar si el día es un día cerrado extraordinario
     const closedDaysRaw = shopFull.rows[0]?.closed_days;
-    const closedDays = closedDaysRaw ? JSON.parse(closedDaysRaw) : [];
+    const closedDays = closedDaysRaw ? (() => { try { return JSON.parse(closedDaysRaw); } catch { return []; } })() : [];
     if (closedDays.includes(date)) {
       return res.json({ slots: [], duration, closed: true, closed_extraordinary: true });
     }
@@ -403,7 +403,7 @@ router.post('/:slug/reserve', async (req, res) => {
 
     // Verificar día cerrado extraordinario
     if (shopData.closed_days) {
-      const closedDays = JSON.parse(shopData.closed_days);
+      const closedDays = (() => { try { return JSON.parse(shopData.closed_days); } catch { return []; } })();
       if (closedDays.includes(date)) {
         return res.status(400).json({ error: 'La barbería no atiende ese día (día no laborable).' });
       }
@@ -411,7 +411,7 @@ router.post('/:slug/reserve', async (req, res) => {
 
     // Verificar que el día esté habilitado en el horario
     if (shopData.schedule) {
-      const schedule = JSON.parse(shopData.schedule);
+      const schedule = (() => { try { return JSON.parse(shopData.schedule); } catch { return {}; } })();
       const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
       const dayKey = dayNames[new Date(date + 'T12:00:00').getDay()];
       if (!schedule[dayKey]?.active) {

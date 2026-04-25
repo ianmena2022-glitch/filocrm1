@@ -1,8 +1,10 @@
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
-const fs      = require('fs');
-const pool    = require('./db/pool');
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path      = require('path');
+const fs        = require('fs');
+const pool      = require('./db/pool');
 
 // ── Prevenir crash de Node.js 20 por unhandledRejection ────────────────────
 // Baileys / WhatsApp emite rechazos en segundo plano. Sin este handler,
@@ -17,10 +19,40 @@ process.on('uncaughtException', (err) => {
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ─────────────────────────────────────────
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// ── Middleware de seguridad ────────────────────────────
+// Helmet: headers de seguridad (XSS, clickjacking, MIME-sniff, etc.)
+app.use(helmet({
+  contentSecurityPolicy: false, // Desactivado para no romper los HTML inline del CRM
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS: solo orígenes conocidos
+const allowedOrigins = [
+  'https://filocrm1-production.up.railway.app',
+  'https://filocrm.com.ar',
+  'http://localhost:3000',
+  'http://localhost:5173',
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Permitir requests sin origin (apps móviles, Postman, n8n interno)
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('CORS no permitido'));
+  },
+  credentials: true,
+}));
+
+// Rate limiting global: 300 requests por minuto por IP
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intentá en un momento.' },
+}));
+
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // ── Middleware Paywall ────────────────────────────────
 app.use(require('./middleware/paywall'));
