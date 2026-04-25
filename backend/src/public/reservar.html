@@ -270,6 +270,7 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
     <div id="screen-barber" style="display:none">
       <div class="card">
         <div class="card-title">✂️ ¿Con quién querés atenderte?</div>
+        <button type="button" onclick="selectFirstAvailableBarberPublic()" style="width:100%;margin-bottom:10px;padding:10px;border:1.5px dashed rgba(255,209,0,0.4);border-radius:10px;background:rgba(255,209,0,0.06);color:rgba(255,209,0,0.8);font-size:13px;font-weight:600;cursor:pointer;letter-spacing:0.3px">⚡ Primer profesional disponible</button>
         <div id="barber-grid" style="display:flex;flex-direction:column;gap:10px;margin-top:8px"></div>
       </div>
       <button class="btn-primary" id="btn-next-barber" onclick="goToForm()" disabled>Continuar →</button>
@@ -1002,6 +1003,25 @@ function selectBarber(id) {
   document.querySelectorAll('#barber-grid .service-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('barber-' + id)?.classList.add('selected');
   document.getElementById('btn-next-barber').disabled = false;
+}
+
+async function selectFirstAvailableBarberPublic() {
+  try {
+    const activeSlug = currentBranchSlug || slug;
+    const dur = selectedService?.duration_minutes || 30;
+    let busyIds = new Set();
+    try {
+      const r = await fetch(`${window.location.origin}/api/booking/${activeSlug}/barber-busy?date=${selectedDate}&time=${encodeURIComponent(selectedTime)}&duration=${dur}`);
+      if (r.ok) { const d = await r.json(); busyIds = new Set(d.busy || []); }
+    } catch(e) {}
+    const available = barbers.filter(b =>
+      isBarberAvailableClient(b.barber_schedule, selectedDate, selectedTime) && !busyIds.has(b.id)
+    );
+    if (!available.length) return;
+    // Elegir al azar entre los disponibles para distribuir equitativamente
+    const chosen = available[Math.floor(Math.random() * available.length)];
+    selectBarber(chosen.id);
+  } catch(e) {}
 }
 
 
