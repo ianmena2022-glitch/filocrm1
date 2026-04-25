@@ -56,7 +56,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
       SELECT
         s.id, s.name, s.email, s.phone, s.city,
         s.filo_plan, s.plan, s.subscription_status,
-        s.trial_ends_at, s.created_at,
+        s.trial_ends_at, s.expired_at, s.created_at,
         s.wpp_connected,
         s.mp_shop_subscription_id, s.mp_shop_status,
         s.is_test,
