@@ -696,34 +696,31 @@
 
     function renderWaiting(data) {
       setState('waiting');
-      const pos = data.position || 0;
-      const posEl = document.getElementById('pos-number');
-      const lblEl = document.getElementById('pos-label');
+      const ahead = typeof data.position === 'number' ? data.position : 0; // personas adelante
+      const myPos = ahead + 1; // mi posición real en la fila (1°, 2°, 3°...)
+      const posEl  = document.getElementById('pos-number');
+      const lblEl  = document.getElementById('pos-label');
       const waitEl = document.getElementById('wait-info');
 
-      if (posEl) posEl.textContent = pos + '°';
-      if (lblEl) lblEl.textContent = pos === 1 ? 'persona adelante' : 'personas adelante';
-      if (pos === 0 && lblEl) {
-        posEl.textContent = '1°';
-        lblEl.textContent = '¡Sos el siguiente!';
+      if (posEl) posEl.textContent = myPos + '°';
+      if (lblEl) {
+        if (ahead === 0)      lblEl.textContent = '¡Sos el siguiente!';
+        else if (ahead === 1) lblEl.textContent = '1 persona adelante';
+        else                  lblEl.textContent = `${ahead} personas adelante`;
       }
 
       const mins = data.estimated_wait_min || 0;
-      if (waitEl) {
-        waitEl.textContent = mins > 0 ? `~${mins} min` : 'Pronto';
-      }
+      if (waitEl) waitEl.textContent = mins > 0 ? `~${mins} min` : 'Pronto';
 
-      // Dots
+      // Dots: uno por cada persona en la fila, el último sos vos
       const dotsWrap = document.getElementById('dots-wrap');
       if (dotsWrap) {
-        const total = Math.min(pos + 1, 8);
+        const total = Math.min(myPos, 8);
         let html = '';
         for (let i = 0; i < total; i++) {
-          if (i < total - 1) {
-            html += `<div class="dot dot-ahead"></div>`;
-          } else {
-            html += `<div class="dot dot-you" title="Vos"></div>`;
-          }
+          html += i < total - 1
+            ? `<div class="dot dot-ahead"></div>`
+            : `<div class="dot dot-you" title="Vos"></div>`;
         }
         dotsWrap.innerHTML = html;
       }
