@@ -5348,7 +5348,10 @@ async function selectFirstAvailableBarber() {
     }
     const available = barbers.filter(b => !busy.has(String(b.id)));
     if (!available.length) return showToast('⚠️', 'Sin disponibles', 'Todos tienen turno a esa hora');
-    available.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+    available.sort((a, b) => {
+      const diff = (counts[a.id] || 0) - (counts[b.id] || 0);
+      return diff !== 0 ? diff : Math.random() - 0.5;
+    });
     const best = available[0];
     const sel = document.getElementById('t-barber-select');
     sel.value = String(best.id);

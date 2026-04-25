@@ -1047,7 +1047,10 @@ async function selectFirstAvailableBarberPublic() {
       if (r.ok) counts = await r.json();
     } catch(e) {}
 
-    available.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+    available.sort((a, b) => {
+      const diff = (counts[a.id] || 0) - (counts[b.id] || 0);
+      return diff !== 0 ? diff : Math.random() - 0.5;
+    });
     const chosen = available[0];
     selectBarber(chosen.id);
     showToastPublic(`⚡ ${chosen.name} asignado`);
