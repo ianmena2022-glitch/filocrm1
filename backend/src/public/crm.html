@@ -1074,6 +1074,7 @@ body {
 .empty-state svg { width: 40px; height: 40px; stroke: rgba(255,255,255,0.15); margin-bottom: 14px; }
 .empty-state h3 { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--white); margin-bottom: 7px; }
 .empty-state p { font-size: 13px; line-height: 1.6; }
+.empty-state .icon { font-size: 38px; margin-bottom: 14px; display: inline-block; animation: floatUpDown 3s ease-in-out infinite; }
 
 /* ─── SPINNER ─── */
 .loading-spinner {
@@ -1446,6 +1447,108 @@ select.form-input { padding-right: 32px; }
 .ganancia-hero::before {
   transition: opacity 0.3s ease;
 }
+
+/* ── Shake (errores de form) ── */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  15%      { transform: translateX(-8px); }
+  30%      { transform: translateX(8px); }
+  45%      { transform: translateX(-6px); }
+  60%      { transform: translateX(6px); }
+  75%      { transform: translateX(-3px); }
+  90%      { transform: translateX(3px); }
+}
+.shake { animation: shake 0.48s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
+/* ── Flash verde (turno completado) ── */
+@keyframes flashGreen {
+  0%   { background: rgba(0,200,117,0); }
+  30%  { background: rgba(0,200,117,0.18); }
+  100% { background: rgba(0,200,117,0); }
+}
+.flash-complete { animation: flashGreen 0.6s ease forwards; }
+
+/* ── Flash amarillo (copy) ── */
+@keyframes flashCopy {
+  0%   { background: rgba(255,209,0,0); color: inherit; }
+  25%  { background: rgba(255,209,0,0.2); color: var(--yellow); }
+  100% { background: rgba(255,209,0,0); }
+}
+.flash-copy { animation: flashCopy 0.7s ease forwards; }
+
+/* ── Ripple ── */
+@keyframes ripple { to { transform: scale(3.5); opacity: 0; } }
+.ripple-host { position: relative; overflow: hidden; }
+.ripple-wave {
+  position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  transform: scale(0); animation: ripple 0.55s linear;
+  pointer-events: none;
+}
+
+/* ── WPP dot ping ── */
+@keyframes wppPing {
+  0%   { box-shadow: 0 0 0 0 rgba(0,200,117,0.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(0,200,117,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,200,117,0); }
+}
+.wpp-dot.connected { animation: wppPing 2s ease infinite; }
+
+/* ── Tab slide ── */
+@keyframes tabSlide {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.cfg-tab-pane.active { animation: tabSlide 0.2s ease forwards; }
+.caja-tab-panel[style*="display:block"],
+.caja-tab-panel[style*="display: block"] { animation: tabSlide 0.2s ease forwards; }
+
+/* ── Empty state float ── */
+@keyframes floatUpDown {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-9px); }
+}
+
+/* ── Client card hover border ── */
+.client-card {
+  position: relative; transition: border-color 0.18s ease, background 0.18s ease;
+}
+.client-card::before {
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 3px; background: var(--yellow); border-radius: 0 3px 3px 0;
+  transform: scaleY(0); transition: transform 0.2s cubic-bezier(0.34,1.3,0.64,1);
+  transform-origin: center;
+}
+.client-card:hover::before { transform: scaleY(1); }
+
+/* ── Trial badge urgente (≤3 días) ── */
+@keyframes urgentGlow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,67,67,0); }
+  50%     { box-shadow: 0 0 0 5px rgba(255,67,67,0.2); }
+}
+.trial-badge.urgent {
+  background: rgba(255,67,67,0.1); border-color: rgba(255,67,67,0.4);
+  color: var(--red); animation: urgentGlow 1.4s ease infinite;
+}
+.trial-badge.urgent .trial-dot { background: var(--red); }
+
+/* ── Avatar hover ── */
+.avatar { transition: all 0.18s cubic-bezier(0.34,1.3,0.64,1); }
+.avatar:hover { transform: scale(1.12); border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255,209,0,0.2); }
+
+/* ── Logo sidebar hover ── */
+.sidebar-logo { transition: transform 0.25s cubic-bezier(0.34,1.4,0.64,1), opacity 0.2s; }
+.sidebar-logo:hover { transform: scale(1.12) rotate(-4deg); opacity: 0.9; }
+
+/* ── Status badge transición de color ── */
+.status-badge { transition: background 0.3s ease, color 0.3s ease; }
+
+/* ── Scroll reveal ── */
+.reveal-target {
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.reveal-target.revealed { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
@@ -3621,6 +3724,15 @@ function showAuthError(msg) {
   const el = document.getElementById('auth-error');
   el.textContent = msg;
   el.style.display = 'block';
+  // Shake en el form activo
+  const activeForm = document.querySelector('#form-login[style*="block"], #form-register[style*="block"]')
+    || document.getElementById('form-login');
+  if (activeForm) {
+    activeForm.classList.remove('shake');
+    void activeForm.offsetWidth;
+    activeForm.classList.add('shake');
+    activeForm.addEventListener('animationend', () => activeForm.classList.remove('shake'), { once: true });
+  }
 }
 
 async function login() {
@@ -4004,7 +4116,8 @@ async function startApp() {
     const trialEnds = currentShop.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
     const daysLeft = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / 86400000)) : 0;
     const label = daysLeft <= 1 ? 'Trial: último día' : `Trial: ${daysLeft}d`;
-    const badgeHTML = `<div class="trial-badge" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Activá tu plan">
+    const urgentClass = daysLeft <= 3 ? ' urgent' : '';
+    const badgeHTML = `<div class="trial-badge${urgentClass}" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Activá tu plan">
       <span class="trial-dot"></span>
       <span class="trial-label">FREE TRIAL</span>
       <span>${label}</span>
@@ -4655,18 +4768,19 @@ async function loadDashboard() {
     document.getElementById('dash-title').textContent = `Buen día, ${currentShop?.name || ''}! ✂️`;
     document.getElementById('dash-date').textContent = `${days[now.getDay()]} ${now.toLocaleDateString('es-AR', { day:'numeric', month:'long' })}`;
 
-    // Helper: actualiza texto + dispara pulso visual
-    function animNum(id, text) {
+    // Helper: count-up animado + pulso visual
+    function animNum(id, endVal, prefix = '$', suffix = '') {
       const el = document.getElementById(id);
       if (!el) return;
-      el.textContent = text;
+      const numVal = typeof endVal === 'number' ? endVal : parseFloat(String(endVal).replace(/[^0-9.-]/g,'')) || 0;
+      animateCount(el, numVal, 600, prefix, suffix);
       el.classList.remove('num-updated');
-      void el.offsetWidth; // reflow para retrigger
+      void el.offsetWidth;
       el.classList.add('num-updated');
     }
 
     // Hoy
-    animNum('dash-profit', '$' + m.net_profit.toLocaleString('es-AR'));
+    animNum('dash-profit', m.net_profit);
     document.getElementById('dash-revenue').textContent = 'Facturación: $' + m.revenue.toLocaleString('es-AR');
     document.getElementById('dash-completed').textContent = m.completed;
     document.getElementById('dash-pending').textContent = m.pending;
@@ -4686,7 +4800,7 @@ async function loadDashboard() {
     if (turnosSub) turnosSub.textContent = `${m.completed} listos · ${m.pending} pend.`;
 
     // Métricas del mes
-    animNum('dash-month-revenue', '$' + month.revenue.toLocaleString('es-AR'));
+    animNum('dash-month-revenue', month.revenue);
     document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
     document.getElementById('dash-new-clients').textContent = month.new_clients;
     document.getElementById('dash-noshow-rate').textContent = month.noshow_rate + '%';
@@ -5064,6 +5178,12 @@ async function updateApptStatus(id, status) {
       badge.className = `status-badge status-${status}`;
       badge.textContent = statusLabel[status] || status;
     }
+    // Flash verde al completar
+    if (status === 'completed') {
+      card.classList.remove('flash-complete');
+      void card.offsetWidth;
+      card.classList.add('flash-complete');
+    }
     const actions = card.querySelector('.appt-actions');
     if (actions) {
       if (status === 'completed') {
@@ -5239,9 +5359,12 @@ async function confirmPayment(apptId) {
 
 async function deleteAppt(id) {
   if (!confirm('¿Eliminar este turno?')) return;
-  // Remover card al instante
   const card = document.querySelector(`[onclick*="deleteAppt(${id})"]`)?.closest('.appointment-card');
-  if (card) card.remove();
+  if (card) {
+    card.classList.add('removing');
+    await new Promise(r => setTimeout(r, 240));
+    card.remove();
+  }
   updateAgendaSummary();
   try {
     await api('DELETE', `/appointments/${id}`);
@@ -5271,10 +5394,11 @@ function renderClients(filtered) {
     el.innerHTML = `<div class="empty-state"><div class="icon">👥</div><h3>Sin clientes todavía</h3><p>Agregá tu primer cliente con el botón +</p></div>`;
     return;
   }
-  el.innerHTML = list.map(c => {
+  el.innerHTML = list.map((c, i) => {
     const initials = c.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
     const lastVisit = c.last_visit ? new Date(c.last_visit).toLocaleDateString('es-AR') : 'Nunca';
-    return `<div class="client-card">
+    const delay = Math.min(i * 35, 220);
+    return `<div class="client-card reveal-target" style="transition-delay:${delay}ms">
       <div class="client-avatar">${initials}</div>
       <div class="client-info">
         <div class="client-name">
@@ -5298,6 +5422,9 @@ function renderClients(filtered) {
       </div>
     </div>`;
   }).join('');
+  requestAnimationFrame(() => {
+    el.querySelectorAll('.reveal-target').forEach(card => _revealObserver.observe(card));
+  });
 }
 
 function searchClients(query) {
@@ -5984,10 +6111,11 @@ function showBookingLink(slug) {
   document.getElementById('booking-link-placeholder').style.display = 'none';
 }
 
-function copyBookingLink() {
+function copyBookingLink(btn) {
   const text = document.getElementById('booking-link-text').textContent;
   navigator.clipboard.writeText(text).then(() => {
     showToast('✅', 'Link copiado', 'Compartilo con tus clientes');
+    if (btn) flashCopyBtn(btn);
   });
 }
 
@@ -6679,6 +6807,72 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   });
 });
 
+// ═══════════════════════════════════════════
+// FILO — Animation Utilities
+// ═══════════════════════════════════════════
+
+// ── Ripple en botones ──
+function initRipple() {
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('button, .btn-primary, .btn-cancel, .btn-motor, .dkpi-nuevo-btn, .dkpi-caja-btn');
+    if (!btn || btn.disabled) return;
+    btn.classList.add('ripple-host');
+    const wave = document.createElement('span');
+    wave.className = 'ripple-wave';
+    const d = Math.max(btn.clientWidth, btn.clientHeight);
+    const r = btn.getBoundingClientRect();
+    wave.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX-r.left-d/2}px;top:${e.clientY-r.top-d/2}px`;
+    btn.appendChild(wave);
+    wave.addEventListener('animationend', () => wave.remove(), { once: true });
+  });
+}
+
+// ── Count-up animado ──
+function animateCount(el, endVal, duration = 650, prefix = '$', suffix = '') {
+  if (!el) return;
+  const startVal = 0;
+  const start = performance.now();
+  const update = now => {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    const cur = Math.round(startVal + (endVal - startVal) * eased);
+    el.textContent = prefix + cur.toLocaleString('es-AR') + suffix;
+    if (p < 1) requestAnimationFrame(update);
+  };
+  requestAnimationFrame(update);
+}
+
+// ── Scroll reveal con IntersectionObserver ──
+const _revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('revealed');
+      _revealObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.08 });
+
+function observeReveal(containerSelector) {
+  document.querySelectorAll(`${containerSelector} .client-card, ${containerSelector} .appointment-card`).forEach((el, i) => {
+    el.style.transitionDelay = `${Math.min(i * 35, 200)}ms`;
+    el.classList.add('reveal-target');
+    _revealObserver.observe(el);
+  });
+}
+
+// ── Flash en botones de copiar ──
+function flashCopyBtn(btn) {
+  if (!btn) return;
+  btn.classList.remove('flash-copy');
+  void btn.offsetWidth;
+  btn.classList.add('flash-copy');
+  const orig = btn.textContent;
+  if (btn.textContent.length < 20) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = orig, 1500); }
+}
+
+// Inicializar ripple al arrancar
+document.addEventListener('DOMContentLoaded', initRipple);
+
 // ─── TOAST ───
 let toastTimer;
 function showToast(icon, title, msg) {
@@ -6816,10 +7010,13 @@ async function saveReferido() {
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
-function copyStoreLink() {
+function copyStoreLink(btn) {
   const text = document.getElementById('store-link-text').textContent;
   if (!text) return showToast('⚠️', 'Guardá la configuración primero', '');
-  navigator.clipboard.writeText(text).then(() => showToast('✅', 'Link copiado', 'Compartilo con tus clientes'));
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✅', 'Link copiado', 'Compartilo con tus clientes');
+    if (btn) flashCopyBtn(btn);
+  });
 }
 
 // ─── KEYBOARD ───
