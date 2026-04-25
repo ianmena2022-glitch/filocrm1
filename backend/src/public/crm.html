@@ -184,7 +184,7 @@ body {
 
 .main { margin-left: var(--sidebar-w); padding: 28px 32px; min-height: 100vh; }
 .section { display: none; }
-.section.active { display: block; }
+.section.active { display: block; animation: sectionFadeIn 0.22s ease forwards; }
 
 /* ─── TOPBAR ─── */
 .topbar {
@@ -780,6 +780,9 @@ body {
 }
 .modal-overlay.open { display: flex; }
 
+.modal-overlay.opening { animation: backdropIn 0.18s ease forwards; }
+.modal-overlay.opening .modal { animation: modalIn 0.22s cubic-bezier(0.34, 1.2, 0.64, 1) forwards; }
+
 .modal {
   background: var(--navy-mid);
   border: 1px solid var(--navy-border);
@@ -894,8 +897,10 @@ body {
   box-shadow: 0 8px 32px rgba(0,0,0,0.6);
   animation: slideUp 0.25s ease;
 }
-@keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-.toast.show { display: flex; }
+@keyframes toastIn  { from { opacity:0; transform:translateY(20px) scale(0.94); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes toastOut { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(10px) scale(0.94); } }
+.toast.show { display: flex; animation: toastIn 0.28s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+.toast.hiding { animation: toastOut 0.2s ease forwards; }
 .toast-icon { font-size: 20px; }
 .toast-text strong { display: block; font-size: 13px; margin-bottom: 1px; }
 .toast-text p { font-size: 11px; color: var(--gray); }
@@ -1317,6 +1322,130 @@ select.form-input { padding-right: 32px; }
 .ent-btn-edit:hover { background: rgba(255,255,255,0.15) !important; }
 .ent-btn-del  { transition: background 0.15s; }
 .ent-btn-del:hover  { background: rgba(255,67,67,0.22) !important; }
+
+/* ═══════════════════════════════════════
+   FILO — Animation System
+   ═══════════════════════════════════════ */
+
+/* ── Keyframes base ── */
+@keyframes sectionFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes backdropIn {
+  from { background: rgba(0,0,0,0); }
+  to   { background: rgba(0,0,0,0.7); }
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes apptIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes apptRemove {
+  from { opacity: 1; transform: translateX(0);   max-height: 80px; margin-bottom: 8px; }
+  to   { opacity: 0; transform: translateX(20px); max-height: 0;   margin-bottom: 0; padding-top:0; padding-bottom:0; }
+}
+@keyframes numPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -500px 0; }
+  100% { background-position:  500px 0; }
+}
+
+/* ── Stat cards stagger ── */
+.stats-grid .stat-card {
+  animation: cardIn 0.3s ease both;
+}
+.stats-grid .stat-card:nth-child(1) { animation-delay:  0ms; }
+.stats-grid .stat-card:nth-child(2) { animation-delay: 50ms; }
+.stats-grid .stat-card:nth-child(3) { animation-delay:100ms; }
+.stats-grid .stat-card:nth-child(4) { animation-delay:150ms; }
+.stats-grid .stat-card:nth-child(5) { animation-delay:200ms; }
+.stats-grid .stat-card:nth-child(6) { animation-delay:240ms; }
+
+/* ── Appointment rows stagger ── */
+.appointment-card { animation: apptIn 0.2s ease both; }
+.dash-appt-row    { animation: apptIn 0.18s ease both; }
+.appointment-card:nth-child(1), .dash-appt-row:nth-child(1) { animation-delay:  0ms; }
+.appointment-card:nth-child(2), .dash-appt-row:nth-child(2) { animation-delay: 35ms; }
+.appointment-card:nth-child(3), .dash-appt-row:nth-child(3) { animation-delay: 65ms; }
+.appointment-card:nth-child(4), .dash-appt-row:nth-child(4) { animation-delay: 90ms; }
+.appointment-card:nth-child(5), .dash-appt-row:nth-child(5) { animation-delay:110ms; }
+.appointment-card:nth-child(n+6), .dash-appt-row:nth-child(n+6) { animation-delay:125ms; }
+
+/* ── Remove animation ── */
+.appointment-card.removing {
+  animation: apptRemove 0.25s ease forwards;
+  overflow: hidden; pointer-events: none;
+}
+
+/* ── Nav item bounce ── */
+.nav-item {
+  transition: background 0.15s ease, color 0.15s ease, transform 0.18s cubic-bezier(0.34,1.5,0.64,1);
+}
+.nav-item:hover:not(.active) { transform: scale(1.08); }
+.nav-item.active              { transform: scale(1.1);  }
+
+/* ── Button press ── */
+.btn-primary, .btn-cancel, .btn-motor,
+.dkpi-nuevo-btn, .dkpi-caja-btn,
+.fila-action-btn, .fila-btn-next {
+  transition: opacity 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+.btn-primary:active, .btn-cancel:active, .btn-motor:active,
+.dkpi-nuevo-btn:active, .dkpi-caja-btn:active,
+.fila-action-btn:active, .fila-btn-next:active {
+  transform: scale(0.96);
+}
+.appt-btn { transition: all 0.12s ease; }
+.appt-btn:active { transform: scale(0.88); }
+.dar-check { transition: all 0.15s ease; }
+.dar-check:active { transform: scale(0.85); }
+
+/* ── Input focus ring ── */
+.form-group input, .form-field input,
+.form-field select, .form-field textarea,
+.caja-date-input {
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.form-group input:focus, .form-field input:focus,
+.form-field select:focus, .form-field textarea:focus {
+  box-shadow: 0 0 0 3px rgba(255,209,0,0.1);
+}
+
+/* ── Number update pulse ── */
+.stat-value.num-updated,
+.ganancia-value.num-updated,
+.dkpi-value.num-updated {
+  animation: numPulse 0.35s ease;
+}
+
+/* ── Skeleton shimmer ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--navy-mid) 25%, rgba(255,255,255,0.05) 50%, var(--navy-mid) 75%);
+  background-size: 500px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px; color: transparent !important;
+  pointer-events: none; user-select: none;
+}
+
+/* ── Auth screen fade in ── */
+#auth-screen { animation: sectionFadeIn 0.3s ease forwards; }
+
+/* ── Ganancia hero accent pulse ── */
+.ganancia-hero::before {
+  transition: opacity 0.3s ease;
+}
 </style>
 </head>
 <body>
@@ -4005,9 +4134,14 @@ function initStaffUI() {
 }
 
 function showSection(name) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => {
+    s.classList.remove('active');
+    // Forzar reflow para que la animación se retrigger al volver a la misma sección
+    void s.offsetWidth;
+  });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('sec-' + name).classList.add('active');
+  const sec = document.getElementById('sec-' + name);
+  sec.classList.add('active');
 
   if (name === 'fila') {
     document.getElementById('nav-fila')?.classList.add('active');
@@ -4521,8 +4655,18 @@ async function loadDashboard() {
     document.getElementById('dash-title').textContent = `Buen día, ${currentShop?.name || ''}! ✂️`;
     document.getElementById('dash-date').textContent = `${days[now.getDay()]} ${now.toLocaleDateString('es-AR', { day:'numeric', month:'long' })}`;
 
+    // Helper: actualiza texto + dispara pulso visual
+    function animNum(id, text) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      el.classList.remove('num-updated');
+      void el.offsetWidth; // reflow para retrigger
+      el.classList.add('num-updated');
+    }
+
     // Hoy
-    document.getElementById('dash-profit').textContent = '$' + m.net_profit.toLocaleString('es-AR');
+    animNum('dash-profit', '$' + m.net_profit.toLocaleString('es-AR'));
     document.getElementById('dash-revenue').textContent = 'Facturación: $' + m.revenue.toLocaleString('es-AR');
     document.getElementById('dash-completed').textContent = m.completed;
     document.getElementById('dash-pending').textContent = m.pending;
@@ -4532,13 +4676,17 @@ async function loadDashboard() {
     const totalTurnos = (m.completed || 0) + (m.pending || 0) + (m.noshows || 0);
     const turnosVal = document.getElementById('dash-turnos-val');
     const turnosSub = document.getElementById('dash-turnos-sub');
-    if (turnosVal) turnosVal.innerHTML = m.pending > 0
-      ? `${totalTurnos} <span style="color:#FF9100;font-size:17px;font-weight:600">· ${m.pending} pend.</span>`
-      : `${totalTurnos}`;
+    if (turnosVal) {
+      turnosVal.innerHTML = m.pending > 0
+        ? `${totalTurnos} <span style="color:#FF9100;font-size:17px;font-weight:600">· ${m.pending} pend.</span>`
+        : `${totalTurnos}`;
+      turnosVal.classList.remove('num-updated'); void turnosVal.offsetWidth;
+      turnosVal.classList.add('num-updated');
+    }
     if (turnosSub) turnosSub.textContent = `${m.completed} listos · ${m.pending} pend.`;
 
     // Métricas del mes
-    document.getElementById('dash-month-revenue').textContent = '$' + month.revenue.toLocaleString('es-AR');
+    animNum('dash-month-revenue', '$' + month.revenue.toLocaleString('es-AR'));
     document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
     document.getElementById('dash-new-clients').textContent = month.new_clients;
     document.getElementById('dash-noshow-rate').textContent = month.noshow_rate + '%';
@@ -6544,7 +6692,11 @@ function showToast(icon, title, msg) {
 }
 
 function hideToast() {
-  document.getElementById('toast').classList.remove('show');
+  const toast = document.getElementById('toast');
+  toast.classList.add('hiding');
+  setTimeout(() => {
+    toast.classList.remove('show', 'hiding');
+  }, 200);
 }
 
 // ─── PUNTOS / TIENDA ───
