@@ -4065,10 +4065,6 @@ function canRedeemFreeMonth() {
 async function redeemFreeMonth() {
   const freeMonths = parseInt(currentShop?.free_months) || 0;
   if (freeMonths <= 0) return showToast('⚠️', 'Sin meses disponibles', 'No tenés meses gratis para canjear');
-  if (!canRedeemFreeMonth()) {
-    const daysLeft = currentShop?.trial_days_left ?? '?';
-    return showToast('⏳', 'Todavía no', `Podés canjear cuando te queden 5 días o menos de acceso. Te quedan ${daysLeft} días.`);
-  }
   if (!confirm(`¿Canjear 1 mes gratis? Tu acceso se extenderá 30 días.\nTe quedarán ${freeMonths - 1} mes${freeMonths - 1 !== 1 ? 'es' : ''} disponible${freeMonths - 1 !== 1 ? 's' : ''}.`)) return;
   try {
     const data = await api('POST', '/referrals/redeem');
