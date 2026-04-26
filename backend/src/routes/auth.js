@@ -57,6 +57,7 @@ function shopPayload(shop) {
     is_branch:            shop.is_branch            || false,
     parent_enterprise_id: shop.parent_enterprise_id || null,
     branch_label:         shop.branch_label         || null,
+    free_months:          parseInt(shop.free_months) || 0,
   };
 }
 

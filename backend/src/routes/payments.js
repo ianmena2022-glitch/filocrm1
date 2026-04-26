@@ -290,6 +290,14 @@ router.post('/webhook-qr', async (req, res) => {
           const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
           console.log(`[QR Webhook] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
 
+          // Otorgar mes gratis al referidor (si aplica)
+          try {
+            const { grantFreeMonthToReferrer } = require('./referrals');
+            await grantFreeMonthToReferrer(shopId);
+          } catch(refErr) {
+            console.error('[QR Webhook] grantFreeMonth error:', refErr.message);
+          }
+
           if (shop.wpp_connected && shop.phone) {
             try {
               const wpp = require('../services/whatsapp');

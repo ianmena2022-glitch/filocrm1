@@ -4016,7 +4016,39 @@ function openQRModal(plan) {
     cancelBtn.onclick = closeQRModal;
     cancelBtn.textContent = currentShop?.subscription_status === 'trial' ? 'Ahora no, usaré el trial' : 'Cancelar';
   }
+  // Mostrar botón de canjear mes gratis si tiene tokens
+  const freeMonths = parseInt(currentShop?.free_months) || 0;
+  const redeemWrap = document.getElementById('qr-redeem-wrap');
+  const badge      = document.getElementById('qr-free-months-badge');
+  if (redeemWrap) redeemWrap.style.display = freeMonths > 0 ? 'block' : 'none';
+  if (badge)      badge.textContent = freeMonths > 0 ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
+  // También en paywall
+  const pwWrap  = document.getElementById('pw-redeem-wrap');
+  const pwBadge = document.getElementById('pw-free-months-badge');
+  if (pwWrap)  pwWrap.style.display  = freeMonths > 0 ? 'block' : 'none';
+  if (pwBadge) pwBadge.textContent   = freeMonths > 0 ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   document.getElementById('modal-qr-payment').classList.add('show');
+}
+
+async function redeemFreeMonth() {
+  const freeMonths = parseInt(currentShop?.free_months) || 0;
+  if (freeMonths <= 0) return showToast('⚠️', 'Sin meses disponibles', 'No tenés meses gratis para canjear');
+  if (!confirm(`¿Canjear 1 mes gratis? Tu acceso se extenderá 30 días.\nTe quedarán ${freeMonths - 1} mes${freeMonths - 1 !== 1 ? 'es' : ''} disponible${freeMonths - 1 !== 1 ? 's' : ''}.`)) return;
+  try {
+    const data = await api('POST', '/referrals/redeem');
+    if (!data.ok) return showToast('❌', 'Error', data.error || 'No se pudo canjear');
+    // Actualizar shop local
+    currentShop = { ...currentShop, ...data.shop };
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    // Cerrar modal y paywall
+    closeQRModal();
+    document.getElementById('paywall-screen')?.classList.remove('show');
+    showToast('🎁', '¡Mes canjeado!', `Acceso extendido 30 días. Quedan ${data.free_months_left} mes${data.free_months_left !== 1 ? 'es' : ''} gratis.`);
+    // Recargar dashboard
+    setTimeout(() => startApp(), 500);
+  } catch(e) {
+    showToast('❌', 'Error', e.message);
+  }
 }
 
 function openQRPaywall() {
@@ -4101,6 +4133,12 @@ function checkPaywall() {
   const status = currentShop.subscription_status;
   if (status === 'expired' || status === 'cancelled') {
     document.getElementById('paywall-screen').classList.add('show');
+    // Mostrar botón de mes gratis si tiene tokens
+    const fm = parseInt(currentShop.free_months) || 0;
+    const pw = document.getElementById('pw-redeem-wrap');
+    const pb = document.getElementById('pw-free-months-badge');
+    if (pw)  pw.style.display = fm > 0 ? 'block' : 'none';
+    if (pb)  pb.textContent   = fm > 0 ? `${fm} disponible${fm > 1 ? 's' : ''}` : '';
   }
 }
 
@@ -10128,6 +10166,13 @@ async function bcmSave(id) {
         <div class="qr-plan-period">por mes</div>
       </div>
     </div>
+    <!-- Botón canjear mes gratis (visible solo si tiene tokens) -->
+    <div id="qr-redeem-wrap" style="display:none;margin-bottom:12px">
+      <button onclick="redeemFreeMonth()" style="width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(34,197,94,.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        🎁 Canjear mes gratis <span id="qr-free-months-badge" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:13px"></span>
+      </button>
+      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.35);margin-top:6px">Extiende tu acceso 30 días sin pagar</div>
+    </div>
     <button class="btn-qr-primary" id="btn-gen-qr" onclick="generateQROrder()">Generar QR de pago</button>
     <button class="btn-qr-secondary" onclick="closeQRModal()" id="btn-qr-cancel-plan">Cerrar sesión</button>
   </div>
@@ -10161,6 +10206,12 @@ async function bcmSave(id) {
   <div class="pw-badge">Período de prueba finalizado</div>
   <div class="pw-title">Seguí usando FILO</div>
   <div class="pw-sub">Tu prueba gratuita de 7 días terminó. Elegí tu plan para continuar.</div>
+  <div id="pw-redeem-wrap" style="display:none;width:100%;max-width:320px;margin-bottom:12px">
+    <button onclick="redeemFreeMonth()" style="width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+      🎁 Canjear mes gratis <span id="pw-free-months-badge" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:13px"></span>
+    </button>
+    <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.35);margin-top:6px">Extiende tu acceso 30 días sin pagar</div>
+  </div>
   <button class="pw-btn" onclick="openQRPaywall()" style="margin-top:8px">Pagar con QR</button>
   <div class="pw-trial-note">Cualquier billetera virtual · Pago seguro</div>
 </div>
