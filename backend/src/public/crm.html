@@ -2743,7 +2743,7 @@ select.form-input { padding-right: 32px; }
         </div>
 
         <!-- Stats -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
           <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center">
             <div style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#aaff00" id="ref-stat-total">—</div>
             <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px">Total referidos</div>
@@ -2755,6 +2755,20 @@ select.form-input { padding-right: 32px; }
           <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center">
             <div style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#FFD100" id="ref-stat-bonus">—</div>
             <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px">Meses ganados</div>
+          </div>
+        </div>
+
+        <!-- Meses disponibles para canjear -->
+        <div style="background:linear-gradient(135deg,rgba(74,222,128,.08),rgba(74,222,128,.04));border:1px solid rgba(74,222,128,.25);border-radius:14px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(74,222,128,.7);margin-bottom:4px">Meses disponibles para canjear</div>
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <div style="font-family:'Oswald',sans-serif;font-size:40px;font-weight:700;color:#4ade80;line-height:1" id="ref-stat-free">—</div>
+              <div style="font-size:13px;color:rgba(255,255,255,.5)">mes gratis</div>
+            </div>
+          </div>
+          <div id="ref-sec-redeem-wrap" style="display:none">
+            <button onclick="redeemFreeMonth()" style="background:#4ade80;color:#0a2010;border:none;border-radius:10px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;white-space:nowrap">🎁 CANJEAR MES GRATIS (<span id="ref-sec-free-badge">0</span>)</button>
           </div>
         </div>
 
@@ -7182,6 +7196,12 @@ async function loadReferrals() {
     const data = await api('GET', '/referrals');
     _referralData = data;
 
+    // Sincronizar free_months en currentShop (puede haber sido actualizado por admin)
+    if (data.free_months !== undefined && currentShop) {
+      currentShop.free_months = data.free_months;
+      try { localStorage.setItem('filo_shop', JSON.stringify(currentShop)); } catch(_) {}
+    }
+
     // Actualizar link en banner y sección
     const link = data.ref_link || '';
     const bannerLink = document.getElementById('referral-banner-link');
@@ -7194,8 +7214,15 @@ async function loadReferrals() {
     setEl('ref-stat-total',  data.total  ?? 0);
     setEl('ref-stat-active', data.active ?? 0);
     setEl('ref-stat-bonus',  data.bonuses ?? 0);
+    setEl('ref-stat-free',   data.free_months ?? 0);
     setEl('dash-ref-total',  data.total  ?? 0);
     setEl('dash-ref-bonus',  data.bonuses ?? 0);
+
+    // Mostrar/ocultar botón canjear en la sección referidos
+    const secRedeemWrap = document.getElementById('ref-sec-redeem-wrap');
+    const secRedeemBadge = document.getElementById('ref-sec-free-badge');
+    if (secRedeemWrap) secRedeemWrap.style.display = (data.free_months ?? 0) > 0 ? 'block' : 'none';
+    if (secRedeemBadge) secRedeemBadge.textContent = data.free_months ?? 0;
 
     // Lista
     const list = document.getElementById('ref-list');
