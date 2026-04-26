@@ -4051,9 +4051,12 @@ function openQRModal(plan) {
 function canRedeemFreeMonth() {
   const freeMonths = parseInt(currentShop?.free_months) || 0;
   if (freeMonths <= 0) return false;
-  const status    = currentShop?.subscription_status;
+  const status = currentShop?.subscription_status;
   if (status === 'expired' || status === 'cancelled') return true;
-  const daysLeft  = currentShop?.trial_days_left ?? 999;
+  // Calcular días restantes fresco (trial_days_left está cacheado desde el login)
+  const trialEnd = currentShop?.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
+  if (!trialEnd) return false;
+  const daysLeft = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
   return daysLeft <= 5;
 }
 
@@ -7325,17 +7328,38 @@ function dismissReferralBanner() {
 }
 
 async function initReferralBanner() {
-  if (localStorage.getItem('filo_ref_banner_dismissed') === '1') return;
   const data = await api('GET', '/referrals').catch(() => null);
   if (!data) return;
   _referralData = data;
-  const bannerLink = document.getElementById('referral-banner-link');
-  if (bannerLink) bannerLink.textContent = data.ref_link || '';
+
+  // Sincronizar free_months en currentShop
+  if (data.free_months !== undefined && currentShop) {
+    currentShop.free_months = data.free_months;
+    try { localStorage.setItem('filo_shop', JSON.stringify(currentShop)); } catch(_) {}
+  }
+
+  // Actualizar pill siempre (independiente del banner)
+  const pill = document.getElementById('dash-ref-bonus-pill');
+  if (pill) {
+    const fm = data.free_months ?? 0;
+    if (fm > 0) {
+      pill.textContent = fm;
+      pill.style.display = 'inline';
+      pill.style.background = '#4ade80';
+      pill.style.color = '#0a2010';
+    } else {
+      pill.style.display = 'none';
+    }
+  }
+
   const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   setEl('dash-ref-total',  data.total  ?? 0);
   setEl('dash-ref-bonus',  data.bonuses ?? 0);
-  const pill = document.getElementById('dash-ref-bonus-pill');
-  if (pill && (data.bonuses ?? 0) > 0) pill.textContent = `+${data.bonuses} meses`;
+
+  // Mostrar banner solo si no fue dismisseado
+  if (localStorage.getItem('filo_ref_banner_dismissed') === '1') return;
+  const bannerLink = document.getElementById('referral-banner-link');
+  if (bannerLink) bannerLink.textContent = data.ref_link || '';
   document.getElementById('referral-banner').style.display = 'block';
 }
 
