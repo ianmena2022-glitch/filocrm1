@@ -1759,7 +1759,7 @@ select.form-input { padding-right: 32px; }
         <button id="dash-tab-productos" onclick="switchDashTab('productos')"  style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🛒 Productos</button>
         <div style="flex:1"></div>
         <button onclick="showSection('referidos')" style="display:flex;align-items:center;gap:6px;background:rgba(170,255,0,.12);color:#aaff00;border:1px solid rgba(170,255,0,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s;white-space:nowrap" onmouseover="this.style.background='rgba(170,255,0,.22)'" onmouseout="this.style.background='rgba(170,255,0,.12)'">
-          🎁 REFERIDOS <span id="dash-ref-bonus-pill" style="background:rgba(170,255,0,.2);padding:1px 6px;border-radius:10px;font-size:11px"></span>
+          🎁 REFERIDOS <span id="dash-ref-bonus-pill" style="display:none;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700"></span>
         </button>
       </div>
 
@@ -7217,6 +7217,20 @@ async function loadReferrals() {
     setEl('ref-stat-free',   data.free_months ?? 0);
     setEl('dash-ref-total',  data.total  ?? 0);
     setEl('dash-ref-bonus',  data.bonuses ?? 0);
+
+    // Badge en la pill del dashboard
+    const pill = document.getElementById('dash-ref-bonus-pill');
+    if (pill) {
+      const fm = data.free_months ?? 0;
+      if (fm > 0) {
+        pill.textContent = fm;
+        pill.style.display = 'inline';
+        pill.style.background = '#4ade80';
+        pill.style.color = '#0a2010';
+      } else {
+        pill.style.display = 'none';
+      }
+    }
 
     // Mostrar/ocultar botón canjear en la sección referidos
     const secRedeemWrap = document.getElementById('ref-sec-redeem-wrap');
