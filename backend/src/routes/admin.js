@@ -63,6 +63,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
         s.is_barber, s.is_branch, s.is_enterprise_owner,
         s.parent_shop_id, s.parent_enterprise_id,
         s.barber_commission_pct,
+        COALESCE(s.free_months, 0) AS free_months,
         COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
         COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s

@@ -218,6 +218,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Estado</th>
               <th>Trial / Desde</th>
               <th>Barberos</th>
+              <th>🎁 Meses</th>
               <th>WhatsApp</th>
               <th>Acciones</th>
             </tr>
@@ -690,6 +691,13 @@ function renderTreeRow(a, depth, parentId) {
     ? `<span style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--y)">${a.barber_count || 0}</span>`
     : `<span style="color:var(--g);font-size:12px">—</span>`;
 
+  // Meses gratis disponibles
+  const freeMonthsCell = (isBarber || isBranch)
+    ? `<span style="color:var(--g);font-size:12px">—</span>`
+    : (parseInt(a.free_months) || 0) > 0
+      ? `<span style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;color:#4ade80">${a.free_months}</span>`
+      : `<span style="color:var(--g);font-size:12px">0</span>`;
+
   // WPP
   const wppDot = a.wpp_connected
     ? `<span style="color:var(--gr)">● Conectado</span>`
@@ -720,6 +728,7 @@ function renderTreeRow(a, depth, parentId) {
     <td>${statusBadge}</td>
     <td>${dateInfo}</td>
     <td>${barberCount}</td>
+    <td>${freeMonthsCell}</td>
     <td style="font-size:12px">${wppDot}</td>
     <td style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
