@@ -70,19 +70,6 @@ router.post('/redeem', auth, async (req, res) => {
     const freeMonths = parseInt(shop.free_months) || 0;
     if (freeMonths <= 0) return res.status(400).json({ error: 'No tenés meses gratis disponibles' });
 
-    // Solo permitir canjear cuando el acceso está vencido o a ≤5 días de vencer
-    const now      = new Date();
-    const trialEnd = shop.trial_ends_at ? new Date(shop.trial_ends_at) : null;
-    const daysLeft = trialEnd ? Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24)) : 0;
-    const status   = shop.subscription_status;
-    const canRedeem = status === 'expired' || status === 'cancelled' || daysLeft <= 5;
-    if (!canRedeem) {
-      return res.status(400).json({
-        error: `Podés canjear el mes gratis cuando te queden 5 días o menos de acceso. Te quedan ${daysLeft} días.`,
-        days_left: daysLeft
-      });
-    }
-
     // Extender acceso 30 días desde hoy (o desde trial_ends_at si está en el futuro)
     const base = shop.trial_ends_at && new Date(shop.trial_ends_at) > new Date()
       ? new Date(shop.trial_ends_at)

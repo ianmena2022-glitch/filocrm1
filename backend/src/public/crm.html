@@ -4031,29 +4031,31 @@ function openQRModal(plan) {
     cancelBtn.onclick = closeQRModal;
     cancelBtn.textContent = currentShop?.subscription_status === 'trial' ? 'Ahora no, usaré el trial' : 'Cancelar';
   }
-  // Mostrar botón de canjear mes gratis solo si puede canjear ahora
+  // En el modal de pago: mostrar si tiene meses disponibles (ya está en el flujo de renovación)
   const freeMonths = parseInt(currentShop?.free_months) || 0;
-  const eligible   = canRedeemFreeMonth();
+  const hasMonths  = freeMonths > 0;
   const redeemWrap = document.getElementById('qr-redeem-wrap');
   const badge      = document.getElementById('qr-free-months-badge');
-  if (redeemWrap) redeemWrap.style.display = eligible ? 'block' : 'none';
-  if (badge)      badge.textContent = eligible ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
+  if (redeemWrap) redeemWrap.style.display = hasMonths ? 'block' : 'none';
+  if (badge)      badge.textContent = hasMonths ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   // También en paywall
   const pwWrap  = document.getElementById('pw-redeem-wrap');
   const pwBadge = document.getElementById('pw-free-months-badge');
-  if (pwWrap)  pwWrap.style.display  = eligible ? 'block' : 'none';
-  if (pwBadge) pwBadge.textContent   = eligible ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
+  if (pwWrap)  pwWrap.style.display  = hasMonths ? 'block' : 'none';
+  if (pwBadge) pwBadge.textContent   = hasMonths ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   document.getElementById('modal-qr-payment').classList.add('show');
 }
 
 // Determina si el usuario puede canjear un mes gratis ahora
 // Solo cuando está vencido/cancelado o le quedan ≤5 días de acceso
+// Solo para el botón de la sección referidos (fuera del flujo de pago)
+// En el modal QR y paywall se muestra siempre que haya meses disponibles
 function canRedeemFreeMonth() {
   const freeMonths = parseInt(currentShop?.free_months) || 0;
   if (freeMonths <= 0) return false;
   const status = currentShop?.subscription_status;
   if (status === 'expired' || status === 'cancelled') return true;
-  // Calcular días restantes fresco (trial_days_left está cacheado desde el login)
+  // Calcular días restantes fresco desde trial_ends_at
   const trialEnd = currentShop?.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
   if (!trialEnd) return false;
   const daysLeft = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
@@ -4167,13 +4169,12 @@ function checkPaywall() {
   const status = currentShop.subscription_status;
   if (status === 'expired' || status === 'cancelled') {
     document.getElementById('paywall-screen').classList.add('show');
-    // Mostrar botón de mes gratis solo si puede canjear ahora
-    const fm       = parseInt(currentShop.free_months) || 0;
-    const eligible = canRedeemFreeMonth();
+    // En el paywall (acceso vencido): mostrar si tiene meses disponibles
+    const fm = parseInt(currentShop.free_months) || 0;
     const pw = document.getElementById('pw-redeem-wrap');
     const pb = document.getElementById('pw-free-months-badge');
-    if (pw)  pw.style.display = eligible ? 'block' : 'none';
-    if (pb)  pb.textContent   = eligible ? `${fm} disponible${fm > 1 ? 's' : ''}` : '';
+    if (pw)  pw.style.display = fm > 0 ? 'block' : 'none';
+    if (pb)  pb.textContent   = fm > 0 ? `${fm} disponible${fm > 1 ? 's' : ''}` : '';
   }
 }
 
