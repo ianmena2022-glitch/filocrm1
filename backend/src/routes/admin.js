@@ -78,6 +78,31 @@ router.get('/accounts', adminAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/peer-referrals — ranking de referidos peer-to-peer
+router.get('/peer-referrals', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id, r.name, r.email, r.booking_slug,
+        COUNT(s.id)::int                                                                    AS total_referred,
+        COUNT(s.id) FILTER (WHERE s.subscription_status = 'active')::int                   AS active_referred,
+        COUNT(s.id) FILTER (WHERE s.subscription_status = 'trial')::int                    AS trial_referred,
+        COUNT(s.id) FILTER (WHERE s.ref_bonus_granted = TRUE)::int                         AS bonuses_granted,
+        MAX(s.created_at)                                                                   AS last_referral_at
+      FROM shops r
+      LEFT JOIN shops s ON s.referred_by_shop_id = r.id
+      WHERE r.is_barber = FALSE AND r.is_branch = FALSE
+      GROUP BY r.id
+      HAVING COUNT(s.id) > 0
+      ORDER BY COUNT(s.id) DESC
+      LIMIT 100
+    `);
+    res.json({ referrers: result.rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── VENDEDORES / REFERIDOS ────────────────────────────────────────────────────
 
 // Precio del primer mes por plan

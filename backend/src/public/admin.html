@@ -184,6 +184,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab active" onclick="switchTab('accounts')">Cuentas</button>
       <button class="tab" onclick="switchTab('billing')">Liquidaciones</button>
       <button class="tab" onclick="switchTab('vendors')">Vendedores</button>
+      <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
     </div>
 
@@ -257,6 +258,43 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     </div>
 
     <!-- TAB: MÉTRICAS -->
+    <!-- TAB: REFERIDOS PEER-TO-PEER -->
+    <div id="tab-referidos" style="display:none">
+      <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:13px;color:var(--g)">Usuarios que trajeron nuevas cuentas usando su link de referido</div>
+        </div>
+        <div id="ref-summary" style="display:flex;gap:16px">
+          <div style="text-align:center;background:rgba(170,255,0,.07);border:1px solid rgba(170,255,0,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#aaff00" id="ref-total-referrers">—</div>
+            <div style="font-size:11px;color:var(--g);letter-spacing:.5px">REFERIDORES</div>
+          </div>
+          <div style="text-align:center;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#4ade80" id="ref-total-accounts">—</div>
+            <div style="font-size:11px;color:var(--g);letter-spacing:.5px">CUENTAS REFERIDAS</div>
+          </div>
+          <div style="text-align:center;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:var(--y)" id="ref-total-active">—</div>
+            <div style="font-size:11px;color:var(--g);letter-spacing:.5px">ACTIVAS</div>
+          </div>
+        </div>
+      </div>
+      <table class="table">
+        <thead><tr>
+          <th>Barbería</th>
+          <th>Email</th>
+          <th>Referidos totales</th>
+          <th>Activos</th>
+          <th>Trial</th>
+          <th>Meses otorgados</th>
+          <th>Último referido</th>
+        </tr></thead>
+        <tbody id="referidos-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <div id="tab-metrics" style="display:none"></div>
 
     <!-- TAB: VENDEDORES -->
@@ -848,11 +886,55 @@ async function deleteAccount(id, name) {
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
-  document.getElementById('tab-accounts').style.display = tab === 'accounts' ? 'block' : 'none';
-  document.getElementById('tab-billing').style.display  = tab === 'billing'  ? 'block' : 'none';
-  document.getElementById('tab-vendors').style.display  = tab === 'vendors'  ? 'block' : 'none';
-  document.getElementById('tab-metrics').style.display  = tab === 'metrics'  ? 'block' : 'none';
+  document.getElementById('tab-accounts').style.display  = tab === 'accounts'  ? 'block' : 'none';
+  document.getElementById('tab-billing').style.display   = tab === 'billing'   ? 'block' : 'none';
+  document.getElementById('tab-vendors').style.display   = tab === 'vendors'   ? 'block' : 'none';
+  document.getElementById('tab-referidos').style.display = tab === 'referidos' ? 'block' : 'none';
+  document.getElementById('tab-metrics').style.display   = tab === 'metrics'   ? 'block' : 'none';
   if (tab === 'metrics') renderMetrics();
+  if (tab === 'referidos') loadPeerReferrals();
+}
+
+async function loadPeerReferrals() {
+  const tbody = document.getElementById('referidos-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Cargando...</td></tr>';
+  try {
+    const res  = await fetch('/api/admin/peer-referrals', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    const rows = data.referrers || [];
+
+    // Totales
+    const totalAccounts = rows.reduce((s, r) => s + r.total_referred, 0);
+    const totalActive   = rows.reduce((s, r) => s + r.active_referred, 0);
+    document.getElementById('ref-total-referrers').textContent = rows.length;
+    document.getElementById('ref-total-accounts').textContent  = totalAccounts;
+    document.getElementById('ref-total-active').textContent    = totalActive;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Ningún usuario ha referido cuentas todavía</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const lastRef = r.last_referral_at ? new Date(r.last_referral_at).toLocaleDateString('es-AR') : '—';
+      const activeBadge = r.active_referred > 0
+        ? `<span style="background:rgba(74,222,128,.12);color:#4ade80;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${r.active_referred}</span>`
+        : `<span style="color:var(--g)">0</span>`;
+      const bonusBadge = r.bonuses_granted > 0
+        ? `<span style="background:rgba(255,209,0,.12);color:var(--y);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">+${r.bonuses_granted} meses</span>`
+        : '<span style="color:var(--g)">—</span>';
+      return `<tr>
+        <td><strong>${r.name}</strong></td>
+        <td style="color:var(--g);font-size:12px">${r.email}</td>
+        <td style="font-weight:700;color:#aaff00">${r.total_referred}</td>
+        <td>${activeBadge}</td>
+        <td style="color:var(--g)">${r.trial_referred}</td>
+        <td>${bonusBadge}</td>
+        <td style="color:var(--g);font-size:12px">${lastRef}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:32px">Error: ${e.message}</td></tr>`;
+  }
 }
 
 // ── VENDEDORES ────────────────────────────────────────────────────────────────
