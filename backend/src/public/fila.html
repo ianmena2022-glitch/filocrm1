@@ -18,6 +18,10 @@
       --border: rgba(255,255,255,.08);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    .filo-bar{position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(5,13,24,.93);backdrop-filter:blur(10px);border-top:1px solid rgba(255,209,0,.1);padding:9px 16px;display:flex;align-items:center;justify-content:center}
+    .filo-bar a{display:flex;align-items:center;gap:7px;text-decoration:none;color:rgba(255,255,255,.45);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;transition:color .2s}
+    .filo-bar a:hover{color:var(--yellow)}
+    .filo-bar-logo{width:18px;height:18px;background:var(--yellow);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;color:#050d18}
     body {
       font-family: 'Barlow', sans-serif;
       background: var(--dark);
@@ -27,7 +31,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 24px 16px 56px;
     }
     .card {
       background: var(--card);
@@ -372,6 +376,10 @@
       </svg>
     </div>
     <div class="shop-name" id="shop-name-display">FILO</div>
+    <a href="https://filocrm.com.ar" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;text-decoration:none;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);border-radius:20px;padding:3px 10px 3px 5px">
+      <span style="width:15px;height:15px;background:var(--yellow);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:9px;font-weight:700;color:#050d18">F</span>
+      <span style="font-size:10px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:rgba(255,255,255,.45)">Powered by FILO</span>
+    </a>
 
     <!-- LOADING -->
     <div id="state-loading">
@@ -847,5 +855,11 @@
     // ─── Boot ─────────────────────────────────────────────────────────────────
     init();
   </script>
+  <div class="filo-bar">
+    <a href="https://filocrm.com.ar" target="_blank" rel="noopener">
+      <div class="filo-bar-logo">F</div>
+      <span>Powered by FILO</span>
+    </a>
+  </div>
 </body>
 </html>

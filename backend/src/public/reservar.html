@@ -11,7 +11,26 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--y:#FFD100;--n:#000d1f;--nm:#001428;--nk:#002043;--w:#fff;--g:#8a9ab5;--gl:#1a2540;--gr:#00E676;--r:#FF4343}
-body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh}
+body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh;padding-bottom:48px}
+
+/* POWERED BY FILO — footer sticky */
+.filo-bar{position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(0,10,28,.92);backdrop-filter:blur(10px);border-top:1px solid rgba(255,209,0,.1);padding:9px 16px;display:flex;align-items:center;justify-content:center;gap:8px}
+.filo-bar a{display:flex;align-items:center;gap:7px;text-decoration:none;color:rgba(255,255,255,.55);font-size:12px;font-weight:600;letter-spacing:.3px;transition:color .2s}
+.filo-bar a:hover{color:var(--y)}
+.filo-bar-logo{width:20px;height:20px;background:var(--y);border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;color:#000d1f;flex-shrink:0}
+.filo-bar-text{font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+
+/* badge powered en header */
+.powered-badge{display:inline-flex;align-items:center;gap:5px;margin-top:10px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);border-radius:20px;padding:4px 10px 4px 6px;text-decoration:none;transition:all .2s}
+.powered-badge:hover{background:rgba(255,209,0,.14);border-color:rgba(255,209,0,.35)}
+.powered-badge-dot{width:16px;height:16px;background:var(--y);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:9px;font-weight:700;color:#000d1f}
+.powered-badge-txt{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.5)}
+
+/* CTA en success */
+.filo-cta{margin-top:28px;padding:16px;background:rgba(255,209,0,.05);border:1px solid rgba(255,209,0,.15);border-radius:14px;text-align:center}
+.filo-cta-txt{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px}
+.filo-cta-btn{display:inline-flex;align-items:center;gap:6px;background:var(--y);color:#000d1f;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;transition:all .2s}
+.filo-cta-btn:hover{box-shadow:0 4px 16px rgba(255,209,0,.35);transform:translateY(-1px)}
 
 /* HEADER */
 .header{background:linear-gradient(135deg,var(--nk),var(--nm));border-bottom:1px solid rgba(255,209,0,.12);padding:24px 20px;text-align:center}
@@ -165,6 +184,10 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
     <div class="header-logo" id="shop-logo">✂</div>
     <div class="header-name" id="shop-name">Barbería</div>
     <div class="header-meta" id="shop-meta"></div>
+    <a href="https://filocrm.com.ar" target="_blank" rel="noopener" class="powered-badge">
+      <div class="powered-badge-dot">F</div>
+      <span class="powered-badge-txt">Powered by FILO</span>
+    </a>
   </div>
 
   <div class="container">
@@ -370,9 +393,22 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         <div class="success-title">¡Turno confirmado!</div>
         <div class="success-msg" id="success-msg"></div>
         <div class="success-detail" id="success-detail"></div>
+        <div class="filo-cta">
+          <div class="filo-cta-txt">¿Tenés una barbería o peluquería?</div>
+          <a href="https://filocrm.com.ar" target="_blank" rel="noopener" class="filo-cta-btn">
+            <span>✂</span> Conocé FILO gratis
+          </a>
+        </div>
       </div>
     </div>
   </div>
+</div>
+
+<div class="filo-bar">
+  <a href="https://filocrm.com.ar" target="_blank" rel="noopener">
+    <div class="filo-bar-logo">F</div>
+    <span class="filo-bar-text">Powered by FILO</span>
+  </a>
 </div>
 
 <script>
