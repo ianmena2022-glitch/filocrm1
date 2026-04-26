@@ -75,6 +75,7 @@ app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/vendor',        require('./routes/vendor'));
 app.use('/api/queue',         require('./routes/queue'));
 app.use('/api/prospector',    require('./routes/prospector'));
+app.use('/api/referrals',     require('./routes/referrals'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));

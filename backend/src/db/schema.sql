@@ -371,6 +371,11 @@ ALTER TABLE shops ADD COLUMN IF NOT EXISTS first_payment_at TIMESTAMPTZ DEFAULT 
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_shops_vendor ON shops(vendor_id);
 
+-- Referidos peer-to-peer
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS referred_by_shop_id INT REFERENCES shops(id) ON DELETE SET NULL;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS ref_bonus_granted BOOLEAN DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_shops_referred ON shops(referred_by_shop_id);
+
 -- Fila digital
 CREATE TABLE IF NOT EXISTS queue_entries (
   id           SERIAL PRIMARY KEY,

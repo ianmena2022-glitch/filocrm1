@@ -1705,6 +1705,10 @@ select.form-input { padding-right: 32px; }
       <div class="nav-item" id="nav-recurrentes" onclick="showSection('recurrentes')" title="Turnos fijos">
         <svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       </div>
+      <!-- 8 referidos -->
+      <div class="nav-item" id="nav-referidos" onclick="showSection('referidos')" title="Referidos 🎁" style="position:relative">
+        <svg viewBox="0 0 24 24"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+      </div>
     </div>
   </nav>
 
@@ -1721,6 +1725,24 @@ select.form-input { padding-right: 32px; }
     </div>
 
     <!-- ─── DASHBOARD ─── -->
+    <!-- ── BANNER REFERIDOS ───────────────────────────────────────── -->
+    <div id="referral-banner" style="display:none;margin:12px 16px 0;background:linear-gradient(135deg,#1a2a0a,#0f1f06);border:1px solid rgba(144,238,0,.25);border-radius:16px;padding:16px 20px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:-30px;right:-20px;width:120px;height:120px;background:radial-gradient(circle,rgba(144,238,0,.12),transparent 70%);pointer-events:none"></div>
+      <button onclick="dismissReferralBanner()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:rgba(255,255,255,.3);font-size:18px;cursor:pointer;line-height:1" title="Cerrar">×</button>
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        <div style="font-size:28px;flex-shrink:0">🎁</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;color:#aaff00;margin-bottom:4px">¡NUEVO — Programa de Referidos!</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:12px">Compartí tu link y <strong style="color:#fff">ganás 1 mes gratis</strong> por cada barbería que se una a FILO con tu referido.</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid rgba(144,238,0,.2);border-radius:8px;padding:8px 12px;font-size:12px;font-family:monospace;color:rgba(255,255,255,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="referral-banner-link">Cargando...</div>
+            <button onclick="copyReferralLink()" style="flex-shrink:0;background:#aaff00;color:#0a1400;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s" onmouseover="this.style.background='#ccff33'" onmouseout="this.style.background='#aaff00'" id="referral-copy-btn">📋 COPIAR</button>
+            <button onclick="showSection('referidos')" style="flex-shrink:0;background:rgba(144,238,0,.1);color:#aaff00;border:1px solid rgba(144,238,0,.3);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s" onmouseover="this.style.background='rgba(144,238,0,.2)'" onmouseout="this.style.background='rgba(144,238,0,.1)'">VER MÁS →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section id="sec-dashboard" class="section active">
       <div class="topbar">
         <div class="topbar-left">
@@ -2690,6 +2712,82 @@ select.form-input { padding-right: 32px; }
     </section>
 
     <!-- ─── CONFIGURACIÓN ─── -->
+    <!-- ── SECCIÓN REFERIDOS ──────────────────────────────────────── -->
+    <section id="sec-referidos" class="section">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>Referidos 🎁</h1>
+          <p>Invitá barberías y ganá 1 mes gratis por cada una</p>
+        </div>
+      </div>
+      <div style="max-width:640px;padding:0 20px 60px">
+
+        <!-- Hero -->
+        <div style="background:linear-gradient(135deg,#1a2a0a,#0f1f06);border:1px solid rgba(144,238,0,.25);border-radius:20px;padding:28px;margin-bottom:20px;text-align:center;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:200px;height:200px;background:radial-gradient(circle,rgba(144,238,0,.1),transparent 70%);pointer-events:none"></div>
+          <div style="font-size:48px;margin-bottom:12px">🎁</div>
+          <div style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#aaff00;letter-spacing:1px;margin-bottom:8px">1 MES GRATIS POR REFERIDO</div>
+          <div style="font-size:14px;color:rgba(255,255,255,.65);line-height:1.6">Cada barbería que se registre con tu link y active su suscripción<br>te da <strong style="color:#fff">1 mes gratis</strong> en tu cuenta automáticamente.</div>
+        </div>
+
+        <!-- Tu link -->
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px">Tu link de referido</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(144,238,0,.2);border-radius:10px;padding:12px 14px;font-size:13px;font-family:monospace;color:rgba(255,255,255,.85);word-break:break-all" id="ref-link-display">Cargando...</div>
+            <button onclick="copyReferralLink()" id="ref-copy-btn" style="flex-shrink:0;background:#aaff00;color:#0a1400;border:none;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s">📋 COPIAR</button>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="shareReferralWhatsApp()" style="flex:1;min-width:120px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:8px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s" onmouseover="this.style.background='rgba(37,211,102,.2)'" onmouseout="this.style.background='rgba(37,211,102,.12)'">📱 COMPARTIR POR WHATSAPP</button>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
+          <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center">
+            <div style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#aaff00" id="ref-stat-total">—</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px">Total referidos</div>
+          </div>
+          <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center">
+            <div style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#4ade80" id="ref-stat-active">—</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px">Activos</div>
+          </div>
+          <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;text-align:center">
+            <div style="font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;color:#FFD100" id="ref-stat-bonus">—</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px">Meses ganados</div>
+          </div>
+        </div>
+
+        <!-- Cómo funciona -->
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:16px">Cómo funciona</div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;background:rgba(170,255,0,.15);border:1px solid rgba(170,255,0,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#aaff00;flex-shrink:0">1</div>
+              <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.5">Copiá tu link de referido y mandáselo a barberos que conozcas</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;background:rgba(170,255,0,.15);border:1px solid rgba(170,255,0,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#aaff00;flex-shrink:0">2</div>
+              <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.5">Ellos se registran en FILO usando tu link</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:28px;height:28px;background:rgba(170,255,0,.15);border:1px solid rgba(170,255,0,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#aaff00;flex-shrink:0">3</div>
+              <div style="font-size:14px;color:rgba(255,255,255,.75);line-height:1.5">Cuando activan su suscripción, vos ganás <strong style="color:#fff">1 mes gratis</strong> automáticamente</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de referidos recientes -->
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:14px">Tus referidos</div>
+          <div id="ref-list">
+            <div style="text-align:center;padding:24px;color:rgba(255,255,255,.3);font-size:13px">Cargando...</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
     <section id="sec-configuracion" class="section">
       <div class="topbar">
         <div class="topbar-left">
@@ -3844,7 +3942,7 @@ async function register() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
@@ -4259,7 +4357,7 @@ function showSection(name) {
   if (name === 'fila') {
     document.getElementById('nav-fila')?.classList.add('active');
   } else {
-    const navMap = { agenda: 0, clientes: 1, motores: 2, dashboard: 3, membresias: 4, equipo: 5, recurrentes: 6 };
+    const navMap = { agenda: 0, clientes: 1, motores: 2, dashboard: 3, membresias: 4, equipo: 5, recurrentes: 6, referidos: 7 };
     const navItems = document.querySelectorAll('.nav-item');
     if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
   }
@@ -4283,6 +4381,7 @@ function showSection(name) {
   if (name === 'equipo') loadEquipo();
   if (name === 'fila') loadQueue();
   if (name === 'recurrentes') loadRecurrentes();
+  if (name === 'referidos') loadReferrals();
   // Nav item recurrentes (fuera del grupo de 5 del bottom nav)
   if (name === 'recurrentes') document.getElementById('nav-recurrentes')?.classList.add('active');
 }
@@ -4753,6 +4852,8 @@ function printFilaQR() {
 let _dashCalOffset = 0; // semanas desde hoy
 
 async function loadDashboard() {
+  // Mostrar banner de referidos (solo primera vez)
+  initReferralBanner();
   try {
     const [today, month, chart, prodVentas, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
@@ -7034,6 +7135,111 @@ let _rfSelectedDay = null;
 let _rfClients = [];
 let _rfBarbers = [];
 let _rfServices = [];
+
+// ── REFERIDOS ─────────────────────────────────────────────────────
+let _referralData = null;
+
+async function loadReferrals() {
+  try {
+    const data = await api('GET', '/referrals');
+    _referralData = data;
+
+    // Actualizar link en banner y sección
+    const link = data.ref_link || '';
+    const bannerLink = document.getElementById('referral-banner-link');
+    const secLink    = document.getElementById('ref-link-display');
+    if (bannerLink) bannerLink.textContent = link;
+    if (secLink)    secLink.textContent    = link;
+
+    // Stats
+    const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setEl('ref-stat-total',  data.total  ?? 0);
+    setEl('ref-stat-active', data.active ?? 0);
+    setEl('ref-stat-bonus',  data.bonuses ?? 0);
+
+    // Lista
+    const list = document.getElementById('ref-list');
+    if (list) {
+      if (!data.recent?.length) {
+        list.innerHTML = '<div style="text-align:center;padding:24px;color:rgba(255,255,255,.3);font-size:13px">Todavía no referiste a nadie.<br>¡Compartí tu link!</div>';
+      } else {
+        list.innerHTML = data.recent.map(r => {
+          const badge = r.subscription_status === 'active'
+            ? '<span style="background:rgba(74,222,128,.12);color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px">ACTIVO</span>'
+            : r.subscription_status === 'trial'
+            ? '<span style="background:rgba(255,209,0,.12);color:#FFD100;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px">TRIAL</span>'
+            : '<span style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.4);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px">EXPIRADO</span>';
+          const fecha = new Date(r.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:2px">${r.name}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.35)">${fecha}</div>
+            </div>
+            ${badge}
+          </div>`;
+        }).join('');
+      }
+    }
+  } catch(e) {
+    console.error('loadReferrals error:', e);
+  }
+}
+
+function copyReferralLink() {
+  const link = _referralData?.ref_link || document.getElementById('ref-link-display')?.textContent || '';
+  if (!link || link === 'Cargando...') return;
+  navigator.clipboard.writeText(link).then(() => {
+    ['ref-copy-btn', 'referral-copy-btn'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = '✅ COPIADO';
+      btn.style.background = '#4ade80';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+    });
+  }).catch(() => {
+    prompt('Copiá tu link de referido:', link);
+  });
+}
+
+function shareReferralWhatsApp() {
+  const link = _referralData?.ref_link || '';
+  if (!link) return;
+  const msg = encodeURIComponent(`¡Probá FILO! El sistema que gestiona mi barbería automáticamente. Registrate gratis con mi link: ${link}`);
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+function dismissReferralBanner() {
+  document.getElementById('referral-banner').style.display = 'none';
+  localStorage.setItem('filo_ref_banner_dismissed', '1');
+}
+
+async function initReferralBanner() {
+  if (localStorage.getItem('filo_ref_banner_dismissed') === '1') return;
+  const data = await api('GET', '/referrals').catch(() => null);
+  if (!data) return;
+  _referralData = data;
+  const bannerLink = document.getElementById('referral-banner-link');
+  if (bannerLink) bannerLink.textContent = data.ref_link || '';
+  document.getElementById('referral-banner').style.display = 'block';
+}
+
+// Capturar ?ref= de la URL y pre-rellenar campo oculto en registro
+(function captureRefSlug() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  if (ref) {
+    localStorage.setItem('filo_ref_slug', ref);
+    // Mostrar tab de registro
+    setTimeout(() => switchAuthTab('register'), 100);
+  }
+})();
+
+function getStoredRefSlug() {
+  return localStorage.getItem('filo_ref_slug') || null;
+}
+
+// ─────────────────────────────────────────────────────────────────
 
 async function loadRecurrentes() {
   const list = document.getElementById('recurrentes-list');

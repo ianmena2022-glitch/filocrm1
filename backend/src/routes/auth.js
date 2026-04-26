@@ -69,7 +69,7 @@ function trialDaysLeft(trial_ends_at) {
 
 // POST /api/auth/register — cuenta normal
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan, referral_code, timezone } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code, ref_slug, timezone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
@@ -97,11 +97,18 @@ router.post('/register', async (req, res) => {
       if (vendorQ.rows.length) vendorId = vendorQ.rows[0].id;
     }
 
+    // Resolver referido peer-to-peer (ref_slug = booking_slug del shop que refirió)
+    let referredByShopId = null;
+    if (ref_slug) {
+      const refQ = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [ref_slug.trim()]);
+      if (refQ.rows.length) referredByShopId = refQ.rows[0].id;
+    }
+
     const tz = timezone || 'America/Argentina/Buenos_Aires';
     const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code, timezone)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9, $10) RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm, tz]
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code, referred_by_shop_id, timezone)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9, $10, $11) RETURNING *`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm, referredByShopId, tz]
     );
     const shop = result.rows[0];
 
