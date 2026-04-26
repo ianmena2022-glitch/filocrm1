@@ -143,14 +143,93 @@ app.get('/healthdb', async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// Tienda pública de puntos
-app.get('/tienda/:slug', (req, res) => {
-  res.sendFile(path.join(publicDir, 'tienda.html'));
+// Tienda pública de puntos — SSR para SEO
+app.get('/tienda/:slug', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT name, city, address, logo_url, store_name FROM shops WHERE booking_slug=$1',
+      [req.params.slug]
+    );
+    let html = fs.readFileSync(path.join(publicDir, 'tienda.html'), 'utf8');
+    if (result.rows.length) {
+      const shop      = result.rows[0];
+      const storeName = shop.store_name || shop.name;
+      const location  = [shop.address, shop.city].filter(Boolean).join(', ');
+      const title     = `${storeName} — Tienda de puntos | FILO CRM`;
+      const desc      = `Canjea tus puntos en ${storeName}${location ? ` · ${location}` : ''}. Programa de fidelidad digital.`;
+      const canonical = `https://filocrm.com.ar/tienda/${req.params.slug}`;
+      const seoTags   = `\n  <meta name="description" content="${desc}">\n  <link rel="canonical" href="${canonical}">\n  <meta property="og:title" content="${title}">\n  <meta property="og:description" content="${desc}">\n  <meta property="og:url" content="${canonical}">\n  <meta name="robots" content="index, follow">`;
+      html = html.replace('</head>', seoTags + '\n</head>');
+    }
+    res.send(html);
+  } catch (e) {
+    res.sendFile(path.join(publicDir, 'tienda.html'));
+  }
 });
 
-// Reservas públicas
-app.get('/reservar/:slug', (req, res) => {
-  res.sendFile(path.join(publicDir, 'reservar.html'));
+// Reservas públicas — SSR para SEO
+app.get('/reservar/:slug', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT name, city, address, phone, logo_url FROM shops WHERE booking_slug=$1',
+      [req.params.slug]
+    );
+
+    let html = fs.readFileSync(path.join(publicDir, 'reservar.html'), 'utf8');
+
+    if (result.rows.length) {
+      const shop     = result.rows[0];
+      const siteName = 'FILO CRM';
+      const location = [shop.address, shop.city].filter(Boolean).join(', ');
+      const title    = `${shop.name} — Reservar turno online | ${siteName}`;
+      const desc     = `Reservá tu turno en ${shop.name}${location ? ` · ${location}` : ''}. Sin llamadas, sin esperas, disponible 24/7.`;
+      const canonical = `https://filocrm.com.ar/reservar/${req.params.slug}`;
+      const image     = shop.logo_url || 'https://filocrm.com.ar/logo_filo.png';
+
+      const jsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'HairSalon',
+        'name': shop.name,
+        ...(location && { 'address': {
+          '@type': 'PostalAddress',
+          'streetAddress': shop.address || '',
+          'addressLocality': shop.city || '',
+          'addressCountry': 'AR'
+        }}),
+        ...(shop.phone && { 'telephone': shop.phone }),
+        'url': canonical,
+        'image': image,
+        'makesOffer': {
+          '@type': 'Offer',
+          'description': 'Turno de barbería online'
+        }
+      });
+
+      const seoTags = `
+  <meta name="description" content="${desc}">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:site_name" content="${siteName}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="robots" content="index, follow">
+  <script type="application/ld+json">${jsonLd}</script>`;
+
+      html = html
+        .replace('<title>Reservar turno — FILO</title>', `<title>${title}</title>`)
+        .replace('</head>', seoTags + '\n</head>');
+    }
+
+    res.send(html);
+  } catch (e) {
+    console.error('SEO reservar error:', e.message);
+    res.sendFile(path.join(publicDir, 'reservar.html'));
+  }
 });
 
 // Landing en la raíz
