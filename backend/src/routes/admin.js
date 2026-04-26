@@ -328,4 +328,26 @@ router.delete('/accounts/:id', adminAuth, async (req, res) => {
   }
 });
 
+// POST /api/admin/grant-free-months — sumar meses gratis a un usuario
+router.post('/grant-free-months', adminAuth, async (req, res) => {
+  const { shop_id, months } = req.body;
+  if (!shop_id || !months || months < 1 || months > 12) {
+    return res.status(400).json({ error: 'shop_id y months (1-12) son requeridos' });
+  }
+  try {
+    await pool.query(`ALTER TABLE shops ADD COLUMN IF NOT EXISTS free_months INT DEFAULT 0`).catch(() => {});
+    const result = await pool.query(
+      `UPDATE shops SET free_months = COALESCE(free_months, 0) + $1 WHERE id = $2
+       RETURNING id, name, free_months`,
+      [parseInt(months), parseInt(shop_id)]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
+    const shop = result.rows[0];
+    console.log(`[ADMIN] +${months} mes${months > 1 ? 'es' : ''} gratis a shop ${shop_id} (${shop.name}). Total: ${shop.free_months}`);
+    res.json({ ok: true, free_months: shop.free_months, name: shop.name });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

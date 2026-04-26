@@ -465,6 +465,32 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 </div>
 
 <!-- MODAL EDITAR CUENTA -->
+<!-- MODAL: MESES GRATIS -->
+<div class="modal-overlay" id="grant-months-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>🎁 MESES GRATIS</h3>
+      <button class="modal-close" onclick="closeModal('grant-months-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--g);margin-bottom:4px">Cuenta</div>
+      <div id="grant-months-name" style="font-size:16px;font-weight:700;color:var(--w);margin-bottom:16px"></div>
+      <div style="font-size:13px;color:var(--g);margin-bottom:8px">¿Cuántos meses gratis querés sumarle?</div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
+        <button onclick="setGrantMonths(1)" class="months-opt" data-v="1" style="flex:1;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:10px;color:#4ade80;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;cursor:pointer;transition:all .15s">+1</button>
+        <button onclick="setGrantMonths(2)" class="months-opt" data-v="2" style="flex:1;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:10px;color:#4ade80;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;cursor:pointer;transition:all .15s">+2</button>
+        <button onclick="setGrantMonths(3)" class="months-opt" data-v="3" style="flex:1;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:10px;color:#4ade80;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;cursor:pointer;transition:all .15s">+3</button>
+        <button onclick="setGrantMonths(6)" class="months-opt" data-v="6" style="flex:1;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:10px;color:#4ade80;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;cursor:pointer;transition:all .15s">+6</button>
+      </div>
+      <div id="grant-months-preview" style="text-align:center;font-size:12px;color:rgba(255,255,255,.35);min-height:18px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm gray" onclick="closeModal('grant-months-modal')">Cancelar</button>
+      <button class="btn-sm" id="btn-confirm-grant" onclick="confirmGrantMonths()" style="background:#22c55e;color:#fff;border:none" disabled>Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <div class="modal-header">
@@ -695,8 +721,9 @@ function renderTreeRow(a, depth, parentId) {
     <td>${dateInfo}</td>
     <td>${barberCount}</td>
     <td style="font-size:12px">${wppDot}</td>
-    <td style="display:flex;gap:6px">
+    <td style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
+      ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},'${esc(a.name)}')" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
       <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
     </td>
   </tr>`;
@@ -837,6 +864,53 @@ async function createAccount() {
 }
 
 // ── MODAL EDITAR ──────────────────────────────────────────────────────────────
+// ── MESES GRATIS ─────────────────────────────────────────────────────────────
+let _grantShopId = null;
+let _grantMonths = 0;
+
+function openGrantMonthsModal(id, name) {
+  _grantShopId = id;
+  _grantMonths = 0;
+  document.getElementById('grant-months-name').textContent = name;
+  document.getElementById('grant-months-preview').textContent = '';
+  document.getElementById('btn-confirm-grant').disabled = true;
+  document.querySelectorAll('.months-opt').forEach(b => b.style.borderColor = 'rgba(34,197,94,.25)');
+  document.getElementById('grant-months-modal').classList.add('open');
+}
+
+function setGrantMonths(n) {
+  _grantMonths = n;
+  document.querySelectorAll('.months-opt').forEach(b => {
+    const active = parseInt(b.dataset.v) === n;
+    b.style.borderColor = active ? '#22c55e' : 'rgba(34,197,94,.25)';
+    b.style.background  = active ? 'rgba(34,197,94,.25)' : 'rgba(34,197,94,.1)';
+  });
+  document.getElementById('grant-months-preview').textContent = `Se sumarán ${n} mes${n > 1 ? 'es' : ''} gratis disponibles para canjear`;
+  document.getElementById('btn-confirm-grant').disabled = false;
+}
+
+async function confirmGrantMonths() {
+  if (!_grantShopId || !_grantMonths) return;
+  const btn = document.getElementById('btn-confirm-grant');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const res = await fetch(`/api/admin/grant-free-months`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({ shop_id: _grantShopId, months: _grantMonths })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    closeModal('grant-months-modal');
+    const name = document.getElementById('grant-months-name').textContent;
+    alert(`✅ +${_grantMonths} mes${_grantMonths > 1 ? 'es' : ''} gratis otorgado${_grantMonths > 1 ? 's' : ''} a ${name}.\nTotal disponible: ${data.free_months}`);
+    await loadAll();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Confirmar';
+  }
+}
+
 function openEditModal(id) {
   const a = allAccounts.find(x => x.id === id);
   if (!a) return;
