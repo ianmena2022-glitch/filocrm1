@@ -2770,6 +2770,7 @@ select.form-input { padding-right: 32px; }
           <div id="ref-sec-redeem-wrap" style="display:none">
             <button onclick="redeemFreeMonth()" style="background:#4ade80;color:#0a2010;border:none;border-radius:10px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;white-space:nowrap">🎁 CANJEAR MES GRATIS (<span id="ref-sec-free-badge">0</span>)</button>
           </div>
+          <div id="ref-sec-no-redeem-msg" style="display:none;font-size:12px;color:rgba(255,255,255,.4);margin-top:6px;font-style:italic"></div>
         </div>
 
         <!-- Cómo funciona -->
@@ -4030,23 +4031,39 @@ function openQRModal(plan) {
     cancelBtn.onclick = closeQRModal;
     cancelBtn.textContent = currentShop?.subscription_status === 'trial' ? 'Ahora no, usaré el trial' : 'Cancelar';
   }
-  // Mostrar botón de canjear mes gratis si tiene tokens
+  // Mostrar botón de canjear mes gratis solo si puede canjear ahora
   const freeMonths = parseInt(currentShop?.free_months) || 0;
+  const eligible   = canRedeemFreeMonth();
   const redeemWrap = document.getElementById('qr-redeem-wrap');
   const badge      = document.getElementById('qr-free-months-badge');
-  if (redeemWrap) redeemWrap.style.display = freeMonths > 0 ? 'block' : 'none';
-  if (badge)      badge.textContent = freeMonths > 0 ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
+  if (redeemWrap) redeemWrap.style.display = eligible ? 'block' : 'none';
+  if (badge)      badge.textContent = eligible ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   // También en paywall
   const pwWrap  = document.getElementById('pw-redeem-wrap');
   const pwBadge = document.getElementById('pw-free-months-badge');
-  if (pwWrap)  pwWrap.style.display  = freeMonths > 0 ? 'block' : 'none';
-  if (pwBadge) pwBadge.textContent   = freeMonths > 0 ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
+  if (pwWrap)  pwWrap.style.display  = eligible ? 'block' : 'none';
+  if (pwBadge) pwBadge.textContent   = eligible ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   document.getElementById('modal-qr-payment').classList.add('show');
+}
+
+// Determina si el usuario puede canjear un mes gratis ahora
+// Solo cuando está vencido/cancelado o le quedan ≤5 días de acceso
+function canRedeemFreeMonth() {
+  const freeMonths = parseInt(currentShop?.free_months) || 0;
+  if (freeMonths <= 0) return false;
+  const status    = currentShop?.subscription_status;
+  if (status === 'expired' || status === 'cancelled') return true;
+  const daysLeft  = currentShop?.trial_days_left ?? 999;
+  return daysLeft <= 5;
 }
 
 async function redeemFreeMonth() {
   const freeMonths = parseInt(currentShop?.free_months) || 0;
   if (freeMonths <= 0) return showToast('⚠️', 'Sin meses disponibles', 'No tenés meses gratis para canjear');
+  if (!canRedeemFreeMonth()) {
+    const daysLeft = currentShop?.trial_days_left ?? '?';
+    return showToast('⏳', 'Todavía no', `Podés canjear cuando te queden 5 días o menos de acceso. Te quedan ${daysLeft} días.`);
+  }
   if (!confirm(`¿Canjear 1 mes gratis? Tu acceso se extenderá 30 días.\nTe quedarán ${freeMonths - 1} mes${freeMonths - 1 !== 1 ? 'es' : ''} disponible${freeMonths - 1 !== 1 ? 's' : ''}.`)) return;
   try {
     const data = await api('POST', '/referrals/redeem');
@@ -4147,12 +4164,13 @@ function checkPaywall() {
   const status = currentShop.subscription_status;
   if (status === 'expired' || status === 'cancelled') {
     document.getElementById('paywall-screen').classList.add('show');
-    // Mostrar botón de mes gratis si tiene tokens
-    const fm = parseInt(currentShop.free_months) || 0;
+    // Mostrar botón de mes gratis solo si puede canjear ahora
+    const fm       = parseInt(currentShop.free_months) || 0;
+    const eligible = canRedeemFreeMonth();
     const pw = document.getElementById('pw-redeem-wrap');
     const pb = document.getElementById('pw-free-months-badge');
-    if (pw)  pw.style.display = fm > 0 ? 'block' : 'none';
-    if (pb)  pb.textContent   = fm > 0 ? `${fm} disponible${fm > 1 ? 's' : ''}` : '';
+    if (pw)  pw.style.display = eligible ? 'block' : 'none';
+    if (pb)  pb.textContent   = eligible ? `${fm} disponible${fm > 1 ? 's' : ''}` : '';
   }
 }
 
@@ -7232,11 +7250,22 @@ async function loadReferrals() {
       }
     }
 
-    // Mostrar/ocultar botón canjear en la sección referidos
-    const secRedeemWrap = document.getElementById('ref-sec-redeem-wrap');
+    // Mostrar/ocultar botón canjear en la sección referidos (solo si es elegible)
+    const secRedeemWrap  = document.getElementById('ref-sec-redeem-wrap');
     const secRedeemBadge = document.getElementById('ref-sec-free-badge');
-    if (secRedeemWrap) secRedeemWrap.style.display = (data.free_months ?? 0) > 0 ? 'block' : 'none';
-    if (secRedeemBadge) secRedeemBadge.textContent = data.free_months ?? 0;
+    const secEligible    = (data.free_months ?? 0) > 0 && canRedeemFreeMonth();
+    if (secRedeemWrap)  secRedeemWrap.style.display = secEligible ? 'block' : 'none';
+    if (secRedeemBadge) secRedeemBadge.textContent  = data.free_months ?? 0;
+    // Mostrar mensaje informativo si tiene meses pero aún no puede canjear
+    const secNoRedeem = document.getElementById('ref-sec-no-redeem-msg');
+    if (secNoRedeem) {
+      const daysLeft = currentShop?.trial_days_left ?? 999;
+      const status   = currentShop?.subscription_status;
+      const hasFm    = (data.free_months ?? 0) > 0;
+      const notYet   = hasFm && !secEligible;
+      secNoRedeem.style.display = notYet ? 'block' : 'none';
+      if (notYet) secNoRedeem.textContent = `Podrás canjear cuando te queden 5 días o menos de acceso (${daysLeft > 0 ? `quedan ${daysLeft} días` : 'acceso activo'}).`;
+    }
 
     // Lista
     const list = document.getElementById('ref-list');
