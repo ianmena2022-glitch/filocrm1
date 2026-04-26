@@ -4357,9 +4357,9 @@ function showSection(name) {
   if (name === 'fila') {
     document.getElementById('nav-fila')?.classList.add('active');
   } else {
-    const navMap = { agenda: 0, clientes: 1, motores: 2, dashboard: 3, membresias: 4, equipo: 5, recurrentes: 6, referidos: 7 };
+    const navMap = { agenda: 0, clientes: 1, motores: 2, dashboard: 3, membresias: 4, equipo: 5, recurrentes: 6 };
     const navItems = document.querySelectorAll('.nav-item');
-    if (navMap[name] !== undefined) navItems[navMap[name]].classList.add('active');
+    if (navMap[name] !== undefined && navItems[navMap[name]]) navItems[navMap[name]].classList.add('active');
   }
 
   // Botón Ajustes: marcar activo solo en configuración
