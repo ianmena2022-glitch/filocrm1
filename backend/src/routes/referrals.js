@@ -76,15 +76,13 @@ router.post('/redeem', auth, async (req, res) => {
       : new Date();
     base.setDate(base.getDate() + 30);
 
-    // Actualizar: restar 1 mes gratis, extender trial, asegurar status = trial
+    // Canjear: restar 1 mes, extender acceso y poner en 'active'
     await pool.query(
       `UPDATE shops SET
-         free_months       = free_months - 1,
-         trial_ends_at     = $1,
-         subscription_status = CASE
-           WHEN subscription_status IN ('expired','cancelled') THEN 'trial'
-           ELSE subscription_status
-         END
+         free_months         = free_months - 1,
+         trial_ends_at       = $1,
+         subscription_status = 'active',
+         expired_at          = NULL
        WHERE id = $2`,
       [base.toISOString(), req.shopId]
     );
