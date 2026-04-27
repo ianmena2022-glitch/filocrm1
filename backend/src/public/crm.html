@@ -1553,6 +1553,29 @@ select.form-input { padding-right: 32px; }
 </head>
 <body>
 
+<!-- Modal confirmar logout -->
+<div id="modal-logout" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0d1f33;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:320px;padding:24px;text-align:center">
+    <div style="font-size:28px;margin-bottom:12px">👋</div>
+    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">¿Cerrás sesión?</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:22px">Vas a tener que volver a ingresar con tu email y contraseña.</div>
+    <div style="display:flex;gap:10px">
+      <button id="btn-confirm-logout" style="flex:1;background:#e53e3e;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cerrar sesión</button>
+      <button id="btn-cancel-logout" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('btn-confirm-logout').addEventListener('click', function() {
+    document.getElementById('modal-logout').style.display = 'none';
+    ['filo_token','filo_shop','barber_token','barber_me'].forEach(k => localStorage.removeItem(k));
+    window.location.reload();
+  });
+  document.getElementById('btn-cancel-logout').addEventListener('click', function() {
+    document.getElementById('modal-logout').style.display = 'none';
+  });
+</script>
+
 <!-- ═══ PANTALLA DE LOGIN ═══ -->
 <div id="auth-screen" style="display:none">
   <div class="auth-box">
@@ -3993,26 +4016,6 @@ async function register() {
 function logout() {
   document.getElementById('modal-logout').style.display = 'flex';
 }
-function _doLogout() {
-  document.getElementById('modal-logout').style.display = 'none';
-  if (_pendingPollInterval) { clearInterval(_pendingPollInterval); _pendingPollInterval = null; }
-  localStorage.removeItem('filo_token');
-  localStorage.removeItem('filo_shop');
-  localStorage.removeItem('barber_token');
-  localStorage.removeItem('barber_me');
-  token = null; currentShop = null;
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('paywall-screen').classList.remove('show');
-  document.getElementById('auth-screen').style.display = 'flex';
-}
-window._doLogout = _doLogout;
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btn-confirm-logout')?.addEventListener('click', _doLogout);
-  document.getElementById('btn-cancel-logout')?.addEventListener('click', () => {
-    document.getElementById('modal-logout').style.display = 'none';
-  });
-});
 
 // ─── APP INIT ───
 
@@ -10513,19 +10516,6 @@ async function bcmSave(id) {
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="confirmarAjusteStock()">✅ Confirmar</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-ajuste-stock')">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal confirmar logout -->
-<div id="modal-logout" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#0d1f33;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:320px;padding:24px;text-align:center">
-    <div style="font-size:28px;margin-bottom:12px">👋</div>
-    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">¿Cerrás sesión?</div>
-    <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:22px">Vas a tener que volver a ingresar con tu email y contraseña.</div>
-    <div style="display:flex;gap:10px">
-      <button id="btn-confirm-logout" style="flex:1;background:#e53e3e;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cerrar sesión</button>
-      <button id="btn-cancel-logout" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
     </div>
   </div>
 </div>
