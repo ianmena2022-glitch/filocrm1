@@ -4005,6 +4005,7 @@ function _doLogout() {
   document.getElementById('paywall-screen').classList.remove('show');
   document.getElementById('auth-screen').style.display = 'flex';
 }
+window._doLogout = _doLogout;
 
 // ─── APP INIT ───
 
