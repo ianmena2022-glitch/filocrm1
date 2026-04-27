@@ -198,6 +198,20 @@ router.post('/', auth, async (req, res) => {
     }
     console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
 
+    // Verificar solapamiento: mismo barbero, mismo día, mismo bloque horario
+    if (assignedBarberId) {
+      const conflict = await pool.query(
+        `SELECT id FROM appointments
+         WHERE shop_id=$1 AND barber_id=$2 AND date=$3
+           AND status NOT IN ('cancelled','noshow')
+           AND time_start < $4 AND time_end > $5`,
+        [shopId, assignedBarberId, date, time_end, time_start]
+      );
+      if (conflict.rows.length) {
+        return res.status(409).json({ error: `El barbero ya tiene un turno de ${time_start} a ${time_end}. Elegí otro horario.` });
+      }
+    }
+
     const result = await pool.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
