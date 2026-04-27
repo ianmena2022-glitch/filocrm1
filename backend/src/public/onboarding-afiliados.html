@@ -330,41 +330,179 @@ h1 .g{color:var(--green)}
 
 </div><!-- /#deck -->
 
-<script>
-const slides = document.querySelectorAll('.slide');
-const total  = slides.length;
-let current  = 0;
-let hintTimer;
+<!-- ─── PANEL DE AUDIO ─── -->
+<div id="audio-panel" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div style="background:#0e1520;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:40px;width:100%;max-width:560px;font-family:'Barlow',sans-serif">
+    <div style="font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;color:#FFD100;margin-bottom:6px">🎙️ Cargar audios</div>
+    <p style="font-size:14px;color:rgba(255,255,255,.5);margin-bottom:24px">Seleccioná los <strong style="color:#fff">9 archivos de audio</strong> (uno por slide). El orden en que los selecciones determina a qué slide va cada uno. Podés usar MP3, WAV o M4A.</p>
 
+    <div id="drop-zone" style="border:2px dashed rgba(255,209,0,.3);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:20px"
+      onclick="document.getElementById('file-input').click()"
+      ondragover="event.preventDefault();this.style.borderColor='#FFD100'"
+      ondragleave="this.style.borderColor='rgba(255,209,0,.3)'"
+      ondrop="handleDrop(event)">
+      <div style="font-size:32px;margin-bottom:8px">📂</div>
+      <div style="font-size:15px;color:rgba(255,255,255,.6)">Hacé clic o arrastrá los archivos acá</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.3);margin-top:4px">MP3 · WAV · M4A · OGG</div>
+    </div>
+    <input type="file" id="file-input" multiple accept="audio/*" style="display:none" onchange="handleFiles(this.files)">
+
+    <div id="file-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;max-height:240px;overflow-y:auto"></div>
+
+    <div style="display:flex;gap:10px">
+      <button onclick="closePanelNoAudio()" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer">CONTINUAR SIN AUDIO</button>
+      <button id="btn-start" onclick="startPresentation()" disabled style="flex:2;background:#FFD100;color:#000;border:none;border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;cursor:pointer;opacity:.4;transition:all .2s">▶ INICIAR PRESENTACIÓN</button>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de audio fija abajo -->
+<div id="audio-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:150;background:rgba(6,9,14,.95);border-top:1px solid rgba(255,255,255,.08);padding:10px 24px;display:none;align-items:center;gap:16px">
+  <button id="btn-play-pause" onclick="togglePlay()" style="background:rgba(255,209,0,.15);border:1px solid rgba(255,209,0,.3);color:#FFD100;border-radius:50%;width:36px;height:36px;font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">▶</button>
+  <div style="flex:1">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.35);margin-bottom:4px;font-family:'Barlow Condensed',sans-serif">
+      <span id="audio-slide-label">Slide 1</span>
+      <span id="audio-time">0:00 / 0:00</span>
+    </div>
+    <div style="background:rgba(255,255,255,.1);border-radius:4px;height:4px;cursor:pointer" onclick="seekAudio(event)" id="audio-track">
+      <div id="audio-fill" style="background:#FFD100;height:100%;border-radius:4px;width:0%;transition:width .1s linear"></div>
+    </div>
+  </div>
+  <div style="font-size:11px;color:rgba(255,255,255,.25);font-family:'Barlow Condensed',sans-serif;white-space:nowrap" id="audio-status">Sin audio</div>
+</div>
+
+<script>
+const slides    = document.querySelectorAll('.slide');
+const total     = slides.length;
+let current     = 0;
+let audioBlobs  = new Array(total).fill(null); // URL.createObjectURL por slide
+let audioEl     = new Audio();
+let isPlaying   = false;
+let autoAdvance = true;
+
+// ── Panel de carga ────────────────────────────────────────────
+function handleFiles(files) {
+  const arr = Array.from(files).sort((a, b) => a.name.localeCompare(b.name));
+  arr.forEach((f, i) => {
+    if (i < total) audioBlobs[i] = URL.createObjectURL(f);
+  });
+  renderFileList(arr);
+  const loaded = arr.length;
+  document.getElementById('btn-start').disabled = loaded === 0;
+  document.getElementById('btn-start').style.opacity = loaded > 0 ? '1' : '.4';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.borderColor = 'rgba(255,209,0,.3)';
+  handleFiles(e.dataTransfer.files);
+}
+
+const SLIDE_NAMES = ['Gancho','¿Qué es FILO?','Los planes','Starter','Staff','Enterprise','Cómo funciona','Potencial','Cierre'];
+function renderFileList(files) {
+  const el = document.getElementById('file-list');
+  el.innerHTML = files.slice(0, total).map((f, i) => `
+    <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+      <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:#FFD100;min-width:60px">SLIDE ${i+1}</span>
+      <span style="font-size:12px;color:rgba(255,255,255,.5);flex:1">${SLIDE_NAMES[i] || ''}</span>
+      <span style="font-size:12px;color:rgba(255,255,255,.7);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${f.name}</span>
+      <span style="color:#4ade80;font-size:14px">✓</span>
+    </div>`).join('');
+}
+
+function closePanelNoAudio() {
+  document.getElementById('audio-panel').style.display = 'none';
+  go(0);
+}
+
+function startPresentation() {
+  document.getElementById('audio-panel').style.display = 'none';
+  document.getElementById('audio-bar').style.display   = 'flex';
+  go(0);
+  playSlideAudio(0);
+}
+
+// ── Playback ──────────────────────────────────────────────────
+function playSlideAudio(i) {
+  audioEl.pause();
+  const src = audioBlobs[i];
+  if (!src) {
+    updateBar(false, i);
+    return;
+  }
+  audioEl = new Audio(src);
+  audioEl.addEventListener('timeupdate', updateProgress);
+  audioEl.addEventListener('ended', () => {
+    isPlaying = false;
+    updatePlayBtn();
+    if (autoAdvance && current < total - 1) setTimeout(() => go(current + 1), 600);
+  });
+  audioEl.play().then(() => {
+    isPlaying = true;
+    updateBar(true, i);
+    updatePlayBtn();
+  }).catch(() => {});
+}
+
+function togglePlay() {
+  if (audioEl.paused) {
+    audioEl.play(); isPlaying = true;
+  } else {
+    audioEl.pause(); isPlaying = false;
+  }
+  updatePlayBtn();
+}
+
+function updatePlayBtn() {
+  document.getElementById('btn-play-pause').textContent = isPlaying ? '⏸' : '▶';
+}
+
+function updateProgress() {
+  const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+  document.getElementById('audio-fill').style.width = pct + '%';
+  document.getElementById('audio-time').textContent =
+    fmt(audioEl.currentTime) + ' / ' + fmt(audioEl.duration || 0);
+}
+
+function seekAudio(e) {
+  if (!audioEl.duration) return;
+  const rect = document.getElementById('audio-track').getBoundingClientRect();
+  audioEl.currentTime = ((e.clientX - rect.left) / rect.width) * audioEl.duration;
+}
+
+function updateBar(hasAudio, i) {
+  document.getElementById('audio-slide-label').textContent = `Slide ${i + 1} — ${SLIDE_NAMES[i] || ''}`;
+  document.getElementById('audio-status').textContent = hasAudio ? '🔊 Reproduciendo' : '🔇 Sin audio';
+  document.getElementById('audio-fill').style.width = '0%';
+  document.getElementById('audio-time').textContent = '0:00 / 0:00';
+}
+
+function fmt(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+// ── Slides ────────────────────────────────────────────────────
 function go(i) {
   slides[current].classList.remove('active');
   current = Math.max(0, Math.min(i, total - 1));
   slides[current].classList.add('active');
-
-  // Progress bar
   document.getElementById('progress-bar').style.width = ((current + 1) / total * 100) + '%';
-
-  // Counter
   document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+  if (document.getElementById('audio-bar').style.display === 'flex') playSlideAudio(current);
 }
 
 function next() { if (current < total - 1) go(current + 1); }
 function prev() { if (current > 0) go(current - 1); }
 
-// Init
-go(0);
-
-// Hide nav hint after 4s
-hintTimer = setTimeout(() => {
-  document.getElementById('nav-hint').style.opacity = '0';
-}, 4000);
-
 // Controls
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); next(); }
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                   { e.preventDefault(); prev(); }
+  if (e.key === 'Escape') { audioEl.pause(); isPlaying = false; updatePlayBtn(); }
 });
 document.addEventListener('click', e => {
+  if (e.target.closest('#audio-bar') || e.target.closest('#audio-panel')) return;
   if (e.clientX > window.innerWidth / 2) next(); else prev();
 });
 
