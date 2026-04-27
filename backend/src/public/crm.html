@@ -10693,7 +10693,7 @@ async function bcmSave(id) {
     {
       target: function() { return document.querySelector('.cfg-tab-btn[onclick*="general"]'); },
       title: '🏠 General',
-      body: 'Nombre de tu barbería, ciudad, foto de perfil y horarios de atención. Lo primero que hay que completar.',
+      body: 'Nombre de tu barbería, ciudad y horarios de atención. Lo primero que hay que completar.',
       side: 'bottom',
       action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('general', document.querySelector('.cfg-tab-btn[onclick*="general"]')); }, 150); }
     },
@@ -10707,7 +10707,7 @@ async function bcmSave(id) {
     {
       target: function() { return document.querySelector('.cfg-tab-btn[onclick*="whatsapp"]'); },
       title: '💬 WhatsApp',
-      body: 'Conectá tu número de WhatsApp para enviar recordatorios automáticos, confirmaciones y mensajes de cumpleaños a tus clientes.',
+      body: 'Conectá tu número de WhatsApp para enviar recordatorios automáticos y confirmaciones de turno a tus clientes.',
       side: 'bottom',
       action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('whatsapp', document.querySelector('.cfg-tab-btn[onclick*="whatsapp"]')); }, 150); }
     },
