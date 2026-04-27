@@ -5,9 +5,9 @@ const jwt     = require('jsonwebtoken');
 
 // Comisión one-time por plan (primer pago del shop referido)
 const COMMISSIONS = {
-  starter:    8000,
-  staff:      16000,
-  enterprise: 26000,
+  starter:    24000,
+  staff:      48000,
+  enterprise: 78000,
 };
 
 // ── Crear tablas si no existen ────────────────────────────────────────────────
