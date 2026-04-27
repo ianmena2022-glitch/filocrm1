@@ -3957,7 +3957,7 @@ async function register() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), aff_code: getStoredAffCode(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
@@ -7361,18 +7361,25 @@ async function initReferralBanner() {
 }
 
 // Capturar ?ref= de la URL y pre-rellenar campo oculto en registro
-(function captureRefSlug() {
+(function captureUrlParams() {
   const params = new URLSearchParams(window.location.search);
   const ref = params.get('ref');
   if (ref) {
     localStorage.setItem('filo_ref_slug', ref);
-    // Mostrar tab de registro
+    setTimeout(() => switchAuthTab('register'), 100);
+  }
+  const aff = params.get('aff');
+  if (aff) {
+    localStorage.setItem('filo_aff_code', aff.toUpperCase());
     setTimeout(() => switchAuthTab('register'), 100);
   }
 })();
 
 function getStoredRefSlug() {
   return localStorage.getItem('filo_ref_slug') || null;
+}
+function getStoredAffCode() {
+  return localStorage.getItem('filo_aff_code') || null;
 }
 
 // ─────────────────────────────────────────────────────────────────

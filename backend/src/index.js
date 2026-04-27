@@ -76,6 +76,7 @@ app.use('/api/vendor',        require('./routes/vendor'));
 app.use('/api/queue',         require('./routes/queue'));
 app.use('/api/prospector',    require('./routes/prospector'));
 app.use('/api/referrals',     require('./routes/referrals'));
+app.use('/api/affiliates',    require('./routes/affiliates'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));
@@ -92,6 +93,11 @@ app.get('/admin', (req, res) => {
 // Dashboard vendedor
 app.get('/vendor', (req, res) => {
   res.sendFile(path.join(publicDir, 'vendor.html'));
+});
+
+// Centro de afiliados
+app.get('/afiliados', (req, res) => {
+  res.sendFile(path.join(publicDir, 'afiliados.html'));
 });
 
 // Fila digital pública

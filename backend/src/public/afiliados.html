@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FILO Afiliados — Ganá dinero recomendando FILO</title>
+<link rel="icon" type="image/png" href="/logo_f.png">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --y:#FFD100;--bg:#080c12;--card:#0e1520;--border:rgba(255,255,255,.07);
+  --g:#7a8ba8;--w:#fff;--green:#4ade80;--r:#f87171;
+}
+body{background:var(--bg);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:18px 32px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(8,12,18,.95);backdrop-filter:blur(10px);z-index:100}
+.nav-logo{font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--y);letter-spacing:1px;text-decoration:none}
+.nav-actions{display:flex;gap:10px}
+.btn{padding:9px 20px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:all .2s;border:none;text-transform:uppercase}
+.btn-outline{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--w)}
+.btn-outline:hover{border-color:var(--y);color:var(--y)}
+.btn-yellow{background:var(--y);color:#000}
+.btn-yellow:hover{box-shadow:0 0 20px rgba(255,209,0,.4)}
+.btn-green{background:var(--green);color:#0a2010}
+.btn-green:hover{box-shadow:0 0 20px rgba(74,222,128,.4)}
+
+/* LANDING */
+#view-landing{display:block}
+#view-auth{display:none}
+#view-dashboard{display:none}
+
+/* HERO */
+.hero{text-align:center;padding:80px 20px 60px;max-width:760px;margin:0 auto}
+.hero-tag{display:inline-block;background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.3);color:var(--y);font-size:12px;font-weight:700;letter-spacing:2px;padding:5px 16px;border-radius:20px;margin-bottom:24px;text-transform:uppercase}
+.hero h1{font-family:'Oswald',sans-serif;font-size:clamp(38px,7vw,68px);font-weight:700;line-height:1.05;margin-bottom:20px}
+.hero h1 span{color:var(--y)}
+.hero p{font-size:18px;color:rgba(255,255,255,.6);line-height:1.6;max-width:520px;margin:0 auto 36px}
+.hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* COMMISSION CARDS */
+.section{padding:60px 20px;max-width:900px;margin:0 auto}
+.section-title{font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y);margin-bottom:12px}
+.section-h2{font-family:'Oswald',sans-serif;font-size:clamp(28px,4vw,40px);font-weight:700;margin-bottom:36px}
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:48px}
+.plan-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;text-align:center;transition:transform .2s}
+.plan-card:hover{transform:translateY(-4px)}
+.plan-card.featured{border-color:rgba(255,209,0,.3);background:linear-gradient(135deg,#1a1400,#120e00)}
+.plan-name{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:12px}
+.plan-price-filo{font-size:14px;color:rgba(255,255,255,.45);margin-bottom:6px}
+.plan-commission{font-family:'Oswald',sans-serif;font-size:42px;font-weight:700;color:var(--green);line-height:1}
+.plan-commission-label{font-size:13px;color:rgba(255,255,255,.45);margin-top:6px}
+
+/* STEPS */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px;margin-bottom:60px}
+.step{text-align:center;padding:24px 16px}
+.step-num{width:44px;height:44px;background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--y);margin:0 auto 16px}
+.step h3{font-weight:700;font-size:16px;margin-bottom:8px}
+.step p{font-size:14px;color:rgba(255,255,255,.5);line-height:1.5}
+
+/* FAQ */
+.faq-item{border-bottom:1px solid var(--border);padding:20px 0}
+.faq-q{font-weight:600;font-size:15px;margin-bottom:8px}
+.faq-a{font-size:14px;color:rgba(255,255,255,.55);line-height:1.6}
+
+/* AUTH */
+.auth-wrap{min-height:calc(100vh - 61px);display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.auth-box{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:40px;width:100%;max-width:480px}
+.auth-tabs{display:flex;gap:0;margin-bottom:32px;border-bottom:1px solid var(--border)}
+.auth-tab{flex:1;text-align:center;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;cursor:pointer;color:rgba(255,255,255,.4);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;text-transform:uppercase}
+.auth-tab.active{color:var(--y);border-bottom-color:var(--y)}
+.form-row{margin-bottom:16px}
+.form-label{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:6px;display:block}
+.form-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--w);font-family:'Barlow',sans-serif;font-size:15px;outline:none;transition:border .2s}
+.form-input:focus{border-color:rgba(255,209,0,.4)}
+.form-hint{font-size:12px;color:var(--g);margin-top:5px}
+.form-err{color:var(--r);font-size:13px;margin-top:12px;display:none}
+.form-btn{width:100%;margin-top:20px}
+
+/* DASHBOARD */
+.dash-wrap{max-width:860px;margin:0 auto;padding:32px 20px 60px}
+.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+.dash-greeting{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:28px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.kpi-val{font-family:'Oswald',sans-serif;font-size:30px;font-weight:700;margin-bottom:4px}
+.kpi-lbl{font-size:11px;color:var(--g);text-transform:uppercase;letter-spacing:1px}
+.link-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
+.link-box-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--g);margin-bottom:10px}
+.link-display{display:flex;gap:8px;align-items:center}
+.link-text{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,209,0,.2);border-radius:8px;padding:11px 14px;font-size:13px;font-family:monospace;color:rgba(255,255,255,.85);word-break:break-all}
+.link-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.link-btn{padding:9px 16px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;border:none;text-transform:uppercase;transition:all .2s}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.table-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.table-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g)}
+table{width:100%;border-collapse:collapse}
+th{padding:11px 16px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--g);background:rgba(0,0,0,.2);border-bottom:1px solid var(--border)}
+td{padding:13px 16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
+tr:last-child td{border-bottom:none}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge-pending{background:rgba(255,209,0,.12);color:var(--y)}
+.badge-paid{background:rgba(74,222,128,.12);color:var(--green)}
+.empty-row{text-align:center;padding:32px;color:rgba(255,255,255,.25);font-size:13px}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:#1a2535;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 20px;font-size:14px;opacity:0;transform:translateY(12px);transition:all .3s;pointer-events:none;z-index:9999;max-width:320px}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* FOOTER */
+footer{text-align:center;padding:40px 20px;border-top:1px solid var(--border);color:rgba(255,255,255,.25);font-size:13px}
+footer a{color:var(--y);text-decoration:none}
+
+@media(max-width:600px){
+  nav{padding:14px 16px}
+  .hero{padding:48px 16px 40px}
+  .auth-box{padding:28px 20px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/">✂ FILO</a>
+  <div class="nav-actions" id="nav-actions">
+    <button class="btn btn-outline" onclick="showAuth('login')">Iniciar sesión</button>
+    <button class="btn btn-yellow" onclick="showAuth('register')">Unirse gratis</button>
+  </div>
+</nav>
+
+<!-- ─── LANDING ──────────────────────────────────────────── -->
+<div id="view-landing">
+
+  <div class="hero">
+    <div class="hero-tag">Programa de Afiliados</div>
+    <h1>Recomendá FILO.<br><span>Ganá en efectivo.</span></h1>
+    <p>Compartí tu link, y cada barbería que se suscriba te genera una comisión directa en tu cuenta bancaria. Sin límites, sin vencimientos.</p>
+    <div class="hero-cta">
+      <button class="btn btn-yellow" style="padding:14px 32px;font-size:16px" onclick="showAuth('register')">🚀 EMPEZAR GRATIS</button>
+      <button class="btn btn-outline" style="padding:14px 32px;font-size:16px" onclick="document.getElementById('sec-comisiones').scrollIntoView({behavior:'smooth'})">Ver comisiones</button>
+    </div>
+  </div>
+
+  <div class="section" id="sec-comisiones">
+    <div class="section-title">Comisiones</div>
+    <div class="section-h2">Valor fijo por cada suscripción</div>
+    <div class="plans-grid">
+      <div class="plan-card">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price-filo">Plan $40.000/mes</div>
+        <div class="plan-commission">$8.000</div>
+        <div class="plan-commission-label">por suscripción activada</div>
+      </div>
+      <div class="plan-card featured">
+        <div class="plan-name">Staff ⭐ Popular</div>
+        <div class="plan-price-filo">Plan $80.000/mes</div>
+        <div class="plan-commission">$16.000</div>
+        <div class="plan-commission-label">por suscripción activada</div>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">Enterprise</div>
+        <div class="plan-price-filo">Plan $130.000/mes</div>
+        <div class="plan-commission">$26.000</div>
+        <div class="plan-commission-label">por suscripción activada</div>
+      </div>
+    </div>
+
+    <div class="section-title">Cómo funciona</div>
+    <div class="section-h2">3 pasos simples</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Registrate gratis</h3>
+        <p>Creá tu cuenta en segundos y recibís tu link único de afiliado.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Compartí tu link</h3>
+        <p>Mandáselo a barberías, peluquerías o salones de belleza que conozcas.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Cobrás en efectivo</h3>
+        <p>Cuando activan su suscripción, recibís tu comisión transferida directamente.</p>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:24px">Preguntas frecuentes</div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cuánto puedo ganar?</div>
+      <div class="faq-a">No hay límite. Cada barbería que se suscriba a través de tu link te genera una comisión. Con 10 barberías en Staff ya son $160.000 por mes.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cómo cobro?</div>
+      <div class="faq-a">Acumulás tus comisiones como "pendientes" y el equipo de FILO te transfiere el total al CBU/Alias que registraste. Los pagos se procesan semanalmente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Necesito ser cliente de FILO?</div>
+      <div class="faq-a">No. Cualquier persona puede ser afiliado, aunque no uses FILO en tu negocio.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿La comisión es por el primer pago o recurrente?</div>
+      <div class="faq-a">Es una comisión one-time por el primer pago de cada barbería. No es recurrente.</div>
+    </div>
+    <div class="faq-item" style="border-bottom:none">
+      <div class="faq-q">¿Hay algún costo para ser afiliado?</div>
+      <div class="faq-a">No. Registrarse y usar el programa es completamente gratuito.</div>
+    </div>
+
+    <div style="text-align:center;margin-top:56px">
+      <button class="btn btn-yellow" style="padding:16px 48px;font-size:17px" onclick="showAuth('register')">QUIERO SER AFILIADO →</button>
+    </div>
+  </div>
+
+</div><!-- /landing -->
+
+<!-- ─── AUTH ─────────────────────────────────────────────── -->
+<div id="view-auth">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--y)">✂ FILO</div>
+        <div style="font-size:14px;color:var(--g);margin-top:4px">Centro de Afiliados</div>
+      </div>
+
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tab-register" onclick="switchTab('register')">Registrarse</div>
+        <div class="auth-tab" id="tab-login" onclick="switchTab('login')">Iniciar sesión</div>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <form id="form-register" onsubmit="doRegister(event)">
+        <div class="form-row">
+          <label class="form-label">Nombre completo</label>
+          <input class="form-input" id="r-name" type="text" placeholder="Ej: Juan Pérez" required>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="r-email" type="email" placeholder="tu@email.com" required>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Contraseña</label>
+          <input class="form-input" id="r-password" type="password" placeholder="Mínimo 6 caracteres" required>
+        </div>
+        <div class="form-row">
+          <label class="form-label">WhatsApp / Teléfono</label>
+          <input class="form-input" id="r-phone" type="tel" placeholder="+54 9 11 ...">
+        </div>
+        <div class="form-row">
+          <label class="form-label">CBU o Alias para cobros <span style="color:var(--r)">*</span></label>
+          <input class="form-input" id="r-bank" type="text" placeholder="cvu / alias de tu billetera" required>
+          <div class="form-hint">Acá te transferimos tus comisiones</div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">¿Cómo vas a promocionar FILO? (opcional)</label>
+          <input class="form-input" id="r-promo" type="text" placeholder="Redes sociales, comunidad, boca en boca...">
+        </div>
+        <div class="form-err" id="r-err"></div>
+        <button type="submit" class="btn btn-yellow form-btn" id="btn-register">CREAR CUENTA GRATIS</button>
+      </form>
+
+      <!-- LOGIN FORM -->
+      <form id="form-login" style="display:none" onsubmit="doLogin(event)">
+        <div class="form-row">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="l-email" type="email" placeholder="tu@email.com" required>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Contraseña</label>
+          <input class="form-input" id="l-password" type="password" placeholder="Tu contraseña" required>
+        </div>
+        <div class="form-err" id="l-err"></div>
+        <button type="submit" class="btn btn-yellow form-btn" id="btn-login">INGRESAR</button>
+      </form>
+
+      <div style="text-align:center;margin-top:16px">
+        <button onclick="showLanding()" style="background:none;border:none;color:var(--g);font-size:13px;cursor:pointer">← Volver</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /auth -->
+
+<!-- ─── DASHBOARD ─────────────────────────────────────────── -->
+<div id="view-dashboard">
+  <div class="dash-wrap">
+
+    <div class="dash-header">
+      <div>
+        <div style="font-size:12px;color:var(--g);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Bienvenido</div>
+        <div class="dash-greeting" id="dash-name">—</div>
+      </div>
+      <button class="btn btn-outline" onclick="logout()">Cerrar sesión</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--y)" id="kpi-total">0</div>
+        <div class="kpi-lbl">Referidos pagos</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--green)" id="kpi-pending-amount">$0</div>
+        <div class="kpi-lbl">Pendiente de cobro</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:#60a5fa" id="kpi-paid-amount">$0</div>
+        <div class="kpi-lbl">Ya cobrado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--w)" id="kpi-earned">$0</div>
+        <div class="kpi-lbl">Total acumulado</div>
+      </div>
+    </div>
+
+    <!-- Link -->
+    <div class="link-box">
+      <div class="link-box-label">Tu link de afiliado</div>
+      <div class="link-display">
+        <div class="link-text" id="aff-link">Cargando...</div>
+        <button class="btn btn-yellow link-btn" onclick="copyLink()" id="btn-copy">📋 COPIAR</button>
+      </div>
+      <div class="link-actions">
+        <button class="link-btn" onclick="shareWA()" style="background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3)">📱 COMPARTIR POR WHATSAPP</button>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <div style="font-size:12px;color:var(--g)">Tu código:</div>
+          <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--y);background:rgba(255,209,0,.08);padding:4px 12px;border-radius:6px" id="aff-code">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cuenta bancaria -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--g);margin-bottom:4px">Cuenta para cobros</div>
+        <div style="font-size:14px;font-family:monospace" id="dash-bank">—</div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.3)">Pagos procesados semanalmente</div>
+    </div>
+
+    <!-- Comisiones -->
+    <div class="table-wrap">
+      <div class="table-head">
+        <div class="table-title">Historial de comisiones</div>
+        <div style="font-size:12px;color:var(--g)" id="pending-summary"></div>
+      </div>
+      <div id="commissions-table">
+        <div class="empty-row">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- Comisiones explainer -->
+    <div style="margin-top:16px;background:rgba(255,209,0,.04);border:1px solid rgba(255,209,0,.12);border-radius:12px;padding:16px 20px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:10px">Comisiones vigentes</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div style="font-size:13px;color:rgba(255,255,255,.6)">Starter → <strong style="color:var(--w)">$8.000</strong></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.6)">Staff → <strong style="color:var(--w)">$16.000</strong></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.6)">Enterprise → <strong style="color:var(--w)">$26.000</strong></div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /dashboard -->
+
+<footer>
+  <div style="margin-bottom:8px"><strong style="color:var(--y)">FILO</strong> — Sistema de gestión para barberías</div>
+  <div><a href="/">filocrm.com.ar</a> · <a href="https://wa.me/5491126604247">Soporte</a></div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+const BASE = '/api/affiliates';
+let _token = localStorage.getItem('filo_aff_token');
+let _aff   = null;
+
+// ── Init ──────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (_token) loadDashboard();
+});
+
+function showView(v) {
+  ['landing','auth','dashboard'].forEach(n => {
+    document.getElementById('view-'+n).style.display = n === v ? 'block' : 'none';
+  });
+  // Nav actions
+  const na = document.getElementById('nav-actions');
+  if (na) na.style.display = v === 'dashboard' ? 'none' : 'flex';
+}
+
+function showLanding() { showView('landing'); }
+
+function showAuth(tab) {
+  showView('auth');
+  switchTab(tab || 'register');
+}
+
+function switchTab(t) {
+  document.getElementById('tab-register').classList.toggle('active', t === 'register');
+  document.getElementById('tab-login').classList.toggle('active',    t === 'login');
+  document.getElementById('form-register').style.display = t === 'register' ? 'block' : 'none';
+  document.getElementById('form-login').style.display    = t === 'login'    ? 'block' : 'none';
+}
+
+// ── API helper ────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (_token) opts.headers['Authorization'] = `Bearer ${_token}`;
+  if (body)   opts.body = JSON.stringify(body);
+  const r = await fetch(BASE + path, opts);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Error');
+  return d;
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+async function doRegister(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-register');
+  const err = document.getElementById('r-err');
+  err.style.display = 'none';
+  btn.textContent = 'Creando cuenta...';
+  btn.disabled = true;
+  try {
+    const data = await api('POST', '/register', {
+      name:         document.getElementById('r-name').value.trim(),
+      email:        document.getElementById('r-email').value.trim(),
+      password:     document.getElementById('r-password').value,
+      phone:        document.getElementById('r-phone').value.trim(),
+      bank_info:    document.getElementById('r-bank').value.trim(),
+      promo_method: document.getElementById('r-promo').value.trim(),
+    });
+    _token = data.token;
+    _aff   = data.affiliate;
+    localStorage.setItem('filo_aff_token', _token);
+    renderDashboard(_aff, { total_referrals:0, pending_amount:0, paid_amount:0, pending_count:0 }, []);
+    showView('dashboard');
+    toast('🎉 ¡Cuenta creada! Tu link está listo.');
+  } catch(ex) {
+    err.textContent = ex.message;
+    err.style.display = 'block';
+  } finally {
+    btn.textContent = 'CREAR CUENTA GRATIS';
+    btn.disabled = false;
+  }
+}
+
+async function doLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-login');
+  const err = document.getElementById('l-err');
+  err.style.display = 'none';
+  btn.textContent = 'Ingresando...';
+  btn.disabled = true;
+  try {
+    const data = await api('POST', '/login', {
+      email:    document.getElementById('l-email').value.trim(),
+      password: document.getElementById('l-password').value,
+    });
+    _token = data.token;
+    localStorage.setItem('filo_aff_token', _token);
+    await loadDashboard();
+  } catch(ex) {
+    err.textContent = ex.message;
+    err.style.display = 'block';
+  } finally {
+    btn.textContent = 'INGRESAR';
+    btn.disabled = false;
+  }
+}
+
+async function loadDashboard() {
+  try {
+    const data = await api('GET', '/me');
+    _aff = data.affiliate;
+    renderDashboard(data.affiliate, data.stats, data.commissions);
+    showView('dashboard');
+  } catch(e) {
+    // Token inválido
+    _token = null;
+    localStorage.removeItem('filo_aff_token');
+    showView('landing');
+  }
+}
+
+function logout() {
+  _token = null;
+  _aff   = null;
+  localStorage.removeItem('filo_aff_token');
+  showView('landing');
+}
+
+// ── Render dashboard ──────────────────────────────────────────
+function fmt(n) {
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function renderDashboard(aff, stats, commissions) {
+  document.getElementById('dash-name').textContent   = aff.name;
+  document.getElementById('dash-bank').textContent   = aff.bank_info || '—';
+  document.getElementById('aff-code').textContent    = aff.code;
+  const link = `https://filocrm.com.ar/app?aff=${aff.code}`;
+  document.getElementById('aff-link').textContent    = link;
+
+  document.getElementById('kpi-total').textContent          = stats.total_referrals;
+  document.getElementById('kpi-pending-amount').textContent = fmt(stats.pending_amount);
+  document.getElementById('kpi-paid-amount').textContent    = fmt(stats.paid_amount);
+  document.getElementById('kpi-earned').textContent         = fmt(aff.total_earned);
+
+  const pendSum = document.getElementById('pending-summary');
+  if (pendSum) pendSum.textContent = stats.pending_count > 0
+    ? `${stats.pending_count} pendiente${stats.pending_count > 1 ? 's' : ''} · ${fmt(stats.pending_amount)}`
+    : '';
+
+  const table = document.getElementById('commissions-table');
+  if (!commissions.length) {
+    table.innerHTML = '<div class="empty-row">Todavía no hay comisiones.<br>¡Compartí tu link para empezar!</div>';
+    return;
+  }
+  table.innerHTML = `<table>
+    <thead><tr>
+      <th>Barbería</th><th>Plan</th><th>Comisión</th><th>Estado</th><th>Fecha</th>
+    </tr></thead>
+    <tbody>
+      ${commissions.map(c => `
+        <tr>
+          <td style="font-weight:600">${esc(c.shop_name || '—')}</td>
+          <td><span style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g)">${c.plan || '—'}</span></td>
+          <td style="font-family:'Oswald',sans-serif;font-size:18px;color:var(--green)">${fmt(c.amount)}</td>
+          <td><span class="badge badge-${c.status}">${c.status === 'paid' ? 'PAGADO' : 'PENDIENTE'}</span></td>
+          <td style="color:var(--g);font-size:12px">${fmtDate(c.created_at)}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ── Link actions ──────────────────────────────────────────────
+function copyLink() {
+  const link = document.getElementById('aff-link').textContent;
+  if (!link || link === 'Cargando...') return;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('btn-copy');
+    const orig = btn.textContent;
+    btn.textContent = '✅ COPIADO';
+    btn.style.background = '#4ade80'; btn.style.color = '#0a2010';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; }, 2000);
+  }).catch(() => prompt('Copiá tu link:', link));
+}
+
+function shareWA() {
+  const link = document.getElementById('aff-link').textContent;
+  if (!link) return;
+  const msg = encodeURIComponent(`Mirá FILO, el sistema que usan las barberías para gestionar todo automáticamente. Probalo gratis: ${link}`);
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+// ── Utils ─────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(d){ return d ? new Date(d).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : '—'; }
+
+function toast(msg, ms = 3500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+</script>
+</body>
+</html>

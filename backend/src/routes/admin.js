@@ -351,4 +351,83 @@ router.post('/grant-free-months', adminAuth, async (req, res) => {
   }
 });
 
+// ── AFILIADOS ─────────────────────────────────────────────────────────────────
+
+// GET /api/admin/affiliates — lista de afiliados con stats
+router.get('/affiliates', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id, a.name, a.email, a.code, a.bank_info, a.status,
+        a.total_earned, a.total_paid, a.created_at,
+        COUNT(ac.id)                                              AS total_referrals,
+        COALESCE(SUM(ac.amount) FILTER (WHERE ac.status='pending'), 0) AS pending_amount,
+        COALESCE(SUM(ac.amount) FILTER (WHERE ac.status='paid'),    0) AS paid_amount
+      FROM affiliates a
+      LEFT JOIN affiliate_commissions ac ON ac.affiliate_id = a.id
+      GROUP BY a.id
+      ORDER BY a.created_at DESC
+    `);
+    res.json({ affiliates: result.rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/affiliates/:id/commissions
+router.get('/affiliates/:id/commissions', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, shop_name, plan, amount, status, created_at, paid_at
+       FROM affiliate_commissions WHERE affiliate_id=$1
+       ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ commissions: result.rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/affiliates/commissions/:id/pay — marcar una comisión como pagada
+router.post('/affiliates/commissions/:id/pay', adminAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE affiliate_commissions SET status='paid', paid_at=NOW()
+       WHERE id=$1 AND status='pending'
+       RETURNING affiliate_id, amount`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Comisión no encontrada o ya pagada' });
+    // Actualizar total_paid del afiliado
+    await pool.query(
+      'UPDATE affiliates SET total_paid = total_paid + $1 WHERE id=$2',
+      [r.rows[0].amount, r.rows[0].affiliate_id]
+    );
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/affiliates/:id/pay-all — marcar todas las pendientes como pagadas
+router.post('/affiliates/:id/pay-all', adminAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE affiliate_commissions SET status='paid', paid_at=NOW()
+       WHERE affiliate_id=$1 AND status='pending'
+       RETURNING amount`,
+      [req.params.id]
+    );
+    const total = r.rows.reduce((s, row) => s + parseFloat(row.amount), 0);
+    await pool.query(
+      'UPDATE affiliates SET total_paid = total_paid + $1 WHERE id=$2',
+      [total, req.params.id]
+    );
+    res.json({ ok: true, count: r.rows.length, total });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

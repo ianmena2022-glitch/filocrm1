@@ -185,6 +185,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab" onclick="switchTab('billing')">Liquidaciones</button>
       <button class="tab" onclick="switchTab('vendors')">Vendedores</button>
       <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
+      <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
     </div>
 
@@ -297,6 +298,55 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     </div>
 
     <div id="tab-metrics" style="display:none"></div>
+
+    <!-- TAB: AFILIADOS -->
+    <div id="tab-afiliados" style="display:none">
+      <div style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div style="font-size:13px;color:var(--g)">Personas externas que recomiendan FILO y ganan comisiones en efectivo</div>
+        <div style="display:flex;gap:12px">
+          <div style="text-align:center;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;color:#4ade80" id="aff-kpi-total">—</div>
+            <div style="font-size:11px;color:var(--g)">AFILIADOS</div>
+          </div>
+          <div style="text-align:center;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;color:var(--y)" id="aff-kpi-pending">$—</div>
+            <div style="font-size:11px;color:var(--g)">PENDIENTE DE PAGO</div>
+          </div>
+          <div style="text-align:center;background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 20px">
+            <div style="font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;color:#60a5fa" id="aff-kpi-paid">$—</div>
+            <div style="font-size:11px;color:var(--g)">YA PAGADO</div>
+          </div>
+        </div>
+      </div>
+      <table class="table" id="aff-table">
+        <thead><tr>
+          <th>Afiliado</th>
+          <th>Código</th>
+          <th>Referidos pagos</th>
+          <th>Pendiente</th>
+          <th>Cobrado</th>
+          <th>CBU / Alias</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="aff-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Cargando...</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Detalle comisiones de un afiliado -->
+      <div id="aff-detail-wrap" style="display:none;margin-top:24px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;padding:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-weight:700" id="aff-detail-name">—</div>
+          <button class="btn-sm gray" onclick="document.getElementById('aff-detail-wrap').style.display='none'">Cerrar</button>
+        </div>
+        <table class="table" style="font-size:12px">
+          <thead><tr>
+            <th>Barbería</th><th>Plan</th><th>Comisión</th><th>Estado</th><th>Fecha</th><th>Acción</th>
+          </tr></thead>
+          <tbody id="aff-detail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
 
     <!-- TAB: VENDEDORES -->
     <div id="tab-vendors" style="display:none">
@@ -973,9 +1023,11 @@ function switchTab(tab) {
   document.getElementById('tab-billing').style.display   = tab === 'billing'   ? 'block' : 'none';
   document.getElementById('tab-vendors').style.display   = tab === 'vendors'   ? 'block' : 'none';
   document.getElementById('tab-referidos').style.display = tab === 'referidos' ? 'block' : 'none';
+  document.getElementById('tab-afiliados').style.display = tab === 'afiliados' ? 'block' : 'none';
   document.getElementById('tab-metrics').style.display   = tab === 'metrics'   ? 'block' : 'none';
-  if (tab === 'metrics') renderMetrics();
+  if (tab === 'metrics')   renderMetrics();
   if (tab === 'referidos') loadPeerReferrals();
+  if (tab === 'afiliados') loadAfiliados();
 }
 
 async function loadPeerReferrals() {
@@ -1458,6 +1510,118 @@ function effectiveStatus(a) {
 document.querySelectorAll('.modal-overlay').forEach(o => {
   o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
 });
+
+// ── AFILIADOS ─────────────────────────────────────────────────────────────────
+async function loadAfiliados() {
+  const tbody = document.getElementById('aff-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Cargando...</td></tr>';
+  try {
+    const res  = await fetch('/api/admin/affiliates', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    const list = data.affiliates || [];
+
+    // KPIs
+    const totalPending = list.reduce((s, a) => s + (parseFloat(a.pending_amount) || 0), 0);
+    const totalPaid    = list.reduce((s, a) => s + (parseFloat(a.paid_amount)    || 0), 0);
+    document.getElementById('aff-kpi-total').textContent   = list.length;
+    document.getElementById('aff-kpi-pending').textContent = '$' + Math.round(totalPending).toLocaleString('es-AR');
+    document.getElementById('aff-kpi-paid').textContent    = '$' + Math.round(totalPaid).toLocaleString('es-AR');
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g);padding:32px">Sin afiliados registrados aún</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(a => `
+      <tr>
+        <td>
+          <div style="font-weight:600">${esc(a.name)}</div>
+          <div style="font-size:11px;color:var(--g)">${esc(a.email)}</div>
+        </td>
+        <td><code style="background:rgba(255,255,255,.07);padding:2px 8px;border-radius:4px;font-size:12px">${esc(a.code)}</code></td>
+        <td style="font-family:'Oswald',sans-serif;font-size:18px;color:var(--w)">${a.total_referrals || 0}</td>
+        <td style="font-family:'Oswald',sans-serif;font-size:18px;color:var(--y)">
+          ${parseFloat(a.pending_amount) > 0 ? '$' + Math.round(a.pending_amount).toLocaleString('es-AR') : '<span style="color:var(--g)">—</span>'}
+        </td>
+        <td style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80">
+          $${Math.round(a.total_paid || 0).toLocaleString('es-AR')}
+        </td>
+        <td style="font-size:12px;font-family:monospace;color:var(--g)">${esc(a.bank_info || '—')}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="action-btn" onclick="loadAffDetail(${a.id},'${esc(a.name)}')">Ver detalle</button>
+          ${parseFloat(a.pending_amount) > 0
+            ? `<button class="action-btn" style="background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80" onclick="markAllPaid(${a.id},'${esc(a.name)}')">✅ Marcar todo pagado</button>`
+            : ''}
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--r);padding:32px">${e.message}</td></tr>`;
+  }
+}
+
+async function loadAffDetail(affId, name) {
+  document.getElementById('aff-detail-wrap').style.display = 'block';
+  document.getElementById('aff-detail-name').textContent = name;
+  const tbody = document.getElementById('aff-detail-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g);padding:20px">Cargando...</td></tr>';
+  try {
+    const res  = await fetch(`/api/admin/affiliates/${affId}/commissions`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    const list = data.commissions || [];
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g);padding:20px">Sin comisiones aún</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(c => `
+      <tr>
+        <td>${esc(c.shop_name || '—')}</td>
+        <td>${c.plan || '—'}</td>
+        <td style="font-family:'Oswald',sans-serif;font-size:16px;color:#4ade80">$${Math.round(c.amount).toLocaleString('es-AR')}</td>
+        <td><span style="background:${c.status==='paid'?'rgba(74,222,128,.12)':'rgba(255,209,0,.12)'};color:${c.status==='paid'?'#4ade80':'var(--y)'};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px">${c.status==='paid'?'PAGADO':'PENDIENTE'}</span></td>
+        <td style="color:var(--g)">${c.created_at ? new Date(c.created_at).toLocaleDateString('es-AR') : '—'}</td>
+        <td>
+          ${c.status === 'pending'
+            ? `<button class="action-btn" style="background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80" onclick="markCommPaid(${c.id},this)">Pagado</button>`
+            : '<span style="color:var(--g);font-size:11px">✓</span>'}
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--r);padding:20px">${e.message}</td></tr>`;
+  }
+  document.getElementById('aff-detail-wrap').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function markCommPaid(commId, btn) {
+  if (!confirm('¿Marcar esta comisión como pagada?')) return;
+  try {
+    btn.disabled = true; btn.textContent = '...';
+    const res  = await fetch(`/api/admin/affiliates/commissions/${commId}/pay`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    btn.closest('tr').querySelector('td:nth-child(4)').innerHTML =
+      '<span style="background:rgba(74,222,128,.12);color:#4ade80;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px">PAGADO</span>';
+    btn.parentElement.innerHTML = '<span style="color:var(--g);font-size:11px">✓</span>';
+    loadAfiliados();
+  } catch(e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Pagado'; }
+}
+
+async function markAllPaid(affId, name) {
+  if (!confirm(`¿Marcar TODAS las comisiones pendientes de ${name} como pagadas?`)) return;
+  try {
+    const res  = await fetch(`/api/admin/affiliates/${affId}/pay-all`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    alert(`✅ ${data.count} comisión(es) marcada(s) como pagadas`);
+    loadAfiliados();
+    document.getElementById('aff-detail-wrap').style.display = 'none';
+  } catch(e) { alert('Error: ' + e.message); }
+}
 </script>
 </body>
 </html>

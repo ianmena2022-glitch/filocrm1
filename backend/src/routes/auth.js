@@ -70,7 +70,7 @@ function trialDaysLeft(trial_ends_at) {
 
 // POST /api/auth/register — cuenta normal
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan, referral_code, ref_slug, timezone } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code, ref_slug, aff_code, timezone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
@@ -105,11 +105,18 @@ router.post('/register', async (req, res) => {
       if (refQ.rows.length) referredByShopId = refQ.rows[0].id;
     }
 
+    // Resolver afiliado por código
+    let affiliateId = null;
+    if (aff_code) {
+      const affQ = await pool.query('SELECT id FROM affiliates WHERE code=$1 AND status=\'active\'', [aff_code.trim().toUpperCase()]);
+      if (affQ.rows.length) affiliateId = affQ.rows[0].id;
+    }
+
     const tz = timezone || 'America/Argentina/Buenos_Aires';
     const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code, referred_by_shop_id, timezone)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9, $10, $11) RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm, referredByShopId, tz]
+      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code, referred_by_shop_id, affiliate_id, timezone)
+       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm, referredByShopId, affiliateId, tz]
     );
     const shop = result.rows[0];
 
