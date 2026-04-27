@@ -3991,7 +3991,6 @@ async function register() {
 
 
 function logout() {
-  if (!confirm('¿Cerrás sesión?')) return;
   if (_pendingPollInterval) { clearInterval(_pendingPollInterval); _pendingPollInterval = null; }
   localStorage.removeItem('filo_token');
   localStorage.removeItem('filo_shop');
