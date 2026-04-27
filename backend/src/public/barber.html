@@ -1495,48 +1495,61 @@ function bvPreview(p) {
 
 /* ── Agregar turno manual ─────────────────────────────────────── */
 let _aaServices = [];
+let _aaClients  = [];
 
 async function openAddAppt() {
-  // Pre-fill fecha con el día activo en la agenda
-  document.getElementById('aa-date').value  = currentDate;
-  document.getElementById('aa-time').value  = '';
+  document.getElementById('aa-date').value   = currentDate;
+  document.getElementById('aa-time').value   = '';
   document.getElementById('aa-client').value = '';
+  document.getElementById('aa-client-id').value = '';
   document.getElementById('aa-notes').value  = '';
   document.getElementById('aa-price').value  = '';
 
-  // Cargar servicios si no los tenemos
+  // Cargar servicios (endpoint correcto: /settings/services)
   const sel = document.getElementById('aa-service');
   if (!_aaServices.length) {
     try {
-      const data = await api('GET', '/services');
-      _aaServices = Array.isArray(data) ? data.filter(s => s.active !== false) : [];
+      const data = await api('GET', '/settings/services');
+      _aaServices = Array.isArray(data) ? data : [];
     } catch(e) { _aaServices = []; }
   }
   sel.innerHTML = _aaServices.length
     ? '<option value="">— Sin servicio específico —</option>' +
       _aaServices.map(s => `<option value="${s.id}" data-price="${s.price}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
-    : '<option value="">Sin servicios disponibles</option>';
-
+    : '<option value="">Sin servicios cargados</option>';
   sel.onchange = () => {
-    const opt = sel.options[sel.selectedIndex];
-    const p   = opt?.dataset?.price;
+    const p = sel.options[sel.selectedIndex]?.dataset?.price;
     if (p) document.getElementById('aa-price').value = parseFloat(p);
   };
+
+  // Cargar clientes (se refresca cada vez para tener la lista actualizada)
+  try {
+    const cdata = await api('GET', '/clients');
+    _aaClients = Array.isArray(cdata) ? cdata : [];
+  } catch(e) { _aaClients = []; }
+  const dl = document.getElementById('aa-client-list');
+  dl.innerHTML = _aaClients.map(c => `<option value="${escHtml(c.name)}" data-id="${c.id}">`).join('');
 
   document.getElementById('modal-add-appt').style.display = 'flex';
 }
 
+function _aaResolveClient() {
+  const input = document.getElementById('aa-client').value.trim();
+  const match = _aaClients.find(c => c.name.toLowerCase() === input.toLowerCase());
+  return { clientId: match?.id || null, clientName: input || null };
+}
+
 async function submitAddAppt() {
-  const date     = document.getElementById('aa-date').value;
-  const time     = document.getElementById('aa-time').value;
+  const date      = document.getElementById('aa-date').value;
+  const time      = document.getElementById('aa-time').value;
   const serviceEl = document.getElementById('aa-service');
   const serviceId = serviceEl.value || null;
   const serviceName = serviceId
     ? serviceEl.options[serviceEl.selectedIndex].text.split(' — ')[0]
     : null;
-  const price    = parseFloat(document.getElementById('aa-price').value) || 0;
-  const client   = document.getElementById('aa-client').value.trim();
-  const notes    = document.getElementById('aa-notes').value.trim();
+  const price  = parseFloat(document.getElementById('aa-price').value) || 0;
+  const notes  = document.getElementById('aa-notes').value.trim();
+  const { clientId, clientName } = _aaResolveClient();
 
   if (!date || !time) { showToast('Completá fecha y hora'); return; }
 
@@ -1547,12 +1560,12 @@ async function submitAddAppt() {
       service_id:   serviceId   || undefined,
       service_name: serviceName || undefined,
       price:        price       || undefined,
-      client_name:  client      || undefined,
+      client_id:    clientId    || undefined,
+      client_name:  clientName  || undefined,
       notes:        notes       || undefined,
     });
     document.getElementById('modal-add-appt').style.display = 'none';
     showToast('Turno agendado');
-    // Si la agenda muestra el mismo día, refrescarla
     if (date === currentDate) await loadAgenda();
   } catch(e) {
     showToast(e.message || 'Error al agendar');
@@ -1620,8 +1633,11 @@ if (token && me?.is_barber) {
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Cliente (opcional)</label>
-        <input type="text" id="aa-client" placeholder="Nombre del cliente"
+        <input type="text" id="aa-client" list="aa-client-list" placeholder="Buscar o escribir nombre"
+          autocomplete="off"
           style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+        <datalist id="aa-client-list"></datalist>
+        <input type="hidden" id="aa-client-id">
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Notas (opcional)</label>

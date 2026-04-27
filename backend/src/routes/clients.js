@@ -5,6 +5,7 @@ const auth   = require('../middleware/auth');
 // GET /api/clients
 router.get('/', auth, async (req, res) => {
   try {
+    const effectiveShopId = req.parentShopId || req.shopId;
     const isEnterprise = req.isEnterpriseOwner || false;
     const shopFilter = isEnterprise
       ? `(c.shop_id = $1 OR c.shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
@@ -17,7 +18,7 @@ router.get('/', auth, async (req, res) => {
        LEFT JOIN memberships m ON m.client_id = c.id AND m.active = TRUE
        WHERE ${shopFilter}
        ORDER BY c.name`,
-      [req.shopId]
+      [effectiveShopId]
     );
     res.json(result.rows);
   } catch (e) {
