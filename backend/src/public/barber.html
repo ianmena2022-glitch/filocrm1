@@ -1496,60 +1496,110 @@ function bvPreview(p) {
 /* ── Agregar turno manual ─────────────────────────────────────── */
 let _aaServices = [];
 let _aaClients  = [];
+let _aaSelSvcId = null;
+let _aaSelSvcName = null;
+let _aaSelCliId = null;
+let _aaSelCliName = null;
+
+function aaCloseModal() {
+  document.getElementById('modal-add-appt').style.display = 'none';
+  aaCloseDd('svc'); aaCloseDd('cli');
+}
+
+function aaCloseDd(type) {
+  document.getElementById(`aa-${type}-menu`).style.display = 'none';
+  document.getElementById(`aa-${type}-trigger`).classList.remove('open');
+}
+
+function aaToggleDd(type) {
+  const menu = document.getElementById(`aa-${type}-menu`);
+  const isOpen = menu.style.display !== 'none';
+  // cerrar ambos primero
+  aaCloseDd('svc'); aaCloseDd('cli');
+  if (!isOpen) {
+    menu.style.display = 'block';
+    document.getElementById(`aa-${type}-trigger`).classList.add('open');
+    if (type === 'cli') {
+      const s = document.getElementById('aa-cli-search');
+      s.value = ''; aaFilterClients(''); s.focus();
+    }
+  }
+}
+
+// cerrar al hacer click fuera
+document.addEventListener('click', e => {
+  if (!e.target.closest('#aa-svc-dd')) aaCloseDd('svc');
+  if (!e.target.closest('#aa-cli-dd')) aaCloseDd('cli');
+});
+
+function aaRenderSvcOpts() {
+  const opts = document.getElementById('aa-svc-opts');
+  const none = `<div class="aa-dd-opt${!_aaSelSvcId ? ' selected' : ''}" onclick="aaPickSvc(null,null,null)">— Sin servicio específico —</div>`;
+  opts.innerHTML = none + _aaServices.map(s =>
+    `<div class="aa-dd-opt${_aaSelSvcId==s.id?' selected':''}" onclick="aaPickSvc(${s.id},${escHtml(JSON.stringify(s.name))},${s.price})">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</div>`
+  ).join('');
+}
+
+function aaPickSvc(id, name, price) {
+  _aaSelSvcId = id; _aaSelSvcName = name;
+  document.getElementById('aa-service').value = id || '';
+  document.getElementById('aa-svc-label').textContent = name || '— Sin servicio específico —';
+  document.getElementById('aa-svc-label').style.color = id ? '' : 'rgba(255,255,255,.4)';
+  if (price != null) document.getElementById('aa-price').value = price;
+  aaCloseDd('svc');
+  aaRenderSvcOpts();
+}
+
+function aaFilterClients(q) {
+  const list = q ? _aaClients.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : _aaClients;
+  const opts = document.getElementById('aa-cli-opts');
+  if (!list.length) { opts.innerHTML = '<div class="aa-dd-empty">Sin resultados</div>'; return; }
+  opts.innerHTML = list.map(c =>
+    `<div class="aa-dd-opt${_aaSelCliId==c.id?' selected':''}" onclick="aaPickCli(${c.id},${escHtml(JSON.stringify(c.name))})">${escHtml(c.name)}</div>`
+  ).join('');
+}
+
+function aaPickCli(id, name) {
+  _aaSelCliId = id; _aaSelCliName = name;
+  document.getElementById('aa-client-id').value = id || '';
+  document.getElementById('aa-client').value    = name || '';
+  document.getElementById('aa-cli-label').textContent = name || 'Buscar cliente…';
+  document.getElementById('aa-cli-label').style.color = name ? '' : 'rgba(255,255,255,.4)';
+  aaCloseDd('cli');
+}
 
 async function openAddAppt() {
-  document.getElementById('aa-date').value   = currentDate;
-  document.getElementById('aa-time').value   = '';
-  document.getElementById('aa-client').value = '';
-  document.getElementById('aa-client-id').value = '';
-  document.getElementById('aa-notes').value  = '';
-  document.getElementById('aa-price').value  = '';
+  document.getElementById('aa-date').value  = currentDate;
+  document.getElementById('aa-time').value  = '';
+  document.getElementById('aa-notes').value = '';
+  document.getElementById('aa-price').value = '';
+  aaPickSvc(null, null, null);
+  aaPickCli(null, null);
 
-  // Cargar servicios (endpoint correcto: /settings/services)
-  const sel = document.getElementById('aa-service');
+  // Cargar servicios
   if (!_aaServices.length) {
     try {
-      const data = await api('GET', '/settings/services');
-      _aaServices = Array.isArray(data) ? data : [];
+      _aaServices = await api('GET', '/settings/services');
+      if (!Array.isArray(_aaServices)) _aaServices = [];
     } catch(e) { _aaServices = []; }
   }
-  sel.innerHTML = _aaServices.length
-    ? '<option value="">— Sin servicio específico —</option>' +
-      _aaServices.map(s => `<option value="${s.id}" data-price="${s.price}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
-    : '<option value="">Sin servicios cargados</option>';
-  sel.onchange = () => {
-    const p = sel.options[sel.selectedIndex]?.dataset?.price;
-    if (p) document.getElementById('aa-price').value = parseFloat(p);
-  };
+  aaRenderSvcOpts();
 
-  // Cargar clientes (se refresca cada vez para tener la lista actualizada)
+  // Cargar clientes frescos
   try {
     const cdata = await api('GET', '/clients');
     _aaClients = Array.isArray(cdata) ? cdata : [];
   } catch(e) { _aaClients = []; }
-  const dl = document.getElementById('aa-client-list');
-  dl.innerHTML = _aaClients.map(c => `<option value="${escHtml(c.name)}" data-id="${c.id}">`).join('');
+  aaFilterClients('');
 
   document.getElementById('modal-add-appt').style.display = 'flex';
 }
 
-function _aaResolveClient() {
-  const input = document.getElementById('aa-client').value.trim();
-  const match = _aaClients.find(c => c.name.toLowerCase() === input.toLowerCase());
-  return { clientId: match?.id || null, clientName: input || null };
-}
-
 async function submitAddAppt() {
-  const date      = document.getElementById('aa-date').value;
-  const time      = document.getElementById('aa-time').value;
-  const serviceEl = document.getElementById('aa-service');
-  const serviceId = serviceEl.value || null;
-  const serviceName = serviceId
-    ? serviceEl.options[serviceEl.selectedIndex].text.split(' — ')[0]
-    : null;
-  const price  = parseFloat(document.getElementById('aa-price').value) || 0;
-  const notes  = document.getElementById('aa-notes').value.trim();
-  const { clientId, clientName } = _aaResolveClient();
+  const date  = document.getElementById('aa-date').value;
+  const time  = document.getElementById('aa-time').value;
+  const price = parseFloat(document.getElementById('aa-price').value) || 0;
+  const notes = document.getElementById('aa-notes').value.trim();
 
   if (!date || !time) { showToast('Completá fecha y hora'); return; }
 
@@ -1557,14 +1607,14 @@ async function submitAddAppt() {
     await api('POST', '/appointments', {
       date,
       time_start:   time,
-      service_id:   serviceId   || undefined,
-      service_name: serviceName || undefined,
-      price:        price       || undefined,
-      client_id:    clientId    || undefined,
-      client_name:  clientName  || undefined,
-      notes:        notes       || undefined,
+      service_id:   _aaSelSvcId   || undefined,
+      service_name: _aaSelSvcName || undefined,
+      price:        price         || undefined,
+      client_id:    _aaSelCliId   || undefined,
+      client_name:  _aaSelCliName || undefined,
+      notes:        notes         || undefined,
     });
-    document.getElementById('modal-add-appt').style.display = 'none';
+    aaCloseModal();
     showToast('Turno agendado');
     if (date === currentDate) await loadAgenda();
   } catch(e) {
@@ -1605,49 +1655,98 @@ if (token && me?.is_barber) {
 
 <!-- MODAL: Venta de producto (barbero) -->
 <!-- Modal agregar turno -->
+<style>
+.aa-dd { position:relative; }
+.aa-dd-trigger {
+  width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;
+  font-family:'Barlow',sans-serif;cursor:pointer;display:flex;align-items:center;
+  justify-content:space-between;gap:8px;box-sizing:border-box;user-select:none;
+}
+.aa-dd-trigger:hover { border-color:rgba(255,255,255,.25); }
+.aa-dd-trigger.open  { border-color:var(--yellow); }
+.aa-dd-menu {
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:400;
+  background:#0d1f35;border:1px solid rgba(255,255,255,.15);border-radius:8px;
+  overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+.aa-dd-search {
+  width:100%;background:rgba(255,255,255,.06);border:none;border-bottom:1px solid rgba(255,255,255,.1);
+  padding:9px 12px;color:var(--white);font-size:13px;font-family:'Barlow',sans-serif;outline:none;
+  box-sizing:border-box;
+}
+.aa-dd-search::placeholder { color:rgba(255,255,255,.3); }
+.aa-dd-opts { max-height:180px;overflow-y:auto; }
+.aa-dd-opt {
+  padding:10px 14px;font-size:14px;color:rgba(255,255,255,.85);cursor:pointer;
+  font-family:'Barlow',sans-serif;
+}
+.aa-dd-opt:hover, .aa-dd-opt.focused { background:rgba(255,209,0,.12);color:var(--yellow); }
+.aa-dd-opt.selected { color:var(--yellow); }
+.aa-dd-empty { padding:10px 14px;font-size:13px;color:rgba(255,255,255,.3);font-family:'Barlow',sans-serif; }
+</style>
+
 <div id="modal-add-appt" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#0a1828;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:360px;padding:20px">
+  <div style="background:#0a1828;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:360px;padding:20px;max-height:90vh;overflow-y:auto">
     <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;margin-bottom:16px">📅 Agregar turno</div>
     <div style="display:flex;flex-direction:column;gap:12px">
+
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Fecha</label>
-        <input type="date" id="aa-date"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+        <input type="date" id="aa-date" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
       </div>
+
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Hora</label>
-        <input type="time" id="aa-time"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+        <input type="time" id="aa-time" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
       </div>
+
+      <!-- Servicio dropdown custom -->
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Servicio</label>
-        <select id="aa-service"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;cursor:pointer;box-sizing:border-box">
-          <option value="">Cargando servicios…</option>
-        </select>
+        <div class="aa-dd" id="aa-svc-dd">
+          <div class="aa-dd-trigger" id="aa-svc-trigger" onclick="aaToggleDd('svc')">
+            <span id="aa-svc-label">— Sin servicio específico —</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.5;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </div>
+          <div class="aa-dd-menu" id="aa-svc-menu" style="display:none">
+            <div class="aa-dd-opts" id="aa-svc-opts"></div>
+          </div>
+        </div>
+        <input type="hidden" id="aa-service">
       </div>
+
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Precio ($)</label>
-        <input type="number" id="aa-price" min="0" step="1" placeholder="Se completa con el servicio"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:15px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+        <input type="number" id="aa-price" min="0" step="1" placeholder="Se completa con el servicio" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:15px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
       </div>
+
+      <!-- Cliente dropdown custom con búsqueda -->
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Cliente (opcional)</label>
-        <input type="text" id="aa-client" list="aa-client-list" placeholder="Buscar o escribir nombre"
-          autocomplete="off"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
-        <datalist id="aa-client-list"></datalist>
+        <div class="aa-dd" id="aa-cli-dd">
+          <div class="aa-dd-trigger" id="aa-cli-trigger" onclick="aaToggleDd('cli')">
+            <span id="aa-cli-label" style="color:rgba(255,255,255,.4)">Buscar cliente…</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.5;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </div>
+          <div class="aa-dd-menu" id="aa-cli-menu" style="display:none">
+            <input class="aa-dd-search" id="aa-cli-search" placeholder="Buscar por nombre…" oninput="aaFilterClients(this.value)" autocomplete="off">
+            <div class="aa-dd-opts" id="aa-cli-opts"></div>
+          </div>
+        </div>
         <input type="hidden" id="aa-client-id">
+        <input type="hidden" id="aa-client">
       </div>
+
       <div>
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Notas (opcional)</label>
-        <input type="text" id="aa-notes" placeholder="Ej: corte + barba"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+        <input type="text" id="aa-notes" placeholder="Ej: corte + barba" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
       </div>
     </div>
+
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="submitAddAppt()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Agendar</button>
-      <button onclick="document.getElementById('modal-add-appt').style.display='none'" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
+      <button onclick="aaCloseModal()" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
     </div>
   </div>
 </div>
