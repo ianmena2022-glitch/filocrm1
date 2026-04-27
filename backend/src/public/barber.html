@@ -578,6 +578,12 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
           <div class="date-summary" id="date-summary"></div>
           <button class="date-btn" onclick="changeDate(1)">→</button>
         </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+          <button onclick="openAddAppt()" style="display:flex;align-items:center;gap:7px;background:var(--yellow);color:#050d18;border:none;border-radius:8px;padding:9px 16px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            Agregar turno
+          </button>
+        </div>
 
         <!-- Desktop table -->
         <div class="appts-table" id="agenda-table">
@@ -1487,6 +1493,72 @@ function bvPreview(p) {
   if (cv) cv.textContent  = '$' + comm.toLocaleString('es-AR') + ` (${pct}%)`;
 }
 
+/* ── Agregar turno manual ─────────────────────────────────────── */
+let _aaServices = [];
+
+async function openAddAppt() {
+  // Pre-fill fecha con el día activo en la agenda
+  document.getElementById('aa-date').value  = currentDate;
+  document.getElementById('aa-time').value  = '';
+  document.getElementById('aa-client').value = '';
+  document.getElementById('aa-notes').value  = '';
+  document.getElementById('aa-price').value  = '';
+
+  // Cargar servicios si no los tenemos
+  const sel = document.getElementById('aa-service');
+  if (!_aaServices.length) {
+    try {
+      const data = await api('GET', '/services');
+      _aaServices = Array.isArray(data) ? data.filter(s => s.active !== false) : [];
+    } catch(e) { _aaServices = []; }
+  }
+  sel.innerHTML = _aaServices.length
+    ? '<option value="">— Sin servicio específico —</option>' +
+      _aaServices.map(s => `<option value="${s.id}" data-price="${s.price}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('')
+    : '<option value="">Sin servicios disponibles</option>';
+
+  sel.onchange = () => {
+    const opt = sel.options[sel.selectedIndex];
+    const p   = opt?.dataset?.price;
+    if (p) document.getElementById('aa-price').value = parseFloat(p);
+  };
+
+  document.getElementById('modal-add-appt').style.display = 'flex';
+}
+
+async function submitAddAppt() {
+  const date     = document.getElementById('aa-date').value;
+  const time     = document.getElementById('aa-time').value;
+  const serviceEl = document.getElementById('aa-service');
+  const serviceId = serviceEl.value || null;
+  const serviceName = serviceId
+    ? serviceEl.options[serviceEl.selectedIndex].text.split(' — ')[0]
+    : null;
+  const price    = parseFloat(document.getElementById('aa-price').value) || 0;
+  const client   = document.getElementById('aa-client').value.trim();
+  const notes    = document.getElementById('aa-notes').value.trim();
+
+  if (!date || !time) { showToast('Completá fecha y hora'); return; }
+
+  try {
+    await api('POST', '/appointments', {
+      date,
+      time_start:   time,
+      service_id:   serviceId   || undefined,
+      service_name: serviceName || undefined,
+      price:        price       || undefined,
+      client_name:  client      || undefined,
+      notes:        notes       || undefined,
+    });
+    document.getElementById('modal-add-appt').style.display = 'none';
+    showToast('Turno agendado');
+    // Si la agenda muestra el mismo día, refrescarla
+    if (date === currentDate) await loadAgenda();
+  } catch(e) {
+    showToast(e.message || 'Error al agendar');
+  }
+}
+
 async function confirmarBarberVenta() {
   const id    = _barberVentaProdId;
   const cant  = parseInt(document.getElementById('bv-cantidad').value || 1);
@@ -1519,6 +1591,51 @@ if (token && me?.is_barber) {
 </script>
 
 <!-- MODAL: Venta de producto (barbero) -->
+<!-- Modal agregar turno -->
+<div id="modal-add-appt" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0a1828;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:360px;padding:20px">
+    <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;margin-bottom:16px">📅 Agregar turno</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Fecha</label>
+        <input type="date" id="aa-date"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Hora</label>
+        <input type="time" id="aa-time"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Servicio</label>
+        <select id="aa-service"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;cursor:pointer;box-sizing:border-box">
+          <option value="">Cargando servicios…</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Precio ($)</label>
+        <input type="number" id="aa-price" min="0" step="1" placeholder="Se completa con el servicio"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:15px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Cliente (opcional)</label>
+        <input type="text" id="aa-client" placeholder="Nombre del cliente"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:6px">Notas (opcional)</label>
+        <input type="text" id="aa-notes" placeholder="Ej: corte + barba"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 14px;color:var(--white);font-size:14px;font-family:'Barlow',sans-serif;outline:none;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="submitAddAppt()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Agendar</button>
+      <button onclick="document.getElementById('modal-add-appt').style.display='none'" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-barber-venta" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div style="background:#0a1828;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:340px;padding:20px">
     <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px">💰 Registrar venta</div>
