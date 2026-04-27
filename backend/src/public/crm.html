@@ -10685,10 +10685,17 @@ async function bcmSave(id) {
       target: function() {
         return document.querySelector('#sec-dashboard .btn-ajustes');
       },
-      title: '⚙️ Configuración',
-      body: 'Personalizá tu barbería: servicios, horarios, conexión de WhatsApp, equipo y suscripción.',
+      title: '⚙️ Botón de Configuración',
+      body: 'Desde acá entrás a toda la configuración de tu barbería. Hacé clic en él cuando quieras personalizarlo.',
       side: 'bottom',
       action: function() { showSection('dashboard'); }
+    },
+    {
+      target: function() { return document.getElementById('cfg-tabs-nav'); },
+      title: '⚙️ Configuración',
+      body: '🏠 General: nombre, ciudad y horarios.\n📅 Turnos: reservas online y recordatorios.\n💬 WhatsApp: conectá el bot de mensajes.\n📦 Servicios: precios y duración.\n⚙️ Cuenta: suscripción y datos.',
+      side: 'bottom',
+      action: function() { showSection('configuracion'); }
     },
     {
       target: null,
