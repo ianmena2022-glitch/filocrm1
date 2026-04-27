@@ -2693,16 +2693,6 @@ select.form-input { padding-right: 32px; }
         </div>
       </div>
 
-      <!-- Switcher de plan para cuentas test (solo visible cuando is_test=true) -->
-      <div id="ent-test-plan-switcher" style="display:none;margin:0 20px 16px;padding:14px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:10px">🧪 CUENTA DE TESTING</div>
-        <div style="display:flex;gap:10px">
-          <button onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
-          <button onclick="switchPlan('staff')"   class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
-          <button onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
-        </div>
-        <div id="ent-current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
-      </div>
 
       <!-- Tabs -->
       <div style="display:flex;gap:0;padding:0 20px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:16px">
@@ -2909,17 +2899,6 @@ select.form-input { padding-right: 32px; }
         </div>
       </div>
 
-      <!-- Testing switcher -->
-      <div id="test-plan-switcher" style="display:none;margin-bottom:20px;padding:16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.25);border-radius:12px">
-        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-bottom:12px">🧪 CUENTA DE TESTING</div>
-        <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Cambiá de plan para testear las distintas experiencias</div>
-        <div style="display:flex;gap:10px">
-          <button id="btn-plan-starter" onclick="switchPlan('starter')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">⭐ Starter</button>
-          <button id="btn-plan-staff" onclick="switchPlan('staff')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">👥 Staff</button>
-          <button id="btn-plan-enterprise" onclick="switchPlan('enterprise')" class="btn-motor secondary" style="flex:1;padding:10px;font-size:13px">🏢 Enterprise</button>
-        </div>
-        <div id="current-plan-label" style="font-size:12px;color:var(--gray);margin-top:10px;text-align:center"></div>
-      </div>
 
       <div style="max-width:760px">
 
@@ -4293,7 +4272,7 @@ async function checkWppStatus() {
   if (currentShop.is_barber) return; // nunca para barberos
   if (sessionStorage.getItem('wpp_banner_dismissed') === '1') return;
 
-  const isEntOwner = currentShop.is_enterprise_owner && !currentShop.is_test;
+  const isEntOwner = currentShop.is_enterprise_owner;
 
   if (isEntOwner) {
     // Enterprise owner: verificar estado WPP del owner y de sus sucursales
@@ -4398,8 +4377,7 @@ async function startApp() {
   // Mostrar panel enterprise si:
   //   - es enterprise owner real (no test), O
   //   - es cuenta test con filo_plan='enterprise' (para previsualizar la UX enterprise)
-  const isTestEnterprise = currentShop?.is_test && currentShop?.filo_plan === 'enterprise';
-  if (currentShop?.is_enterprise_owner && (!currentShop?.is_test || isTestEnterprise)) {
+  if (currentShop?.is_enterprise_owner) {
     // Mostrar setup enterprise la primera vez que el usuario llega a este plan
     const setupKey = 'filo_ent_setup_' + currentShop.id;
     if (!localStorage.getItem(setupKey)) {
@@ -4436,14 +4414,6 @@ function launchEnterprisePanel() {
   document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
   document.getElementById('sec-enterprise').style.display = 'block';
   document.getElementById('sec-enterprise').classList.add('active');
-  if (currentShop?.is_test) {
-    const ts = document.getElementById('ent-test-plan-switcher');
-    if (ts) {
-      ts.style.display = 'block';
-      const lbl = document.getElementById('ent-current-plan-label');
-      if (lbl) lbl.textContent = 'Plan activo: enterprise';
-    }
-  }
   loadEnterpriseDashboard();
 }
 
@@ -4528,30 +4498,14 @@ async function switchPlan(plan) {
 
 function initStaffUI() {
   const filoPlan = currentShop?.filo_plan || currentShop?.plan || 'starter';
-  const plan = currentShop?.plan;
-  const isTest = currentShop?.is_test || plan === 'test';
   const isBarber = currentShop?.is_barber;
   const navEquipo = document.getElementById('nav-equipo');
 
-  // Mostrar sección equipo para staff, enterprise y cuentas test
-  const showEquipo = (filoPlan === 'staff' || filoPlan === 'enterprise' || plan === 'test') && !isBarber;
+  const showEquipo = (filoPlan === 'staff' || filoPlan === 'enterprise') && !isBarber;
   if (navEquipo) navEquipo.style.display = showEquipo ? 'flex' : 'none';
 
-  // Starter: 1 barbero. Staff y enterprise: sin límite.
   if (!isBarber) {
     window._maxBarbers = filoPlan === 'starter' ? 1 : Infinity;
-  }
-
-  // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches reales)
-  // Nota: is_test tiene prioridad — una cuenta test puede tener is_enterprise_owner=true en DB
-  const switcher = document.getElementById('test-plan-switcher');
-  const isEnterprise = (currentShop?.is_enterprise_owner || currentShop?.is_branch) && !isTest;
-  if (isTest && !isEnterprise && switcher) {
-    switcher.style.display = 'block';
-    const label = document.getElementById('current-plan-label');
-    if (label) label.textContent = `Plan activo: ${filoPlan}`;
-  } else if (switcher) {
-    switcher.style.display = 'none';
   }
 }
 
