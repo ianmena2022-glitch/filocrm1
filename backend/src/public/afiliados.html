@@ -122,7 +122,10 @@ footer a{color:var(--y);text-decoration:none}
 <body>
 
 <nav>
-  <a class="nav-logo" href="/">✂ FILO</a>
+  <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+    <img src="/logo_f.png" alt="FILO" style="height:32px;width:auto">
+    <span class="nav-logo" style="line-height:1">FILO</span>
+  </a>
   <div class="nav-actions" id="nav-actions">
     <button class="btn btn-outline" onclick="showAuth('login')">Iniciar sesión</button>
     <button class="btn btn-yellow" onclick="showAuth('register')">Unirse gratis</button>
@@ -132,7 +135,30 @@ footer a{color:var(--y);text-decoration:none}
 <!-- ─── LANDING ──────────────────────────────────────────── -->
 <div id="view-landing">
 
-  <div class="hero">
+  <!-- Gráfico de fondo SVG -->
+  <div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden">
+    <!-- Grid de puntos -->
+    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;opacity:.18">
+      <defs>
+        <pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+          <circle cx="1.5" cy="1.5" r="1.5" fill="#FFD100"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#dots)"/>
+    </svg>
+    <!-- Glow verde arriba derecha -->
+    <div style="position:absolute;top:-120px;right:-80px;width:600px;height:600px;background:radial-gradient(circle,rgba(170,255,0,.07) 0%,transparent 70%);border-radius:50%"></div>
+    <!-- Glow amarillo abajo izquierda -->
+    <div style="position:absolute;bottom:-100px;left:-60px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,209,0,.05) 0%,transparent 70%);border-radius:50%"></div>
+    <!-- Líneas diagonales decorativas -->
+    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;opacity:.06">
+      <line x1="0" y1="40%" x2="100%" y2="10%" stroke="#FFD100" stroke-width="1"/>
+      <line x1="0" y1="60%" x2="100%" y2="30%" stroke="#aaff00" stroke-width="0.5"/>
+      <line x1="0" y1="80%" x2="100%" y2="50%" stroke="#FFD100" stroke-width="0.8"/>
+    </svg>
+  </div>
+
+  <div class="hero" style="position:relative;z-index:1">
     <div class="hero-tag">Programa de Afiliados</div>
     <h1>Recomendá FILO.<br><span>Ganá en efectivo.</span></h1>
     <p>Compartí tu link, y cada barbería que se suscriba te genera una comisión directa en tu cuenta bancaria. Sin límites, sin vencimientos.</p>
