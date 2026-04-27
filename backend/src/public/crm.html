@@ -3991,6 +3991,10 @@ async function register() {
 
 
 function logout() {
+  document.getElementById('modal-logout').style.display = 'flex';
+}
+function _doLogout() {
+  document.getElementById('modal-logout').style.display = 'none';
   if (_pendingPollInterval) { clearInterval(_pendingPollInterval); _pendingPollInterval = null; }
   localStorage.removeItem('filo_token');
   localStorage.removeItem('filo_shop');
@@ -10501,6 +10505,19 @@ async function bcmSave(id) {
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="confirmarAjusteStock()">✅ Confirmar</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-ajuste-stock')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmar logout -->
+<div id="modal-logout" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0d1f33;border:1px solid rgba(255,255,255,.1);border-radius:14px;width:100%;max-width:320px;padding:24px;text-align:center">
+    <div style="font-size:28px;margin-bottom:12px">👋</div>
+    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">¿Cerrás sesión?</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:22px">Vas a tener que volver a ingresar con tu email y contraseña.</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="_doLogout()" style="flex:1;background:#e53e3e;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cerrar sesión</button>
+      <button onclick="document.getElementById('modal-logout').style.display='none'" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
     </div>
   </div>
 </div>
