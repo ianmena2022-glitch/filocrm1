@@ -4537,10 +4537,9 @@ function initStaffUI() {
   const showEquipo = (filoPlan === 'staff' || filoPlan === 'enterprise' || plan === 'test') && !isBarber;
   if (navEquipo) navEquipo.style.display = showEquipo ? 'flex' : 'none';
 
-  // Aplicar cap de empleados según plan
+  // Starter: 1 barbero. Staff y enterprise: sin límite.
   if (!isBarber) {
-    const maxBarbers = filoPlan === 'enterprise' ? 20 : filoPlan === 'staff' ? 10 : 1;
-    window._maxBarbers = maxBarbers;
+    window._maxBarbers = filoPlan === 'starter' ? 1 : Infinity;
   }
 
   // Mostrar switcher de plan para cuentas test (nunca para enterprise owners ni branches reales)
@@ -7778,9 +7777,8 @@ async function loadEquipo() {
     document.getElementById('equipo-stats').textContent = `${barbers.length} barberos en el equipo`;
 
     // Mostrar cap del plan
-    const maxB = window._maxBarbers || 10;
     const capEl = document.getElementById('equipo-cap');
-    if (capEl) capEl.textContent = `${barbers.length} / ${maxB} barberos (plan ${(currentShop?.filo_plan || 'staff').toUpperCase()})`;
+    if (capEl) capEl.textContent = `${barbers.length} barbero${barbers.length !== 1 ? 's' : ''} en el equipo`;
 
     // Lista de barberos
     const el = document.getElementById('equipo-list');
@@ -7848,12 +7846,13 @@ function openInviteModal() {
 async function generateInvite() {
   const name = document.getElementById('invite-name').value.trim();
   try {
-    // Verificar cap del plan antes de invitar
-    const barbers = await api('GET', '/barbers');
-    const maxB = window._maxBarbers || 10;
-    if (barbers.length >= maxB) {
-      showToast('❌', 'Límite alcanzado', `Tu plan ${(currentShop?.filo_plan || 'staff').toUpperCase()} permite hasta ${maxB} barberos. Cambiá de plan para agregar más.`);
-      return;
+    // Starter: verificar límite de 1 barbero
+    if ((currentShop?.filo_plan || 'staff') === 'starter') {
+      const barbers = await api('GET', '/barbers');
+      if (barbers.length >= 1) {
+        showToast('❌', 'Plan Starter', 'El plan Starter permite 1 barbero. Actualizá tu plan para agregar más.');
+        return;
+      }
     }
     const res = await api('POST', '/barbers/invite', { barber_name: name || null });
     document.getElementById('invite-code').textContent = res.code;
@@ -10675,8 +10674,8 @@ async function bcmSave(id) {
       </div>
       <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
         <div style="font-size:18px;margin-bottom:4px">👥</div>
-        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">Hasta 20 barberos</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45)">El doble de capacidad de equipo que el plan Staff</div>
+        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">Equipo sin límite</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">Agregá todos los barberos que necesités en cada sede</div>
       </div>
       <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
         <div style="font-size:18px;margin-bottom:4px">💬</div>

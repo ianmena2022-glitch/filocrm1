@@ -28,14 +28,14 @@ router.get('/', auth, ownerOnly, async (req, res) => {
 router.post('/invite', auth, ownerOnly, async (req, res) => {
   const { barber_name } = req.body;
 
-  const [countRes, shopRes] = await Promise.all([
-    pool.query('SELECT COUNT(*) FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [req.shopId]),
-    pool.query('SELECT filo_plan FROM shops WHERE id=$1', [req.shopId])
-  ]);
+  // Starter solo permite 1 barbero; staff y enterprise sin límite
+  const shopRes = await pool.query('SELECT filo_plan FROM shops WHERE id=$1', [req.shopId]);
   const plan = shopRes.rows[0]?.filo_plan || 'staff';
-  const barberLimit = plan === 'enterprise' ? 20 : plan === 'starter' ? 1 : 10;
-  if (parseInt(countRes.rows[0].count) >= barberLimit) {
-    return res.status(400).json({ error: `Límite de ${barberLimit} barberos alcanzado para tu plan ${plan}` });
+  if (plan === 'starter') {
+    const countRes = await pool.query('SELECT COUNT(*) FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [req.shopId]);
+    if (parseInt(countRes.rows[0].count) >= 1) {
+      return res.status(400).json({ error: 'El plan Starter permite 1 barbero. Actualizá tu plan para agregar más.' });
+    }
   }
 
   try {
