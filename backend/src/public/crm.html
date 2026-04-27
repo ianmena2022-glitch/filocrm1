@@ -9292,12 +9292,14 @@ function renderEntBranches(branches) {
     const active   = b.subscription_status === 'active';
     const dotColor = active ? '#4CAF50' : '#FF4343';
     const bJson    = encodeURIComponent(JSON.stringify(b));
+    const mainBorder = b.is_main ? 'border-color:rgba(255,209,0,0.4);' : '';
     return `
-    <div class="ent-branch-card${active ? '' : ' inactive'}" style="cursor:pointer" onclick="openBranchDetail('${bJson}')">
+    <div class="ent-branch-card${active ? '' : ' inactive'}" style="cursor:pointer;${mainBorder}" onclick="openBranchDetail('${bJson}')">
       <div class="ent-status-dot" style="background:${dotColor}" title="${active ? 'Activa' : 'Inactiva'}"></div>
       ${b.wpp_connected ? `<div class="ent-wpp-badge" title="WhatsApp conectado">📱</div>` : ''}
+      ${b.is_main ? `<div style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:rgba(255,209,0,0.12);color:var(--yellow);border:1px solid rgba(255,209,0,0.3);border-radius:4px;padding:2px 7px;margin-bottom:6px">⭐ Sede Principal</div>` : ''}
       <div class="ent-branch-name">${b.name}</div>
-      ${b.branch_label ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
+      ${b.branch_label && !b.is_main ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
       ${b.city ? `<div class="ent-branch-stat" style="margin-top:4px;font-size:11px">📍 ${b.city}</div>` : ''}
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
@@ -9317,8 +9319,11 @@ function renderEntBranches(branches) {
       ${b.pending_today > 0 ? `<div class="ent-branch-stat" style="color:#FF9800">⏳ ${b.pending_today} turno${b.pending_today>1?'s':''} pendiente${b.pending_today>1?'s':''} hoy</div>` : ''}
       ${b.next_appt ? `<div class="ent-branch-stat">Próximo: <b>${b.next_appt.substring(0,5)}</b></div>` : ''}
       <div class="ent-branch-actions" onclick="event.stopPropagation()">
-        <button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
-        ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}
+        ${b.is_main
+          ? `<button class="ent-btn-edit" onclick="showSection('configuracion')">⚙️ Configurar</button>`
+          : `<button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
+             ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}`
+        }
       </div>
     </div>`;
   }).join('');
@@ -9341,7 +9346,7 @@ function renderEntRanking(branches) {
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:18px">${medals[i] || '#' + (i+1)}</span>
             <div>
-              <div style="font-size:13px;font-weight:700">${b.name}${b.branch_label ? ` <span style="font-size:10px;color:var(--yellow);font-weight:400">${b.branch_label}</span>` : ''}</div>
+              <div style="font-size:13px;font-weight:700">${b.name}${b.is_main ? ` <span style="font-size:9px;color:var(--yellow);font-weight:700;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:3px;padding:1px 5px">⭐ PRINCIPAL</span>` : b.branch_label ? ` <span style="font-size:10px;color:var(--yellow);font-weight:400">${b.branch_label}</span>` : ''}</div>
               <div style="font-size:11px;color:var(--gray)">${b.cuts_month} cortes · Ticket prom. ${fmt(avgTicket)}</div>
             </div>
           </div>

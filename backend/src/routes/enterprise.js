@@ -28,18 +28,16 @@ async function enterpriseOnly(req, res, next) {
   } catch(e) { res.status(500).json({ error: e.message }); }
 }
 
-// ── GET /api/enterprise/branches — listar sucursales ─────────────────────────
+// ── GET /api/enterprise/branches — listar sucursales (incluye sede principal) ─
 router.get('/branches', auth, enterpriseOnly, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id, name, email, branch_label, city, address, wpp_connected,
-              subscription_status, created_at
-       FROM shops
-       WHERE parent_enterprise_id = $1 AND is_branch = TRUE
-       ORDER BY name`,
-      [req.shopId]
-    );
-    res.json(result.rows);
+    const cols = `id, name, email, branch_label, city, address, wpp_connected, subscription_status, created_at`;
+    const [ownerRes, branchRes] = await Promise.all([
+      pool.query(`SELECT ${cols} FROM shops WHERE id=$1`, [req.shopId]),
+      pool.query(`SELECT ${cols} FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE ORDER BY name`, [req.shopId])
+    ]);
+    const main = { ...ownerRes.rows[0], is_main: true, branch_label: ownerRes.rows[0]?.branch_label || 'Sede Principal' };
+    res.json([main, ...branchRes.rows]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -160,7 +158,7 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
            WHERE a2.shop_id=s.id AND a2.date=CURRENT_DATE AND a2.status IN ('pending','confirmed')) AS next_appt
        FROM shops s
        LEFT JOIN appointments a ON a.shop_id=s.id
-       WHERE s.parent_enterprise_id=$1 AND s.is_branch=TRUE
+       WHERE s.id=$1 OR (s.parent_enterprise_id=$1 AND s.is_branch=TRUE)
        GROUP BY s.id,s.name,s.branch_label,s.wpp_connected,s.subscription_status,s.city,s.address,s.created_at
        ORDER BY revenue_month DESC`,
       [req.shopId]
