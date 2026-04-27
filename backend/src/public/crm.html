@@ -1549,6 +1549,77 @@ select.form-input { padding-right: 32px; }
   transition: opacity 0.35s ease, transform 0.35s ease;
 }
 .reveal-target.revealed { opacity: 1; transform: translateY(0); }
+
+/* ══════════════════════════════════════
+   FILO PRODUCT TOUR
+   ══════════════════════════════════════ */
+#tour-overlay {
+  position: fixed; inset: 0; z-index: 8000;
+  pointer-events: none;
+}
+#tour-overlay.active { pointer-events: auto; }
+
+#tour-spotlight {
+  position: fixed; z-index: 8001; pointer-events: none;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(2,8,18,0.82);
+  transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease, opacity 0.2s;
+  opacity: 0;
+}
+#tour-spotlight.visible { opacity: 1; }
+
+#tour-card {
+  position: fixed; z-index: 8002;
+  background: #0a1828;
+  border: 1px solid rgba(255,209,0,0.55);
+  border-radius: 14px;
+  padding: 20px 22px 16px;
+  width: 280px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  transition: top 0.3s ease, left 0.3s ease, opacity 0.25s;
+  opacity: 0;
+  pointer-events: none;
+}
+#tour-card.visible { opacity: 1; pointer-events: auto; }
+
+#tour-card .tc-step {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--yellow);
+  margin-bottom: 8px;
+}
+#tour-card .tc-title {
+  font-family: 'Oswald', sans-serif; font-size: 17px;
+  font-weight: 700; letter-spacing: 0.5px;
+  color: #fff; margin-bottom: 8px; line-height: 1.2;
+}
+#tour-card .tc-body {
+  font-size: 13px; color: rgba(255,255,255,0.72);
+  line-height: 1.55; margin-bottom: 16px;
+}
+#tour-card .tc-actions {
+  display: flex; align-items: center; gap: 8px;
+}
+#tour-card .tc-btn-next {
+  flex: 1; background: var(--yellow); color: #050d18;
+  border: none; border-radius: 8px; padding: 9px 14px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: 'Barlow', sans-serif; transition: opacity 0.15s;
+}
+#tour-card .tc-btn-next:hover { opacity: 0.88; }
+#tour-card .tc-btn-skip {
+  background: none; border: none; color: rgba(255,255,255,0.35);
+  font-size: 12px; cursor: pointer; padding: 4px 2px;
+  font-family: 'Barlow', sans-serif; white-space: nowrap;
+}
+#tour-card .tc-btn-skip:hover { color: rgba(255,255,255,0.6); }
+#tour-card .tc-dots {
+  display: flex; gap: 5px; margin-top: 12px;
+}
+#tour-card .tc-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.18); transition: background 0.2s;
+}
+#tour-card .tc-dot.active { background: var(--yellow); }
 </style>
 </head>
 <body>
@@ -3235,6 +3306,20 @@ select.form-input { padding-right: 32px; }
               <button onclick="deleteAccount()" style="background:rgba(255,67,67,0.12);border:1px solid rgba(255,67,67,0.3);color:var(--red);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Borrar cuenta</button>
             </div>
             <div style="margin-top:12px;padding:10px 14px;background:rgba(255,67,67,0.06);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">🔴 Esta acción es <strong style="color:var(--red)">irreversible</strong>. Se eliminarán todos tus datos.</div>
+          </div>
+        </div>
+
+        <!-- Relanzar tour -->
+        <div style="padding-top:4px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);margin-bottom:14px">Tour del producto</div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+              <div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Tutorial interactivo</div>
+                <div style="font-size:12px;color:var(--gray)">Recorré el dashboard paso a paso y aprendé todas las funciones de FILO</div>
+              </div>
+              <button onclick="startTour()" style="background:rgba(255,209,0,0.12);border:1px solid rgba(255,209,0,0.35);color:var(--yellow);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">▶ Iniciar tour</button>
+            </div>
           </div>
         </div>
 
@@ -10519,6 +10604,248 @@ async function bcmSave(id) {
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════
+     FILO PRODUCT TOUR — overlay + card
+     ═══════════════════════════════════════════ -->
+<div id="tour-overlay"></div>
+<div id="tour-spotlight"></div>
+<div id="tour-card">
+  <div class="tc-step" id="tc-step"></div>
+  <div class="tc-title" id="tc-title"></div>
+  <div class="tc-body" id="tc-body"></div>
+  <div class="tc-actions">
+    <button class="tc-btn-next" id="tc-btn-next" onclick="tourNext()">Siguiente →</button>
+    <button class="tc-btn-skip" id="tc-btn-skip" onclick="tourSkip()">Saltar tour</button>
+  </div>
+  <div class="tc-dots" id="tc-dots"></div>
+</div>
+
+<script>
+(function() {
+  var STEPS = [
+    {
+      target: null,
+      title: '👋 Bienvenido a FILO',
+      body: 'Este tour rápido te muestra cómo usar el dashboard. Son solo 9 pasos — podés saltearlo en cualquier momento.',
+      side: 'center'
+    },
+    {
+      target: function() { return document.querySelector('.nav-item[onclick*="agenda"]'); },
+      title: '📅 Agenda',
+      body: 'Acá gestionás todos los turnos del día. Podés ver, crear y editar citas de un vistazo.',
+      side: 'right',
+      action: function() { showSection('agenda'); }
+    },
+    {
+      target: function() { return document.querySelector('.nav-item[onclick*="clientes"]'); },
+      title: '👥 Clientes',
+      body: 'Tu base de datos completa. Historial de visitas, notas, puntos de fidelidad y membresías.',
+      side: 'right',
+      action: function() { showSection('clientes'); }
+    },
+    {
+      target: function() { return document.querySelector('.nav-item[onclick*="motores"]'); },
+      title: '⚡ Motores',
+      body: 'Automatizaciones de WhatsApp: recordatorios automáticos, mensajes de cumpleaños y campañas masivas.',
+      side: 'right',
+      action: function() { showSection('motores'); }
+    },
+    {
+      target: function() { return document.getElementById('nav-fila'); },
+      title: '📋 Fila Digital',
+      body: 'Pantalla en tiempo real para mostrar en la barra. Los clientes ven cuándo les toca sin preguntar.',
+      side: 'right',
+      action: function() { showSection('fila'); }
+    },
+    {
+      target: function() { return document.querySelector('.nav-item-dashboard'); },
+      title: '📊 Dashboard',
+      body: 'Tu resumen financiero del día y del mes. Ganancia neta, turnos y facturación siempre a la vista.',
+      side: 'right',
+      action: function() { showSection('dashboard'); }
+    },
+    {
+      target: function() { return document.querySelector('.dash-sidebar-kpi'); },
+      title: '💰 KPIs en tiempo real',
+      body: 'Neto de hoy, turnos completados y facturación mensual. Todo actualiza automáticamente.',
+      side: 'right',
+      action: function() { showSection('dashboard'); }
+    },
+    {
+      target: function() {
+        return document.querySelector('#sec-dashboard .btn-add[onclick*="modal-turno"]');
+      },
+      title: '➕ Nuevo turno',
+      body: 'Registrá un turno manual en segundos: elegís barbero, servicio, cliente y horario.',
+      side: 'bottom',
+      action: function() { showSection('dashboard'); }
+    },
+    {
+      target: function() {
+        return document.querySelector('#sec-dashboard .btn-ajustes');
+      },
+      title: '⚙️ Configuración',
+      body: 'Personalizá tu barbería: servicios, horarios, conexión de WhatsApp, equipo y suscripción.',
+      side: 'bottom',
+      action: function() { showSection('dashboard'); }
+    },
+    {
+      target: null,
+      title: '🎉 ¡Ya conocés FILO!',
+      body: 'Estás listo para arrancar. Podés relanzar este tour en cualquier momento desde Configuración → Cuenta.',
+      side: 'center',
+      isLast: true
+    }
+  ];
+
+  var _step = 0;
+  var _active = false;
+
+  function buildDots() {
+    var d = document.getElementById('tc-dots');
+    d.innerHTML = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var dot = document.createElement('div');
+      dot.className = 'tc-dot' + (i === _step ? ' active' : '');
+      d.appendChild(dot);
+    }
+  }
+
+  function positionCard(rect, side) {
+    var card = document.getElementById('tour-card');
+    var cw = 280, ch = card.offsetHeight || 200;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var gap = 16;
+    var t, l;
+
+    if (side === 'center' || !rect) {
+      t = Math.round((vh - ch) / 2);
+      l = Math.round((vw - cw) / 2);
+    } else if (side === 'right') {
+      l = Math.min(rect.right + gap, vw - cw - 12);
+      t = Math.round(rect.top + rect.height / 2 - ch / 2);
+    } else if (side === 'left') {
+      l = Math.max(rect.left - gap - cw, 12);
+      t = Math.round(rect.top + rect.height / 2 - ch / 2);
+    } else if (side === 'bottom') {
+      t = rect.bottom + gap;
+      l = Math.round(rect.left + rect.width / 2 - cw / 2);
+    } else {
+      t = rect.top - ch - gap;
+      l = Math.round(rect.left + rect.width / 2 - cw / 2);
+    }
+    t = Math.max(12, Math.min(t, vh - ch - 12));
+    l = Math.max(12, Math.min(l, vw - cw - 12));
+    card.style.top  = t + 'px';
+    card.style.left = l + 'px';
+  }
+
+  function showStep(idx) {
+    var step = STEPS[idx];
+    var spotlight = document.getElementById('tour-spotlight');
+    var card      = document.getElementById('tour-card');
+    var overlay   = document.getElementById('tour-overlay');
+
+    overlay.classList.add('active');
+
+    document.getElementById('tc-step').textContent  = 'PASO ' + (idx + 1) + ' DE ' + STEPS.length;
+    document.getElementById('tc-title').textContent = step.title;
+    document.getElementById('tc-body').textContent  = step.body;
+    var nextBtn = document.getElementById('tc-btn-next');
+    var skipBtn = document.getElementById('tc-btn-skip');
+    nextBtn.textContent = step.isLast ? '¡Empezar! 🚀' : 'Siguiente →';
+    skipBtn.style.display = step.isLast ? 'none' : '';
+    buildDots();
+
+    if (step.action) { step.action(); }
+
+    setTimeout(function() {
+      var rect = null;
+      if (step.target) {
+        var el = step.target();
+        if (el) {
+          rect = el.getBoundingClientRect();
+          var p = 6;
+          spotlight.style.top    = (rect.top  - p) + 'px';
+          spotlight.style.left   = (rect.left - p) + 'px';
+          spotlight.style.width  = (rect.width  + p*2) + 'px';
+          spotlight.style.height = (rect.height + p*2) + 'px';
+          spotlight.classList.add('visible');
+        }
+      } else {
+        spotlight.classList.remove('visible');
+        spotlight.style.width = '0px';
+        spotlight.style.height = '0px';
+      }
+      card.classList.add('visible');
+      positionCard(rect, step.side);
+    }, 120);
+  }
+
+  window.tourNext = function() {
+    if (!_active) return;
+    if (STEPS[_step].isLast) { tourEnd(true); return; }
+    _step++;
+    if (_step >= STEPS.length) { tourEnd(true); return; }
+    showStep(_step);
+  };
+
+  window.tourSkip = function() { tourEnd(false); };
+
+  function tourEnd(completed) {
+    _active = false;
+    localStorage.setItem('filo_tour_done', '1');
+    var overlay   = document.getElementById('tour-overlay');
+    var spotlight = document.getElementById('tour-spotlight');
+    var card      = document.getElementById('tour-card');
+    overlay.classList.remove('active');
+    spotlight.classList.remove('visible');
+    card.classList.remove('visible');
+    if (completed) { showSection('dashboard'); }
+  }
+
+  window.startTour = function() {
+    _step = 0;
+    _active = true;
+    var card = document.getElementById('tour-card');
+    card.style.top = '-999px';
+    card.classList.remove('visible');
+    document.getElementById('tour-spotlight').classList.remove('visible');
+    showSection('dashboard');
+    setTimeout(function() { showStep(0); }, 200);
+  };
+
+  // Auto-launch on first login — observe auth-screen hiding
+  var _obs = new MutationObserver(function(mutations) {
+    for (var i = 0; i < mutations.length; i++) {
+      var m = mutations[i];
+      if (m.attributeName === 'style') {
+        var authScreen = document.getElementById('auth-screen');
+        if (authScreen && authScreen.style.display === 'none') {
+          _obs.disconnect();
+          if (!localStorage.getItem('filo_tour_done')) {
+            setTimeout(window.startTour, 900);
+          }
+        }
+      }
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var authScreen = document.getElementById('auth-screen');
+    if (authScreen) {
+      _obs.observe(authScreen, { attributes: true });
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (!_active) return;
+    if (e.key === 'ArrowRight' || e.key === 'Enter') { window.tourNext(); }
+    if (e.key === 'Escape') { window.tourSkip(); }
+  });
+})();
+</script>
 
 </body>
 </html>
