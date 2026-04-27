@@ -393,7 +393,7 @@ footer a{color:var(--y);text-decoration:none}
 </div><!-- /dashboard -->
 
 <!-- ── Video popup modal ───────────────────────────────────────────────── -->
-<div id="vid-modal" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s;pointer-events:none">
+<div id="vid-modal" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);transition:opacity .3s">
   <div style="width:100%;max-width:820px;position:relative">
     <!-- header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -477,7 +477,8 @@ footer a{color:var(--y);text-decoration:none}
 <style>
   #vp.playing #vp-overlay { opacity:0; pointer-events:none }
   #vp:hover #vp-overlay   { opacity:1; pointer-events:auto }
-  #vid-modal.open { opacity:1; pointer-events:auto }
+  #vid-modal           { opacity:0; pointer-events:none }
+  #vid-modal.open      { opacity:1; pointer-events:auto }
 </style>
 
 <script>
