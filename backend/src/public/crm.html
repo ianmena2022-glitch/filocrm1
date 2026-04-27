@@ -10691,11 +10691,39 @@ async function bcmSave(id) {
       action: function() { showSection('dashboard'); }
     },
     {
-      target: function() { return document.getElementById('cfg-tabs-nav'); },
-      title: '⚙️ Configuración',
-      body: '🏠 General: nombre, ciudad y horarios.\n📅 Turnos: reservas online y recordatorios.\n💬 WhatsApp: conectá el bot de mensajes.\n📦 Servicios: precios y duración.\n⚙️ Cuenta: suscripción y datos.',
+      target: function() { return document.querySelector('.cfg-tab-btn[onclick*="general"]'); },
+      title: '🏠 General',
+      body: 'Nombre de tu barbería, ciudad, foto de perfil y horarios de atención. Lo primero que hay que completar.',
       side: 'bottom',
-      action: function() { showSection('configuracion'); }
+      action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('general', document.querySelector('.cfg-tab-btn[onclick*="general"]')); }, 150); }
+    },
+    {
+      target: function() { return document.querySelector('.cfg-tab-btn[onclick*="reservas"]'); },
+      title: '📅 Turnos',
+      body: 'Activá las reservas online para que los clientes saquen turno solos. Configurá intervalos, anticipación mínima y mensajes automáticos.',
+      side: 'bottom',
+      action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('reservas', document.querySelector('.cfg-tab-btn[onclick*="reservas"]')); }, 150); }
+    },
+    {
+      target: function() { return document.querySelector('.cfg-tab-btn[onclick*="whatsapp"]'); },
+      title: '💬 WhatsApp',
+      body: 'Conectá tu número de WhatsApp para enviar recordatorios automáticos, confirmaciones y mensajes de cumpleaños a tus clientes.',
+      side: 'bottom',
+      action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('whatsapp', document.querySelector('.cfg-tab-btn[onclick*="whatsapp"]')); }, 150); }
+    },
+    {
+      target: function() { return document.querySelector('.cfg-tab-btn[onclick*="negocio"]'); },
+      title: '📦 Servicios',
+      body: 'Creá y editá los servicios que ofrecés: nombre, precio y duración. También gestionás el catálogo de productos para venta.',
+      side: 'bottom',
+      action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('negocio', document.querySelector('.cfg-tab-btn[onclick*="negocio"]')); }, 150); }
+    },
+    {
+      target: function() { return document.querySelector('.cfg-tab-btn[onclick*="cuenta"]'); },
+      title: '⚙️ Cuenta',
+      body: 'Gestioná tu suscripción, cambiá de plan o cancelá cuando quieras. También podés relanzar este tour desde acá.',
+      side: 'bottom',
+      action: function() { showSection('configuracion'); setTimeout(function(){ switchCfgTab('cuenta', document.querySelector('.cfg-tab-btn[onclick*="cuenta"]')); }, 150); }
     },
     {
       target: null,
