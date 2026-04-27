@@ -8517,12 +8517,20 @@ async function loadSubscriptionStatus() {
   const btn = document.getElementById('btn-cancel-subscription');
   if (!el) return;
 
-  // Cuentas test: no necesitan pagar, ocultar todo lo relacionado con suscripción
+  // Cuentas test: sin pago, pero pueden simular cualquier plan
   if (currentShop?.is_test || currentShop?.plan === 'test') {
-    el.innerHTML = '<span style="color:var(--green)">● Cuenta de testing</span> · Sin pagos requeridos';
+    const activePlan = (currentShop?.filo_plan || 'starter').toUpperCase();
+    el.innerHTML = `<span style="color:var(--green)">● Cuenta de testing</span> · Plan simulado: <strong style="color:#fff">${activePlan}</strong>`;
     if (btn) btn.style.display = 'none';
     const actions = document.getElementById('subscription-actions');
-    if (actions) actions.style.display = 'none';
+    if (actions) {
+      actions.style.display = 'flex';
+      actions.innerHTML = `
+        <button onclick="switchPlan('starter')" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">⭐ Starter</button>
+        <button onclick="switchPlan('staff')"   style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">👥 Staff</button>
+        <button onclick="switchPlan('enterprise')" style="background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.3);color:var(--yellow);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🏢 Enterprise</button>
+      `;
+    }
     return;
   }
 
