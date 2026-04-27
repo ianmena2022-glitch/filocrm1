@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FILO — Programa de Afiliados</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --y:#FFD100;--bg:#06090e;--w:#fff;--g:rgba(255,255,255,.5);
+  --green:#aaff00;--card:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--w);font-family:'Barlow',sans-serif}
+
+/* ── SLIDES ── */
+#deck{position:relative;width:100vw;height:100vh}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:60px 8%;
+  opacity:0;pointer-events:none;transition:opacity .6s ease;
+  overflow:hidden;
+}
+.slide.active{opacity:1;pointer-events:all}
+.slide.exit{opacity:0}
+
+/* ── FONDO COMÚN ── */
+.bg-dots{position:absolute;inset:0;background-image:radial-gradient(rgba(255,209,0,.12) 1.2px,transparent 1.2px);background-size:36px 36px;pointer-events:none}
+.bg-glow-y{position:absolute;width:700px;height:700px;background:radial-gradient(circle,rgba(255,209,0,.06),transparent 70%);border-radius:50%;pointer-events:none}
+.bg-glow-g{position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(170,255,0,.06),transparent 70%);border-radius:50%;pointer-events:none}
+
+/* ── TIPOGRAFÍA ── */
+.label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--y);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.label::before,.label::after{content:'';flex:1;height:1px;background:rgba(255,209,0,.2);max-width:60px}
+h1{font-family:'Oswald',sans-serif;font-size:clamp(42px,6vw,76px);font-weight:700;line-height:1.0;text-align:center;margin-bottom:20px}
+h1 .y{color:var(--y)}
+h1 .g{color:var(--green)}
+.sub{font-size:clamp(16px,2vw,22px);color:var(--g);text-align:center;line-height:1.6;max-width:680px;font-weight:300}
+.sub strong{color:var(--w);font-weight:600}
+
+/* ── PLAN CARDS ── */
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:900px;margin-top:32px}
+.plan-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:28px 22px;text-align:center;position:relative;overflow:hidden}
+.plan-card.hl{border-color:rgba(255,209,0,.35);background:linear-gradient(145deg,rgba(255,209,0,.06),rgba(255,209,0,.02))}
+.plan-card.hl2{border-color:rgba(170,255,0,.35);background:linear-gradient(145deg,rgba(170,255,0,.06),rgba(170,255,0,.02))}
+.plan-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
+.plan-price{font-family:'Oswald',sans-serif;font-size:34px;font-weight:700;color:var(--w);line-height:1}
+.plan-price span{font-size:15px;color:var(--g);font-family:'Barlow',sans-serif;font-weight:400}
+.plan-comm{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.plan-comm-label{font-size:11px;color:var(--g);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
+.plan-comm-val{font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--green)}
+
+/* ── FEATURE LIST ── */
+.feat-list{list-style:none;display:flex;flex-direction:column;gap:12px;text-align:left;width:100%;max-width:560px}
+.feat-list li{display:flex;align-items:flex-start;gap:12px;font-size:17px;color:rgba(255,255,255,.8)}
+.feat-list li::before{content:'✓';color:var(--green);font-weight:700;font-size:16px;flex-shrink:0;margin-top:2px}
+
+/* ── DETAIL SLIDE (plan individual) ── */
+.plan-detail{display:grid;grid-template-columns:1fr 1fr;gap:48px;width:100%;max-width:960px;align-items:start}
+.detail-left h2{font-family:'Oswald',sans-serif;font-size:clamp(32px,4vw,54px);font-weight:700;line-height:1.05;margin-bottom:12px}
+.detail-left .price-big{font-family:'Oswald',sans-serif;font-size:clamp(20px,3vw,32px);font-weight:600;color:var(--g);margin-bottom:8px}
+.detail-left .comm-big{font-family:'Oswald',sans-serif;font-size:clamp(28px,4vw,48px);font-weight:700;color:var(--green);margin-bottom:20px}
+.detail-left .comm-label{font-size:13px;color:var(--g);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
+.ideal-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.ideal-label{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--y);margin-bottom:8px}
+.ideal-text{font-size:15px;color:rgba(255,255,255,.75);line-height:1.5}
+.pro-list{list-style:none;display:flex;flex-direction:column;gap:10px}
+.pro-list li{display:flex;align-items:flex-start;gap:10px;font-size:15px;color:rgba(255,255,255,.75)}
+.pro-list li::before{content:'→';color:var(--y);font-weight:700;flex-shrink:0}
+
+/* ── FLOW ── */
+.flow{display:flex;align-items:center;gap:0;width:100%;max-width:820px;margin-top:32px;flex-wrap:wrap;justify-content:center}
+.flow-step{display:flex;flex-direction:column;align-items:center;gap:10px;flex:1;min-width:120px}
+.flow-num{width:52px;height:52px;border-radius:50%;border:2px solid var(--y);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--y)}
+.flow-label{font-size:14px;color:rgba(255,255,255,.7);text-align:center;line-height:1.4}
+.flow-arrow{font-size:22px;color:rgba(255,255,255,.2);flex-shrink:0;padding:0 8px;margin-bottom:24px}
+
+/* ── BIG MONEY ── */
+.money-row{display:flex;gap:24px;margin-top:28px;flex-wrap:wrap;justify-content:center}
+.money-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 32px;text-align:center;flex:1;min-width:180px}
+.money-plan{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
+.money-val{font-family:'Oswald',sans-serif;font-size:40px;font-weight:700;line-height:1}
+.money-sub{font-size:12px;color:var(--g);margin-top:4px}
+
+/* ── PROGRESS ── */
+#progress-bar{position:fixed;top:0;left:0;height:3px;background:var(--y);transition:width .4s ease;z-index:100}
+#slide-counter{position:fixed;bottom:24px;right:32px;font-size:13px;color:rgba(255,255,255,.3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;z-index:100}
+#nav-hint{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.2);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;z-index:100;transition:opacity .5s}
+
+/* ── FILO LOGO ── */
+.filo-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.filo-logo img{height:36px}
+.filo-logo span{font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--y);letter-spacing:1px}
+
+/* ── ANIM ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+.slide.active .anim{animation:fadeUp .55s ease both}
+.slide.active .anim:nth-child(2){animation-delay:.1s}
+.slide.active .anim:nth-child(3){animation-delay:.2s}
+.slide.active .anim:nth-child(4){animation-delay:.3s}
+.slide.active .anim:nth-child(5){animation-delay:.4s}
+.slide.active .anim:nth-child(6){animation-delay:.5s}
+</style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+<div id="slide-counter"></div>
+<div id="nav-hint">CLICK · ESPACIO · →</div>
+<div id="deck">
+
+  <!-- ─── SLIDE 1: GANCHO ─── -->
+  <div class="slide" id="s1">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-y" style="top:-200px;right:-150px"></div>
+    <div class="filo-logo anim">
+      <img src="/logo_f.png" alt="FILO">
+      <span>FILO</span>
+    </div>
+    <div class="label anim">Programa de Afiliados</div>
+    <h1 class="anim">Recomendá FILO.<br><span class="y">Ganá en efectivo.</span></h1>
+    <p class="sub anim">Si conocés barberías, estás sentado sobre una oportunidad.<br>En los próximos minutos te explicamos <strong>exactamente cómo funciona</strong>.</p>
+  </div>
+
+  <!-- ─── SLIDE 2: QUÉ ES FILO ─── -->
+  <div class="slide" id="s2">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-g" style="bottom:-200px;left:-100px"></div>
+    <div class="label anim">¿Qué es FILO?</div>
+    <h1 class="anim" style="font-size:clamp(36px,5vw,62px)">El sistema de gestión<br><span class="y">número uno</span> para barberías</h1>
+    <ul class="feat-list anim" style="margin-top:28px">
+      <li>Turnos online y fila digital en tiempo real</li>
+      <li>Cobros en el local — sin tarjeta de crédito necesaria</li>
+      <li>Dashboard financiero: facturación, costos, rentabilidad</li>
+      <li>Membresías, puntos y fidelización de clientes</li>
+      <li>Gestión de equipo y comisiones por barbero</li>
+    </ul>
+  </div>
+
+  <!-- ─── SLIDE 3: LOS PLANES ─── -->
+  <div class="slide" id="s3">
+    <div class="bg-dots"></div>
+    <div class="label anim">Los planes</div>
+    <h1 class="anim" style="font-size:clamp(32px,4.5vw,58px)">Tres planes.<br><span class="y">Una comisión por cada uno.</span></h1>
+    <div class="plan-grid anim">
+      <div class="plan-card">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price">$40.000<span>/mes</span></div>
+        <div class="plan-comm">
+          <div class="plan-comm-label">Tu comisión</div>
+          <div class="plan-comm-val">$24.000</div>
+        </div>
+      </div>
+      <div class="plan-card hl">
+        <div class="plan-name">Staff ⭐</div>
+        <div class="plan-price">$80.000<span>/mes</span></div>
+        <div class="plan-comm">
+          <div class="plan-comm-label">Tu comisión</div>
+          <div class="plan-comm-val">$48.000</div>
+        </div>
+      </div>
+      <div class="plan-card hl2">
+        <div class="plan-name">Enterprise</div>
+        <div class="plan-price">$130.000<span>/mes</span></div>
+        <div class="plan-comm">
+          <div class="plan-comm-label">Tu comisión</div>
+          <div class="plan-comm-val">$78.000</div>
+        </div>
+      </div>
+    </div>
+    <p class="sub anim" style="margin-top:20px;font-size:14px">Comisión única al momento del primer pago. Sin topes, sin vencimientos.</p>
+  </div>
+
+  <!-- ─── SLIDE 4: PLAN STARTER ─── -->
+  <div class="slide" id="s4">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-y" style="top:-100px;left:-100px;opacity:.5"></div>
+    <div class="plan-detail">
+      <div class="detail-left">
+        <div class="label anim" style="justify-content:flex-start">Plan 01</div>
+        <h2 class="anim">Starter</h2>
+        <div class="price-big anim">$40.000 / mes</div>
+        <div class="comm-label anim">Tu comisión</div>
+        <div class="comm-big anim">$24.000</div>
+        <div class="ideal-box anim">
+          <div class="ideal-label">Cliente ideal</div>
+          <div class="ideal-text">Barbero independiente. Trabaja solo, alquila un sillón o tiene su propio espacio. Quiere organizarse sin complicaciones.</div>
+        </div>
+      </div>
+      <div class="detail-right">
+        <div class="label anim" style="justify-content:flex-start">Por qué le conviene</div>
+        <ul class="pro-list anim">
+          <li>Organiza su agenda y elimina el WhatsApp constante</li>
+          <li>Acepta turnos online 24/7 sin estar presente</li>
+          <li>Ve sus ganancias reales en tiempo real</li>
+          <li>Fideliza clientes con puntos y beneficios</li>
+          <li>Se ve como un negocio profesional desde el día uno</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 5: PLAN STAFF ─── -->
+  <div class="slide" id="s5">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-y" style="bottom:-100px;right:-100px;opacity:.5"></div>
+    <div class="plan-detail">
+      <div class="detail-left">
+        <div class="label anim" style="justify-content:flex-start">Plan 02</div>
+        <h2 class="anim">Staff <span style="color:var(--y)">⭐</span></h2>
+        <div class="price-big anim">$80.000 / mes</div>
+        <div class="comm-label anim">Tu comisión</div>
+        <div class="comm-big anim">$48.000</div>
+        <div class="ideal-box anim">
+          <div class="ideal-label">Cliente ideal</div>
+          <div class="ideal-text">Barbería con 2 o más barberos. El dueño necesita controlar el equipo, dividir comisiones y ver la caja sin estar todo el día en el local.</div>
+        </div>
+      </div>
+      <div class="detail-right">
+        <div class="label anim" style="justify-content:flex-start">Por qué le conviene</div>
+        <ul class="pro-list anim">
+          <li>Panel individual por cada barbero del equipo</li>
+          <li>División automática de comisiones sin discusiones</li>
+          <li>Fila digital por barbero — el cliente elige a quién</li>
+          <li>El dueño ve todo desde su celular en tiempo real</li>
+          <li>Escala sin agregar caos operativo</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 6: PLAN ENTERPRISE ─── -->
+  <div class="slide" id="s6">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-g" style="top:-80px;right:-80px;opacity:.6"></div>
+    <div class="plan-detail">
+      <div class="detail-left">
+        <div class="label anim" style="justify-content:flex-start">Plan 03</div>
+        <h2 class="anim">Enterprise</h2>
+        <div class="price-big anim">$130.000 / mes</div>
+        <div class="comm-label anim">Tu comisión</div>
+        <div class="comm-big anim" style="color:var(--green)">$78.000</div>
+        <div class="ideal-box anim">
+          <div class="ideal-label">Cliente ideal</div>
+          <div class="ideal-text">Dueño de 2 o más locales. Franquicias, cadenas, o el barbero que ya escala y necesita gestionar todo desde un panel central.</div>
+        </div>
+      </div>
+      <div class="detail-right">
+        <div class="label anim" style="justify-content:flex-start">Por qué le conviene</div>
+        <ul class="pro-list anim">
+          <li>Panel madre que consolida todas las sucursales</li>
+          <li>Métricas por local: qué sucursal rinde más</li>
+          <li>Control total sin necesidad de estar físicamente</li>
+          <li>Cada sucursal opera de forma independiente</li>
+          <li>La herramienta que necesita cualquier cadena seria</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 7: CÓMO FUNCIONA ─── -->
+  <div class="slide" id="s7">
+    <div class="bg-dots"></div>
+    <div class="label anim">¿Cómo funciona el programa?</div>
+    <h1 class="anim" style="font-size:clamp(34px,5vw,60px)">4 pasos.<br><span class="y">100% automático.</span></h1>
+    <div class="flow anim">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-label">Te registrás<br>gratis</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-label">Obtenés tu<br>link único</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-label">La barbería<br>se suscribe</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-label">Comisión a<br>tu cuenta</div>
+      </div>
+    </div>
+    <p class="sub anim" style="margin-top:28px;font-size:15px">El sistema detecta el pago automáticamente. Vos solo te enterás cuando el dinero ya está acreditado.</p>
+  </div>
+
+  <!-- ─── SLIDE 8: CUÁNTO PODÉS GANAR ─── -->
+  <div class="slide" id="s8">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-g" style="bottom:-100px;left:-50px"></div>
+    <div class="label anim">El potencial</div>
+    <h1 class="anim" style="font-size:clamp(36px,5vw,62px)">¿Cuánto podés<br><span class="y">ganar por mes?</span></h1>
+    <div class="money-row anim">
+      <div class="money-card">
+        <div class="money-plan">5 Starter</div>
+        <div class="money-val" style="color:var(--w)">$120.000</div>
+        <div class="money-sub">al mes</div>
+      </div>
+      <div class="money-card" style="border-color:rgba(255,209,0,.25)">
+        <div class="money-plan">5 Staff</div>
+        <div class="money-val" style="color:var(--y)">$240.000</div>
+        <div class="money-sub">al mes</div>
+      </div>
+      <div class="money-card" style="border-color:rgba(170,255,0,.25)">
+        <div class="money-plan">5 Enterprise</div>
+        <div class="money-val" style="color:var(--green)">$390.000</div>
+        <div class="money-sub">al mes</div>
+      </div>
+    </div>
+    <p class="sub anim" style="margin-top:20px;font-size:14px">Sin topes. Sin límite de referidos. Cuanto más cerrás, más ganás.</p>
+  </div>
+
+  <!-- ─── SLIDE 9: CIERRE ─── -->
+  <div class="slide" id="s9">
+    <div class="bg-dots"></div>
+    <div class="bg-glow-y" style="top:50%;left:50%;transform:translate(-50%,-50%);width:900px;height:900px;opacity:.5"></div>
+    <div class="filo-logo anim">
+      <img src="/logo_f.png" alt="FILO">
+      <span>FILO</span>
+    </div>
+    <h1 class="anim" style="font-size:clamp(38px,6vw,72px)">Empezá hoy.<br><span class="y">Es gratis.</span></h1>
+    <p class="sub anim">No necesitás ser cliente de FILO. No necesitás saber de tecnología.<br>Solo necesitás conocer barberías.</p>
+    <div class="anim" style="margin-top:36px;background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.3);border-radius:12px;padding:18px 40px;font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--y);letter-spacing:1px">
+      filocrm.com.ar/afiliados
+    </div>
+  </div>
+
+</div><!-- /#deck -->
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total  = slides.length;
+let current  = 0;
+let hintTimer;
+
+function go(i) {
+  slides[current].classList.remove('active');
+  current = Math.max(0, Math.min(i, total - 1));
+  slides[current].classList.add('active');
+
+  // Progress bar
+  document.getElementById('progress-bar').style.width = ((current + 1) / total * 100) + '%';
+
+  // Counter
+  document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+}
+
+function next() { if (current < total - 1) go(current + 1); }
+function prev() { if (current > 0) go(current - 1); }
+
+// Init
+go(0);
+
+// Hide nav hint after 4s
+hintTimer = setTimeout(() => {
+  document.getElementById('nav-hint').style.opacity = '0';
+}, 4000);
+
+// Controls
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                   { e.preventDefault(); prev(); }
+});
+document.addEventListener('click', e => {
+  if (e.clientX > window.innerWidth / 2) next(); else prev();
+});
+
+// Touch swipe
+let tx = 0;
+document.addEventListener('touchstart', e => tx = e.touches[0].clientX, {passive:true});
+document.addEventListener('touchend',   e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  if (Math.abs(dx) > 40) { dx < 0 ? next() : prev(); }
+}, {passive:true});
+</script>
+</body>
+</html>

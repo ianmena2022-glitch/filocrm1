@@ -100,6 +100,11 @@ app.get('/afiliados', (req, res) => {
   res.sendFile(path.join(publicDir, 'afiliados.html'));
 });
 
+// Video onboarding afiliados
+app.get('/afiliados/onboarding', (req, res) => {
+  res.sendFile(path.join(publicDir, 'onboarding-afiliados.html'));
+});
+
 // Fila digital pública
 app.get('/fila/:slug', (req, res) => {
   res.sendFile(path.join(publicDir, 'fila.html'));
