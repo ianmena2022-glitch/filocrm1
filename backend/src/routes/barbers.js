@@ -28,13 +28,14 @@ router.get('/', auth, ownerOnly, async (req, res) => {
 router.post('/invite', auth, ownerOnly, async (req, res) => {
   const { barber_name } = req.body;
 
-  // Verificar límite de 10 barberos
-  const count = await pool.query(
-    'SELECT COUNT(*) FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
-    [req.shopId]
-  );
-  if (parseInt(count.rows[0].count) >= 10) {
-    return res.status(400).json({ error: 'Límite de 10 barberos alcanzado' });
+  const [countRes, shopRes] = await Promise.all([
+    pool.query('SELECT COUNT(*) FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [req.shopId]),
+    pool.query('SELECT filo_plan FROM shops WHERE id=$1', [req.shopId])
+  ]);
+  const plan = shopRes.rows[0]?.filo_plan || 'staff';
+  const barberLimit = plan === 'enterprise' ? 20 : plan === 'starter' ? 1 : 10;
+  if (parseInt(countRes.rows[0].count) >= barberLimit) {
+    return res.status(400).json({ error: `Límite de ${barberLimit} barberos alcanzado para tu plan ${plan}` });
   }
 
   try {

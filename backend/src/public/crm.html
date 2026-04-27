@@ -4400,20 +4400,13 @@ async function startApp() {
   //   - es cuenta test con filo_plan='enterprise' (para previsualizar la UX enterprise)
   const isTestEnterprise = currentShop?.is_test && currentShop?.filo_plan === 'enterprise';
   if (currentShop?.is_enterprise_owner && (!currentShop?.is_test || isTestEnterprise)) {
-    document.querySelector('.sidebar').style.display = 'none';
-    document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
-    document.getElementById('sec-enterprise').style.display = 'block';
-    document.getElementById('sec-enterprise').classList.add('active');
-    // Para cuentas test en enterprise: mostrar el switcher dentro del panel
-    if (currentShop?.is_test) {
-      const ts = document.getElementById('ent-test-plan-switcher');
-      if (ts) {
-        ts.style.display = 'block';
-        const lbl = document.getElementById('ent-current-plan-label');
-        if (lbl) lbl.textContent = 'Plan activo: enterprise';
-      }
+    // Mostrar setup enterprise la primera vez que el usuario llega a este plan
+    const setupKey = 'filo_ent_setup_' + currentShop.id;
+    if (!localStorage.getItem(setupKey)) {
+      showEnterpriseSetup();
+      return;
     }
-    loadEnterpriseDashboard();
+    launchEnterprisePanel();
     return;
   }
 
@@ -4436,6 +4429,56 @@ async function startApp() {
   loadStoreItems();
   initStaffUI();
   startPolling();
+}
+
+function launchEnterprisePanel() {
+  document.querySelector('.sidebar').style.display = 'none';
+  document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
+  document.getElementById('sec-enterprise').style.display = 'block';
+  document.getElementById('sec-enterprise').classList.add('active');
+  if (currentShop?.is_test) {
+    const ts = document.getElementById('ent-test-plan-switcher');
+    if (ts) {
+      ts.style.display = 'block';
+      const lbl = document.getElementById('ent-current-plan-label');
+      if (lbl) lbl.textContent = 'Plan activo: enterprise';
+    }
+  }
+  loadEnterpriseDashboard();
+}
+
+function showEnterpriseSetup() {
+  document.getElementById('app').style.display = 'block';
+  // Pre-fill fields with current shop data
+  const nameInput = document.getElementById('ent-setup-name');
+  const cityInput = document.getElementById('ent-setup-city');
+  if (nameInput) nameInput.value = currentShop?.name || '';
+  if (cityInput) cityInput.value = currentShop?.city || '';
+  document.getElementById('modal-enterprise-setup').style.display = 'flex';
+}
+
+async function confirmEnterpriseSetup() {
+  const nameInput = document.getElementById('ent-setup-name');
+  const cityInput = document.getElementById('ent-setup-city');
+  const name = nameInput?.value?.trim();
+  const city = cityInput?.value?.trim();
+  if (!name) { nameInput?.focus(); return; }
+
+  const btn = document.getElementById('ent-setup-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    const data = await api('PUT', '/settings', { name, city: city || currentShop?.city });
+    if (data.shop) {
+      currentShop = { ...currentShop, ...data.shop };
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    }
+  } catch(e) { /* continuar aunque falle el save */ }
+
+  localStorage.setItem('filo_ent_setup_' + currentShop.id, '1');
+  document.getElementById('modal-enterprise-setup').style.display = 'none';
+  launchEnterprisePanel();
 }
 
 // ── AUTO-REFRESH (polling cada 30 segundos) ───────────────
@@ -10601,6 +10644,68 @@ async function bcmSave(id) {
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="confirmarAjusteStock()">✅ Confirmar</button>
       <button class="btn-modal-secondary" onclick="closeModal('modal-ajuste-stock')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ENTERPRISE SETUP MODAL
+     ═══════════════════════════════════════════ -->
+<div id="modal-enterprise-setup" style="display:none;position:fixed;inset:0;background:rgba(2,8,18,0.92);z-index:9600;align-items:center;justify-content:center">
+  <div style="background:#0a1828;border:1px solid rgba(255,209,0,0.4);border-radius:20px;padding:36px 32px;max-width:500px;width:92%;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.7)">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:48px;margin-bottom:12px">🏢</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:1px;color:#fff;margin-bottom:8px">¡Bienvenido a FILO Enterprise!</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.55);line-height:1.55">Tu barbería se convierte en la <strong style="color:#FFD100">Sede Principal</strong> de tu red.<br>Configurala antes de continuar.</div>
+    </div>
+
+    <!-- Beneficios rápidos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px">
+      <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
+        <div style="font-size:18px;margin-bottom:4px">🏪</div>
+        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">Múltiples sucursales</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">Creá y gestioná todas tus sedes desde un solo panel</div>
+      </div>
+      <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
+        <div style="font-size:18px;margin-bottom:4px">📊</div>
+        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">Stats consolidadas</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">Facturación y turnos de toda la red en tiempo real</div>
+      </div>
+      <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
+        <div style="font-size:18px;margin-bottom:4px">👥</div>
+        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">Hasta 20 barberos</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">El doble de capacidad de equipo que el plan Staff</div>
+      </div>
+      <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.15);border-radius:10px;padding:12px 14px">
+        <div style="font-size:18px;margin-bottom:4px">💬</div>
+        <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:2px">WhatsApp compartido</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">Un solo número para atender a todos tus clientes</div>
+      </div>
+    </div>
+
+    <!-- Formulario -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:14px">Datos de tu sede principal</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Nombre de la sede *</label>
+          <input id="ent-setup-name" type="text" placeholder="Ej: Barbería Central" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;font-family:'Barlow',sans-serif;outline:none" onfocus="this.style.borderColor='rgba(255,209,0,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Ciudad</label>
+          <input id="ent-setup-city" type="text" placeholder="Ej: Buenos Aires" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;font-family:'Barlow',sans-serif;outline:none" onfocus="this.style.borderColor='rgba(255,209,0,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <button id="ent-setup-confirm-btn" onclick="confirmEnterpriseSetup()" style="width:100%;background:#FFD100;color:#050d18;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;letter-spacing:0.3px;transition:opacity 0.15s">
+      Ir al panel Enterprise →
+    </button>
+    <div style="text-align:center;margin-top:12px">
+      <span onclick="localStorage.setItem('filo_ent_setup_'+currentShop.id,'1');document.getElementById('modal-enterprise-setup').style.display='none';launchEnterprisePanel()" style="font-size:12px;color:rgba(255,255,255,0.3);cursor:pointer;text-decoration:underline">Omitir por ahora</span>
     </div>
   </div>
 </div>
