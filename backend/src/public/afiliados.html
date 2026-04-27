@@ -389,94 +389,167 @@ footer a{color:var(--y);text-decoration:none}
 
   </div>
 
-  <!-- Video onboarding -->
-  <div style="margin-top:48px;display:flex;flex-direction:column;align-items:center">
-    <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,209,0,.7);margin-bottom:16px">Video de onboarding</div>
 
-    <div id="vp" style="width:100%;max-width:780px;border-radius:14px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px rgba(0,0,0,.6);position:relative;cursor:pointer" onclick="vpToggle()">
-      <video id="vid" preload="metadata" style="width:100%;display:block">
+</div><!-- /dashboard -->
+
+<!-- ── Video popup modal ───────────────────────────────────────────────── -->
+<div id="vid-modal" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s;pointer-events:none">
+  <div style="width:100%;max-width:820px;position:relative">
+    <!-- header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,209,0,.8);margin-bottom:2px">Onboarding para afiliados</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.5)">Todo lo que necesitás saber para empezar a ganar</div>
+      </div>
+      <button onclick="closeVidModal()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.6);cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;transition:background .2s" onmouseover="this.style.background='rgba(255,255,255,.15)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">&times;</button>
+    </div>
+
+    <!-- player -->
+    <div id="vp" style="border-radius:14px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,.12);box-shadow:0 32px 80px rgba(0,0,0,.8);position:relative;cursor:pointer" onclick="vpToggle()">
+      <video id="vid" preload="metadata" style="width:100%;display:block;max-height:70vh">
         <source src="/filo-onboarding.mp4" type="video/mp4">
       </video>
 
-      <!-- Big play overlay -->
-      <div id="vp-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);transition:opacity .25s">
-        <div style="width:72px;height:72px;border-radius:50%;background:rgba(255,209,0,.92);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,.5)">
-          <svg id="vp-icon" width="28" height="28" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+      <!-- big play overlay -->
+      <div id="vp-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);transition:opacity .2s">
+        <div style="width:68px;height:68px;border-radius:50%;background:rgba(255,209,0,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,.5)">
+          <svg id="vp-icon" width="26" height="26" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
         </div>
       </div>
 
-      <!-- Controls bar -->
-      <div id="vp-bar" style="position:absolute;bottom:0;left:0;right:0;padding:10px 16px 14px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;flex-direction:column;gap:8px;opacity:0;transition:opacity .25s" onclick="event.stopPropagation()">
-
-        <!-- Progress -->
-        <div id="vp-prog-wrap" style="position:relative;height:4px;background:rgba(255,255,255,.2);border-radius:4px;cursor:pointer" onmousedown="vpSeek(event)">
-          <div id="vp-prog" style="height:100%;width:0%;background:var(--y,#ffd100);border-radius:4px;pointer-events:none"></div>
-          <div id="vp-thumb" style="position:absolute;top:50%;right:-6px;transform:translateY(-50%);width:12px;height:12px;border-radius:50%;background:var(--y,#ffd100);pointer-events:none;left:0%"></div>
+      <!-- controls bar — always visible -->
+      <div id="vp-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;flex-direction:column;gap:10px" onclick="event.stopPropagation()">
+        <!-- progress -->
+        <div id="vp-prog-wrap" style="position:relative;height:5px;background:rgba(255,255,255,.18);border-radius:4px;cursor:pointer" onmousedown="vpSeek(event)">
+          <div id="vp-prog" style="height:100%;width:0%;background:#ffd100;border-radius:4px;pointer-events:none;transition:width .1s linear"></div>
+          <div id="vp-thumb" style="position:absolute;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#ffd100;pointer-events:none;left:0%;box-shadow:0 0 0 3px rgba(255,209,0,.25)"></div>
         </div>
-
-        <!-- Buttons row -->
-        <div style="display:flex;align-items:center;gap:12px">
-          <button onclick="vpToggle()" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center">
-            <svg id="vp-play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <!-- buttons -->
+        <div style="display:flex;align-items:center;gap:14px">
+          <button onclick="vpToggle()" title="Play / Pausa" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center;opacity:.9;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.9'">
+            <svg id="vp-play-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
-          <button onclick="vpMute()" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center">
-            <svg id="vp-vol-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+          <button onclick="vpMute()" title="Silenciar" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center;opacity:.75;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.75'">
+            <svg id="vp-vol-icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
           </button>
-          <input id="vp-vol" type="range" min="0" max="1" step="0.02" value="1" oninput="vpVolume(this.value)" style="width:72px;accent-color:var(--y,#ffd100);cursor:pointer">
-          <span id="vp-time" style="font-size:12px;color:rgba(255,255,255,.7);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;margin-left:4px">0:00 / 0:00</span>
+          <input id="vp-vol" type="range" min="0" max="1" step="0.02" value="1" oninput="vpVolume(this.value)" style="width:68px;accent-color:#ffd100;cursor:pointer">
+          <span id="vp-time" style="font-size:12px;color:rgba(255,255,255,.55);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px">0:00 / 0:00</span>
           <div style="flex:1"></div>
-          <button onclick="vpFullscreen()" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+          <button onclick="vpFullscreen()" title="Pantalla completa" style="background:none;border:none;cursor:pointer;padding:0;color:#fff;display:flex;align-items:center;opacity:.75;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.75'">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
           </button>
         </div>
       </div>
     </div>
+
+    <!-- footer hint -->
+    <div style="margin-top:10px;text-align:center;font-size:12px;color:rgba(255,255,255,.3)">Presioná Esc o hacé clic fuera para cerrar</div>
+  </div>
+</div>
+
+<!-- ── Botón flotante reabrir video + WhatsApp ────────────────────────── -->
+<div style="position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;align-items:flex-end;z-index:900">
+  <!-- Video pill (oculto hasta cerrar modal) -->
+  <div id="vid-fab-wrap" style="display:none;transform:translateX(120px);transition:transform .35s cubic-bezier(.34,1.56,.64,1)">
+    <button onclick="openVidModal()" style="display:flex;align-items:center;gap:10px;background:#1a1a1a;border:1px solid rgba(255,209,0,.35);border-radius:40px;padding:10px 18px 10px 12px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.5);transition:border-color .2s" onmouseover="this.style.borderColor='rgba(255,209,0,.7)'" onmouseout="this.style.borderColor='rgba(255,209,0,.35)'">
+      <div style="width:34px;height:34px;border-radius:50%;background:#ffd100;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+      </div>
+      <div style="text-align:left">
+        <div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:.3px;line-height:1.2">Ver onboarding</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.45)">2 min 51 seg</div>
+      </div>
+    </button>
   </div>
 
-  <style>
-    #vp:hover #vp-bar { opacity:1 }
-    #vp.playing #vp-overlay { opacity:0 }
-    #vp:hover #vp-overlay { opacity:1 }
-    #vp.playing:hover #vp-overlay { opacity:1 }
-  </style>
+  <!-- WhatsApp / soporte -->
+  <a href="https://wa.me/5491126604247?text=Hola!%20Me%20acabo%20de%20registrar%20como%20afiliado%20FILO%20y%20quiero%20arrancar%20%F0%9F%92%AA" target="_blank" style="display:flex;align-items:center;gap:10px;background:#1a1a1a;border:1px solid rgba(37,211,102,.3);border-radius:40px;padding:10px 18px 10px 12px;text-decoration:none;box-shadow:0 8px 28px rgba(0,0,0,.5);transition:border-color .2s" onmouseover="this.style.borderColor='rgba(37,211,102,.7)'" onmouseout="this.style.borderColor='rgba(37,211,102,.3)'">
+    <div style="width:34px;height:34px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    </div>
+    <div style="text-align:left">
+      <div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:.3px;line-height:1.2">¿Necesitás ayuda?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.45)">Te acompañamos por WhatsApp</div>
+    </div>
+  </a>
+</div>
 
-  <script>
-    const vid = document.getElementById('vid');
-    const overlay = document.getElementById('vp-overlay');
-    const vpIcon = document.getElementById('vp-icon');
-    const playIcon = document.getElementById('vp-play-icon');
-    const prog = document.getElementById('vp-prog');
-    const thumb = document.getElementById('vp-thumb');
-    const timeEl = document.getElementById('vp-time');
-    const volIcon = document.getElementById('vp-vol-icon');
+<style>
+  #vp.playing #vp-overlay { opacity:0; pointer-events:none }
+  #vp:hover #vp-overlay   { opacity:1; pointer-events:auto }
+  #vid-modal.open { opacity:1; pointer-events:auto }
+</style>
 
-    function fmt(s){ const m=Math.floor(s/60),sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
+<script>
+  /* ── Video modal ── */
+  const vid       = document.getElementById('vid');
+  const vpIcon    = document.getElementById('vp-icon');
+  const playIcon  = document.getElementById('vp-play-icon');
+  const prog      = document.getElementById('vp-prog');
+  const thumb     = document.getElementById('vp-thumb');
+  const timeEl    = document.getElementById('vp-time');
+  const volIcon   = document.getElementById('vp-vol-icon');
+  const modal     = document.getElementById('vid-modal');
+  const fabWrap   = document.getElementById('vid-fab-wrap');
 
-    vid.addEventListener('timeupdate', () => {
-      if (!vid.duration) return;
-      const pct = (vid.currentTime / vid.duration) * 100;
-      prog.style.width = pct + '%';
-      thumb.style.left = pct + '%';
-      timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(vid.duration)}`;
-    });
-    vid.addEventListener('loadedmetadata', () => { timeEl.textContent = `0:00 / ${fmt(vid.duration)}`; });
-    vid.addEventListener('ended', () => {
+  function fmt(s){ const m=Math.floor(s/60),sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}`; }
+
+  vid.addEventListener('timeupdate', () => {
+    if(!vid.duration) return;
+    const pct = (vid.currentTime/vid.duration)*100;
+    prog.style.width = pct+'%';
+    thumb.style.left = pct+'%';
+    timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(vid.duration)}`;
+  });
+  vid.addEventListener('loadedmetadata', () => { timeEl.textContent=`0:00 / ${fmt(vid.duration)}`; });
+  vid.addEventListener('ended', () => {
+    document.getElementById('vp').classList.remove('playing');
+    vpIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+    playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+  });
+
+  function vpToggle(){
+    if(vid.paused){
+      vid.play();
+      document.getElementById('vp').classList.add('playing');
+      vpIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+      playIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+    } else {
+      vid.pause();
       document.getElementById('vp').classList.remove('playing');
-      vpIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
-      playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
-    });
-
-    function vpToggle(){
-      if(vid.paused){ vid.play(); document.getElementById('vp').classList.add('playing'); vpIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; playIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; }
-      else { vid.pause(); document.getElementById('vp').classList.remove('playing'); vpIcon.innerHTML='<path d="M8 5v14l11-7z"/>'; playIcon.innerHTML='<path d="M8 5v14l11-7z"/>'; }
+      vpIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+      playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
     }
-    function vpMute(){ vid.muted=!vid.muted; volIcon.innerHTML = vid.muted ? '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>':'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>'; }
-    function vpVolume(v){ vid.volume=v; vid.muted=v==0; }
-    function vpSeek(e){ const r=document.getElementById('vp-prog-wrap').getBoundingClientRect(); const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); vid.currentTime=pct*vid.duration; }
-    function vpFullscreen(){ if(vid.requestFullscreen) vid.requestFullscreen(); }
-  </script>
+  }
+  function vpMute(){ vid.muted=!vid.muted; volIcon.innerHTML=vid.muted?'<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>':'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>'; }
+  function vpVolume(v){ vid.volume=v; vid.muted=v==0; }
+  function vpSeek(e){ const r=document.getElementById('vp-prog-wrap').getBoundingClientRect(); const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); vid.currentTime=pct*vid.duration; }
+  function vpFullscreen(){ if(vid.requestFullscreen) vid.requestFullscreen(); }
 
-</div><!-- /dashboard -->
+  function openVidModal(){
+    modal.classList.add('open');
+    fabWrap.style.transform='translateX(120px)';
+    setTimeout(()=>{ fabWrap.style.display='none'; }, 350);
+  }
+  function closeVidModal(){
+    modal.classList.remove('open');
+    vid.pause();
+    document.getElementById('vp').classList.remove('playing');
+    vpIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+    playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+    fabWrap.style.display='flex';
+    requestAnimationFrame(()=>{ fabWrap.style.transform='translateX(0)'; });
+  }
+
+  // Cerrar con Esc o click fuera del player
+  modal.addEventListener('click', e=>{ if(e.target===modal) closeVidModal(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeVidModal(); });
+
+  // Abrir popup automático 1.5s después de cargar el dashboard
+  function initVideoPopup(){
+    setTimeout(openVidModal, 1500);
+  }
+</script>
 
 <footer>
   <div style="margin-bottom:8px"><strong style="color:var(--y)">FILO</strong> — Sistema de gestión para barberías</div>
@@ -594,6 +667,7 @@ async function loadDashboard() {
     _aff = data.affiliate;
     renderDashboard(data.affiliate, data.stats, data.commissions);
     showView('dashboard');
+    initVideoPopup();
   } catch(e) {
     // Token inválido
     _token = null;
