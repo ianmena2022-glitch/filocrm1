@@ -3269,7 +3269,7 @@ select.form-input { padding-right: 32px; }
                 <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px">Mi suscripción FILO</div>
                 <div id="subscription-status-text" style="font-size:12px;color:var(--gray)">Cargando...</div>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div id="subscription-actions" style="display:flex;gap:8px;flex-wrap:wrap">
                 <button onclick="openQRModal(currentShop?.filo_plan||'staff')" style="background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.3);color:var(--yellow);padding:9px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cambiar plan 🔄</button>
                 <button id="btn-cancel-subscription" onclick="cancelFiloSubscription()" style="background:rgba(255,145,0,0.12);border:1px solid rgba(255,145,0,0.3);color:#FF9100;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancelar suscripción</button>
               </div>
@@ -8516,6 +8516,16 @@ async function loadSubscriptionStatus() {
   const el = document.getElementById('subscription-status-text');
   const btn = document.getElementById('btn-cancel-subscription');
   if (!el) return;
+
+  // Cuentas test: no necesitan pagar, ocultar todo lo relacionado con suscripción
+  if (currentShop?.is_test || currentShop?.plan === 'test') {
+    el.innerHTML = '<span style="color:var(--green)">● Cuenta de testing</span> · Sin pagos requeridos';
+    if (btn) btn.style.display = 'none';
+    const actions = document.getElementById('subscription-actions');
+    if (actions) actions.style.display = 'none';
+    return;
+  }
+
   try {
     const data = await fetch('/api/auth/status', {
       headers: { 'Authorization': 'Bearer ' + token }
