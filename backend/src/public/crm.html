@@ -4007,6 +4007,13 @@ function _doLogout() {
 }
 window._doLogout = _doLogout;
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btn-confirm-logout')?.addEventListener('click', _doLogout);
+  document.getElementById('btn-cancel-logout')?.addEventListener('click', () => {
+    document.getElementById('modal-logout').style.display = 'none';
+  });
+});
+
 // ─── APP INIT ───
 
 // ── QR PAYMENT ─────────────────────────────────────────────────────────────
@@ -10517,8 +10524,8 @@ async function bcmSave(id) {
     <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">¿Cerrás sesión?</div>
     <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:22px">Vas a tener que volver a ingresar con tu email y contraseña.</div>
     <div style="display:flex;gap:10px">
-      <button onclick="_doLogout()" style="flex:1;background:#e53e3e;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cerrar sesión</button>
-      <button onclick="document.getElementById('modal-logout').style.display='none'" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
+      <button id="btn-confirm-logout" style="flex:1;background:#e53e3e;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cerrar sesión</button>
+      <button id="btn-cancel-logout" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
     </div>
   </div>
 </div>
