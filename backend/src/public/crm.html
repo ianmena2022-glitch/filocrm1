@@ -3423,9 +3423,13 @@ select.form-input { padding-right: 32px; }
           <option value="">-- Sin asignar --</option>
         </select>
       </div>
-      <div class="form-field">
-        <label>Nombre (si es nuevo)</label>
-        <input type="text" id="t-client-name" placeholder="Nombre del cliente">
+      <div class="form-field" id="t-new-client-fields" style="display:none">
+        <label>Nombre del cliente nuevo</label>
+        <input type="text" id="t-client-name" placeholder="Ej: María González">
+      </div>
+      <div class="form-field" id="t-new-client-phone-field" style="display:none">
+        <label>WhatsApp (sin +54)</label>
+        <input type="tel" id="t-client-phone" placeholder="Ej: 1134567890">
       </div>
       <div class="form-field">
         <label>Servicio</label>
@@ -5737,8 +5741,11 @@ function onClientSelectChange() {
   const sel = document.getElementById('t-client');
   const clientId = sel.value;
   const section = document.getElementById('t-redeem-section');
+  const isNew = !clientId;
 
-  if (!clientId) {
+  document.getElementById('t-new-client-fields').style.display = isNew ? 'block' : 'none';
+  document.getElementById('t-new-client-phone-field').style.display = isNew ? 'block' : 'none';
+  if (isNew) {
     section.style.display = 'none';
     document.getElementById('t-redeem-item').value = '';
     return;
@@ -5930,8 +5937,9 @@ async function selectFirstAvailableBarber() {
 }
 
 async function createAppointment() {
-  const clientId = document.getElementById('t-client').value;
+  let clientId = document.getElementById('t-client').value;
   const clientName = document.getElementById('t-client-name').value.trim();
+  const clientPhone = document.getElementById('t-client-phone').value.trim();
   const serviceId = document.getElementById('t-service').value;
   const price = document.getElementById('t-price').value;
   const date = document.getElementById('t-date').value || agendaDate;
@@ -5958,9 +5966,25 @@ async function createAppointment() {
   if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
 
   try {
+    // Si hay nombre pero no hay cliente seleccionado, crear el cliente primero
+    if (!clientId && clientName) {
+      try {
+        const newClient = await api('POST', '/clients', { name: clientName, phone: clientPhone || null });
+        clientId = String(newClient.id);
+        // Agregar al select para futuras interacciones en la sesión
+        const sel = document.getElementById('t-client');
+        const opt = new Option(clientName, clientId);
+        opt.dataset.points = '0';
+        sel.appendChild(opt);
+      } catch(ce) {
+        // Si falla la creación del cliente (ej: duplicado), seguir igual sin client_id
+        console.warn('[createAppointment] No se pudo crear cliente:', ce.message);
+      }
+    }
+
     await api('POST', '/appointments', {
       client_id: clientId || null,
-      client_name: clientName || null,
+      client_name: !clientId ? (clientName || null) : null,
       service_id: serviceId || null,
       price: parseFloat(price) || 0,
       date, time_start: time,
@@ -7075,6 +7099,12 @@ function openModal(id) {
       barberField.style.display = 'none';
     }
   }
+  if (id === 'modal-turno') {
+    // Mostrar campos de cliente nuevo por defecto (si no hay cliente seleccionado)
+    const hasClient = !!document.getElementById('t-client').value;
+    document.getElementById('t-new-client-fields').style.display = hasClient ? 'none' : 'block';
+    document.getElementById('t-new-client-phone-field').style.display = hasClient ? 'none' : 'block';
+  }
   document.getElementById(id).classList.add('open');
 }
 
@@ -7085,6 +7115,10 @@ function closeModal(id) {
     document.getElementById('t-redeem-item').value = '';
     document.getElementById('t-redeem-warning').style.display = 'none';
     document.getElementById('t-client').value = '';
+    document.getElementById('t-client-name').value = '';
+    document.getElementById('t-client-phone').value = '';
+    document.getElementById('t-new-client-fields').style.display = 'none';
+    document.getElementById('t-new-client-phone-field').style.display = 'none';
     const bSel = document.getElementById('t-barber-select');
     if (bSel) bSel.value = '';
     document.getElementById('t-barber').value = '';
