@@ -138,15 +138,31 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 <!-- PANEL -->
 <div id="panel">
   <div class="topbar">
-    <div class="topbar-logo">✂ FILO ADMIN</div>
+    <div style="display:flex;align-items:center;gap:20px">
+      <div class="topbar-logo" id="topbar-logo-text">✂ FILO ADMIN</div>
+      <!-- APP SWITCHER -->
+      <div id="app-switcher" style="display:flex;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:3px;gap:2px">
+        <button id="sw-crm" onclick="switchApp('crm')"
+          style="padding:5px 14px;border-radius:6px;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;background:var(--y);color:var(--nk)">
+          ✂ CRM
+        </button>
+        <button id="sw-nails" onclick="switchApp('nails')"
+          style="padding:5px 14px;border-radius:6px;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;background:transparent;color:var(--g)">
+          💅 Nails
+        </button>
+      </div>
+    </div>
     <div class="topbar-right">
       <span style="font-size:12px;color:var(--g)" id="last-update"></span>
-      <button class="btn-ghost" onclick="loadAll()">↺ Actualizar</button>
+      <button class="btn-ghost" id="topbar-refresh-btn" onclick="loadAll()">↺ Actualizar</button>
       <button class="btn-ghost" onclick="logout()">Salir</button>
     </div>
   </div>
 
   <div class="content">
+
+    <!-- ── CRM CONTENT ── -->
+    <div id="crm-content">
     <div class="page-title">Panel de Control</div>
     <div class="page-sub">Gestión de cuentas y facturación de FILO CRM</div>
 
@@ -187,7 +203,6 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
       <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
-      <button class="tab" onclick="switchTab('nails')" style="border-left:1px solid rgba(255,255,255,.1);margin-left:4px;padding-left:16px">💅 FILO Nails</button>
     </div>
 
     <!-- TAB: CUENTAS -->
@@ -300,8 +315,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 
     <div id="tab-metrics" style="display:none"></div>
 
-    <!-- TAB: FILO NAILS -->
-    <div id="tab-nails" style="display:none">
+    <!-- ── NAILS CONTENT ── -->
+    <div id="nails-content" style="display:none">
+    <div class="page-title" style="color:#c9a96e">💅 FILO Nails</div>
+    <div class="page-sub">Gestión de cuentas y facturación de FILO Nails</div>
+    <div id="tab-nails">
 
       <!-- Config conexión -->
       <div id="nails-config" style="margin-bottom:20px;padding:16px 20px;background:rgba(201,96,128,.07);border:1px solid rgba(201,96,128,.2);border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -450,6 +468,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         </div>
       </div>
     </div>
+    </div><!-- /nails-content -->
 
     <!-- TAB: AFILIADOS -->
     <div id="tab-afiliados" style="display:none">
@@ -542,6 +561,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         </table>
       </div>
     </div>
+    </div><!-- /crm-content -->
 
   </div>
 </div>
@@ -1773,6 +1793,44 @@ async function markAllPaid(affId, name) {
     loadAfiliados();
     document.getElementById('aff-detail-wrap').style.display = 'none';
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ══════════════════════════════════════
+// APP SWITCHER
+// ══════════════════════════════════════
+let currentApp = 'crm';
+
+function switchApp(app) {
+  currentApp = app;
+  const crmContent  = document.getElementById('crm-content');
+  const nailsContent = document.getElementById('nails-content');
+  const swCrm   = document.getElementById('sw-crm');
+  const swNails = document.getElementById('sw-nails');
+  const logo    = document.getElementById('topbar-logo-text');
+  const refreshBtn = document.getElementById('topbar-refresh-btn');
+
+  if (app === 'crm') {
+    crmContent.style.display  = '';
+    nailsContent.style.display = 'none';
+    swCrm.style.background   = 'var(--y)';
+    swCrm.style.color        = 'var(--nk)';
+    swNails.style.background = 'transparent';
+    swNails.style.color      = 'var(--g)';
+    logo.textContent         = '✂ FILO ADMIN';
+    logo.style.color         = 'var(--y)';
+    refreshBtn.onclick       = loadAll;
+  } else {
+    crmContent.style.display  = 'none';
+    nailsContent.style.display = '';
+    swNails.style.background = '#c96080';
+    swNails.style.color      = '#fff';
+    swCrm.style.background   = 'transparent';
+    swCrm.style.color        = 'var(--g)';
+    logo.textContent         = '💅 NAILS ADMIN';
+    logo.style.color         = '#c9a96e';
+    refreshBtn.onclick       = loadNails;
+    loadNails();
+  }
 }
 
 // ══════════════════════════════════════
