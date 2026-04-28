@@ -187,6 +187,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
       <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
+      <button class="tab" onclick="switchTab('nails')" style="border-left:1px solid rgba(255,255,255,.1);margin-left:4px;padding-left:16px">💅 FILO Nails</button>
     </div>
 
     <!-- TAB: CUENTAS -->
@@ -298,6 +299,157 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     </div>
 
     <div id="tab-metrics" style="display:none"></div>
+
+    <!-- TAB: FILO NAILS -->
+    <div id="tab-nails" style="display:none">
+
+      <!-- Config conexión -->
+      <div id="nails-config" style="margin-bottom:20px;padding:16px 20px;background:rgba(201,96,128,.07);border:1px solid rgba(201,96,128,.2);border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:12px;color:rgba(201,96,128,.8);font-weight:600;letter-spacing:.5px;text-transform:uppercase">URL API</span>
+        <input id="nails-api-url" class="input" style="width:340px;font-size:13px" placeholder="https://filo-nails-production.up.railway.app" />
+        <input id="nails-admin-token" class="input" style="width:220px;font-size:13px" type="password" placeholder="ADMIN_TOKEN de FILO Nails" />
+        <button class="btn-sm" style="background:#c96080;color:#fff" onclick="loadNails()">Conectar</button>
+        <span id="nails-conn-status" style="font-size:12px;color:var(--g)"></span>
+      </div>
+
+      <!-- Stats FILO Nails -->
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card highlight" style="border-color:rgba(201,96,128,.3)">
+          <div class="stat-label">MRR Nails</div>
+          <div class="stat-val" style="color:#c9a96e" id="nails-mrr">—</div>
+          <div class="stat-sub">Cuentas activas pagando</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Activas</div>
+          <div class="stat-val green" id="nails-active">—</div>
+          <div class="stat-sub">Suscripción vigente</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">En trial</div>
+          <div class="stat-val" id="nails-trial">—</div>
+          <div class="stat-sub">7 días de prueba</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Expiradas</div>
+          <div class="stat-val" style="color:var(--r)" id="nails-expired">—</div>
+          <div class="stat-sub">Sin acceso activo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total salones</div>
+          <div class="stat-val" id="nails-total">—</div>
+          <div class="stat-sub">Registrados</div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <input class="search-input" id="nails-search" placeholder="🔍 Buscar salón..." oninput="filterNails()">
+        <select class="filter" id="nails-filter-status" onchange="filterNails()">
+          <option value="">Todos los estados</option>
+          <option value="trial">Trial</option>
+          <option value="active">Activos</option>
+          <option value="expired">Expirados</option>
+        </select>
+        <select class="filter" id="nails-filter-plan" onchange="filterNails()">
+          <option value="">Todos los planes</option>
+          <option value="starter">Starter</option>
+          <option value="staff">Staff</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+        <button class="btn-sm" style="background:#c96080" onclick="openNailsCreateModal()">+ Nueva cuenta</button>
+      </div>
+
+      <!-- Tabla -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Salón</th>
+              <th>Email</th>
+              <th>Plan</th>
+              <th>Estado</th>
+              <th>Trial / Desde</th>
+              <th>Técnicas</th>
+              <th>Clientas</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="nails-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--g);padding:32px">Configurá la URL de FILO Nails para conectar</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MODAL CREAR CUENTA NAILS -->
+    <div class="modal-overlay" id="nails-create-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 style="color:#c9a96e">💅 Nueva cuenta Nails</h3>
+          <button class="modal-close" onclick="closeModal('nails-create-modal')">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group"><label>Nombre del salón</label><input class="input" id="nails-new-name" placeholder="Ej: Nail Studio by Caro"></div>
+          <div class="form-group"><label>Email</label><input class="input" id="nails-new-email" type="email" placeholder="hola@salon.com"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Plan</label>
+              <select class="input filter" id="nails-new-plan">
+                <option value="starter">Starter — $40.000/mes</option>
+                <option value="staff">Staff — $80.000/mes</option>
+                <option value="enterprise">Enterprise — $130.000/mes</option>
+              </select>
+            </div>
+          </div>
+          <div id="nails-create-err" style="color:var(--r);font-size:13px;display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-sm gray" onclick="closeModal('nails-create-modal')">Cancelar</button>
+          <button class="btn-sm" style="background:#c96080" onclick="createNailsAccount()">Crear cuenta test</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL EDITAR PLAN NAILS -->
+    <div class="modal-overlay" id="nails-edit-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 style="color:#c9a96e">Editar cuenta Nails</h3>
+          <button class="modal-close" onclick="closeModal('nails-edit-modal')">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="nails-edit-name" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px"></div>
+          <div id="nails-edit-email" style="font-size:13px;color:var(--g);margin-bottom:16px"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Plan</label>
+              <select class="input filter" id="nails-edit-plan-sel">
+                <option value="starter">Starter</option>
+                <option value="staff">Staff</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Estado</label>
+              <select class="input filter" id="nails-edit-status-sel">
+                <option value="trial">Trial</option>
+                <option value="active">Activo</option>
+                <option value="expired">Expirado</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Extender trial (días desde hoy)</label>
+            <input class="input" id="nails-edit-trial-days" type="number" placeholder="Ej: 7" min="1" max="365">
+          </div>
+          <div id="nails-edit-err" style="color:var(--r);font-size:13px;display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-sm gray" onclick="closeModal('nails-edit-modal')">Cancelar</button>
+          <button class="btn-sm" style="background:#c96080" onclick="saveNailsEdit()">Guardar</button>
+        </div>
+      </div>
+    </div>
 
     <!-- TAB: AFILIADOS -->
     <div id="tab-afiliados" style="display:none">
@@ -1622,6 +1774,197 @@ async function markAllPaid(affId, name) {
     document.getElementById('aff-detail-wrap').style.display = 'none';
   } catch(e) { alert('Error: ' + e.message); }
 }
+
+// ══════════════════════════════════════
+// FILO NAILS
+// ══════════════════════════════════════
+let nailsShops = [];
+let nailsEditId = null;
+
+function getNailsBase() { return (document.getElementById('nails-api-url').value || '').replace(/\/$/, ''); }
+function getNailsToken() { return document.getElementById('nails-admin-token').value; }
+
+function nailsFetch(path, opts = {}) {
+  const base = getNailsBase();
+  const token = getNailsToken();
+  if (!base || !token) throw new Error('Configurá la URL y el token de FILO Nails');
+  return fetch(base + path, {
+    ...opts,
+    headers: { 'x-admin-token': token, 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+}
+
+async function loadNails() {
+  const statusEl = document.getElementById('nails-conn-status');
+  statusEl.textContent = 'Conectando...';
+  statusEl.style.color = 'var(--g)';
+  try {
+    const [statsRes, shopsRes] = await Promise.all([
+      nailsFetch('/api/admin/stats'),
+      nailsFetch('/api/admin/shops'),
+    ]);
+    if (!statsRes.ok) throw new Error('Error de autenticación — revisá el token');
+    const stats = await statsRes.json();
+    nailsShops = await shopsRes.json();
+
+    document.getElementById('nails-mrr').textContent     = '$' + Number(stats.mrr).toLocaleString('es-AR');
+    document.getElementById('nails-active').textContent  = stats.active;
+    document.getElementById('nails-trial').textContent   = stats.trial;
+    document.getElementById('nails-expired').textContent = stats.expired;
+    document.getElementById('nails-total').textContent   = stats.total;
+
+    statusEl.textContent = '✓ Conectado';
+    statusEl.style.color = 'var(--gr)';
+
+    // Guardar config en localStorage
+    localStorage.setItem('nails_api_url', getNailsBase());
+    localStorage.setItem('nails_admin_token', getNailsToken());
+
+    renderNailsTable(nailsShops);
+  } catch(e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--r)';
+  }
+}
+
+function renderNailsTable(shops) {
+  const tbody = document.getElementById('nails-tbody');
+  if (!shops.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--g);padding:32px">Sin resultados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = shops.map(s => {
+    const statusBadge = {
+      trial:    '<span class="badge trial">Trial</span>',
+      active:   '<span class="badge active">Activo</span>',
+      expired:  '<span class="badge expired">Expirado</span>',
+      cancelled:'<span class="badge cancelled">Cancelado</span>',
+    }[s.subscription_status] || s.subscription_status;
+
+    const planBadge = {
+      starter:    '<span class="badge starter">Starter</span>',
+      staff:      '<span class="badge staff">Staff</span>',
+      enterprise: '<span class="badge enterprise">Enterprise</span>',
+      free:       '<span class="badge cancelled">Free</span>',
+    }[s.plan] || s.plan;
+
+    const trialDate = s.trial_ends_at
+      ? new Date(s.trial_ends_at).toLocaleDateString('es-AR')
+      : new Date(s.created_at).toLocaleDateString('es-AR');
+
+    const testTag = s.is_test_account
+      ? ' <span style="background:rgba(255,145,0,.15);color:var(--or);font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">TEST</span>'
+      : '';
+
+    return `<tr>
+      <td><strong>${s.name}</strong>${testTag}</td>
+      <td style="color:var(--g);font-size:12px">${s.email}</td>
+      <td>${planBadge}</td>
+      <td>${statusBadge}</td>
+      <td style="font-size:12px;color:var(--g)">${trialDate}</td>
+      <td style="text-align:center">${s.technicians_count || 0}</td>
+      <td style="text-align:center">${s.clients_count || 0}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="action-btn" onclick="openNailsEdit('${s.id}','${s.name}','${s.email}','${s.plan}','${s.subscription_status}')">Editar</button>
+        <button class="action-btn" onclick="toggleNailsTest('${s.id}',${!s.is_test_account})">${s.is_test_account ? 'Quitar test' : 'Marcar test'}</button>
+        <button class="action-btn danger" onclick="deleteNailsShop('${s.id}','${s.name}')">Eliminar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filterNails() {
+  const search = document.getElementById('nails-search').value.toLowerCase();
+  const status = document.getElementById('nails-filter-status').value;
+  const plan   = document.getElementById('nails-filter-plan').value;
+  const filtered = nailsShops.filter(s => {
+    if (status && s.subscription_status !== status) return false;
+    if (plan   && s.plan !== plan) return false;
+    if (search && !s.name.toLowerCase().includes(search) && !s.email.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  renderNailsTable(filtered);
+}
+
+function openNailsCreateModal() {
+  document.getElementById('nails-create-err').style.display = 'none';
+  document.getElementById('nails-new-name').value = '';
+  document.getElementById('nails-new-email').value = '';
+  document.getElementById('nails-create-modal').classList.add('open');
+}
+
+async function createNailsAccount() {
+  const name  = document.getElementById('nails-new-name').value.trim();
+  const email = document.getElementById('nails-new-email').value.trim();
+  const plan  = document.getElementById('nails-new-plan').value;
+  const errEl = document.getElementById('nails-create-err');
+  errEl.style.display = 'none';
+  if (!name || !email) { errEl.textContent = 'Nombre y email requeridos'; errEl.style.display = 'block'; return; }
+  try {
+    const res = await nailsFetch('/api/admin/shops', {
+      method: 'POST', body: JSON.stringify({ name, email, plan })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    closeModal('nails-create-modal');
+    await loadNails();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
+function openNailsEdit(id, name, email, plan, status) {
+  nailsEditId = id;
+  document.getElementById('nails-edit-name').textContent = name;
+  document.getElementById('nails-edit-email').textContent = email;
+  document.getElementById('nails-edit-plan-sel').value = plan;
+  document.getElementById('nails-edit-status-sel').value = status;
+  document.getElementById('nails-edit-trial-days').value = '';
+  document.getElementById('nails-edit-err').style.display = 'none';
+  document.getElementById('nails-edit-modal').classList.add('open');
+}
+
+async function saveNailsEdit() {
+  const errEl = document.getElementById('nails-edit-err');
+  errEl.style.display = 'none';
+  const body = {
+    plan:                document.getElementById('nails-edit-plan-sel').value,
+    subscription_status: document.getElementById('nails-edit-status-sel').value,
+  };
+  const days = document.getElementById('nails-edit-trial-days').value;
+  if (days) body.trial_days = parseInt(days);
+  try {
+    const res = await nailsFetch(`/api/admin/shops/${nailsEditId}/plan`, {
+      method: 'PATCH', body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    closeModal('nails-edit-modal');
+    await loadNails();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
+async function toggleNailsTest(id, enable) {
+  if (!confirm(enable ? '¿Marcar como cuenta TEST?' : '¿Quitar flag test?')) return;
+  try {
+    await nailsFetch(`/api/admin/shops/${id}/test`, { method: 'POST', body: JSON.stringify({ enable }) });
+    await loadNails();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function deleteNailsShop(id, name) {
+  if (!confirm(`¿Eliminar "${name}" de FILO Nails? Esta acción es irreversible.`)) return;
+  try {
+    await nailsFetch(`/api/admin/shops/${id}`, { method: 'DELETE' });
+    await loadNails();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Restaurar config guardada al cargar
+window.addEventListener('DOMContentLoaded', () => {
+  const savedUrl   = localStorage.getItem('nails_api_url');
+  const savedToken = localStorage.getItem('nails_admin_token');
+  if (savedUrl)   document.getElementById('nails-api-url').value = savedUrl;
+  if (savedToken) document.getElementById('nails-admin-token').value = savedToken;
+});
 </script>
 </body>
 </html>
