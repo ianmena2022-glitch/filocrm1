@@ -381,3 +381,31 @@ router.post('/filo-cancel', auth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// POST /api/payments/test-change-plan — solo para cuentas test, cambia plan sin pago
+router.post('/test-change-plan', auth, async (req, res) => {
+  try {
+    const { plan } = req.body;
+    const validPlans = ['starter', 'staff', 'enterprise'];
+    if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
+
+    const shopRes = await pool.query('SELECT is_test FROM shops WHERE id=$1', [req.shopId]);
+    if (!shopRes.rows.length || !shopRes.rows[0].is_test) {
+      return res.status(403).json({ error: 'Solo disponible para cuentas test' });
+    }
+
+    const isEnterprise = plan === 'enterprise';
+    await pool.query(
+      `UPDATE shops SET filo_plan=$1, is_enterprise_owner=$2,
+         is_branch=CASE WHEN $2 THEN FALSE ELSE is_branch END,
+         parent_enterprise_id=CASE WHEN $2 THEN NULL ELSE parent_enterprise_id END
+       WHERE id=$3`,
+      [plan, isEnterprise, req.shopId]
+    );
+
+    res.json({ ok: true, plan });
+  } catch (e) {
+    console.error('[test-change-plan]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});

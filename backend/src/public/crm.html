@@ -4103,7 +4103,23 @@ function selectQRPlan(plan, el) {
   el.classList.add('selected');
 }
 
-function openQRModal(plan) {
+async function openQRModal(plan) {
+  // Cuentas test: cambio de plan directo sin pago
+  if (currentShop?.is_test) {
+    const opts = ['starter','staff','enterprise'];
+    const choice = prompt(`Cambiar plan (cuenta test)\nOpciones: ${opts.join(' / ')}\nPlan actual: ${currentShop.filo_plan || 'starter'}`);
+    if (!choice || !opts.includes(choice.toLowerCase().trim())) return;
+    const newPlan = choice.toLowerCase().trim();
+    try {
+      await api('POST', '/payments/test-change-plan', { plan: newPlan });
+      currentShop.filo_plan = newPlan;
+      currentShop.is_enterprise_owner = newPlan === 'enterprise';
+      localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+      showToast('✅', 'Plan cambiado', `Ahora estás en plan ${newPlan}`);
+      setTimeout(() => startApp(), 600);
+    } catch(e) { showToast('❌', 'Error', e.message); }
+    return;
+  }
   _qrSelectedPlan = plan || currentShop?.filo_plan || 'staff';
   document.querySelectorAll('.qr-plan-opt').forEach(el => {
     el.classList.toggle('selected', el.dataset.plan === _qrSelectedPlan);
