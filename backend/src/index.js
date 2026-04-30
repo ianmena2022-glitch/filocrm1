@@ -329,9 +329,40 @@ app.get('/sitemap.xml', async (req, res) => {
 </urlset>`);
 });
 
-// Landing en la raíz
+// Landing en la raíz — con prerender estático para SEO
 app.get('/', (req, res) => {
-  res.sendFile(path.join(publicDir, 'landing.html'));
+  try {
+    let html = fs.readFileSync(path.join(publicDir, 'landing.html'), 'utf8');
+
+    // Bloque HTML estático que Google indexa en la primera pasada (antes del render de React).
+    // Se oculta vía JS cuando la app carga. No es cloaking: el contenido es idéntico al visible.
+    const prerender = `
+<div id="seo-prerender" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+  <h1>Software para barberías en Argentina — FILO CRM</h1>
+  <p>FILO es el sistema todo-en-uno para barberías y peluquerías en Argentina. Gestión de turnos online, recordatorios automáticos por WhatsApp, fila digital, caja y estadísticas en tiempo real.</p>
+  <h2>Funciones de FILO para tu barbería</h2>
+  <ul>
+    <li>Turnos online: reservas las 24 horas desde el link de tu barbería, sin llamadas</li>
+    <li>Recordatorios por WhatsApp: mensajes automáticos para reducir ausencias</li>
+    <li>Fila digital: tus clientes se anotan y esperan sin estar parados</li>
+    <li>CRM de clientes: historial de cortes, preferencias y cumpleaños</li>
+    <li>Caja y estadísticas: ingresos, servicios más pedidos y rendimiento por barbero</li>
+    <li>Gestión de barberos: agenda individual para cada profesional del equipo</li>
+    <li>Plan Enterprise: manejo de múltiples sucursales desde un solo panel</li>
+  </ul>
+  <h2>¿Por qué elegir FILO?</h2>
+  <p>FILO fue creado específicamente para barberías argentinas. A diferencia de otros sistemas genéricos, FILO incluye fila digital, integración con WhatsApp, programa de puntos para fidelizar clientes y soporte en español.</p>
+  <h2>Precios y planes</h2>
+  <p>FILO tiene 7 días de prueba gratis sin necesidad de tarjeta de crédito. Planes para barberías chicas (Starter), medianas (Staff) y cadenas con múltiples sucursales (Enterprise).</p>
+  <p>Software para barbería · Sistema de turnos barbería · App para barberos · Gestión de barbería Argentina · Turnos online barbería · CRM barbería</p>
+</div>
+<script>window.addEventListener('DOMContentLoaded',function(){var el=document.getElementById('seo-prerender');if(el)el.remove();})</script>`;
+
+    html = html.replace('<div id="root">', prerender + '\n<div id="root">');
+    res.send(html);
+  } catch(e) {
+    res.sendFile(path.join(publicDir, 'landing.html'));
+  }
 });
 
 // CRM en /app
