@@ -118,6 +118,7 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
   COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes,
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
+  + COALESCE(SUM(a.tip) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
   + COALESCE((SELECT SUM(ps.barber_commission_amount) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0)
   AS pending_commission,
   COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments,
@@ -195,7 +196,8 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
     const barber = barberQ.rows[0];
 
     const appts = await pool.query(
-      `SELECT id, date, time_start, service_name, price, commission_pct
+      `SELECT id, date, time_start, service_name, price, commission_pct,
+              COALESCE(tip, 0) AS tip
        FROM appointments
        WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
          AND (commission_settled IS NULL OR commission_settled=FALSE)
@@ -208,6 +210,7 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
       const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
+    const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
 
     const productSalesQ = await pool.query(
       `SELECT id, product_name, total_price, barber_commission_pct, barber_commission_amount, sold_at
@@ -217,7 +220,7 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
       [barber.id, req.shopId]
     );
     const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
-    const totalCommission = apptCommission + productCommission;
+    const totalCommission = apptCommission + productCommission + tipsTotal;
 
     res.json({
       barber,
@@ -225,6 +228,7 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
       count: appts.rows.length,
       total_price: totalPrice,
       appt_commission: apptCommission,
+      tips_total: tipsTotal,
       product_sales: productSalesQ.rows,
       product_commission: productCommission,
       commission_amount: totalCommission
@@ -244,7 +248,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     const barber = barberQ.rows[0];
 
     const appts = await pool.query(
-      `SELECT id, price, commission_pct FROM appointments
+      `SELECT id, price, commission_pct, COALESCE(tip, 0) AS tip FROM appointments
        WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
          AND (commission_settled IS NULL OR commission_settled=FALSE)`,
       [req.shopId, barber.id]
@@ -265,11 +269,13 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
+    const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
     const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
-    const commissionAmount = apptCommission + productCommission;
+    const commissionAmount = apptCommission + productCommission + tipsTotal;
 
     const notesExtra = [
       appts.rows.length ? `${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}` : null,
+      tipsTotal > 0 ? `propinas $${Math.round(tipsTotal).toLocaleString('es-AR')}` : null,
       productSalesQ.rows.length ? `${productSalesQ.rows.length} venta${productSalesQ.rows.length !== 1 ? 's' : ''} de producto` : null,
     ].filter(Boolean).join(' · ');
 
@@ -302,7 +308,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
        VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4)`,
       [req.shopId, commissionAmount,
-       `Comisión ${barber.name} — ${notesExtra}`,
+       `Liquidación ${barber.name} — ${notesExtra}`,
        settlement.rows[0].id]
     );
 

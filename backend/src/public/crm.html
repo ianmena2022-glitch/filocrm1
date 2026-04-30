@@ -8065,6 +8065,8 @@ async function openSettlementModal(barberId, barberName) {
     const prodExtra = (data.product_sales||[]).length > 5 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.product_sales.length - 5} venta${data.product_sales.length-5!==1?'s':''} más</td></tr>` : '';
     const apptComm = parseFloat(data.appt_commission || 0);
     const prodComm = parseFloat(data.product_commission || 0);
+    const tipsTotal = parseFloat(data.tips_total || 0);
+    const fmt0 = v => Math.round(v).toLocaleString('es-AR');
     document.getElementById('settlement-preview').innerHTML = `
       <div style="margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -8077,19 +8079,27 @@ async function openSettlementModal(barberId, barberName) {
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <span style="color:rgba(255,255,255,0.6);font-size:13px">Total facturado</span>
-          <strong>$${data.total_price.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+          <strong>$${fmt0(data.total_price)}</strong>
         </div>
-        ${apptComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="color:rgba(255,255,255,0.5);font-size:12px">Comisión turnos (${data.count})</span>
-          <span style="color:rgba(255,255,255,0.7);font-size:12px">$${apptComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</span>
+        <div style="border-top:1px solid rgba(255,255,255,.06);margin:10px 0 8px"></div>
+        ${apptComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:rgba(255,255,255,0.5);font-size:12px">✂️ Comisión turnos (${data.count})</span>
+          <span style="color:rgba(255,255,255,0.7);font-size:12px">$${fmt0(apptComm)}</span>
         </div>` : ''}
-        ${prodComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="color:rgba(192,132,252,0.8);font-size:12px">Comisión productos (${(data.product_sales||[]).length})</span>
-          <span style="color:#c084fc;font-size:12px">$${prodComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</span>
+        ${tipsTotal > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:rgba(0,230,118,0.8);font-size:12px">🎁 Propinas (${data.appointments.filter(a=>parseFloat(a.tip||0)>0).length} turnos)</span>
+          <span style="color:#00E676;font-size:12px">$${fmt0(tipsTotal)}</span>
+        </div>` : ''}
+        ${prodComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:rgba(192,132,252,0.8);font-size:12px">🛒 Comisión productos (${(data.product_sales||[]).length})</span>
+          <span style="color:#c084fc;font-size:12px">$${fmt0(prodComm)}</span>
         </div>` : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:10px;margin:12px 0">
           <span style="color:var(--yellow);font-size:14px;font-weight:700">💸 Total a pagar</span>
-          <strong style="color:#FFD100;font-size:20px">$${data.commission_amount.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+          <div style="text-align:right">
+            <strong style="color:#FFD100;font-size:20px">$${fmt0(data.commission_amount)}</strong>
+            ${tipsTotal > 0 ? `<div style="font-size:10px;color:rgba(0,230,118,0.7);margin-top:2px">Incluye $${fmt0(tipsTotal)} en propinas</div>` : ''}
+          </div>
         </div>
       </div>
       ${rows ? `<div style="background:rgba(255,255,255,0.02);border-radius:8px;overflow:hidden;margin-bottom:12px">
