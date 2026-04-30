@@ -529,6 +529,184 @@ router.post('/cash/close', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/dashboard/cash/monthly?year=YYYY — P&L mensual del año
+router.get('/cash/monthly', auth, async (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+  try {
+    // Totales por mes del año pedido
+    const current = await pool.query(
+      `SELECT
+         EXTRACT(MONTH FROM date)::int AS month,
+         SUM(revenue_total)            AS revenue,
+         SUM(tips_total)               AS tips,
+         SUM(expenses_total)           AS expenses,
+         SUM(net_total)                AS net,
+         SUM(cuts_count)               AS cuts,
+         COUNT(*)                      AS days_worked
+       FROM cash_registers
+       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2
+       GROUP BY 1 ORDER BY 1`,
+      [req.shopId, year]
+    );
+
+    // Mismo año anterior para delta %
+    const prev = await pool.query(
+      `SELECT
+         EXTRACT(MONTH FROM date)::int AS month,
+         SUM(revenue_total) AS revenue,
+         SUM(net_total)     AS net
+       FROM cash_registers
+       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2
+       GROUP BY 1`,
+      [req.shopId, year - 1]
+    );
+
+    // Totales anuales
+    const totals = await pool.query(
+      `SELECT
+         SUM(revenue_total) AS revenue,
+         SUM(tips_total)    AS tips,
+         SUM(expenses_total) AS expenses,
+         SUM(net_total)     AS net,
+         SUM(cuts_count)    AS cuts,
+         AVG(net_total)     AS avg_daily_net,
+         MAX(net_total)     AS best_day_net,
+         MIN(net_total) FILTER (WHERE net_total > 0) AS worst_day_net
+       FROM cash_registers
+       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2`,
+      [req.shopId, year]
+    );
+
+    const prevByMonth = {};
+    prev.rows.forEach(r => { prevByMonth[r.month] = r; });
+
+    const months = current.rows.map(r => {
+      const p = prevByMonth[r.month];
+      return {
+        month:       r.month,
+        revenue:     parseFloat(r.revenue   || 0),
+        tips:        parseFloat(r.tips      || 0),
+        expenses:    parseFloat(r.expenses  || 0),
+        net:         parseFloat(r.net       || 0),
+        cuts:        parseInt(r.cuts        || 0),
+        days_worked: parseInt(r.days_worked || 0),
+        prev_revenue: p ? parseFloat(p.revenue || 0) : null,
+        prev_net:     p ? parseFloat(p.net     || 0) : null,
+        delta_net_pct: p && parseFloat(p.net) !== 0
+          ? Math.round(((parseFloat(r.net) - parseFloat(p.net)) / Math.abs(parseFloat(p.net))) * 100)
+          : null
+      };
+    });
+
+    const t = totals.rows[0] || {};
+    res.json({
+      year,
+      months,
+      totals: {
+        revenue:       parseFloat(t.revenue       || 0),
+        tips:          parseFloat(t.tips          || 0),
+        expenses:      parseFloat(t.expenses      || 0),
+        net:           parseFloat(t.net           || 0),
+        cuts:          parseInt(t.cuts            || 0),
+        avg_daily_net: parseFloat(t.avg_daily_net || 0),
+        best_day_net:  parseFloat(t.best_day_net  || 0),
+        worst_day_net: parseFloat(t.worst_day_net || 0)
+      }
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/cash/week-compare — esta semana vs semana pasada
+router.get('/cash/week-compare', auth, async (req, res) => {
+  try {
+    // Lunes de esta semana (Argentina UTC-3)
+    const now = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const dow = now.getUTCDay() === 0 ? 6 : now.getUTCDay() - 1; // 0=lun
+    const thisMonday = new Date(now);
+    thisMonday.setUTCDate(now.getUTCDate() - dow);
+    const thisMondayStr = thisMonday.toISOString().split('T')[0];
+
+    const lastMonday = new Date(thisMonday);
+    lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+    const lastMondayStr = lastMonday.toISOString().split('T')[0];
+
+    const lastSunday = new Date(thisMonday);
+    lastSunday.setUTCDate(thisMonday.getUTCDate() - 1);
+    const lastSundayStr = lastSunday.toISOString().split('T')[0];
+
+    // Esta semana (hasta hoy)
+    const thisWeek = await pool.query(
+      `SELECT
+         EXTRACT(DOW FROM date)::int  AS dow,
+         date::text                   AS date,
+         revenue_total, tips_total, expenses_total, net_total, cuts_count
+       FROM cash_registers
+       WHERE shop_id=$1 AND date >= $2
+       ORDER BY date`,
+      [req.shopId, thisMondayStr]
+    );
+
+    // Semana pasada (lunes a domingo)
+    const lastWeek = await pool.query(
+      `SELECT
+         EXTRACT(DOW FROM date)::int  AS dow,
+         date::text                   AS date,
+         revenue_total, tips_total, expenses_total, net_total, cuts_count
+       FROM cash_registers
+       WHERE shop_id=$1 AND date >= $2 AND date <= $3
+       ORDER BY date`,
+      [req.shopId, lastMondayStr, lastSundayStr]
+    );
+
+    const sumWeek = rows => ({
+      revenue:  rows.reduce((a,r) => a + parseFloat(r.revenue_total  || 0), 0),
+      tips:     rows.reduce((a,r) => a + parseFloat(r.tips_total     || 0), 0),
+      expenses: rows.reduce((a,r) => a + parseFloat(r.expenses_total || 0), 0),
+      net:      rows.reduce((a,r) => a + parseFloat(r.net_total      || 0), 0),
+      cuts:     rows.reduce((a,r) => a + parseInt(r.cuts_count       || 0), 0),
+      days:     rows.length
+    });
+
+    const thisTotals = sumWeek(thisWeek.rows);
+    const lastTotals = sumWeek(lastWeek.rows);
+
+    const delta = (curr, prev) =>
+      prev !== 0 ? Math.round(((curr - prev) / Math.abs(prev)) * 100) : null;
+
+    res.json({
+      this_week: {
+        from:    thisMondayStr,
+        totals:  thisTotals,
+        days:    thisWeek.rows.map(r => ({
+          date:     r.date,
+          dow:      r.dow,
+          revenue:  parseFloat(r.revenue_total  || 0),
+          tips:     parseFloat(r.tips_total     || 0),
+          expenses: parseFloat(r.expenses_total || 0),
+          net:      parseFloat(r.net_total      || 0),
+          cuts:     parseInt(r.cuts_count       || 0)
+        }))
+      },
+      last_week: {
+        from:    lastMondayStr,
+        totals:  lastTotals,
+        days:    lastWeek.rows.map(r => ({
+          date:     r.date,
+          dow:      r.dow,
+          revenue:  parseFloat(r.revenue_total  || 0),
+          net:      parseFloat(r.net_total      || 0),
+          cuts:     parseInt(r.cuts_count       || 0)
+        }))
+      },
+      delta: {
+        revenue_pct: delta(thisTotals.revenue, lastTotals.revenue),
+        net_pct:     delta(thisTotals.net,     lastTotals.net),
+        cuts_pct:    delta(thisTotals.cuts,    lastTotals.cuts)
+      }
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/dashboard/cash/history — historial de cierres
 router.get('/cash/history', auth, async (req, res) => {
   try {

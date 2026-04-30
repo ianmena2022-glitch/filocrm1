@@ -610,6 +610,38 @@ body {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--gray); margin-bottom: 10px;
 }
+/* P&L */
+.pnl-week-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.pnl-week-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 12px 14px; }
+.pnl-week-card-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray); margin-bottom: 6px; }
+.pnl-week-net { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; color: var(--yellow); }
+.pnl-week-cuts { font-size: 11px; color: var(--gray); margin-top: 3px; }
+.pnl-delta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.pnl-delta-chip { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+.pnl-delta-chip.up   { background: rgba(0,230,118,.12); color: #00E676; }
+.pnl-delta-chip.down { background: rgba(255,67,67,.12);  color: #FF4343; }
+.pnl-delta-chip.flat { background: rgba(255,255,255,.07); color: var(--gray); }
+.pnl-day-bar-wrap { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.pnl-day-bar-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.pnl-day-bar-label { width: 26px; color: var(--gray); text-align: right; flex-shrink: 0; }
+.pnl-day-bar-track { flex: 1; height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+.pnl-day-bar-fill  { height: 100%; border-radius: 3px; background: var(--yellow); transition: width .4s; }
+.pnl-day-bar-fill.prev { background: rgba(255,209,0,.3); }
+.pnl-day-bar-val { width: 60px; text-align: right; color: rgba(255,255,255,.7); flex-shrink: 0; }
+.pnl-annual-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 14px; }
+.pnl-annual-kpi { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 8px; padding: 10px 12px; }
+.pnl-annual-kpi-label { font-size: 10px; color: var(--gray); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.pnl-annual-kpi-val { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; color: var(--yellow); }
+.pnl-month-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px; }
+.pnl-month-row:last-child { border-bottom: none; }
+.pnl-month-name { width: 70px; color: rgba(255,255,255,.7); flex-shrink: 0; }
+.pnl-month-bar-track { flex: 1; height: 5px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+.pnl-month-bar-fill { height: 100%; border-radius: 3px; background: var(--yellow); }
+.pnl-month-net { width: 72px; text-align: right; font-weight: 700; flex-shrink: 0; }
+.pnl-month-delta { width: 46px; text-align: right; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.pnl-month-delta.up   { color: #00E676; }
+.pnl-month-delta.down { color: #FF4343; }
+.pnl-month-delta.flat { color: var(--gray); }
 @media (max-width: 768px) {
   #cash-summary-cards { display: none !important; }
   .caja-neto-val { font-size: 28px; }
@@ -1959,6 +1991,7 @@ select.form-input { padding-right: 32px; }
           <button class="caja-tab"        id="ctab-gastos"   onclick="switchCajaTab('gastos')">📋 Gastos</button>
           <button class="caja-tab"        id="ctab-deudas"   onclick="switchCajaTab('deudas')">🤝 Deudas <span id="ctab-deudas-badge"></span></button>
           <button class="caja-tab"        id="ctab-historial" onclick="switchCajaTab('historial')">🗂 Historial</button>
+          <button class="caja-tab"        id="ctab-pnl"       onclick="switchCajaTab('pnl')">📊 P&L</button>
         </div>
 
         <!-- Cuerpo de tabs -->
@@ -1991,6 +2024,28 @@ select.form-input { padding-right: 32px; }
               <button onclick="manuallyCloseCaja()" style="background:rgba(255,255,255,.07);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer">💾 Cerrar hoy</button>
             </div>
             <div id="cash-history-list"><div style="color:var(--gray);font-size:13px">Sin cierres</div></div>
+          </div>
+
+          <!-- TAB: P&L -->
+          <div id="tab-content-pnl" class="caja-tab-panel">
+            <!-- Comparativa semanal -->
+            <div id="pnl-week-section" style="margin-bottom:20px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);margin-bottom:10px">Esta semana vs semana pasada</div>
+              <div id="pnl-week-content"><div style="color:var(--gray);font-size:13px">Cargando...</div></div>
+            </div>
+            <!-- P&L Mensual -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray)">P&L mensual</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <button onclick="pnlYearChange(-1)" style="background:rgba(255,255,255,.07);border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">‹</button>
+                  <span id="pnl-year-label" style="font-size:13px;font-weight:700;min-width:36px;text-align:center"></span>
+                  <button onclick="pnlYearChange(1)"  style="background:rgba(255,255,255,.07);border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px">›</button>
+                </div>
+              </div>
+              <div id="pnl-annual-totals" style="margin-bottom:12px"></div>
+              <div id="pnl-months-list"><div style="color:var(--gray);font-size:13px">Sin datos</div></div>
+            </div>
           </div>
 
         </div>
@@ -8659,7 +8714,7 @@ async function deleteAccount() {
 // ── SISTEMA DE CAJA ───────────────────────────────────────────────────────────
 
 function switchCajaTab(tab) {
-  const tabs = ['pagos', 'gastos', 'deudas', 'historial'];
+  const tabs = ['pagos', 'gastos', 'deudas', 'historial', 'pnl'];
   tabs.forEach(t => {
     const btn   = document.getElementById(`ctab-${t}`);
     const panel = document.getElementById(`tab-content-${t}`);
@@ -8667,6 +8722,137 @@ function switchCajaTab(tab) {
     if (btn)   { btn.classList.toggle('active', active); }
     if (panel) { panel.style.display = active ? 'block' : 'none'; }
   });
+  if (tab === 'pnl') loadPnL();
+}
+
+// ── P&L ─────────────────────────────────────────────────────────────────────
+let _pnlYear = new Date().getFullYear();
+let _pnlLoaded = false;
+
+function pnlYearChange(delta) {
+  _pnlYear += delta;
+  document.getElementById('pnl-year-label').textContent = _pnlYear;
+  loadPnLMonthly();
+}
+
+async function loadPnL() {
+  if (_pnlLoaded) return;
+  _pnlLoaded = true;
+  document.getElementById('pnl-year-label').textContent = _pnlYear;
+  await Promise.all([loadPnLWeek(), loadPnLMonthly()]);
+}
+
+async function loadPnLWeek() {
+  const el = document.getElementById('pnl-week-content');
+  try {
+    const d = await api('GET', '/dashboard/cash/week-compare');
+    const { this_week, last_week, delta } = d;
+
+    const fmtMoney = v => '$' + Math.round(v).toLocaleString('es-AR');
+    const fmtDelta = (pct, label) => {
+      if (pct === null) return '';
+      const cls = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+      const sign = pct > 0 ? '+' : '';
+      return `<span class="pnl-delta-chip ${cls}">${label} ${sign}${pct}%</span>`;
+    };
+
+    // Barras por día (lun-dom)
+    const DAYS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+    const maxNet = Math.max(
+      ...this_week.days.map(d => d.net),
+      ...last_week.days.map(d => d.net),
+      1
+    );
+
+    // Mapear por dow (0=dom,1=lun... → normalizar a lun=0)
+    const thisByDow = {}; this_week.days.forEach(d => { thisByDow[d.dow === 0 ? 6 : d.dow - 1] = d; });
+    const lastByDow = {}; last_week.days.forEach(d => { lastByDow[d.dow === 0 ? 6 : d.dow - 1] = d; });
+
+    const bars = DAYS.map((label, i) => {
+      const t = thisByDow[i];
+      const l = lastByDow[i];
+      const tPct = t ? Math.round((t.net / maxNet) * 100) : 0;
+      const lPct = l ? Math.round((l.net / maxNet) * 100) : 0;
+      return `<div class="pnl-day-bar-row">
+        <div class="pnl-day-bar-label">${label}</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+          <div class="pnl-day-bar-track"><div class="pnl-day-bar-fill" style="width:${tPct}%"></div></div>
+          <div class="pnl-day-bar-track"><div class="pnl-day-bar-fill prev" style="width:${lPct}%"></div></div>
+        </div>
+        <div class="pnl-day-bar-val">${t ? fmtMoney(t.net) : '—'}</div>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="pnl-week-grid">
+        <div class="pnl-week-card">
+          <div class="pnl-week-card-label">Esta semana</div>
+          <div class="pnl-week-net">${fmtMoney(this_week.totals.net)}</div>
+          <div class="pnl-week-cuts">${this_week.totals.cuts} cortes · ${this_week.totals.days} días</div>
+        </div>
+        <div class="pnl-week-card">
+          <div class="pnl-week-card-label">Semana pasada</div>
+          <div class="pnl-week-net" style="color:rgba(255,209,0,.5)">${fmtMoney(last_week.totals.net)}</div>
+          <div class="pnl-week-cuts">${last_week.totals.cuts} cortes · ${last_week.totals.days} días</div>
+        </div>
+      </div>
+      <div class="pnl-delta-row">
+        ${fmtDelta(delta.net_pct, 'Neto')}
+        ${fmtDelta(delta.revenue_pct, 'Ingresos')}
+        ${fmtDelta(delta.cuts_pct, 'Cortes')}
+        ${!delta.net_pct && !delta.revenue_pct ? '<span class="pnl-delta-chip flat">Sin datos semana anterior</span>' : ''}
+      </div>
+      <div style="font-size:10px;color:var(--gray);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase">
+        <span style="display:inline-block;width:10px;height:4px;background:var(--yellow);border-radius:2px;margin-right:4px"></span>Esta semana
+        <span style="display:inline-block;width:10px;height:4px;background:rgba(255,209,0,.3);border-radius:2px;margin:0 4px 0 12px"></span>Semana pasada
+      </div>
+      <div class="pnl-day-bar-wrap">${bars}</div>`;
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin datos esta semana</div>';
+  }
+}
+
+async function loadPnLMonthly() {
+  const monthsEl = document.getElementById('pnl-months-list');
+  const totalsEl = document.getElementById('pnl-annual-totals');
+  monthsEl.innerHTML = '<div style="color:var(--gray);font-size:13px">Cargando...</div>';
+  try {
+    const d = await api('GET', `/dashboard/cash/monthly?year=${_pnlYear}`);
+    const { months, totals } = d;
+
+    const fmtMoney = v => '$' + Math.round(v).toLocaleString('es-AR');
+    const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    // Totales anuales
+    totalsEl.innerHTML = `
+      <div class="pnl-annual-strip">
+        <div class="pnl-annual-kpi"><div class="pnl-annual-kpi-label">Ingresos</div><div class="pnl-annual-kpi-val">${fmtMoney(totals.revenue)}</div></div>
+        <div class="pnl-annual-kpi"><div class="pnl-annual-kpi-label">Gastos</div><div class="pnl-annual-kpi-val" style="color:#FF4343">${fmtMoney(totals.expenses)}</div></div>
+        <div class="pnl-annual-kpi"><div class="pnl-annual-kpi-label">Neto</div><div class="pnl-annual-kpi-val" style="color:${totals.net >= 0 ? 'var(--yellow)' : '#FF4343'}">${fmtMoney(totals.net)}</div></div>
+        <div class="pnl-annual-kpi"><div class="pnl-annual-kpi-label">Cortes</div><div class="pnl-annual-kpi-val">${totals.cuts.toLocaleString('es-AR')}</div></div>
+      </div>`;
+
+    if (!months.length) {
+      monthsEl.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin cierres en ' + _pnlYear + '</div>';
+      return;
+    }
+
+    const maxNet = Math.max(...months.map(m => m.net), 1);
+
+    monthsEl.innerHTML = months.map(m => {
+      const barPct = Math.round((m.net / maxNet) * 100);
+      const deltaClass = m.delta_net_pct === null ? 'flat' : m.delta_net_pct > 0 ? 'up' : m.delta_net_pct < 0 ? 'down' : 'flat';
+      const deltaLabel = m.delta_net_pct === null ? '—' : (m.delta_net_pct > 0 ? '+' : '') + m.delta_net_pct + '%';
+      return `<div class="pnl-month-row">
+        <div class="pnl-month-name">${MESES[m.month - 1]}</div>
+        <div class="pnl-month-bar-track"><div class="pnl-month-bar-fill" style="width:${barPct}%"></div></div>
+        <div class="pnl-month-net" style="color:${m.net >= 0 ? 'var(--yellow)' : '#FF4343'}">${fmtMoney(m.net)}</div>
+        <div class="pnl-month-delta ${deltaClass}">${deltaLabel}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    monthsEl.innerHTML = '<div style="color:var(--gray);font-size:13px">Error cargando datos</div>';
+  }
 }
 
 function switchDashTab(tab) {
@@ -8679,7 +8865,7 @@ function switchDashTab(tab) {
     if (p) p.style.display = active ? (t === 'productos' ? 'flex' : 'block') : 'none';
     if (b) { b.style.background = active ? 'var(--yellow)' : 'rgba(255,255,255,.07)'; b.style.color = active ? '#000' : 'rgba(255,255,255,.6)'; }
   });
-  if (tab === 'caja') { switchCajaTab('pagos'); loadCashOnNavigation(); }
+  if (tab === 'caja') { _pnlLoaded = false; switchCajaTab('pagos'); loadCashOnNavigation(); }
   if (tab === 'productos') { renderDashProdPanel(); }
 }
 
