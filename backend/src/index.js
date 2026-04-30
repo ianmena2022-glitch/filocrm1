@@ -167,11 +167,35 @@ app.get('/tienda/:slug', async (req, res) => {
       const shop      = result.rows[0];
       const storeName = shop.store_name || shop.name;
       const location  = [shop.address, shop.city].filter(Boolean).join(', ');
-      const title     = `${storeName} — Tienda de puntos | FILO CRM`;
-      const desc      = `Canjea tus puntos en ${storeName}${location ? ` · ${location}` : ''}. Programa de fidelidad digital.`;
+      const title     = `${storeName} — Tienda de puntos | FILO`;
+      const desc      = `Canjea tus puntos en ${storeName}${location ? ` · ${location}` : ''}. Programa de fidelidad digital para barberíasargentinas.`;
       const canonical = `https://filocrm.com.ar/tienda/${req.params.slug}`;
-      const seoTags   = `\n  <meta name="description" content="${desc}">\n  <link rel="canonical" href="${canonical}">\n  <meta property="og:title" content="${title}">\n  <meta property="og:description" content="${desc}">\n  <meta property="og:url" content="${canonical}">\n  <meta name="robots" content="index, follow">`;
-      html = html.replace('</head>', seoTags + '\n</head>');
+      const image     = shop.logo_url || 'https://filocrm.com.ar/logo_filo.png';
+      const jsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Store',
+        'name': storeName,
+        'description': desc,
+        'url': canonical,
+        'image': image
+      });
+      const seoTags = `
+  <meta name="description" content="${desc}">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:site_name" content="FILO">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="robots" content="index, follow">
+  <script type="application/ld+json">${jsonLd}</script>`;
+      html = html
+        .replace('<title>Tienda de Puntos FILO</title>', `<title>${title}</title>`)
+        .replace('</head>', seoTags + '\n</head>');
     }
     res.send(html);
   } catch (e) {
@@ -242,6 +266,67 @@ app.get('/reservar/:slug', async (req, res) => {
     console.error('SEO reservar error:', e.message);
     res.sendFile(path.join(publicDir, 'reservar.html'));
   }
+});
+
+// ── Sitemap dinámico ─────────────────────────────────────────────────────────
+app.get('/sitemap.xml', async (req, res) => {
+  const BASE = 'https://filocrm.com.ar';
+  const now  = new Date().toISOString().split('T')[0];
+
+  // Páginas estáticas
+  const staticPages = [
+    { url: '/',          priority: '1.0', changefreq: 'weekly'  },
+    { url: '/funciones', priority: '0.8', changefreq: 'monthly' },
+  ];
+
+  // Páginas dinámicas de reservas y tiendas (barberías activas con booking_slug)
+  let dynamicPages = [];
+  try {
+    const result = await pool.query(
+      `SELECT booking_slug, updated_at, points_enabled FROM shops
+       WHERE booking_slug IS NOT NULL AND booking_slug != ''
+         AND subscription_status IN ('active','trial')
+       ORDER BY updated_at DESC LIMIT 500`
+    );
+    result.rows.forEach(r => {
+      const lastmod = r.updated_at ? new Date(r.updated_at).toISOString().split('T')[0] : now;
+      dynamicPages.push({
+        url: `/reservar/${r.booking_slug}`,
+        priority: '0.7',
+        changefreq: 'weekly',
+        lastmod
+      });
+      // Solo incluir tienda si el local tiene el sistema de puntos activo
+      if (r.points_enabled) {
+        dynamicPages.push({
+          url: `/tienda/${r.booking_slug}`,
+          priority: '0.5',
+          changefreq: 'monthly',
+          lastmod
+        });
+      }
+    });
+  } catch(e) { /* continuar sin páginas dinámicas */ }
+
+  const urlTags = [...staticPages.map(p => `
+  <url>
+    <loc>${BASE}${p.url}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`),
+  ...dynamicPages.map(p => `
+  <url>
+    <loc>${BASE}${p.url}</loc>
+    <lastmod>${p.lastmod}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`)].join('');
+
+  res.setHeader('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlTags}
+</urlset>`);
 });
 
 // Landing en la raíz

@@ -1,9 +1,27 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-AR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reservar turno — FILO</title>
+<meta name="description" content="Reservá tu turno online en la barbería. Elegí el servicio, el profesional y el horario que más te convenga. Rápido, fácil y sin llamadas.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://filocrm.com.ar/reservar/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FILO">
+<meta property="og:locale" content="es_AR">
+<meta property="og:title" content="Reservar turno — FILO">
+<meta property="og:description" content="Reservá tu turno online en la barbería. Elegí el servicio, el profesional y el horario. Rápido y sin llamadas.">
+<meta property="og:image" content="https://filocrm.com.ar/logo_filo.png">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Reservar turno — FILO">
+<meta name="twitter:description" content="Reservá tu turno online en la barbería. Sin llamadas, sin espera.">
+<meta name="twitter:image" content="https://filocrm.com.ar/logo_filo.png">
+
 <link rel="icon" type="image/png" href="/logo_f.png" />
 <link rel="apple-touch-icon" href="/logo_f.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -485,6 +503,37 @@ function loadShopData(data) {
   if (shopData.city || shopData.address) {
     document.getElementById('shop-meta').textContent = [shopData.address, shopData.city].filter(Boolean).join(' · ');
   }
+
+  // SEO dinámico: actualizar og:title + JSON-LD con datos reales del local
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  const ogDesc  = document.querySelector('meta[property="og:description"]');
+  if (ogTitle) ogTitle.setAttribute('content', `Reservar turno — ${shopData.name}`);
+  if (ogDesc)  ogDesc.setAttribute('content', `Sacate turno en ${shopData.name}${shopData.city ? ' · ' + shopData.city : ''}. Elegí el servicio, el profesional y el horario. Sin llamadas.`);
+
+  const slug = window.location.pathname.split('/').filter(Boolean).pop();
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "HairSalon",
+    "name": shopData.name,
+    "url": `https://filocrm.com.ar/reservar/${slug}`,
+    "address": shopData.address ? {
+      "@type": "PostalAddress",
+      "streetAddress": shopData.address,
+      "addressLocality": shopData.city || '',
+      "addressCountry": "AR"
+    } : undefined,
+    "hasMap": shopData.address ? `https://www.google.com/maps/search/${encodeURIComponent(shopData.name + ' ' + (shopData.city || ''))}` : undefined,
+    "potentialAction": {
+      "@type": "ReserveAction",
+      "target": `https://filocrm.com.ar/reservar/${slug}`,
+      "result": { "@type": "Reservation", "name": "Turno de barbería" }
+    }
+  };
+  // Limpiar undefined
+  Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k]);
+  let ldEl = document.getElementById('ld-shop');
+  if (!ldEl) { ldEl = document.createElement('script'); ldEl.id = 'ld-shop'; ldEl.type = 'application/ld+json'; document.head.appendChild(ldEl); }
+  ldEl.textContent = JSON.stringify(ld);
 }
 
 // ── BRANCH SELECTION (solo enterprise) ──

@@ -1,0 +1,22 @@
+User-agent: *
+
+# Páginas públicas — permitidas
+Allow: /$
+Allow: /funciones
+Allow: /reservar/
+Allow: /tienda/
+
+# App privada — no indexar
+Disallow: /app
+Disallow: /barber
+Disallow: /afiliados
+Disallow: /admin
+Disallow: /vendor
+Disallow: /fila
+Disallow: /onboarding-afiliados
+Disallow: /api/
+
+# Evitar contenido duplicado de parámetros de query
+Disallow: /*?*
+
+Sitemap: https://filocrm.com.ar/sitemap.xml

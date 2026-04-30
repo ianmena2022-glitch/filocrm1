@@ -1,9 +1,28 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-AR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tienda de Puntos FILO</title>
+<meta name="description" content="Canjea tus puntos FILO por premios en la tienda de tu barbería. Acumulá puntos con cada turno y elegí tu recompensa.">
+<meta name="robots" content="index, follow">
+<link rel="icon" type="image/png" href="/logo_f.png" />
+<link rel="apple-touch-icon" href="/logo_f.png" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FILO">
+<meta property="og:locale" content="es_AR">
+<meta property="og:title" content="Tienda de Puntos FILO">
+<meta property="og:description" content="Canjea tus puntos FILO por premios. Acumulá puntos con cada turno en tu barbería.">
+<meta property="og:image" content="https://filocrm.com.ar/logo_filo.png">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tienda de Puntos FILO">
+<meta name="twitter:description" content="Canjea tus puntos FILO por premios en la tienda de tu barbería.">
+<meta name="twitter:image" content="https://filocrm.com.ar/logo_filo.png">
+
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -142,6 +161,22 @@ async function init() {
     document.getElementById('store-name').textContent = shopData.store_name || 'Tienda de Puntos';
     document.title = `${shopData.store_name || 'Tienda'} — ${shopData.name}`;
     document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+
+    // SEO dinámico
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    const ogDesc  = document.querySelector('meta[property="og:description"]');
+    if (ogTitle) ogTitle.setAttribute('content', `${shopData.store_name || 'Tienda de Puntos'} — ${shopData.name}`);
+    if (ogDesc)  ogDesc.setAttribute('content', `Canjea tus puntos en la tienda de ${shopData.name}. Acumulá puntos con cada visita y elegí tu premio.`);
+    const ld = {
+      "@context": "https://schema.org",
+      "@type": "Store",
+      "name": `${shopData.store_name || 'Tienda de Puntos'} — ${shopData.name}`,
+      "url": window.location.href,
+      "description": `Tienda de puntos de ${shopData.name}. Canjea puntos por premios.`
+    };
+    let ldEl = document.getElementById('ld-store');
+    if (!ldEl) { ldEl = document.createElement('script'); ldEl.id = 'ld-store'; ldEl.type = 'application/ld+json'; document.head.appendChild(ldEl); }
+    ldEl.textContent = JSON.stringify(ld);
 
     // Link de reserva
     const reserveLink = document.getElementById('reserve-link');
