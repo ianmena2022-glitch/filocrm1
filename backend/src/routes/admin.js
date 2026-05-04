@@ -430,4 +430,15 @@ router.post('/affiliates/:id/pay-all', adminAuth, async (req, res) => {
   }
 });
 
+// POST /api/admin/accounts/:id/wpp-reset — limpiar sesión WhatsApp de un shop
+router.post('/accounts/:id/wpp-reset', adminAuth, async (req, res) => {
+  try {
+    const wpp = require('../services/whatsapp');
+    await wpp.clearSession(parseInt(req.params.id));
+    res.json({ ok: true, message: `Sesión WhatsApp limpiada para shop #${req.params.id}` });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
