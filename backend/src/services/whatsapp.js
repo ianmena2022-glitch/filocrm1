@@ -17,6 +17,12 @@ const statuses = {};
 const decryptErrors = {};
 const ciphertextLastWarning = {}; // debounce: última vez que se avisó por JID
 
+// Backoff de QR — evita rate-limit de WhatsApp por demasiados intentos de vinculación
+const qrAttempts     = {}; // shopId -> cantidad de QRs generados en la sesión actual
+const qrCooldownUntil = {}; // shopId -> timestamp hasta el que no se puede generar QR
+const MAX_QR_ATTEMPTS  = 5;               // máx QRs sin que nadie escanee
+const QR_COOLDOWN_MS   = 30 * 60 * 1000; // 30 minutos de cooldown
+
 // Registrar una única vez el handler de unhandledRejection para errores de conexión no fatales
 process.on('unhandledRejection', (reason) => {
   if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
@@ -45,6 +51,9 @@ async function clearSession(shopId) {
     delete sockets[shopId];
     delete statuses[shopId];
     delete decryptErrors[shopId];
+    // Reset backoff al limpiar manualmente
+    delete qrAttempts[shopId];
+    delete qrCooldownUntil[shopId];
   } catch (e) {
     console.error('clearSession error:', e.message);
   }
@@ -514,7 +523,21 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log(`Baileys QR generado para shop ${shopId}`);
+      // Backoff: contar QRs generados sin escanear
+      qrAttempts[shopId] = (qrAttempts[shopId] || 0) + 1;
+      console.log(`Baileys QR generado para shop ${shopId} (intento ${qrAttempts[shopId]}/${MAX_QR_ATTEMPTS})`);
+
+      if (qrAttempts[shopId] > MAX_QR_ATTEMPTS) {
+        const cooldownMin = QR_COOLDOWN_MS / 60000;
+        console.warn(`[WPP] Shop ${shopId}: límite de QRs (${MAX_QR_ATTEMPTS}) alcanzado. Cooldown ${cooldownMin} min para evitar rate-limit de WA.`);
+        qrCooldownUntil[shopId] = Date.now() + QR_COOLDOWN_MS;
+        statuses[shopId] = 'qr_limit';
+        qrCodes[shopId]  = null;
+        try { sock.end(); } catch(e) {}
+        delete sockets[shopId];
+        return;
+      }
+
       qrCodes[shopId]  = qr;
       statuses[shopId] = 'qr';
       if (onQR) onQR(qr);
@@ -524,6 +547,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       console.log(`Baileys conectado para shop ${shopId}`);
       statuses[shopId] = 'connected';
       qrCodes[shopId]  = null;
+      // Reset backoff al conectarse exitosamente
+      delete qrAttempts[shopId];
+      delete qrCooldownUntil[shopId];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
       await saveSessionToDB(shopId);
       if (onConnected) onConnected();
@@ -732,6 +758,16 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
 // Iniciar sesión (devuelve QR como base64 o status connected)
 async function startSession(shopId) {
+  // Verificar cooldown por demasiados intentos fallidos
+  const cooldownUntil = qrCooldownUntil[shopId];
+  if (cooldownUntil && Date.now() < cooldownUntil) {
+    const minutesLeft = Math.ceil((cooldownUntil - Date.now()) / 60000);
+    throw new Error(`Demasiados intentos fallidos. Esperá ${minutesLeft} minuto${minutesLeft !== 1 ? 's' : ''} antes de volver a vincular WhatsApp.`);
+  }
+
+  // Reset contador al iniciar sesión nueva manualmente
+  delete qrAttempts[shopId];
+
   await clearSession(shopId);
   if (sockets[shopId]) {
     try { sockets[shopId].end(); } catch(e) {}
@@ -767,7 +803,13 @@ async function startSession(shopId) {
 async function getStatus(shopId) {
   const status = statuses[shopId];
   const connected = status === 'connected';
-  return { connected, status: status || 'disconnected' };
+  const cooldownUntil = qrCooldownUntil[shopId];
+  const inCooldown = cooldownUntil && Date.now() < cooldownUntil;
+  return {
+    connected,
+    status: inCooldown ? 'qr_limit' : (status || 'disconnected'),
+    cooldownMinutes: inCooldown ? Math.ceil((cooldownUntil - Date.now()) / 60000) : null
+  };
 }
 
 // Fix #7: resolver shopId real para WPP — si la sucursal no tiene socket, usar enterprise owner

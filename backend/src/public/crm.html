@@ -7016,6 +7016,12 @@ async function connectWhatsapp() {
         try {
           const status = await api('GET', '/settings/whatsapp/status');
           if (status.connected) { clearInterval(check); onWppConnected(); }
+          else if (status.status === 'qr_limit') {
+            clearInterval(check);
+            const mins = status.cooldownMinutes || 30;
+            document.getElementById('wpp-status-text').textContent = `⏳ Demasiados intentos — esperá ${mins} min`;
+            showToast('⚠️', 'Rate limit de WhatsApp', `Esperá ${mins} minuto${mins !== 1 ? 's' : ''} antes de volver a intentar`);
+          }
         } catch { clearInterval(check); }
       }, 5000);
     } else if (res.connected) {
@@ -7024,7 +7030,15 @@ async function connectWhatsapp() {
       showToast('❌', 'Error', res.error || 'No se pudo conectar');
     }
   } catch (e) {
-    showToast('❌', 'Error', e.message);
+    // Puede ser el error de cooldown devuelto por el backend
+    const msg = e.message || '';
+    if (msg.includes('Esperá') || msg.includes('intentos fallidos')) {
+      showToast('⚠️', 'Demasiados intentos', msg);
+      const txt = document.getElementById('wpp-status-text');
+      if (txt) txt.textContent = '⏳ ' + msg;
+    } else {
+      showToast('❌', 'Error', msg);
+    }
   } finally {
     btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp';
   }
@@ -7102,6 +7116,13 @@ async function connectEntWpp() {
         try {
           const status = await api('GET', '/settings/whatsapp/status');
           if (status.connected) { clearInterval(check); onEntWppConnected(); }
+          else if (status.status === 'qr_limit') {
+            clearInterval(check);
+            const mins = status.cooldownMinutes || 30;
+            const txt = document.getElementById('ent-wpp-status-text');
+            if (txt) txt.textContent = `⏳ Demasiados intentos — esperá ${mins} min`;
+            showToast('⚠️', 'Rate limit de WhatsApp', `Esperá ${mins} minuto${mins !== 1 ? 's' : ''} antes de volver a intentar`);
+          }
         } catch { clearInterval(check); }
       }, 5000);
     } else if (res.connected) {
@@ -7110,7 +7131,14 @@ async function connectEntWpp() {
       showToast('❌', 'Error', res.error || 'No se pudo conectar');
     }
   } catch(e) {
-    showToast('❌', 'Error', e.message);
+    const msg = e.message || '';
+    if (msg.includes('Esperá') || msg.includes('intentos fallidos')) {
+      showToast('⚠️', 'Demasiados intentos', msg);
+      const txt = document.getElementById('ent-wpp-status-text');
+      if (txt) txt.textContent = '⏳ ' + msg;
+    } else {
+      showToast('❌', 'Error', msg);
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp'; }
   }
