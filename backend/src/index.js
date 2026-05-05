@@ -33,6 +33,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
 ];
+// Railway y otros proxies envían X-Forwarded-For — necesario para rate limiting correcto
+app.set('trust proxy', 1);
+
 app.use(cors({
   origin: (origin, cb) => {
     // Permitir requests sin origin (apps móviles, Postman, n8n interno)
