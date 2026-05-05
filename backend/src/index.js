@@ -448,11 +448,18 @@ async function initDB() {
   }
 
   // ── 4. Correr solo migraciones nuevas ─────────────────
+  // Ejecutar cada statement por separado para soportar migraciones multi-statement
   let ran = 0;
   for (const file of migrationFiles) {
     if (appliedSet.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-    await pool.query(sql);
+    const statements = sql
+      .split(/;\s*\n/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'));
+    for (const stmt of statements) {
+      await pool.query(stmt);
+    }
     await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
     console.log(`  ✔ migración: ${file}`);
     ran++;
