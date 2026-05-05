@@ -62,7 +62,6 @@ function shopPayload(shop) {
     is_branch:            shop.is_branch            || false,
     parent_enterprise_id: shop.parent_enterprise_id || null,
     branch_label:         shop.branch_label         || null,
-    free_months:          parseInt(shop.free_months) || 0,
   };
 }
 
@@ -73,29 +72,24 @@ function trialDaysLeft(trial_ends_at) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// POST /api/auth/register — cuenta normal
+// POST /api/auth/register — guarda en pending_registrations, NO crea la cuenta todavía
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan, referral_code, ref_slug, aff_code, timezone } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code, timezone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
+  const emailNorm = email.toLowerCase().trim();
+
   try {
-    const exists = await pool.query('SELECT id FROM shops WHERE email = $1', [email.toLowerCase()]);
+    // Verificar que no exista una cuenta real con ese email
+    const exists = await pool.query('SELECT id FROM shops WHERE email = $1', [emailNorm]);
     if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
 
     const hash = await bcrypt.hash(password, 12);
 
-    // Trial de 7 días
-    const trialEnds = new Date();
-    trialEnds.setDate(trialEnds.getDate() + 7);
-
-    // Plan elegido por el usuario
     const validFiloPlans = ['starter', 'staff', 'enterprise'];
     const filoPlan = validFiloPlans.includes(filo_plan) ? filo_plan : 'starter';
 
-    const isEnterpriseOwner = filoPlan === 'enterprise';
-
-    // Resolver vendor por código de referido (opcional)
     let vendorId = null;
     const codeNorm = referral_code ? referral_code.trim().toUpperCase() : null;
     if (codeNorm) {
@@ -103,58 +97,30 @@ router.post('/register', async (req, res) => {
       if (vendorQ.rows.length) vendorId = vendorQ.rows[0].id;
     }
 
-    // Resolver referido peer-to-peer (ref_slug = booking_slug del shop que refirió)
-    let referredByShopId = null;
-    if (ref_slug) {
-      const refQ = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [ref_slug.trim()]);
-      if (refQ.rows.length) referredByShopId = refQ.rows[0].id;
-    }
-
-    // Resolver afiliado por código
-    let affiliateId = null;
-    if (aff_code) {
-      const affQ = await pool.query('SELECT id FROM affiliates WHERE code=$1 AND status=\'active\'', [aff_code.trim().toUpperCase()]);
-      if (affQ.rows.length) affiliateId = affQ.rows[0].id;
-    }
-
     const tz = timezone || 'America/Argentina/Buenos_Aires';
-    const result = await pool.query(
-      `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at, subscription_status, is_enterprise_owner, vendor_id, referral_code, referred_by_shop_id, affiliate_id, timezone)
-       VALUES ($1, $2, $3, $4, 'starter', $5, $6, 'trial', $7, $8, $9, $10, $11, $12) RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null, filoPlan, trialEnds.toISOString(), isEnterpriseOwner, vendorId, codeNorm, referredByShopId, affiliateId, tz]
-    );
-    const shop = result.rows[0];
-
-    // Las cuentas enterprise owner no necesitan servicios (no hacen reservas)
-    if (!isEnterpriseOwner) {
-      await pool.query(
-        `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
-         ($1, 'Corte de cabello', 3500, 200, 30),
-         ($1, 'Corte + barba', 5000, 300, 45),
-         ($1, 'Barba', 2000, 150, 20),
-         ($1, 'Corte + lavado', 4500, 250, 40)`,
-        [shop.id]
-      );
-    }
-
-    // Generar código de verificación (15 min)
     const verifyCode    = generateCode();
     const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Upsert en pending_registrations (si ya intentó antes, reemplaza)
     await pool.query(
-      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
-      [verifyCode, verifyExpires.toISOString(), shop.id]
+      `INSERT INTO pending_registrations
+         (email, name, password_hash, phone, filo_plan, vendor_id, referral_code, timezone, is_enterprise, verify_code, verify_expires)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10)
+       ON CONFLICT (email) DO UPDATE SET
+         name=$2, password_hash=$3, phone=$4, filo_plan=$5, vendor_id=$6,
+         referral_code=$7, timezone=$8, verify_code=$9, verify_expires=$10, created_at=NOW()`,
+      [emailNorm, name.trim(), hash, phone || null, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString()]
     );
 
-    const refLog = vendorId ? ` · ref=${codeNorm} (vendor #${vendorId})` : '';
-    console.log(`[REGISTRO] ${email} → plan ${filoPlan} · trial hasta ${trialEnds.toDateString()}${refLog}`);
+    console.log(`[REGISTRO PENDIENTE] ${emailNorm} → plan ${filoPlan}`);
 
     try {
-      await sendVerificationEmail(email.toLowerCase().trim(), name.trim(), verifyCode);
+      await sendVerificationEmail(emailNorm, name.trim(), verifyCode);
     } catch (mailErr) {
       console.error('[REGISTRO] Error enviando email:', mailErr.message);
     }
 
-    res.status(201).json({ pending_verification: true, email: email.toLowerCase().trim() });
+    res.status(201).json({ pending_verification: true, email: emailNorm });
   } catch (e) {
     console.error('Register error:', e.message);
     res.status(500).json({ error: 'Error al crear la cuenta' });
@@ -167,37 +133,34 @@ router.post('/register-enterprise', async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
+  const emailNorm = email.toLowerCase().trim();
+
   try {
-    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [email.toLowerCase()]);
+    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [emailNorm]);
     if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
 
     const hash = await bcrypt.hash(password, 12);
-
-    const result = await pool.query(
-      `INSERT INTO shops
-         (name, email, password, phone, plan, filo_plan,
-          subscription_status, trial_ends_at, is_enterprise_owner)
-       VALUES ($1,$2,$3,$4,'staff','enterprise','active','2099-12-31',TRUE)
-       RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, phone || null]
-    );
-    const shop = result.rows[0];
-
     const verifyCode    = generateCode();
     const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
+
     await pool.query(
-      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
-      [verifyCode, verifyExpires.toISOString(), shop.id]
+      `INSERT INTO pending_registrations
+         (email, name, password_hash, phone, filo_plan, is_enterprise, verify_code, verify_expires)
+       VALUES ($1,$2,$3,$4,'enterprise',TRUE,$5,$6)
+       ON CONFLICT (email) DO UPDATE SET
+         name=$2, password_hash=$3, phone=$4, filo_plan='enterprise', is_enterprise=TRUE,
+         verify_code=$5, verify_expires=$6, created_at=NOW()`,
+      [emailNorm, name.trim(), hash, phone || null, verifyCode, verifyExpires.toISOString()]
     );
 
-    console.log(`[ENTERPRISE] Cuenta madre creada: ${email}`);
+    console.log(`[ENTERPRISE PENDIENTE] ${emailNorm}`);
     try {
-      await sendVerificationEmail(email.toLowerCase().trim(), name.trim(), verifyCode);
+      await sendVerificationEmail(emailNorm, name.trim(), verifyCode);
     } catch (mailErr) {
       console.error('[ENTERPRISE] Error enviando email:', mailErr.message);
     }
 
-    res.status(201).json({ pending_verification: true, email: email.toLowerCase().trim() });
+    res.status(201).json({ pending_verification: true, email: emailNorm });
   } catch(e) {
     console.error('Register enterprise error:', e.message);
     res.status(500).json({ error: 'Error al crear la cuenta enterprise' });
@@ -369,34 +332,77 @@ router.delete('/delete-account', async (req, res) => {
   }
 });
 
-// POST /api/auth/verify-email — verificar código de 6 dígitos
+// POST /api/auth/verify-email — verifica código y CREA la cuenta real
 router.post('/verify-email', async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Email y código son requeridos' });
 
-  try {
-    const result = await pool.query(
-      'SELECT * FROM shops WHERE email=$1',
-      [email.toLowerCase().trim()]
-    );
-    const shop = result.rows[0];
-    if (!shop) return res.status(404).json({ error: 'Cuenta no encontrada' });
-    if (shop.email_verified) return res.json({ token: makeToken(shop), shop: shopPayload(shop) });
+  const emailNorm = email.toLowerCase().trim();
 
-    if (!shop.email_verify_code || shop.email_verify_code !== String(code).trim()) {
+  try {
+    // Buscar en pending_registrations
+    const pendingQ = await pool.query('SELECT * FROM pending_registrations WHERE email=$1', [emailNorm]);
+    const pending  = pendingQ.rows[0];
+
+    // Si no hay pendiente, puede que ya verificó antes — intentar login normal
+    if (!pending) {
+      const shopQ = await pool.query('SELECT * FROM shops WHERE email=$1', [emailNorm]);
+      if (shopQ.rows[0]?.email_verified) {
+        return res.status(400).json({ error: 'Este email ya fue verificado. Iniciá sesión.' });
+      }
+      return res.status(404).json({ error: 'No hay registro pendiente para este email' });
+    }
+
+    if (pending.verify_code !== String(code).trim()) {
       return res.status(400).json({ error: 'Código incorrecto' });
     }
-    if (new Date(shop.email_verify_expires) < new Date()) {
+    if (new Date(pending.verify_expires) < new Date()) {
       return res.status(400).json({ error: 'El código expiró. Solicitá uno nuevo.' });
     }
 
-    await pool.query(
-      'UPDATE shops SET email_verified=TRUE, email_verify_code=NULL, email_verify_expires=NULL WHERE id=$1',
-      [shop.id]
-    );
-    shop.email_verified = true;
+    // Crear la cuenta real ahora que el email está verificado
+    let shop;
+    if (pending.is_enterprise) {
+      const r = await pool.query(
+        `INSERT INTO shops (name, email, password, phone, plan, filo_plan,
+           subscription_status, trial_ends_at, is_enterprise_owner, email_verified)
+         VALUES ($1,$2,$3,$4,'staff','enterprise','active','2099-12-31',TRUE,TRUE)
+         RETURNING *`,
+        [pending.name, emailNorm, pending.password_hash, pending.phone]
+      );
+      shop = r.rows[0];
+    } else {
+      const trialEnds = new Date();
+      trialEnds.setDate(trialEnds.getDate() + 7);
+      const isEnterpriseOwner = pending.filo_plan === 'enterprise';
 
-    console.log(`[VERIFY] ${email} verificado`);
+      const r = await pool.query(
+        `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at,
+           subscription_status, is_enterprise_owner, vendor_id, referral_code, timezone, email_verified)
+         VALUES ($1,$2,$3,$4,'starter',$5,$6,'trial',$7,$8,$9,$10,TRUE)
+         RETURNING *`,
+        [pending.name, emailNorm, pending.password_hash, pending.phone,
+         pending.filo_plan, trialEnds.toISOString(), isEnterpriseOwner,
+         pending.vendor_id, pending.referral_code, pending.timezone]
+      );
+      shop = r.rows[0];
+
+      if (!isEnterpriseOwner) {
+        await pool.query(
+          `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
+           ($1,'Corte de cabello',3500,200,30),
+           ($1,'Corte + barba',5000,300,45),
+           ($1,'Barba',2000,150,20),
+           ($1,'Corte + lavado',4500,250,40)`,
+          [shop.id]
+        );
+      }
+    }
+
+    // Eliminar el pendiente
+    await pool.query('DELETE FROM pending_registrations WHERE email=$1', [emailNorm]);
+
+    console.log(`[VERIFY] Cuenta creada y verificada: ${emailNorm}`);
     res.json({ token: makeToken(shop), shop: shopPayload(shop) });
   } catch (e) {
     console.error('Verify email error:', e.message);
@@ -414,21 +420,22 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email requerido' });
 
+  const emailNorm = email.toLowerCase().trim();
+
   try {
-    const result = await pool.query('SELECT * FROM shops WHERE email=$1', [email.toLowerCase().trim()]);
-    const shop = result.rows[0];
-    if (!shop) return res.status(404).json({ error: 'Cuenta no encontrada' });
-    if (shop.email_verified) return res.json({ ok: true });
+    const pendingQ = await pool.query('SELECT * FROM pending_registrations WHERE email=$1', [emailNorm]);
+    const pending  = pendingQ.rows[0];
+    if (!pending) return res.status(404).json({ error: 'No hay registro pendiente para este email' });
 
     const verifyCode    = generateCode();
     const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query(
-      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
-      [verifyCode, verifyExpires.toISOString(), shop.id]
+      'UPDATE pending_registrations SET verify_code=$1, verify_expires=$2 WHERE email=$3',
+      [verifyCode, verifyExpires.toISOString(), emailNorm]
     );
 
-    await sendVerificationEmail(shop.email, shop.name, verifyCode);
-    console.log(`[VERIFY] Código reenviado a ${email}`);
+    await sendVerificationEmail(emailNorm, pending.name, verifyCode);
+    console.log(`[VERIFY] Código reenviado a ${emailNorm}`);
     res.json({ ok: true });
   } catch (e) {
     console.error('Resend verification error:', e.message);
