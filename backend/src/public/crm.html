@@ -1640,6 +1640,35 @@ select.form-input { padding-right: 32px; }
       <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.25);margin-top:10px;letter-spacing:.5px">SIN TARJETA · PAGÁS CON QR CUANDO QUIERAS</div>
     </div>
 
+    <!-- Verificación de email -->
+    <div id="form-verify" style="display:none">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:40px;margin-bottom:10px">📬</div>
+        <div style="font-size:17px;font-weight:700;color:#f0f6ff;margin-bottom:6px">Verificá tu email</div>
+        <div style="font-size:13px;color:var(--gray);line-height:1.6">
+          Te enviamos un código de 6 dígitos a<br>
+          <strong id="verify-email-display" style="color:#FFD100"></strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Código de verificación</label>
+        <input type="text" id="verify-code-input"
+          placeholder="000000"
+          maxlength="6"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          style="text-align:center;font-size:32px;font-weight:900;letter-spacing:10px;font-family:monospace;padding:16px"
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+      </div>
+      <button class="btn-primary" id="verify-btn" onclick="verifyEmail()">✅ Verificar cuenta</button>
+      <div id="verify-resend-wrap" style="text-align:center;margin-top:14px">
+        <button id="verify-resend-btn" onclick="resendVerification()" style="background:none;border:none;color:var(--gray);font-size:13px;cursor:pointer;padding:6px;text-decoration:underline">
+          ¿No llegó? Reenviar código
+        </button>
+        <span id="verify-resend-timer" style="display:none;font-size:12px;color:var(--gray)"></span>
+      </div>
+    </div>
+
     <!-- Registro barbero con código -->
     <div id="form-barber" style="display:none">
       <div style="text-align:center;margin-bottom:20px">
@@ -3717,7 +3746,10 @@ function switchAuthTab(tab) {
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
   document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('form-verify').style.display = 'none';
+  document.querySelector('.auth-tabs').style.display = '';
   document.getElementById('auth-error').style.display = 'none';
+  if (_resendTimer) clearInterval(_resendTimer);
 }
 
 function showAuthError(msg) {
@@ -3743,11 +3775,22 @@ async function login() {
   const btn = document.querySelector('#form-login .btn-primary');
   btn.disabled = true; btn.textContent = '...';
   try {
-    const data = await api('POST', '/auth/login', { email, password: pass });
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+
+    if (res.status === 403 && data.error === 'email_not_verified') {
+      showVerifyScreen(data.email || email);
+      return;
+    }
+    if (!res.ok) return showAuthError(data.error || 'Error al iniciar sesión');
+
     token = data.token;
     currentShop = data.shop;
     if (data.shop?.is_barber) {
-      // Limpiar cualquier sesión de dueño previa para no contaminar filo_token
       localStorage.removeItem('filo_token');
       localStorage.removeItem('filo_shop');
       localStorage.setItem('barber_token', token);
@@ -3849,25 +3892,22 @@ async function register() {
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
 
+    if (data.pending_verification) {
+      showVerifyScreen(data.email);
+      return;
+    }
+
+    // Fallback: si el backend ya devuelve token (cuentas viejas)
     token = data.token;
     currentShop = data.shop;
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-
-    // Abrir el dashboard con trial activo y mostrar el modal QR para pagar
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
     document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
-    loadDashboard();
-    loadServices();
-    loadClients();
-    loadStoreItems();
-    initStaffUI();
-    startPolling();
-
-    // Abrir modal QR para que el usuario elija plan y pague cuando quiera
+    loadDashboard(); loadServices(); loadClients(); loadStoreItems(); initStaffUI(); startPolling();
     setTimeout(() => openQRModal(selectedRegPlan), 800);
   } catch (e) {
     showAuthError(e.message);
@@ -3876,6 +3916,100 @@ async function register() {
   }
 }
 
+
+// ── EMAIL VERIFICATION ──────────────────────────────────────────────────────
+
+let _verifyEmail = '';
+let _resendTimer = null;
+
+function showVerifyScreen(email) {
+  _verifyEmail = email;
+  document.getElementById('verify-email-display').textContent = email;
+  document.getElementById('verify-code-input').value = '';
+  document.getElementById('form-login').style.display    = 'none';
+  document.getElementById('form-register').style.display = 'none';
+  document.getElementById('form-barber').style.display   = 'none';
+  document.getElementById('form-verify').style.display   = 'block';
+  document.querySelector('.auth-tabs').style.display     = 'none';
+  document.getElementById('auth-error').style.display    = 'none';
+  setTimeout(() => document.getElementById('verify-code-input').focus(), 100);
+  startResendCooldown(60);
+}
+
+function startResendCooldown(secs) {
+  const btn   = document.getElementById('verify-resend-btn');
+  const timer = document.getElementById('verify-resend-timer');
+  btn.style.display   = 'none';
+  timer.style.display = 'inline';
+  if (_resendTimer) clearInterval(_resendTimer);
+  let remaining = secs;
+  timer.textContent = `Podés reenviar en ${remaining}s`;
+  _resendTimer = setInterval(() => {
+    remaining--;
+    timer.textContent = `Podés reenviar en ${remaining}s`;
+    if (remaining <= 0) {
+      clearInterval(_resendTimer);
+      timer.style.display = 'none';
+      btn.style.display   = 'inline';
+    }
+  }, 1000);
+}
+
+async function verifyEmail() {
+  const code = document.getElementById('verify-code-input').value.trim();
+  if (code.length !== 6) return showAuthError('Ingresá el código de 6 dígitos');
+  const btn = document.getElementById('verify-btn');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  document.getElementById('auth-error').style.display = 'none';
+  try {
+    const res = await fetch('/api/auth/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _verifyEmail, code })
+    });
+    const data = await res.json();
+    if (!res.ok) return showAuthError(data.error || 'Código incorrecto');
+
+    token = data.token;
+    currentShop = data.shop;
+    localStorage.setItem('filo_token', token);
+    localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+    document.getElementById('auth-screen').style.display = 'none';
+    document.querySelector('.auth-tabs').style.display = '';
+    document.getElementById('app').style.display = 'block';
+    const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
+    document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
+    document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
+    loadDashboard(); loadServices(); loadClients(); loadStoreItems(); initStaffUI(); startPolling();
+    setTimeout(() => openQRModal(currentShop?.filo_plan || 'staff'), 800);
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ Verificar cuenta';
+  }
+}
+
+async function resendVerification() {
+  const btn = document.getElementById('verify-resend-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _verifyEmail })
+    });
+    const data = await res.json();
+    if (!res.ok) return showAuthError(data.error || 'Error al reenviar');
+    showAuthError('✅ Código reenviado. Revisá tu bandeja.');
+    document.getElementById('auth-error').style.color = '#00E676';
+    document.getElementById('auth-error').style.display = 'block';
+    startResendCooldown(60);
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 function logout() {
   if (!confirm('¿Cerrás sesión?')) return;

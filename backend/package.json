@@ -22,7 +22,8 @@
     "node-fetch": "^3.3.2",
     "pdf-parse": "^1.1.1",
     "pg": "^8.13.0",
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.3",
+    "resend": "^6.12.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

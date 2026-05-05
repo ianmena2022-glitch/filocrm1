@@ -3,6 +3,11 @@ const bcrypt    = require('bcryptjs');
 const jwt       = require('jsonwebtoken');
 const pool      = require('../db/pool');
 const rateLimit = require('express-rate-limit');
+const { sendVerificationEmail } = require('../services/email');
+
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
 // Rate limit estricto para login: máx 10 intentos por 15 minutos por IP
 const loginLimiter = rateLimit({
@@ -117,9 +122,24 @@ router.post('/register', async (req, res) => {
       );
     }
 
+    // Generar código de verificación (15 min)
+    const verifyCode    = generateCode();
+    const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await pool.query(
+      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
+      [verifyCode, verifyExpires.toISOString(), shop.id]
+    );
+
     const refLog = vendorId ? ` · ref=${codeNorm} (vendor #${vendorId})` : '';
     console.log(`[REGISTRO] ${email} → plan ${filoPlan} · trial hasta ${trialEnds.toDateString()}${refLog}`);
-    res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
+
+    try {
+      await sendVerificationEmail(email.toLowerCase().trim(), name.trim(), verifyCode);
+    } catch (mailErr) {
+      console.error('[REGISTRO] Error enviando email:', mailErr.message);
+    }
+
+    res.status(201).json({ pending_verification: true, email: email.toLowerCase().trim() });
   } catch (e) {
     console.error('Register error:', e.message);
     res.status(500).json({ error: 'Error al crear la cuenta' });
@@ -147,8 +167,22 @@ router.post('/register-enterprise', async (req, res) => {
       [name.trim(), email.toLowerCase().trim(), hash, phone || null]
     );
     const shop = result.rows[0];
+
+    const verifyCode    = generateCode();
+    const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await pool.query(
+      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
+      [verifyCode, verifyExpires.toISOString(), shop.id]
+    );
+
     console.log(`[ENTERPRISE] Cuenta madre creada: ${email}`);
-    res.status(201).json({ token: makeToken(shop), shop: shopPayload(shop) });
+    try {
+      await sendVerificationEmail(email.toLowerCase().trim(), name.trim(), verifyCode);
+    } catch (mailErr) {
+      console.error('[ENTERPRISE] Error enviando email:', mailErr.message);
+    }
+
+    res.status(201).json({ pending_verification: true, email: email.toLowerCase().trim() });
   } catch(e) {
     console.error('Register enterprise error:', e.message);
     res.status(500).json({ error: 'Error al crear la cuenta enterprise' });
@@ -204,6 +238,10 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const ok = await bcrypt.compare(password, shop.password);
     if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+
+    if (!shop.email_verified) {
+      return res.status(403).json({ error: 'email_not_verified', email: shop.email });
+    }
 
     // Verificar si el trial expiró y aún no tiene suscripción activa
     if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
@@ -313,6 +351,73 @@ router.delete('/delete-account', async (req, res) => {
   } catch (e) {
     console.error('Delete account error:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/auth/verify-email — verificar código de 6 dígitos
+router.post('/verify-email', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'Email y código son requeridos' });
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM shops WHERE email=$1',
+      [email.toLowerCase().trim()]
+    );
+    const shop = result.rows[0];
+    if (!shop) return res.status(404).json({ error: 'Cuenta no encontrada' });
+    if (shop.email_verified) return res.json({ token: makeToken(shop), shop: shopPayload(shop) });
+
+    if (!shop.email_verify_code || shop.email_verify_code !== String(code).trim()) {
+      return res.status(400).json({ error: 'Código incorrecto' });
+    }
+    if (new Date(shop.email_verify_expires) < new Date()) {
+      return res.status(400).json({ error: 'El código expiró. Solicitá uno nuevo.' });
+    }
+
+    await pool.query(
+      'UPDATE shops SET email_verified=TRUE, email_verify_code=NULL, email_verify_expires=NULL WHERE id=$1',
+      [shop.id]
+    );
+    shop.email_verified = true;
+
+    console.log(`[VERIFY] ${email} verificado`);
+    res.json({ token: makeToken(shop), shop: shopPayload(shop) });
+  } catch (e) {
+    console.error('Verify email error:', e.message);
+    res.status(500).json({ error: 'Error al verificar' });
+  }
+});
+
+// POST /api/auth/resend-verification — reenviar código
+const resendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  message: { error: 'Demasiados intentos. Esperá un minuto.' },
+});
+router.post('/resend-verification', resendLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email requerido' });
+
+  try {
+    const result = await pool.query('SELECT * FROM shops WHERE email=$1', [email.toLowerCase().trim()]);
+    const shop = result.rows[0];
+    if (!shop) return res.status(404).json({ error: 'Cuenta no encontrada' });
+    if (shop.email_verified) return res.json({ ok: true });
+
+    const verifyCode    = generateCode();
+    const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await pool.query(
+      'UPDATE shops SET email_verify_code=$1, email_verify_expires=$2 WHERE id=$3',
+      [verifyCode, verifyExpires.toISOString(), shop.id]
+    );
+
+    await sendVerificationEmail(shop.email, shop.name, verifyCode);
+    console.log(`[VERIFY] Código reenviado a ${email}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Resend verification error:', e.message);
+    res.status(500).json({ error: 'Error al reenviar el código' });
   }
 });
 
