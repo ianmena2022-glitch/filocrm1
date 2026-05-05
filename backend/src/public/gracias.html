@@ -32,6 +32,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
+      width: 100%;
       height: 100%;
     }
 
@@ -40,58 +41,81 @@
       color: #f0f6ff;
       font-family: 'Barlow', sans-serif;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px 20px;
       overflow-x: hidden;
     }
 
-    /* fondo de partículas / glow */
+    /* fondo con glow centrado */
     .bg-glow {
       position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events: none;
+      overflow: hidden;
     }
     .glow-1 {
       position: absolute;
-      width: 600px; height: 600px;
+      width: 80vw; height: 80vw;
+      max-width: 700px; max-height: 700px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,209,0,.08) 0%, transparent 70%);
-      top: -150px; left: -150px;
+      background: radial-gradient(circle, rgba(255,209,0,.09) 0%, transparent 70%);
+      top: -30%; left: -20%;
       animation: pulse 6s ease-in-out infinite;
     }
     .glow-2 {
       position: absolute;
-      width: 400px; height: 400px;
+      width: 60vw; height: 60vw;
+      max-width: 500px; max-height: 500px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,209,0,.05) 0%, transparent 70%);
-      bottom: -100px; right: -100px;
+      background: radial-gradient(circle, rgba(255,209,0,.06) 0%, transparent 70%);
+      bottom: -20%; right: -15%;
       animation: pulse 8s ease-in-out infinite reverse;
+    }
+    .glow-3 {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,209,0,.15), transparent);
+      top: 50%;
     }
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.1); opacity: .7; }
+      50% { transform: scale(1.12); opacity: .65; }
+    }
+
+    /* wrapper que ocupa toda la pantalla y centra el contenido */
+    .page {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
     }
 
     .card {
-      position: relative;
-      z-index: 1;
-      max-width: 540px;
       width: 100%;
-      background: rgba(10, 24, 40, 0.9);
-      border: 1px solid rgba(255, 209, 0, .2);
-      border-radius: 16px;
-      padding: 56px 48px;
+      max-width: 580px;
+      background: rgba(8, 20, 38, 0.88);
+      border: 1px solid rgba(255, 209, 0, .18);
+      border-radius: 20px;
+      padding: 52px 48px;
       text-align: center;
-      backdrop-filter: blur(12px);
-      box-shadow: 0 0 60px rgba(255,209,0,.07), 0 20px 60px rgba(0,0,0,.4);
-      animation: fadeUp .6s ease-out both;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 0 80px rgba(255,209,0,.06), 0 24px 64px rgba(0,0,0,.5);
+      animation: fadeUp .55s ease-out both;
     }
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(24px); }
+      from { opacity: 0; transform: translateY(20px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -99,16 +123,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
       margin-bottom: 28px;
-      animation: popIn .5s .3s ease-out both;
+      animation: popIn .5s .25s ease-out both;
     }
     @keyframes popIn {
-      from { opacity: 0; transform: scale(.95); }
+      from { opacity: 0; transform: scale(.94); }
       to   { opacity: 1; transform: scale(1); }
     }
     .logo-img {
-      height: 56px;
+      height: 52px;
       width: auto;
       object-fit: contain;
     }
@@ -118,21 +142,26 @@
       align-items: center;
       gap: 8px;
       background: rgba(255,209,0,.07);
-      border: 1px solid rgba(255,209,0,.2);
-      border-radius: 3px;
-      padding: 4px 14px;
+      border: 1px solid rgba(255,209,0,.22);
+      border-radius: 4px;
+      padding: 5px 14px;
       margin-bottom: 20px;
     }
     .badge-dot {
-      width: 6px; height: 6px;
+      width: 7px; height: 7px;
       border-radius: 50%;
       background: #FFD100;
-      box-shadow: 0 0 6px #FFD100;
+      box-shadow: 0 0 8px #FFD100;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
     }
     .badge-text {
       font-family: 'Barlow Condensed', sans-serif;
       font-weight: 700;
-      font-size: 10px;
+      font-size: 11px;
       letter-spacing: 2.5px;
       text-transform: uppercase;
       color: #FFD100;
@@ -141,9 +170,9 @@
     h1 {
       font-family: 'Oswald', sans-serif;
       font-weight: 700;
-      font-size: clamp(36px, 6vw, 52px);
-      line-height: .95;
-      letter-spacing: -.02em;
+      font-size: clamp(34px, 7vw, 54px);
+      line-height: .93;
+      letter-spacing: -.01em;
       margin-bottom: 16px;
       color: #f0f6ff;
     }
@@ -151,18 +180,18 @@
 
     .subtitle {
       font-weight: 300;
-      font-size: 16px;
-      color: #7a8fa8;
-      line-height: 1.7;
-      margin-bottom: 36px;
+      font-size: 15px;
+      color: #6a7f98;
+      line-height: 1.75;
+      margin-bottom: 32px;
     }
-    .subtitle strong { color: rgba(255,255,255,.85); font-weight: 600; }
+    .subtitle strong { color: rgba(255,255,255,.88); font-weight: 600; }
 
     .perks {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-bottom: 36px;
+      gap: 10px;
+      margin-bottom: 32px;
       text-align: left;
     }
     .perk {
@@ -171,67 +200,82 @@
       gap: 12px;
       background: rgba(255,209,0,.04);
       border: 1px solid rgba(255,209,0,.1);
-      border-radius: 8px;
-      padding: 12px 16px;
+      border-radius: 10px;
+      padding: 13px 16px;
+      transition: border-color .2s;
     }
-    .perk-icon { font-size: 20px; flex-shrink: 0; }
+    .perk:hover { border-color: rgba(255,209,0,.22); }
+    .perk-icon { font-size: 18px; flex-shrink: 0; }
     .perk-text {
       font-family: 'Barlow Condensed', sans-serif;
       font-weight: 600;
       font-size: 14px;
       letter-spacing: .04em;
-      color: rgba(255,255,255,.85);
+      color: rgba(255,255,255,.82);
     }
 
     .btn-primary {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       font-family: 'Barlow Condensed', sans-serif;
       font-weight: 700;
-      letter-spacing: .08em;
-      font-size: 16px;
-      padding: 15px 40px;
-      border-radius: 7px;
+      letter-spacing: .1em;
+      font-size: 17px;
+      text-transform: uppercase;
+      padding: 17px 40px;
+      border-radius: 10px;
       background: #FFD100;
       color: #050d18;
       border: none;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 0 4px 24px rgba(255,209,0,.4);
-      transition: all .25s;
+      box-shadow: 0 4px 28px rgba(255,209,0,.38);
+      transition: transform .22s, box-shadow .22s;
       width: 100%;
     }
     .btn-primary:hover {
-      transform: translateY(-2px) scale(1.02);
-      box-shadow: 0 8px 32px rgba(255,209,0,.5);
+      transform: translateY(-2px) scale(1.015);
+      box-shadow: 0 8px 36px rgba(255,209,0,.52);
     }
+    .btn-primary:active { transform: scale(.98); }
 
     .countdown {
       margin-top: 14px;
       font-size: 13px;
-      color: #7a8fa8;
+      color: #5a7090;
     }
     .countdown span {
       color: #FFD100;
-      font-weight: 600;
+      font-weight: 700;
     }
 
-    .logo {
+    .footer-brand {
       position: relative;
       z-index: 1;
-      margin-top: 32px;
+      margin-top: 28px;
       font-family: 'Oswald', sans-serif;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 12px;
       letter-spacing: 3px;
       text-transform: uppercase;
-      color: rgba(255,255,255,.2);
+      color: rgba(255,255,255,.15);
     }
 
-    @media (max-width: 480px) {
-      .card { padding: 40px 28px; }
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .card {
+        padding: 36px 24px;
+        border-radius: 16px;
+      }
+      h1 { font-size: clamp(30px, 9vw, 44px); }
+      .btn-primary { font-size: 15px; padding: 15px; }
+    }
+
+    /* ── Desktop wide: abre un poco más el card y usa el espacio ── */
+    @media (min-width: 900px) {
+      .card { max-width: 620px; padding: 64px 64px; }
     }
   </style>
 </head>
@@ -240,8 +284,10 @@
   <div class="bg-glow">
     <div class="glow-1"></div>
     <div class="glow-2"></div>
+    <div class="glow-3"></div>
   </div>
 
+  <div class="page">
   <div class="card">
     <div class="logo-wrap">
       <img src="/logo_filo.png" alt="FILO CRM" class="logo-img"/>
@@ -281,7 +327,8 @@
     </p>
   </div>
 
-  <div class="logo">FILO CRM</div>
+  <div class="footer-brand">FILO CRM</div>
+  </div><!-- /page -->
 
   <script>
     // Countdown y redirect automático
