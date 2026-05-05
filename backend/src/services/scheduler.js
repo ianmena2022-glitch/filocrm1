@@ -110,12 +110,16 @@ async function runTrialExpiration() {
     const { rowCount } = await pool.query(`
       UPDATE shops
          SET subscription_status = 'expired',
-             expired_at = COALESCE(expired_at, NOW())
+             expired_at = COALESCE(expired_at, NOW()),
+             trial_ends_at = COALESCE(trial_ends_at, created_at + INTERVAL '7 days')
        WHERE subscription_status = 'trial'
-         AND trial_ends_at IS NOT NULL
-         AND trial_ends_at < NOW() - INTERVAL '10 days'
          AND (is_test IS NULL OR is_test = FALSE)
          AND plan IS DISTINCT FROM 'test'
+         AND (
+           (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - INTERVAL '10 days')
+           OR
+           (trial_ends_at IS NULL AND created_at < NOW() - INTERVAL '17 days')
+         )
     `);
     if (rowCount > 0) console.log(`[TRIAL] ${rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
   } catch (e) {
