@@ -1,7 +1,9 @@
 const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM   = process.env.RESEND_FROM || 'FILO CRM <noreply@filocrm.com.ar>';
+// RESEND_FROM debe apuntar a un dominio verificado en Resend.
+// Mientras no esté verificado filocrm.com.ar, usar onboarding@resend.dev (funciona sin verificación).
+const FROM   = process.env.RESEND_FROM || 'onboarding@resend.dev';
 
 function verificationHtml(name, code) {
   return `<!DOCTYPE html>
