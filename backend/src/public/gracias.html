@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>¡Gracias por confiar en FILO! ✂️</title>
+  <meta name="robots" content="noindex, nofollow"/>
+
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window,document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '1640869710476207');
+  fbq('track', 'PageView');
+  fbq('track', 'Purchase', { currency: 'ARS', value: 1 });
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=1640869710476207&ev=Purchase&noscript=1"/></noscript>
+  <!-- End Meta Pixel Code -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      background: #050d18;
+      color: #f0f6ff;
+      font-family: 'Barlow', sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* fondo con glow centrado */
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-1 {
+      position: absolute;
+      width: 80vw; height: 80vw;
+      max-width: 700px; max-height: 700px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,209,0,.09) 0%, transparent 70%);
+      top: -30%; left: -20%;
+      animation: pulse 6s ease-in-out infinite;
+    }
+    .glow-2 {
+      position: absolute;
+      width: 60vw; height: 60vw;
+      max-width: 500px; max-height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,209,0,.06) 0%, transparent 70%);
+      bottom: -20%; right: -15%;
+      animation: pulse 8s ease-in-out infinite reverse;
+    }
+    .glow-3 {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,209,0,.15), transparent);
+      top: 50%;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.12); opacity: .65; }
+    }
+
+    /* wrapper que ocupa toda la pantalla y centra el contenido */
+    .page {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 580px;
+      background: rgba(8, 20, 38, 0.88);
+      border: 1px solid rgba(255, 209, 0, .18);
+      border-radius: 20px;
+      padding: 52px 48px;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 0 80px rgba(255,209,0,.06), 0 24px 64px rgba(0,0,0,.5);
+      animation: fadeUp .55s ease-out both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      animation: popIn .5s .25s ease-out both;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(.94); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .logo-img {
+      height: 52px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,209,0,.07);
+      border: 1px solid rgba(255,209,0,.22);
+      border-radius: 4px;
+      padding: 5px 14px;
+      margin-bottom: 20px;
+    }
+    .badge-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #FFD100;
+      box-shadow: 0 0 8px #FFD100;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+    .badge-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #FFD100;
+    }
+
+    h1 {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: clamp(34px, 7vw, 54px);
+      line-height: .93;
+      letter-spacing: -.01em;
+      margin-bottom: 16px;
+      color: #f0f6ff;
+    }
+    h1 span { color: #FFD100; }
+
+    .subtitle {
+      font-weight: 300;
+      font-size: 15px;
+      color: #6a7f98;
+      line-height: 1.75;
+      margin-bottom: 32px;
+    }
+    .subtitle strong { color: rgba(255,255,255,.88); font-weight: 600; }
+
+    .perks {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 32px;
+      text-align: left;
+    }
+    .perk {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,209,0,.04);
+      border: 1px solid rgba(255,209,0,.1);
+      border-radius: 10px;
+      padding: 13px 16px;
+      transition: border-color .2s;
+    }
+    .perk:hover { border-color: rgba(255,209,0,.22); }
+    .perk-icon { font-size: 18px; flex-shrink: 0; }
+    .perk-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: .04em;
+      color: rgba(255,255,255,.82);
+    }
+
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      letter-spacing: .1em;
+      font-size: 17px;
+      text-transform: uppercase;
+      padding: 17px 40px;
+      border-radius: 10px;
+      background: #FFD100;
+      color: #050d18;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 4px 28px rgba(255,209,0,.38);
+      transition: transform .22s, box-shadow .22s;
+      width: 100%;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px) scale(1.015);
+      box-shadow: 0 8px 36px rgba(255,209,0,.52);
+    }
+    .btn-primary:active { transform: scale(.98); }
+
+    .countdown {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #5a7090;
+    }
+    .countdown span {
+      color: #FFD100;
+      font-weight: 700;
+    }
+
+    .footer-brand {
+      position: relative;
+      z-index: 1;
+      margin-top: 28px;
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.15);
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .card {
+        padding: 36px 24px;
+        border-radius: 16px;
+      }
+      h1 { font-size: clamp(30px, 9vw, 44px); }
+      .btn-primary { font-size: 15px; padding: 15px; }
+    }
+
+    /* ── Desktop wide: abre un poco más el card y usa el espacio ── */
+    @media (min-width: 900px) {
+      .card { max-width: 620px; padding: 64px 64px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-glow">
+    <div class="glow-1"></div>
+    <div class="glow-2"></div>
+    <div class="glow-3"></div>
+  </div>
+
+  <div class="page">
+  <div class="card">
+    <div class="logo-wrap">
+      <img src="/logo_filo.png" alt="FILO CRM" class="logo-img"/>
+      <div class="badge">
+        <div class="badge-dot"></div>
+        <span class="badge-text">CUENTA ACTIVADA</span>
+      </div>
+    </div>
+
+    <h1>GRACIAS POR<br><span>CONFIAR EN FILO.</span></h1>
+
+    <p class="subtitle">
+      Tu plan ya está <strong>activo</strong>. En segundos te llevamos al panel para que empieces a gestionar tu barbería.
+    </p>
+
+    <div class="perks">
+      <div class="perk">
+        <span class="perk-icon">📅</span>
+        <span class="perk-text">Turnos online activos — tus clientes ya pueden reservar</span>
+      </div>
+      <div class="perk">
+        <span class="perk-icon">🤖</span>
+        <span class="perk-text">IA y WhatsApp listos para configurar</span>
+      </div>
+      <div class="perk">
+        <span class="perk-icon">📊</span>
+        <span class="perk-text">Caja y estadísticas en tiempo real</span>
+      </div>
+    </div>
+
+    <a href="/app" class="btn-primary" id="cta-btn">
+      ✂ IR A MI PANEL AHORA
+    </a>
+
+    <p class="countdown">
+      Redirigiendo automáticamente en <span id="timer">5</span> segundos...
+    </p>
+  </div>
+
+  <div class="footer-brand">FILO CRM</div>
+  </div><!-- /page -->
+
+  <script>
+    // Countdown y redirect automático
+    let secs = 5;
+    const timerEl = document.getElementById('timer');
+    const interval = setInterval(() => {
+      secs--;
+      timerEl.textContent = secs;
+      if (secs <= 0) {
+        clearInterval(interval);
+        window.location.href = '/app';
+      }
+    }, 1000);
+
+    // Click manual cancela el countdown
+    document.getElementById('cta-btn').addEventListener('click', () => {
+      clearInterval(interval);
+    });
+  </script>
+</body>
+</html>
