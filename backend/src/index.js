@@ -370,6 +370,11 @@ app.get('/app', (req, res) => {
   res.sendFile(path.join(publicDir, 'crm.html'));
 });
 
+// Página de conversión post-pago
+app.get('/gracias', (req, res) => {
+  res.sendFile(path.join(publicDir, 'gracias.html'));
+});
+
 // Página de funciones
 app.get('/funciones', (req, res) => {
   res.sendFile(path.join(publicDir, 'funciones.html'));

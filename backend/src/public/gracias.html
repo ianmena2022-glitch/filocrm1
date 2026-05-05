@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>¡Gracias por confiar en FILO! ✂️</title>
+  <meta name="robots" content="noindex, nofollow"/>
+
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window,document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '1640869710476207');
+  fbq('track', 'PageView');
+  fbq('track', 'Purchase', { currency: 'ARS', value: 1 });
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=1640869710476207&ev=Purchase&noscript=1"/></noscript>
+  <!-- End Meta Pixel Code -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #050d18;
+      color: #f0f6ff;
+      font-family: 'Barlow', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow: hidden;
+    }
+
+    /* fondo de partículas / glow */
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .glow-1 {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,209,0,.08) 0%, transparent 70%);
+      top: -150px; left: -150px;
+      animation: pulse 6s ease-in-out infinite;
+    }
+    .glow-2 {
+      position: absolute;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,209,0,.05) 0%, transparent 70%);
+      bottom: -100px; right: -100px;
+      animation: pulse 8s ease-in-out infinite reverse;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: .7; }
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      max-width: 540px;
+      width: 100%;
+      background: rgba(10, 24, 40, 0.9);
+      border: 1px solid rgba(255, 209, 0, .2);
+      border-radius: 16px;
+      padding: 56px 48px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 60px rgba(255,209,0,.07), 0 20px 60px rgba(0,0,0,.4);
+      animation: fadeUp .6s ease-out both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .check-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(255,209,0,.1);
+      border: 2px solid rgba(255,209,0,.3);
+      margin-bottom: 28px;
+      animation: popIn .5s .3s ease-out both;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(.5); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .check-icon {
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,209,0,.07);
+      border: 1px solid rgba(255,209,0,.2);
+      border-radius: 3px;
+      padding: 4px 14px;
+      margin-bottom: 20px;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #FFD100;
+      box-shadow: 0 0 6px #FFD100;
+    }
+    .badge-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #FFD100;
+    }
+
+    h1 {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: clamp(36px, 6vw, 52px);
+      line-height: .95;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+      color: #f0f6ff;
+    }
+    h1 span { color: #FFD100; }
+
+    .subtitle {
+      font-weight: 300;
+      font-size: 16px;
+      color: #7a8fa8;
+      line-height: 1.7;
+      margin-bottom: 36px;
+    }
+    .subtitle strong { color: rgba(255,255,255,.85); font-weight: 600; }
+
+    .perks {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 36px;
+      text-align: left;
+    }
+    .perk {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,209,0,.04);
+      border: 1px solid rgba(255,209,0,.1);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .perk-icon { font-size: 20px; flex-shrink: 0; }
+    .perk-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: .04em;
+      color: rgba(255,255,255,.85);
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      letter-spacing: .08em;
+      font-size: 16px;
+      padding: 15px 40px;
+      border-radius: 7px;
+      background: #FFD100;
+      color: #050d18;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 4px 24px rgba(255,209,0,.4);
+      transition: all .25s;
+      width: 100%;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 32px rgba(255,209,0,.5);
+    }
+
+    .countdown {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #7a8fa8;
+    }
+    .countdown span {
+      color: #FFD100;
+      font-weight: 600;
+    }
+
+    .logo {
+      position: relative;
+      z-index: 1;
+      margin-top: 32px;
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.2);
+    }
+
+    @media (max-width: 480px) {
+      .card { padding: 40px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-glow">
+    <div class="glow-1"></div>
+    <div class="glow-2"></div>
+  </div>
+
+  <div class="card">
+    <div class="check-wrap">
+      <span class="check-icon">✂️</span>
+    </div>
+
+    <div class="badge">
+      <div class="badge-dot"></div>
+      <span class="badge-text">CUENTA ACTIVADA</span>
+    </div>
+
+    <h1>GRACIAS POR<br><span>CONFIAR EN FILO.</span></h1>
+
+    <p class="subtitle">
+      Tu plan ya está <strong>activo</strong>. En segundos te llevamos al panel para que empieces a gestionar tu barbería.
+    </p>
+
+    <div class="perks">
+      <div class="perk">
+        <span class="perk-icon">📅</span>
+        <span class="perk-text">Turnos online activos — tus clientes ya pueden reservar</span>
+      </div>
+      <div class="perk">
+        <span class="perk-icon">🤖</span>
+        <span class="perk-text">IA y WhatsApp listos para configurar</span>
+      </div>
+      <div class="perk">
+        <span class="perk-icon">📊</span>
+        <span class="perk-text">Caja y estadísticas en tiempo real</span>
+      </div>
+    </div>
+
+    <a href="/app" class="btn-primary" id="cta-btn">
+      ✂ IR A MI PANEL AHORA
+    </a>
+
+    <p class="countdown">
+      Redirigiendo automáticamente en <span id="timer">5</span> segundos...
+    </p>
+  </div>
+
+  <div class="logo">FILO CRM</div>
+
+  <script>
+    // Countdown y redirect automático
+    let secs = 5;
+    const timerEl = document.getElementById('timer');
+    const interval = setInterval(() => {
+      secs--;
+      timerEl.textContent = secs;
+      if (secs <= 0) {
+        clearInterval(interval);
+        window.location.href = '/app';
+      }
+    }, 1000);
+
+    // Click manual cancela el countdown
+    document.getElementById('cta-btn').addEventListener('click', () => {
+      clearInterval(interval);
+    });
+  </script>
+</body>
+</html>

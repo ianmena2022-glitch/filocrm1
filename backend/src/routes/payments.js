@@ -227,7 +227,7 @@ router.post('/qr-order', auth, async (req, res) => {
       items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: planCfg.price, currency_id: 'ARS' }],
       external_reference: extRef,
       notification_url: `${appUrl}/api/payments/webhook-qr`,
-      back_urls: { success: `${appUrl}/app?qr_paid=1`, failure: `${appUrl}/app` },
+      back_urls: { success: `${appUrl}/gracias`, failure: `${appUrl}/app` },
       auto_return: 'approved',
     });
 
