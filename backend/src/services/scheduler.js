@@ -102,6 +102,27 @@ async function runCajaAutoClose() {
   }
 }
 
+// ── Auto-expiración de trials vencidos ────────────────────────────────────────
+// Pasa a 'expired' las cuentas que llevan más de 10 días con trial vencido
+// sin haber pagado (cubre casos donde el usuario nunca volvió a loguearse)
+async function runTrialExpiration() {
+  try {
+    const { rowCount } = await pool.query(`
+      UPDATE shops
+         SET subscription_status = 'expired',
+             expired_at = COALESCE(expired_at, NOW())
+       WHERE subscription_status = 'trial'
+         AND trial_ends_at IS NOT NULL
+         AND trial_ends_at < NOW() - INTERVAL '10 days'
+         AND (is_test IS NULL OR is_test = FALSE)
+         AND plan IS DISTINCT FROM 'test'
+    `);
+    if (rowCount > 0) console.log(`[TRIAL] ${rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
+  } catch (e) {
+    console.error('[TRIAL] Error auto-expiración:', e.message);
+  }
+}
+
 // ── Auto-cancelación de cuentas expiradas ─────────────────────────────────────
 // Después de CANCEL_AFTER_DAYS días en status 'expired', se desconecta WhatsApp
 // y se marca la cuenta como 'cancelled' para no consumir recursos del server.
@@ -169,8 +190,11 @@ function startScheduler() {
   // Cada 30 minutos
   setInterval(runCajaAutoClose, 30 * 60 * 1000);
 
-  // Limpieza de cuentas expiradas: una vez al día (al arrancar + cada 24h)
-  setTimeout(runExpiredCleanup, 60_000); // 1 min después del arranque
+  // Auto-expiración de trials + limpieza: una vez al día
+  setTimeout(runTrialExpiration, 60_000);
+  setInterval(runTrialExpiration, 24 * 60 * 60 * 1000);
+
+  setTimeout(runExpiredCleanup, 90_000); // 1.5 min después (corre tras la expiración)
   setInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
 }
 
