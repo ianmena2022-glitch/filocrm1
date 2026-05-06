@@ -1615,6 +1615,16 @@ select.form-input { padding-right: 32px; }
 }
 #tour-card.visible { opacity: 1; pointer-events: auto; }
 
+@media(max-width:768px) {
+  #tour-card {
+    top: 16px !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    width: calc(100vw - 32px);
+    max-width: 340px;
+  }
+}
+
 #tour-card .tc-step {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--yellow);
