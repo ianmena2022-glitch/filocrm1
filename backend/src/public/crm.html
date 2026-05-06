@@ -581,9 +581,61 @@ body {
   font-size: 14px; cursor: default;
 }
 @media (max-width: 768px) {
-  .ent-grid { grid-template-columns: 1fr; }
-  .ent-kpi-strip { gap: 8px; }
-  .ent-kpi-block { min-width: calc(50% - 8px); }
+  /* Grid sucursales */
+  .ent-grid { grid-template-columns: 1fr; padding: 0 12px; }
+
+  /* KPI strips: 2 columnas en mobile */
+  .ent-kpi-strip { gap: 8px; padding: 0 12px 12px; }
+  .ent-kpi-block { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); padding: 12px; }
+  .ent-kpi-value { font-size: 18px; }
+
+  /* Sección padding */
+  .ent-section { padding: 0 12px 40px; }
+
+  /* Topbar enterprise en mobile: apilar en dos filas */
+  #sec-enterprise .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+    height: auto;
+  }
+  #sec-enterprise .topbar-left h1 {
+    font-size: 16px;
+  }
+  #sec-enterprise .topbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  #sec-enterprise .topbar-right button {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    padding: 7px 8px;
+    white-space: nowrap;
+  }
+  /* Ocultar avatar duplicado en mobile */
+  #sec-enterprise .topbar-user-group { display: none; }
+
+  /* Tabs con scroll horizontal */
+  #sec-enterprise > div[style*="border-bottom"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 12px;
+    gap: 0;
+    flex-wrap: nowrap;
+  }
+  #sec-enterprise > div[style*="border-bottom"]::-webkit-scrollbar { display: none; }
+  .ent-tab { white-space: nowrap; padding: 10px 14px; font-size: 12px; }
+
+  /* Labels de sección */
+  #ent-tab-overview > div[style*="padding:0 20px"] {
+    padding: 0 12px 6px !important;
+  }
+
+  /* Ranking */
+  #ent-tab-ranking { padding: 0 12px !important; }
 }
 .ent-tab {
   background: none; border: none; color: var(--gray);
