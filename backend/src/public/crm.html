@@ -8551,27 +8551,43 @@ async function saveEditStoreItem() {
 <style>
 #copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}
 
-/* ── MOBILE: círculo colapsado arriba a la derecha ── */
+/* ── MOBILE: tab lateral derecha ── */
 @media(max-width:768px){
-  #copilot-widget{bottom:auto;top:72px;right:12px}
+  #copilot-widget{
+    bottom:auto;top:50%;right:0;
+    transform:translateY(-50%);
+  }
 
-  /* Pill oculta en mobile — solo el círculo */
+  /* Tab lateral — texto vertical */
   #copilot-pill .cp-pill-label,
   #copilot-pill .cp-pill-sub,
   #copilot-pill .cp-dot { display:none }
   #copilot-pill{
-    padding:0;width:38px;height:38px;border-radius:50%;
-    justify-content:center;background:#0a1828;
+    padding:0;
+    width:28px;
+    height:80px;
+    border-radius:8px 0 0 8px;
+    border-right:none;
+    justify-content:center;
+    align-items:center;
+    background:#0a1828;
     border:1.5px solid rgba(255,209,0,.35);
-    box-shadow:0 2px 12px rgba(0,0,0,.5);
+    box-shadow:-2px 0 12px rgba(0,0,0,.5);
+    writing-mode:vertical-rl;
+    gap:0;
   }
-  /* Cuando está expandido muestra la pill completa */
+  .cp-avatar{
+    width:24px;height:24px;
+    background:transparent;
+    transform:rotate(0deg);
+  }
+  /* Cuando está expandido vuelve a la pill normal */
   #copilot-pill.expanded .cp-pill-label,
   #copilot-pill.expanded .cp-pill-sub,
   #copilot-pill.expanded .cp-dot { display:block }
   #copilot-pill.expanded{
-    width:auto;height:auto;border-radius:40px;
-    padding:8px 16px 8px 10px;gap:9px;
+    width:auto;height:auto;border-radius:40px;border-right:1.5px solid rgba(255,209,0,.35);
+    padding:8px 16px 8px 10px;gap:9px;writing-mode:horizontal-tb;
     animation:pillIn .2s ease;
   }
   @keyframes pillIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
