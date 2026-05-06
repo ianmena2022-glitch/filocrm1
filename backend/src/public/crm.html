@@ -8554,40 +8554,41 @@ async function saveEditStoreItem() {
 /* ── MOBILE: tab lateral derecha ── */
 @media(max-width:768px){
   #copilot-widget{
-    bottom:auto;top:50%;right:0;
-    transform:translateY(-50%);
+    bottom:auto;top:80px;right:0;
+    transform:none;
   }
 
-  /* Tab lateral — texto vertical */
+  /* Tab lateral pequeña — esquina superior derecha */
   #copilot-pill .cp-pill-label,
   #copilot-pill .cp-pill-sub,
   #copilot-pill .cp-dot { display:none }
   #copilot-pill{
-    padding:0;
-    width:28px;
-    height:80px;
-    border-radius:8px 0 0 8px;
+    padding:6px 5px;
+    width:22px;
+    height:52px;
+    border-radius:6px 0 0 6px;
     border-right:none;
     justify-content:center;
     align-items:center;
     background:#0a1828;
-    border:1.5px solid rgba(255,209,0,.35);
-    box-shadow:-2px 0 12px rgba(0,0,0,.5);
-    writing-mode:vertical-rl;
+    border:1px solid rgba(255,209,0,.4);
+    box-shadow:-2px 2px 10px rgba(0,0,0,.5);
     gap:0;
   }
-  .cp-avatar{
-    width:24px;height:24px;
+  #copilot-pill .cp-avatar{
+    width:20px;height:20px;
     background:transparent;
-    transform:rotate(0deg);
   }
+  #copilot-pill .cp-avatar svg{ width:14px;height:14px; }
+
   /* Cuando está expandido vuelve a la pill normal */
   #copilot-pill.expanded .cp-pill-label,
   #copilot-pill.expanded .cp-pill-sub,
   #copilot-pill.expanded .cp-dot { display:block }
   #copilot-pill.expanded{
-    width:auto;height:auto;border-radius:40px;border-right:1.5px solid rgba(255,209,0,.35);
-    padding:8px 16px 8px 10px;gap:9px;writing-mode:horizontal-tb;
+    width:auto;height:auto;border-radius:40px;
+    border-right:1px solid rgba(255,209,0,.4);
+    padding:8px 16px 8px 10px;gap:9px;
     animation:pillIn .2s ease;
   }
   @keyframes pillIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
