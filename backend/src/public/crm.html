@@ -11263,9 +11263,8 @@ async function bcmSave(id) {
 
     if (isMobile && rect) {
       var targetMidY = rect.top + rect.height / 2;
-      // Solo intervenir si el target está en el navbar (bottom 25% de pantalla)
       if (targetMidY > vh * 0.75) {
-        // Target en navbar → card en parte superior, centrada
+        // Target en navbar (bottom 25%) → card arriba
         l = Math.round((vw - cw) / 2);
         t = Math.round(vh * 0.06);
         t = Math.max(8, Math.min(t, vh - ch - 8));
@@ -11274,7 +11273,17 @@ async function bcmSave(id) {
         card.style.left = l + 'px';
         return;
       }
-      // Para otros targets en mobile, seguir con lógica normal de posicionamiento
+      if (targetMidY < vh * 0.35) {
+        // Target en zona superior (top 35%) → card abajo
+        l = Math.round((vw - cw) / 2);
+        t = Math.round(vh * 0.55);
+        t = Math.max(8, Math.min(t, vh - ch - 8));
+        l = Math.max(8, Math.min(l, vw - cw - 8));
+        card.style.top  = t + 'px';
+        card.style.left = l + 'px';
+        return;
+      }
+      // Para targets en zona media, seguir con lógica normal
     }
 
     if (side === 'center' || !rect) {
