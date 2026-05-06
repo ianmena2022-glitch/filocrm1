@@ -121,6 +121,92 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 .child-line{color:rgba(122,139,168,.5);font-size:13px;flex-shrink:0;line-height:1}
 .badge.branch{background:rgba(56,178,172,.12);color:#38b2ac}
 .badge.barber-badge{background:rgba(160,174,192,.1);color:#a0aec0}
+
+/* ── RESPONSIVE MOBILE ──────────────────────────────────────── */
+@media(max-width:768px){
+  body{overflow-x:hidden}
+
+  .topbar{padding:0 14px;gap:8px;flex-wrap:nowrap}
+  .topbar-logo{font-size:15px}
+  #app-switcher button{padding:4px 9px;font-size:11px}
+  .topbar-right{gap:8px}
+  .topbar-right span{display:none}
+  .btn-ghost{padding:5px 10px;font-size:12px}
+
+  .content{padding:14px}
+  .page-title{font-size:20px}
+  .page-sub{font-size:12px;margin-bottom:16px}
+
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+  .stat-card{padding:14px 16px}
+  .stat-val{font-size:24px}
+
+  /* Tabs horizontales con scroll, sin saltos */
+  .tabs{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:2px;padding:3px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;padding:7px 13px;font-size:12px}
+
+  /* Toolbar en columna */
+  .toolbar{flex-direction:column;align-items:stretch;gap:8px}
+  .search-input{width:100%}
+  select.filter{width:100%}
+  .btn-sm{width:100%;text-align:center}
+
+  /* Ocultar tabla, mostrar cards */
+  .table-wrap{background:transparent;border:none;border-radius:0}
+  table thead{display:none}
+  table,tbody,tr,td{display:block;width:100%}
+
+  tbody tr{
+    background:var(--gl);
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin-bottom:10px;
+    padding:14px;
+    position:relative;
+  }
+  tbody tr:hover{background:var(--gl)}
+
+  /* Ocultar celdas vacías / de nivel en mobile */
+  td[data-label=""]{ display:none }
+
+  td{
+    padding:4px 0;
+    font-size:13px;
+    border:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:0;
+  }
+  td::before{
+    content:attr(data-label);
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.8px;
+    text-transform:uppercase;
+    color:var(--g);
+    min-width:80px;
+    flex-shrink:0;
+  }
+  td:first-child{font-size:14px;font-weight:600;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:6px}
+  td:first-child::before{display:none}
+
+  /* Acciones: fila de botones */
+  td[data-label="Acciones"]{flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid var(--border);margin-top:4px}
+  td[data-label="Acciones"]::before{display:none}
+  .action-btn{padding:6px 12px;font-size:12px}
+
+  /* Billing table */
+  #tab-billing .table-wrap{background:transparent;border:none}
+
+  /* Modales full width */
+  .modal{max-width:100%;margin:0;border-radius:14px}
+  .form-row{grid-template-columns:1fr}
+}
+@media(max-width:400px){
+  .stats-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -948,14 +1034,14 @@ function renderTreeRow(a, depth, parentId) {
 
   return `<tr data-id="${a.id}" class="row-level-${depth} ${childClass}" style="${depth > 0 ? 'display:none' : ''}">
     <td style="${indentPad}"><div class="row-indent">${connector}${toggleEl}${nameHtml}</div></td>
-    <td style="color:var(--g);font-size:12px">${esc(a.email||'')}</td>
-    <td>${planBadge}</td>
-    <td>${statusBadge}</td>
-    <td>${dateInfo}</td>
-    <td>${barberCount}</td>
-    <td>${freeMonthsCell}</td>
-    <td style="font-size:12px">${wppDot}</td>
-    <td style="display:flex;gap:6px;flex-wrap:wrap">
+    <td data-label="Email" style="color:var(--g);font-size:12px">${esc(a.email||'')}</td>
+    <td data-label="Plan">${planBadge}</td>
+    <td data-label="Estado">${statusBadge}</td>
+    <td data-label="Trial">${dateInfo}</td>
+    <td data-label="Barberos">${barberCount}</td>
+    <td data-label="Meses">${freeMonthsCell}</td>
+    <td data-label="WPP" style="font-size:12px">${wppDot}</td>
+    <td data-label="Acciones" style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
       ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},'${esc(a.name)}')" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
       <button class="action-btn" onclick="resetWpp(${a.id},'${esc(a.name)}')" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
@@ -1034,10 +1120,10 @@ function renderBillingTable(accounts) {
 
     return `<tr>
       <td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:11px;color:var(--g)">${esc(a.email)}</div></td>
-      <td>${planBadge}</td>
-      <td><span class="billing-amount">$${price.toLocaleString('es-AR')}</span></td>
-      <td><span class="billing-date">${a.nextDate ? fmtDate(a.nextDate) : '—'}</span></td>
-      <td>${daysLabel}</td>
+      <td data-label="Plan">${planBadge}</td>
+      <td data-label="Monto"><span class="billing-amount">$${price.toLocaleString('es-AR')}</span></td>
+      <td data-label="Próx. liquidación"><span class="billing-date">${a.nextDate ? fmtDate(a.nextDate) : '—'}</span></td>
+      <td data-label="Días">${daysLabel}</td>
     </tr>`;
   }).join('');
 }
@@ -1249,12 +1335,12 @@ async function loadPeerReferrals() {
         : '<span style="color:var(--g)">—</span>';
       return `<tr>
         <td><strong>${r.name}</strong></td>
-        <td style="color:var(--g);font-size:12px">${r.email}</td>
-        <td style="font-weight:700;color:#aaff00">${r.total_referred}</td>
-        <td>${activeBadge}</td>
-        <td style="color:var(--g)">${r.trial_referred}</td>
-        <td>${bonusBadge}</td>
-        <td style="color:var(--g);font-size:12px">${lastRef}</td>
+        <td data-label="Email" style="color:var(--g);font-size:12px">${r.email}</td>
+        <td data-label="Total ref." style="font-weight:700;color:#aaff00">${r.total_referred}</td>
+        <td data-label="Activos">${activeBadge}</td>
+        <td data-label="En trial" style="color:var(--g)">${r.trial_referred}</td>
+        <td data-label="Bonos">${bonusBadge}</td>
+        <td data-label="Último ref." style="color:var(--g);font-size:12px">${lastRef}</td>
       </tr>`;
     }).join('');
   } catch(e) {
@@ -1293,14 +1379,14 @@ function renderVendorsTable() {
         <div style="font-weight:600">${esc(v.name)}</div>
         ${v.email ? `<div style="font-size:11px;color:var(--g)">${esc(v.email)}</div>` : ''}
       </td>
-      <td><span style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--y);letter-spacing:1px">${esc(v.code)}</span></td>
-      <td>
+      <td data-label="Código"><span style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--y);letter-spacing:1px">${esc(v.code)}</span></td>
+      <td data-label="Link">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;color:var(--g);word-break:break-all;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(link)}</span>
           <button class="action-btn" onclick="copyVendorLink('${esc(link)}')" title="Copiar link">📋</button>
         </div>
       </td>
-      <td style="text-align:center">
+      <td data-label="Referidos" style="text-align:center">
         ${v.referred_count > 0
           ? `<button class="action-btn" onclick="openVendorAccounts(${v.id},'${esc(v.name)}')" style="color:var(--y);border-color:rgba(255,209,0,.3)">
                <span style="font-family:'Oswald',sans-serif;font-size:15px">${v.referred_count}</span>
@@ -1309,21 +1395,21 @@ function renderVendorsTable() {
           : `<span style="color:var(--g);font-size:12px">0</span>`
         }
       </td>
-      <td style="text-align:center">
+      <td data-label="Pagando" style="text-align:center">
         <span style="font-family:'Oswald',sans-serif;font-size:15px;color:${v.paying_count > 0 ? 'var(--ok)' : 'var(--g)'}">${v.paying_count || 0}</span>
       </td>
-      <td>
+      <td data-label="Este mes">
         ${newThisMonth > 0
           ? `<div style="font-family:'Oswald',sans-serif;font-size:15px;color:#4ade80">+${newThisMonth} nueva${newThisMonth > 1 ? 's' : ''}</div>
              <div style="font-size:11px;color:#4ade80">$${commMonth.toLocaleString('es-AR')}</div>`
           : `<span style="color:var(--g);font-size:12px">—</span>`
         }
       </td>
-      <td>
+      <td data-label="Comisión total">
         <div style="font-family:'Oswald',sans-serif;font-size:16px;color:var(--y);font-weight:700">$${commTotal.toLocaleString('es-AR')}</div>
         <div style="font-size:10px;color:var(--g)">${pct}% × primer pago</div>
       </td>
-      <td style="display:flex;gap:6px">
+      <td data-label="Acciones" style="display:flex;gap:6px">
         <button class="action-btn" onclick="openVendorModal(${v.id})">Editar</button>
         <button class="action-btn danger" onclick="deleteVendor(${v.id},'${esc(v.name)}')">Borrar</button>
       </td>
