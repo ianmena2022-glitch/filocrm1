@@ -8562,35 +8562,46 @@ async function saveEditStoreItem() {
   /* Tab lateral pequeña — esquina superior derecha */
   #copilot-pill .cp-pill-label,
   #copilot-pill .cp-pill-sub,
-  #copilot-pill .cp-dot { display:none }
+  #copilot-pill .cp-dot,
+  #copilot-pill .cp-collapse-arrow { display:none }
   #copilot-pill{
-    padding:6px 5px;
-    width:22px;
-    height:52px;
-    border-radius:6px 0 0 6px;
+    padding:6px 4px;
+    width:24px;
+    height:56px;
+    border-radius:8px 0 0 8px;
     border-right:none;
     justify-content:center;
     align-items:center;
-    background:#0a1828;
-    border:1px solid rgba(255,209,0,.4);
-    box-shadow:-2px 2px 10px rgba(0,0,0,.5);
+    background:#FFD100;
+    border:none;
+    box-shadow:-2px 2px 10px rgba(0,0,0,.4);
     gap:0;
   }
   #copilot-pill .cp-avatar{
-    width:20px;height:20px;
+    width:22px;height:22px;
     background:transparent;
+    margin:0 auto;
   }
-  #copilot-pill .cp-avatar svg{ width:14px;height:14px; }
+  #copilot-pill .cp-avatar svg{ width:15px;height:15px;stroke:#000d1f; }
 
-  /* Cuando está expandido vuelve a la pill normal */
+  /* Cuando está expandido: pill normal + flecha de colapso */
+  #copilot-pill.expanded .cp-collapse-arrow { display:inline; }
   #copilot-pill.expanded .cp-pill-label,
   #copilot-pill.expanded .cp-pill-sub,
   #copilot-pill.expanded .cp-dot { display:block }
   #copilot-pill.expanded{
     width:auto;height:auto;border-radius:40px;
-    border-right:1px solid rgba(255,209,0,.4);
-    padding:8px 16px 8px 10px;gap:9px;
+    border:1px solid rgba(255,209,0,.4);
+    background:#0a1828;
+    padding:8px 16px 8px 8px;gap:8px;
     animation:pillIn .2s ease;
+  }
+  #copilot-pill.expanded .cp-avatar{
+    background:#FFD100;width:32px;height:32px;
+  }
+  .cp-collapse-arrow{
+    font-size:16px;color:var(--y);line-height:1;
+    margin-right:2px;flex-shrink:0;
   }
   @keyframes pillIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 
@@ -8677,6 +8688,7 @@ async function saveEditStoreItem() {
     </div>
   </div>
   <div id="copilot-pill" onclick="toggleCopilot()">
+    <span class="cp-collapse-arrow">&#8250;</span>
     <div class="cp-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
     <div><div class="cp-pill-label">FILO Copilot</div><div class="cp-pill-sub">En que te ayudo?</div></div>
     <div class="cp-dot"></div>
