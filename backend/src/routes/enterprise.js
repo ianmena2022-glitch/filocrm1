@@ -123,26 +123,26 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
          COALESCE(SUM(a.price) FILTER (WHERE a.date = CURRENT_DATE AND a.status='completed'), 0) AS revenue_today,
          -- Este mes
          COUNT(a.id) FILTER (
-           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
+           WHERE LEFT(a.date::text,7) = TO_CHAR(CURRENT_DATE AT TIME ZONE 'America/Argentina/Buenos_Aires','YYYY-MM') AND a.status='completed'
          ) AS cuts_month,
          COALESCE(SUM(a.price) FILTER (
-           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
+           WHERE LEFT(a.date::text,7) = TO_CHAR(CURRENT_DATE AT TIME ZONE 'America/Argentina/Buenos_Aires','YYYY-MM') AND a.status='completed'
          ), 0) AS revenue_month,
          -- Comisiones mes
          COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (
-           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
+           WHERE LEFT(a.date::text,7) = TO_CHAR(CURRENT_DATE AT TIME ZONE 'America/Argentina/Buenos_Aires','YYYY-MM') AND a.status='completed'
          ), 0) AS commissions_month,
          -- Gastos mes (egresos reales)
          COALESCE((SELECT SUM(e.amount) FROM expenses e
            WHERE e.shop_id=s.id AND (e.is_income IS NULL OR e.is_income=FALSE)
-             AND date_trunc('month',e.date::timestamptz)=date_trunc('month',NOW())
+             AND LEFT(e.date::text,7) = TO_CHAR(CURRENT_DATE AT TIME ZONE 'America/Argentina/Buenos_Aires','YYYY-MM')
          ), 0) AS expenses_month,
          -- Última semana (7 días)
          COUNT(a.id) FILTER (WHERE a.date >= CURRENT_DATE-6 AND a.status='completed') AS cuts_week,
          COALESCE(SUM(a.price) FILTER (WHERE a.date >= CURRENT_DATE-6 AND a.status='completed'), 0) AS revenue_week,
          -- Ticket promedio del mes
          COALESCE(AVG(a.price) FILTER (
-           WHERE date_trunc('month',a.date::timestamptz)=date_trunc('month',NOW()) AND a.status='completed'
+           WHERE LEFT(a.date::text,7) = TO_CHAR(CURRENT_DATE AT TIME ZONE 'America/Argentina/Buenos_Aires','YYYY-MM') AND a.status='completed'
          ), 0) AS avg_ticket_month,
          -- Barberos activos
          (SELECT COUNT(*) FROM shops b WHERE b.parent_shop_id=s.id AND b.is_barber=TRUE) AS barber_count,
