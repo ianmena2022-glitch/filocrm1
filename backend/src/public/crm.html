@@ -4173,7 +4173,7 @@ async function register() {
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
+    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
     const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
     document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
@@ -4246,7 +4246,7 @@ async function verifyEmail() {
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     document.getElementById('auth-screen').style.display = 'none';
     document.querySelector('.auth-tabs').style.display = '';
-    document.getElementById('app').style.display = 'block';
+    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
     const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
     document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
@@ -4572,7 +4572,7 @@ async function startApp() {
     }
   }
 
-  document.getElementById('app').style.display = 'block';
+  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
   checkPaywall();
   checkWppStatus(); // banner de alerta si el bot de WPP tiene problemas
 
@@ -4644,7 +4644,7 @@ function launchEnterprisePanel() {
 }
 
 function showEnterpriseSetup() {
-  document.getElementById('app').style.display = 'block';
+  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
   // Pre-fill fields with current shop data
   const nameInput = document.getElementById('ent-setup-name');
   const cityInput = document.getElementById('ent-setup-city');
@@ -8549,7 +8549,7 @@ async function saveEditStoreItem() {
 
 <!-- ── FILO COPILOT ──────────────────────────────────────── -->
 <style>
-#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif}
+#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif;display:none}
 
 #copilot-pill{display:flex;align-items:center;gap:10px;background:#0a1828;border:1px solid rgba(255,209,0,.3);border-radius:40px;padding:10px 18px 10px 12px;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5);transition:all .2s;user-select:none}
 #copilot-pill:hover{border-color:rgba(255,209,0,.6);transform:translateY(-1px)}
