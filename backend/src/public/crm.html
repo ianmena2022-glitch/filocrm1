@@ -11258,19 +11258,19 @@ async function bcmSave(id) {
     var cw = 280, ch = card.offsetHeight || 200;
     var vw = window.innerWidth, vh = window.innerHeight;
     var gap = 16;
-    var isMobile = vw < 600;
+    var isMobile = vw <= 768;
     var t, l;
 
-    // En mobile: card siempre centrada horizontalmente
-    // Si target está en la mitad inferior → card en el tercio superior
-    // Si target está en la mitad superior → card en el tercio inferior
-    if (isMobile && rect) {
-      var targetMidY = rect.top + rect.height / 2;
+    if (isMobile) {
+      // Mobile: card siempre centrada, en zona opuesta al target
       l = Math.round((vw - cw) / 2);
-      if (targetMidY > vh * 0.45) {
-        t = Math.round(vh * 0.08); // 8% desde arriba
+      if (!rect || side === 'center') {
+        t = Math.round((vh - ch) / 2);
       } else {
-        t = Math.round(vh * 0.55); // 55% desde arriba
+        var targetMidY = rect.top + rect.height / 2;
+        t = targetMidY > vh / 2
+          ? Math.round(vh * 0.06)   // target abajo → card arriba
+          : Math.round(vh * 0.55);  // target arriba → card abajo
       }
     } else if (side === 'center' || !rect) {
       t = Math.round((vh - ch) / 2);
@@ -11288,8 +11288,8 @@ async function bcmSave(id) {
       t = rect.top - ch - gap;
       l = Math.round(rect.left + rect.width / 2 - cw / 2);
     }
-    t = Math.max(12, Math.min(t, vh - ch - 12));
-    l = Math.max(12, Math.min(l, vw - cw - 12));
+    t = Math.max(8, Math.min(t, vh - ch - 8));
+    l = Math.max(8, Math.min(l, vw - cw - 8));
     card.style.top  = t + 'px';
     card.style.left = l + 'px';
   }
