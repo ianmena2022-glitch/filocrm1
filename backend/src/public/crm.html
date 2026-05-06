@@ -604,14 +604,14 @@ body {
   }
   #sec-enterprise .topbar-right {
     width: 100%;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 6px;
   }
   #sec-enterprise .topbar-right button {
-    flex: 1;
-    min-width: 0;
+    width: 100%;
     font-size: 12px;
-    padding: 7px 8px;
+    padding: 9px 8px;
     white-space: nowrap;
   }
   /* Ocultar avatar duplicado en mobile */
