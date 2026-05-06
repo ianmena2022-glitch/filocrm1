@@ -3390,16 +3390,21 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
-        <!-- Métodos de pago -->
-        <div class="settings-section" id="payment-methods-section">
-          <div class="settings-section-title">💳 Métodos de pago</div>
-          <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">
-            Personalizá los métodos de pago disponibles al cobrar un turno.
+        <!-- Métodos de pago — acordeón -->
+        <div class="settings-section" id="payment-methods-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-payment-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">💳 Métodos de pago</div>
+            <span class="tpl-arrow" id="arrow-cfg-payment-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
           </div>
-          <div id="payment-methods-list" style="margin-bottom:12px"></div>
-          <button onclick="openAddPaymentMethod()" style="width:100%;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:10px;padding:10px;color:rgba(255,255,255,.6);cursor:pointer;font-size:13px;font-family:'Barlow',sans-serif">
-            + Agregar método
-          </button>
+          <div id="cfg-payment-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">
+              Personalizá los métodos de pago disponibles al cobrar un turno.
+            </div>
+            <div id="payment-methods-list" style="margin-bottom:12px"></div>
+            <button onclick="openAddPaymentMethod()" style="width:100%;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:10px;padding:10px;color:rgba(255,255,255,.6);cursor:pointer;font-size:13px;font-family:'Barlow',sans-serif">
+              + Agregar método
+            </button>
+          </div>
         </div>
 
         </div><!-- /cfg-tab-negocio -->
