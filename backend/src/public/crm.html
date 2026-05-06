@@ -8717,7 +8717,7 @@ async function saveEditStoreItem() {
     </div>
   </div>
   <div id="copilot-pill" onclick="toggleCopilot()">
-    <span class="cp-collapse-arrow">&#8250;</span>
+    <span class="cp-collapse-arrow" onclick="event.stopPropagation();document.getElementById('copilot-pill').classList.remove('expanded')">&#8249;</span>
     <div class="cp-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
     <div><div class="cp-pill-label">FILO Copilot</div><div class="cp-pill-sub">En que te ayudo?</div></div>
     <div class="cp-dot"></div>
