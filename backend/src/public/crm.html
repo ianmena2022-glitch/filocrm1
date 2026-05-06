@@ -11261,18 +11261,16 @@ async function bcmSave(id) {
     var isMobile = vw < 600;
     var t, l;
 
-    // En mobile con navbar abajo: si el target está en la mitad inferior
-    // de la pantalla, mostrar la card arriba del target en lugar de a la derecha
-    if (isMobile && rect && (side === 'right' || side === 'left')) {
+    // En mobile: card siempre centrada horizontalmente
+    // Si target está en la mitad inferior → card en el tercio superior
+    // Si target está en la mitad superior → card en el tercio inferior
+    if (isMobile && rect) {
       var targetMidY = rect.top + rect.height / 2;
-      if (targetMidY > vh * 0.5) {
-        // Target en zona inferior → card arriba del target, centrada
-        t = Math.max(12, rect.top - ch - gap);
-        l = Math.round((vw - cw) / 2);
+      l = Math.round((vw - cw) / 2);
+      if (targetMidY > vh * 0.45) {
+        t = Math.round(vh * 0.08); // 8% desde arriba
       } else {
-        // Target en zona superior → card debajo, centrada
-        t = Math.min(rect.bottom + gap, vh - ch - 12);
-        l = Math.round((vw - cw) / 2);
+        t = Math.round(vh * 0.55); // 55% desde arriba
       }
     } else if (side === 'center' || !rect) {
       t = Math.round((vh - ch) / 2);
