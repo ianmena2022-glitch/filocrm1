@@ -4230,7 +4230,7 @@ async function register() {
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
+    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = 'block';
     const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
     document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
@@ -4303,7 +4303,7 @@ async function verifyEmail() {
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     document.getElementById('auth-screen').style.display = 'none';
     document.querySelector('.auth-tabs').style.display = '';
-    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
+    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = 'block';
     const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
     document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
@@ -4629,7 +4629,7 @@ async function startApp() {
     }
   }
 
-  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
+  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = 'block';
   checkPaywall();
   checkWppStatus(); // banner de alerta si el bot de WPP tiene problemas
 
@@ -4701,7 +4701,7 @@ function launchEnterprisePanel() {
 }
 
 function showEnterpriseSetup() {
-  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = '';
+  document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = 'block';
   // Pre-fill fields with current shop data
   const nameInput = document.getElementById('ent-setup-name');
   const cityInput = document.getElementById('ent-setup-city');
