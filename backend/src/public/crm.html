@@ -4252,6 +4252,11 @@ async function verifyEmail() {
     document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
     loadDashboard(); loadServices(); loadClients(); loadStoreItems(); initStaffUI(); startPolling();
     setTimeout(() => openQRModal(currentShop?.filo_plan || 'staff'), 800);
+    // Tour para cuentas nuevas (después de que cierre el QR modal)
+    sessionStorage.setItem('filo_just_registered', '1');
+    if (!localStorage.getItem('filo_tour_done') && typeof window.startTour === 'function') {
+      setTimeout(window.startTour, 3500);
+    }
   } catch (e) {
     showAuthError(e.message);
   } finally {
@@ -11359,7 +11364,8 @@ async function bcmSave(id) {
         var authScreen = document.getElementById('auth-screen');
         if (authScreen && authScreen.style.display === 'none') {
           _obs.disconnect();
-          if (!localStorage.getItem('filo_tour_done')) {
+          // Solo para login normal — el registro nuevo dispara el tour desde verifyEmail()
+          if (!localStorage.getItem('filo_tour_done') && !sessionStorage.getItem('filo_just_registered')) {
             setTimeout(window.startTour, 900);
           }
         }
