@@ -11273,10 +11273,10 @@ async function bcmSave(id) {
         card.style.left = l + 'px';
         return;
       }
-      if (targetMidY < vh * 0.35) {
-        // Target en zona superior (top 35%) → card abajo
+      if (targetMidY < vh * 0.55) {
+        // Target en zona superior (top 55%) → card abajo
         l = Math.round((vw - cw) / 2);
-        t = Math.round(vh * 0.55);
+        t = Math.round(vh * 0.62);
         t = Math.max(8, Math.min(t, vh - ch - 8));
         l = Math.max(8, Math.min(l, vw - cw - 8));
         card.style.top  = t + 'px';
