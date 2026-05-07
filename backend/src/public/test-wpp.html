@@ -290,27 +290,17 @@ const msgInput   = document.getElementById('msg-input');
 const shopSelect = document.getElementById('shop-select');
 
 // ── Cargar shops ──────────────────────────────────────────────────────────
-async function loadShops() {
+function loadShops() {
   try {
-    const res = await fetch('/api/admin/shops', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const shops = await res.json();
-    shopSelect.innerHTML = '<option value="">— Elegir shop —</option>';
-    (shops.rows || shops).forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = `[${s.id}] ${s.name}`;
-      shopSelect.appendChild(opt);
-    });
-
-    // Pre-seleccionar si hay currentShop en localStorage
-    try {
-      const cs = JSON.parse(localStorage.getItem('filo_shop') || '{}');
-      if (cs.id) { shopSelect.value = cs.id; onShopChange(); }
-    } catch(e) {}
+    const cs = JSON.parse(localStorage.getItem('filo_shop') || 'null');
+    if (cs?.id) {
+      shopSelect.innerHTML = `<option value="${cs.id}">[${cs.id}] ${cs.name}</option>`;
+      onShopChange();
+    } else {
+      shopSelect.innerHTML = '<option value="">— No hay sesión iniciada —</option>';
+    }
   } catch(e) {
-    shopSelect.innerHTML = '<option value="">Error cargando shops</option>';
+    shopSelect.innerHTML = '<option value="">Error leyendo sesión</option>';
   }
 }
 
