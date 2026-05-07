@@ -8930,7 +8930,9 @@ async function loadSubscriptionStatus() {
       if (daysLeft <= 15) {
         const actions = document.getElementById('subscription-actions');
         if (actions) {
+          document.getElementById('btn-renew-plan')?.remove();
           const renewBtn = document.createElement('button');
+          renewBtn.id = 'btn-renew-plan';
           renewBtn.textContent = '🔄 Renovar plan';
           renewBtn.style.cssText = 'background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:#00E676;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer';
           renewBtn.onclick = () => openQRModal(data.filo_plan || 'staff');
