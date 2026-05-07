@@ -272,7 +272,11 @@ router.post('/webhook-qr', async (req, res) => {
           return res.sendStatus(200);
         }
 
-        const accessUntil = new Date();
+        const shopRow = await pool.query('SELECT trial_ends_at FROM shops WHERE id=$1', [shopId]);
+        const currentExpiry = shopRow.rows[0]?.trial_ends_at;
+        const accessUntil = (currentExpiry && new Date(currentExpiry) > new Date())
+          ? new Date(currentExpiry)
+          : new Date();
         accessUntil.setDate(accessUntil.getDate() + 30);
 
         const isEnterprise = plan === 'enterprise';

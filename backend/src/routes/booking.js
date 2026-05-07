@@ -275,7 +275,7 @@ router.get('/:slug/available', async (req, res) => {
     for (const t of validTimes) {
       if (date === todayAR) {
         const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
-        if (t <= nowMinsAR + 30) continue;
+        if (t <= nowMinsAR) continue;
       }
 
       let available;

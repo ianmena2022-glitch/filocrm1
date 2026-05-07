@@ -88,6 +88,23 @@ app.use('/api/payments',              require('./routes/payments'));
 const recurringRouter = require('./routes/recurring');
 app.use('/api/recurring', recurringRouter);
 
+// Test WhatsApp bot
+app.get('/test', (req, res) => {
+  res.sendFile(path.join(publicDir, 'test-wpp.html'));
+});
+app.post('/api/test-wpp/chat', require('./middleware/auth'), async (req, res) => {
+  try {
+    const { shop_id, phone, text } = req.body;
+    if (!shop_id || !phone || !text) return res.status(400).json({ error: 'shop_id, phone y text son requeridos' });
+    const { getAIResponse } = require('./services/ai');
+    const reply = await getAIResponse(parseInt(shop_id), phone, text);
+    res.json({ reply: reply || null });
+  } catch(e) {
+    console.error('[test-wpp]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Panel admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(publicDir, 'admin.html'));

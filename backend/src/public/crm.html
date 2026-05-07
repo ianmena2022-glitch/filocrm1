@@ -4638,22 +4638,39 @@ async function startApp() {
   document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
   document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
 
-  // Trial badge en todos los topbars
+  // Trial / renovación badge en todos los topbars
   document.querySelectorAll('.trial-badge').forEach(el => el.remove());
-  if (currentShop?.subscription_status === 'trial' && !currentShop.is_test && !currentShop.is_barber
-      && !currentShop.is_enterprise_owner && !currentShop.is_branch) {
-    const trialEnds = currentShop.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
-    const daysLeft = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / 86400000)) : 0;
-    const label = daysLeft <= 1 ? 'Trial: último día' : `Trial: ${daysLeft}d`;
-    const urgentClass = daysLeft <= 3 ? ' urgent' : '';
-    const badgeHTML = `<div class="trial-badge${urgentClass}" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Activá tu plan">
-      <span class="trial-dot"></span>
-      <span class="trial-label">FREE TRIAL</span>
-      <span>${label}</span>
-    </div>`;
-    document.querySelectorAll('.topbar-user-group').forEach(group => {
-      group.insertAdjacentHTML('afterbegin', badgeHTML);
-    });
+  const _isPayingShop = !currentShop?.is_test && !currentShop?.is_barber
+    && !currentShop?.is_enterprise_owner && !currentShop?.is_branch;
+  if (_isPayingShop) {
+    const _planEnd = currentShop?.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
+    const _daysLeft = _planEnd ? Math.max(0, Math.ceil((_planEnd - new Date()) / 86400000)) : 0;
+    const _status = currentShop?.subscription_status;
+    let _badgeHTML = null;
+
+    if (_status === 'trial') {
+      const label = _daysLeft <= 1 ? 'Trial: último día' : `Trial: ${_daysLeft}d`;
+      const urgentClass = _daysLeft <= 3 ? ' urgent' : '';
+      _badgeHTML = `<div class="trial-badge${urgentClass}" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Activá tu plan">
+        <span class="trial-dot"></span>
+        <span class="trial-label">FREE TRIAL</span>
+        <span>${label}</span>
+      </div>`;
+    } else if (_status === 'active' && _daysLeft <= 7) {
+      const label = _daysLeft <= 1 ? 'Plan: último día' : `Plan vence en ${_daysLeft}d`;
+      const urgentClass = _daysLeft <= 3 ? ' urgent' : '';
+      _badgeHTML = `<div class="trial-badge${urgentClass}" onclick="openQRModal('${currentShop.filo_plan||'staff'}')" title="Renovar plan">
+        <span class="trial-dot"></span>
+        <span class="trial-label">RENOVAR</span>
+        <span>${label}</span>
+      </div>`;
+    }
+
+    if (_badgeHTML) {
+      document.querySelectorAll('.topbar-user-group').forEach(group => {
+        group.insertAdjacentHTML('afterbegin', _badgeHTML);
+      });
+    }
   }
 
   // ── Enterprise owner → panel de gestión (sin CRM normal) ─────────────────
@@ -8903,6 +8920,16 @@ async function loadSubscriptionStatus() {
       const vto = data.trial_ends_at ? new Date(data.trial_ends_at).toLocaleDateString('es-AR',{day:'numeric',month:'long'}) : '—';
       el.innerHTML = '<span style="color:var(--green)">● Activa</span> · Plan ' + plan + ' · Vence el <strong style="color:#fff">' + vto + '</strong>';
       if (btn) { btn.textContent = 'Cancelar'; btn.style.display = 'inline-block'; }
+      if (daysLeft <= 15) {
+        const actions = document.getElementById('subscription-actions');
+        if (actions) {
+          const renewBtn = document.createElement('button');
+          renewBtn.textContent = '🔄 Renovar plan';
+          renewBtn.style.cssText = 'background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:#00E676;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer';
+          renewBtn.onclick = () => openQRModal(data.filo_plan || 'staff');
+          actions.prepend(renewBtn);
+        }
+      }
     } else if (status === 'expired' || status === 'cancelled') {
       el.innerHTML = '<span style="color:var(--red)">● Inactiva</span> · Pagá con QR para recuperar el acceso';
       if (btn) { btn.textContent = 'Renovar con QR'; btn.style.display = 'inline-block'; btn.onclick = () => openQRModal(data.filo_plan || 'staff'); }
