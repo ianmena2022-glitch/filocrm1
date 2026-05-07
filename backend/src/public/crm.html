@@ -4643,9 +4643,16 @@ async function startApp() {
   const _isPayingShop = !currentShop?.is_test && !currentShop?.is_barber
     && !currentShop?.is_enterprise_owner && !currentShop?.is_branch;
   if (_isPayingShop) {
-    const _planEnd = currentShop?.trial_ends_at ? new Date(currentShop.trial_ends_at) : null;
-    const _daysLeft = _planEnd ? Math.max(0, Math.ceil((_planEnd - new Date()) / 86400000)) : 0;
     const _status = currentShop?.subscription_status;
+    // trial_days_left viene del token/status; si no, calcular desde trial_ends_at
+    let _daysLeft = currentShop?.trial_days_left ?? null;
+    if (_daysLeft === null && currentShop?.trial_ends_at) {
+      // trial_ends_at es YYYY-MM-DD (sin hora) → parsear como fecha local para evitar off-by-one UTC
+      const [y, m, d] = currentShop.trial_ends_at.split('T')[0].split('-').map(Number);
+      const planEnd = new Date(y, m - 1, d, 23, 59, 59);
+      _daysLeft = Math.max(0, Math.ceil((planEnd - new Date()) / 86400000));
+    }
+    _daysLeft = _daysLeft ?? 0;
     let _badgeHTML = null;
 
     if (_status === 'trial') {
