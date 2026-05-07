@@ -344,9 +344,8 @@ ALTER TABLE memberships ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
 -- Rescate automático
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_rescue_sent TIMESTAMPTZ DEFAULT NULL;
 
--- CBU/CVU para verificación de comprobantes (reemplaza alias)
+-- CBU/CVU para verificación de comprobantes
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_cbu VARCHAR(100) DEFAULT NULL;
-UPDATE shops SET sena_cbu = sena_alias WHERE sena_cbu IS NULL AND sena_alias IS NOT NULL;
 
 -- Horarios individuales por barbero
 -- Estructura: {"mon":{"active":true,"from":"09:00","to":"18:00"},"tue":{...},...}
@@ -398,4 +397,46 @@ ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS payment_method VARCHAR(100) DEFAULT NULL;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS tip NUMERIC(10,2) DEFAULT 0;
 ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL;
+
+-- ── SEÑAS ─────────────────────────────────────────────────────────────────────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_pct INT DEFAULT 30;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_alias VARCHAR(100) DEFAULT NULL;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS sena_payment_method VARCHAR(100) DEFAULT 'transfer';
+
+-- ── ENTERPRISE / SUCURSALES ───────────────────────────────────────────────────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_enterprise_owner BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS enterprise_shared_wpp BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS is_branch BOOLEAN DEFAULT FALSE;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS parent_enterprise_id INT REFERENCES shops(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_shops_parent_enterprise ON shops(parent_enterprise_id) WHERE parent_enterprise_id IS NOT NULL;
+
+-- ── CONFIGURACIÓN ADICIONAL ───────────────────────────────────────────────────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS closed_days TEXT DEFAULT NULL;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS referral_code VARCHAR(20) DEFAULT NULL;
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Argentina/Buenos_Aires';
+CREATE INDEX IF NOT EXISTS idx_shops_referral_code ON shops(referral_code) WHERE referral_code IS NOT NULL;
+
+-- ── AFILIADOS ─────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS affiliates (
+  id             SERIAL PRIMARY KEY,
+  name           VARCHAR(255) NOT NULL,
+  email          VARCHAR(255),
+  code           VARCHAR(50) UNIQUE NOT NULL,
+  commission_pct INT DEFAULT 20,
+  password       VARCHAR(255) DEFAULT NULL,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS affiliate_commissions (
+  id           SERIAL PRIMARY KEY,
+  affiliate_id INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+  shop_id      INT REFERENCES shops(id) ON DELETE SET NULL,
+  amount       NUMERIC(10,2) NOT NULL,
+  status       VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','paid')),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS affiliate_id INT REFERENCES affiliates(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_shops_affiliate ON shops(affiliate_id);
 
