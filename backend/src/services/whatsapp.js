@@ -516,7 +516,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   sock.ev.on('creds.update', async () => {
     await saveCreds();
-    await saveSessionToDB(shopId);
+    // Solo guardar en DB si ya está autenticado (evita guardar sesión incompleta del QR)
+    if (statuses[shopId] === 'connected') {
+      await saveSessionToDB(shopId);
+    }
   });
 
   sock.ev.on('connection.update', async (update) => {
@@ -550,6 +553,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       // Reset backoff al conectarse exitosamente
       delete qrAttempts[shopId];
       delete qrCooldownUntil[shopId];
+      delete statuses[`${shopId}_reconnect`]; // reset contador de reconexión
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
       await saveSessionToDB(shopId);
       if (onConnected) onConnected();
@@ -557,24 +561,29 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
       console.log(`Baileys desconectado para shop ${shopId}, código: ${code}`);
       statuses[shopId] = 'disconnected';
 
-      if (code === DisconnectReason.loggedOut) {
+      // 401 = sesión inválida/revocada por WhatsApp → limpiar sesión y pedir nuevo QR
+      if (code === DisconnectReason.loggedOut || code === 401) {
+        console.log(`[WPP] Shop ${shopId}: sesión inválida (${code}), limpiando sesión guardada`);
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
+        delete statuses[`${shopId}_reconnect`];
         if (onDisconnected) onDisconnected();
-      } else if (shouldReconnect) {
+      } else {
+        // Otros errores: reconectar con backoff exponencial
         const attempt = (statuses[`${shopId}_reconnect`] || 0) + 1;
         statuses[`${shopId}_reconnect`] = attempt;
         if (attempt <= 10) {
-          console.log(`[WPP] Shop ${shopId}: reconectando en 5s (intento ${attempt}/10)...`);
-          setTimeout(() => connect(shopId, null, null, null), 5000);
+          const delay = Math.min(5000 * attempt, 60000); // 5s, 10s, ... máx 60s
+          console.log(`[WPP] Shop ${shopId}: reconectando en ${delay/1000}s (intento ${attempt}/10)...`);
+          setTimeout(() => connect(shopId, null, null, null), delay);
         } else {
           console.log(`[WPP] Shop ${shopId}: demasiados intentos de reconexión, abortando`);
           await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);
           delete sockets[shopId];
+          delete statuses[`${shopId}_reconnect`];
         }
       }
     }
