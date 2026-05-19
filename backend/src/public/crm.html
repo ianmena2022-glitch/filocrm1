@@ -4306,14 +4306,9 @@ async function verifyEmail() {
     currentShop = data.shop;
     localStorage.setItem('filo_token', token);
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
-    document.getElementById('auth-screen').style.display = 'none';
     document.querySelector('.auth-tabs').style.display = '';
-    document.getElementById('app').style.display = 'block'; document.getElementById('copilot-widget').style.display = 'block';
-    const initials = (currentShop?.name || 'F').charAt(0).toUpperCase();
-    document.querySelectorAll('.tb-avatar').forEach(el => el.textContent = initials);
-    document.querySelectorAll('.tb-uname').forEach(el => el.textContent = currentShop?.name || '');
-    loadDashboard(); loadServices(); loadClients(); loadStoreItems(); initStaffUI(); startPolling();
     sessionStorage.setItem('filo_just_registered', '1');
+    await startApp();
     setTimeout(() => openQRModal(currentShop?.filo_plan || 'staff'), 800);
   } catch (e) {
     showAuthError(e.message);
