@@ -351,12 +351,13 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Barbería</th>
               <th>Plan</th>
               <th>Monto mensual</th>
+              <th>Último pago</th>
               <th>Próxima liquidación</th>
               <th>Días restantes</th>
             </tr>
           </thead>
           <tbody id="billing-tbody">
-            <tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>
+            <tr class="loading-row"><td colspan="6"><div class="spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1099,7 +1100,7 @@ function renderBillingTable(accounts) {
   const tbody = document.getElementById('billing-tbody');
 
   if (!accounts.length) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Sin cuentas activas para mostrar</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Sin cuentas activas para mostrar</div></td></tr>`;
     return;
   }
 
@@ -1117,11 +1118,15 @@ function renderBillingTable(accounts) {
     const daysLabel = a.days !== null
       ? `<span class="billing-days ${daysClass}">${a.days === 0 ? 'Hoy' : `en ${a.days} día${a.days !== 1 ? 's' : ''}`}</span>`
       : `<span class="billing-days">—</span>`;
+    const lastPaymentLabel = a.last_payment_at
+      ? `<span class="billing-date">${fmtDate(a.last_payment_at)}</span>`
+      : `<span style="color:var(--g);font-size:12px">Sin pagos</span>`;
 
     return `<tr>
       <td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:11px;color:var(--g)">${esc(a.email)}</div></td>
       <td data-label="Plan">${planBadge}</td>
       <td data-label="Monto"><span class="billing-amount">$${price.toLocaleString('es-AR')}</span></td>
+      <td data-label="Último pago">${lastPaymentLabel}</td>
       <td data-label="Próx. liquidación"><span class="billing-date">${a.nextDate ? fmtDate(a.nextDate) : '—'}</span></td>
       <td data-label="Días">${daysLabel}</td>
     </tr>`;

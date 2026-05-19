@@ -367,6 +367,9 @@ ALTER TABLE vendors ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT NULL;
 
 -- Fecha del primer pago real de cada cuenta (para cálculo de comisión one-time)
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS first_payment_at TIMESTAMPTZ DEFAULT NULL;
+-- Fecha del último pago recibido (se actualiza en cada webhook de MP aprobado)
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ DEFAULT NULL;
+UPDATE shops SET last_payment_at = first_payment_at WHERE last_payment_at IS NULL AND first_payment_at IS NOT NULL;
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS vendor_id INT REFERENCES vendors(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_shops_vendor ON shops(vendor_id);
 

@@ -285,6 +285,7 @@ router.post('/webhook-qr', async (req, res) => {
            SET subscription_status='active', mp_shop_status='authorized',
                filo_plan=$1, trial_ends_at=$2, expired_at=NULL,
                first_payment_at=COALESCE(first_payment_at, NOW()),
+               last_payment_at=NOW(),
                is_enterprise_owner=$4,
                is_branch=CASE WHEN $4 THEN FALSE ELSE is_branch END,
                parent_enterprise_id=CASE WHEN $4 THEN NULL ELSE parent_enterprise_id END

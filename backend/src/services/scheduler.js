@@ -127,6 +127,29 @@ async function runTrialExpiration() {
   }
 }
 
+// ── Auto-expiración de cuentas activas con cuota vencida ──────────────────────
+// Pasa a 'expired' las cuentas 'active' cuyo trial_ends_at + 3 días de gracia
+// ya pasaron sin renovación. Esto cubre clientes que pagaron alguna vez pero
+// no renovaron en el ciclo siguiente.
+async function runActiveExpiration() {
+  try {
+    const GRACE = 3;
+    const { rowCount } = await pool.query(`
+      UPDATE shops
+         SET subscription_status = 'expired',
+             expired_at = COALESCE(expired_at, NOW())
+       WHERE subscription_status = 'active'
+         AND (is_test IS NULL OR is_test = FALSE)
+         AND plan IS DISTINCT FROM 'test'
+         AND trial_ends_at IS NOT NULL
+         AND trial_ends_at < NOW() - INTERVAL '${GRACE} days'
+    `);
+    if (rowCount > 0) console.log(`[ACTIVE-EXP] ${rowCount} cuenta(s) 'active' pasaron a 'expired' por falta de renovación`);
+  } catch (e) {
+    console.error('[ACTIVE-EXP] Error auto-expiración:', e.message);
+  }
+}
+
 // ── Auto-cancelación de cuentas expiradas ─────────────────────────────────────
 // Después de CANCEL_AFTER_DAYS días en status 'expired', se desconecta WhatsApp
 // y se marca la cuenta como 'cancelled' para no consumir recursos del server.
@@ -197,6 +220,10 @@ function startScheduler() {
   // Auto-expiración de trials + limpieza: una vez al día
   setTimeout(runTrialExpiration, 60_000);
   setInterval(runTrialExpiration, 24 * 60 * 60 * 1000);
+
+  // Auto-expiración de cuentas active sin renovar (3 días gracia)
+  setTimeout(runActiveExpiration, 75_000);
+  setInterval(runActiveExpiration, 24 * 60 * 60 * 1000);
 
   setTimeout(runExpiredCleanup, 90_000); // 1.5 min después (corre tras la expiración)
   setInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
