@@ -1134,9 +1134,10 @@ function renderBillingTable(accounts) {
 }
 
 function getNextBillingDate(account) {
-  // Si tiene fecha de suscripción MP, usarla
-  if (account.mp_next_payment) return account.mp_next_payment;
-  // Sino calcular: created_at + N meses completos hacia adelante
+  // trial_ends_at = fecha real de vencimiento de acceso (se actualiza con cada pago).
+  // Esto refleja cuándo realmente vence el ciclo pagado.
+  if (account.trial_ends_at) return account.trial_ends_at;
+  // Fallback (sin trial_ends_at): created_at + N meses
   if (!account.created_at) return null;
   const created = new Date(account.created_at);
   const now = new Date();
