@@ -151,9 +151,10 @@ router.get('/:slug/available', async (req, res) => {
 
     // Generar slots según horario configurado
     const shopFull = await pool.query(
-      'SELECT schedule, closed_days, allow_barber_choice, is_branch, parent_enterprise_id FROM shops WHERE id=$1',
+      'SELECT schedule, closed_days, allow_barber_choice, is_branch, parent_enterprise_id, slot_interval_minutes FROM shops WHERE id=$1',
       [shopId]
     );
+    const slotInterval = parseInt(shopFull.rows[0]?.slot_interval_minutes) || 30;
     const scheduleRaw = shopFull.rows[0]?.schedule;
     const schedule = scheduleRaw ? (() => { try { return JSON.parse(scheduleRaw); } catch { return null; } })() : null;
 
@@ -267,7 +268,7 @@ router.get('/:slug/available', async (req, res) => {
     // Construir lista de slots válidos a partir de todas las franjas horarias
     const validTimes = [];
     for (const range of workRanges) {
-      for (let t = range.from; t + duration <= range.to; t += 30) {
+      for (let t = range.from; t + duration <= range.to; t += slotInterval) {
         validTimes.push(t);
       }
     }

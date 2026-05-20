@@ -1,0 +1,1 @@
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS slot_interval_minutes INT NOT NULL DEFAULT 30;

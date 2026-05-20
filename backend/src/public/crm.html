@@ -3175,6 +3175,26 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        <!-- Intervalo de turnos -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-slot-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">⏱️ Intervalo de turnos</div>
+            <span class="tpl-arrow" id="arrow-cfg-slot-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-slot-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.5">
+              Cada cuánto se ofrecen horarios disponibles en la agenda online. Por ejemplo, con 30 minutos: 09:00, 09:30, 10:00, etc.
+            </div>
+            <div class="form-field" style="margin-bottom:0">
+              <label>Intervalo entre turnos (minutos)</label>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <input type="number" id="cfg-slot-interval" min="5" max="200" step="1" placeholder="30" style="max-width:140px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--w);font-size:14px;font-family:'Barlow',sans-serif;outline:none">
+                <span style="font-size:12px;color:rgba(255,255,255,.45)">min: 5 · máx: 200</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Horarios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-schedule-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -6950,6 +6970,8 @@ async function loadSettings() {
     document.getElementById('cfg-address').value = settings.address || '';
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
     document.getElementById('cfg-timezone').value = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Argentina/Buenos_Aires';
+    const slotEl = document.getElementById('cfg-slot-interval');
+    if (slotEl) slotEl.value = String(settings.slot_interval_minutes || 30);
 
     // Home service toggle
     const homeService = settings.home_service || false;
@@ -7143,7 +7165,8 @@ async function saveSettings() {
     sena_enabled:          document.getElementById('toggle-sena')?.checked || false,
     sena_pct:              parseInt(document.getElementById('cfg-sena-pct')?.value) || 30,
     sena_alias:            document.getElementById('cfg-sena-alias')?.value.trim() || null,
-    sena_payment_method:   document.getElementById('cfg-sena-payment-method')?.value || 'transfer'
+    sena_payment_method:   document.getElementById('cfg-sena-payment-method')?.value || 'transfer',
+    slot_interval_minutes: Math.min(200, Math.max(5, parseInt(document.getElementById('cfg-slot-interval')?.value) || 30))
   };
   try {
     const res = await api('PUT', '/settings', body);
