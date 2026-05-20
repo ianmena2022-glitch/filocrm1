@@ -69,6 +69,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
       FROM shops s
       LEFT JOIN shops b  ON b.parent_shop_id       = s.id AND b.is_barber = TRUE
       LEFT JOIN shops br ON br.parent_enterprise_id = s.id AND br.is_branch = TRUE
+      WHERE s.is_system IS DISTINCT FROM TRUE
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `);
@@ -99,6 +100,126 @@ router.get('/peer-referrals', adminAuth, async (req, res) => {
       LIMIT 100
     `);
     res.json({ referrers: result.rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ADMIN WHATSAPP SENDER (shop sistema oculto que envía mensajes admin) ─────
+
+// Devuelve el shop sistema (lo crea si no existe). Es invisible para el admin
+// y solo se usa como remitente de WhatsApp para mensajes automáticos.
+async function getOrCreateAdminSenderShop() {
+  const { rows } = await pool.query(
+    `SELECT id, name, phone, wpp_connected, (wpp_session IS NOT NULL) AS had_session
+     FROM shops WHERE is_system = TRUE LIMIT 1`
+  );
+  if (rows.length) return rows[0];
+
+  const hash = await bcrypt.hash(require('crypto').randomBytes(32).toString('hex'), 12);
+  const ins = await pool.query(
+    `INSERT INTO shops (name, email, password, plan, filo_plan, subscription_status,
+       trial_ends_at, is_system, is_test, email_verified)
+     VALUES ('FILO Admin Sender', '_filo_system_sender_@filo.internal', $1,
+       'test', 'starter', 'active', '2099-12-31', TRUE, TRUE, TRUE)
+     RETURNING id, name, phone, wpp_connected, (wpp_session IS NOT NULL) AS had_session`,
+    [hash]
+  );
+  return ins.rows[0];
+}
+
+// GET /api/admin/wpp/status — estado actual del sender
+router.get('/wpp/status', adminAuth, async (req, res) => {
+  try {
+    const shop = await getOrCreateAdminSenderShop();
+    res.json({ shop_id: shop.id, connected: !!shop.wpp_connected, had_session: !!shop.had_session, phone: shop.phone || null });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/wpp/connect — iniciar sesión, devuelve QR
+router.post('/wpp/connect', adminAuth, async (req, res) => {
+  try {
+    const shop = await getOrCreateAdminSenderShop();
+    const wpp  = require('../services/whatsapp');
+    const data = await wpp.startSession(shop.id);
+
+    if (data.status === 'CONNECTED') {
+      await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shop.id]);
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ('welcome_wpp_shop_id', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [String(shop.id)]
+      );
+      return res.json({ ok: true, connected: true, shop_id: shop.id });
+    }
+
+    if (data.qrcode) {
+      let qrImage = data.qrcode;
+      if (!qrImage.startsWith('data:image')) {
+        try {
+          const QRCode = require('qrcode');
+          qrImage = await QRCode.toDataURL(data.qrcode, { width: 256, margin: 2, color: { dark:'#000', light:'#fff' } });
+        } catch(_) {}
+      }
+      // Persistir el shop_id en settings para que verify-email lo use
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ('welcome_wpp_shop_id', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [String(shop.id)]
+      );
+      return res.json({ ok: true, qr: qrImage, shop_id: shop.id });
+    }
+
+    res.json({ ok: false, error: 'No se pudo obtener el QR' });
+  } catch(e) {
+    console.error('Admin WPP connect:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/admin/wpp/reset — desconectar y limpiar sesión
+router.post('/wpp/reset', adminAuth, async (req, res) => {
+  try {
+    const shop = await getOrCreateAdminSenderShop();
+    const wpp  = require('../services/whatsapp');
+    await wpp.clearSession(shop.id);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── APP SETTINGS (configuración global) ───────────────────────────────────────
+
+// GET /api/admin/settings — leer todas las settings globales
+router.get('/settings', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT key, value FROM app_settings');
+    const settings = {};
+    for (const row of result.rows) settings[row.key] = row.value;
+    res.json({ settings });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/settings — actualizar settings (upsert por key)
+router.put('/settings', adminAuth, async (req, res) => {
+  const { settings } = req.body;
+  if (!settings || typeof settings !== 'object')
+    return res.status(400).json({ error: 'settings es requerido' });
+
+  try {
+    for (const [key, value] of Object.entries(settings)) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [key, value == null ? '' : String(value)]
+      );
+    }
+    res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

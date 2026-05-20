@@ -403,6 +403,34 @@ router.post('/verify-email', async (req, res) => {
     await pool.query('DELETE FROM pending_registrations WHERE email=$1', [emailNorm]);
 
     console.log(`[VERIFY] Cuenta creada y verificada: ${emailNorm}`);
+
+    // Enviar mensaje de bienvenida por WhatsApp desde el shop admin (no bloquea si falla)
+    try {
+      const settingsQ = await pool.query(
+        `SELECT key, value FROM app_settings
+         WHERE key IN ('welcome_wpp_enabled','welcome_wpp_shop_id','welcome_wpp_message')`
+      );
+      const s = {};
+      for (const r of settingsQ.rows) s[r.key] = r.value;
+
+      const enabled = s.welcome_wpp_enabled === 'true';
+      const adminShopId = parseInt(s.welcome_wpp_shop_id);
+      const template = s.welcome_wpp_message;
+
+      if (enabled && adminShopId && shop.phone && template) {
+        const link = (process.env.APP_URL || 'https://filocrm.com.ar') + '/app';
+        const msg = template
+          .replace(/\{nombre\}/g, shop.name || '')
+          .replace(/\{email\}/g, shop.email || '')
+          .replace(/\{link\}/g, link);
+        const wpp = require('../services/whatsapp');
+        await wpp.sendText(adminShopId, shop.phone, msg);
+        console.log(`[VERIFY] WhatsApp de bienvenida enviado a ${shop.phone}`);
+      }
+    } catch (e) {
+      console.error(`[VERIFY] No se pudo enviar WhatsApp de bienvenida:`, e.message);
+    }
+
     res.json({ token: makeToken(shop), shop: shopPayload(shop) });
   } catch (e) {
     console.error('Verify email error:', e.message);

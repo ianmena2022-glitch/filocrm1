@@ -290,6 +290,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
       <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
+      <button class="tab" onclick="switchTab('config')">⚙️ Config</button>
     </div>
 
     <!-- TAB: CUENTAS -->
@@ -402,6 +403,41 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     </div>
 
     <div id="tab-metrics" style="display:none"></div>
+
+    <!-- TAB: CONFIG -->
+    <div id="tab-config" style="display:none">
+      <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:24px;max-width:760px">
+        <div style="font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--y);margin-bottom:18px">📱 Mensaje de bienvenida por WhatsApp</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:20px;line-height:1.5">Se envía automáticamente al teléfono del cliente cuando verifica su email y la cuenta queda creada. Si falla (WhatsApp desconectado, etc.), no bloquea el registro.</div>
+
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:18px;cursor:pointer">
+          <input type="checkbox" id="cfg-welcome-enabled" style="width:18px;height:18px;cursor:pointer">
+          <span style="font-size:14px;font-weight:600">Activar envío automático</span>
+        </label>
+
+        <div style="margin-bottom:18px;padding:14px;background:rgba(0,0,0,.25);border-radius:8px;border:1px solid rgba(255,255,255,.06)">
+          <label style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:10px">WhatsApp del remitente</label>
+          <div id="cfg-wpp-status" style="font-size:13px;color:var(--g);margin-bottom:10px">Cargando estado...</div>
+          <div id="cfg-wpp-qr-wrap" style="display:none;margin:12px 0;text-align:center">
+            <img id="cfg-wpp-qr" alt="QR" style="width:220px;height:220px;background:#fff;border-radius:8px;padding:8px">
+            <div style="font-size:11px;color:var(--g);margin-top:8px">Escaneá con WhatsApp → Dispositivos vinculados</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="cfg-wpp-connect-btn" onclick="adminWppConnect()" style="background:#25D366;color:#0a2a14;border:none;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">📱 Conectar WhatsApp</button>
+            <button id="cfg-wpp-reset-btn" onclick="adminWppReset()" style="display:none;background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">🔌 Desconectar</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:18px">
+          <label style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:6px">Mensaje</label>
+          <textarea id="cfg-welcome-msg" rows="8" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+          <div style="font-size:11px;color:var(--g);margin-top:6px">Variables disponibles: <code style="color:var(--y)">{nombre}</code> · <code style="color:var(--y)">{email}</code> · <code style="color:var(--y)">{link}</code></div>
+        </div>
+
+        <button onclick="saveAppSettings()" style="background:var(--y);color:var(--nk);border:none;padding:10px 24px;border-radius:6px;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">Guardar</button>
+        <span id="cfg-save-msg" style="margin-left:14px;font-size:13px"></span>
+      </div>
+    </div>
 
     </div><!-- /crm-content -->
 
@@ -1310,9 +1346,117 @@ function switchTab(tab) {
   document.getElementById('tab-referidos').style.display = tab === 'referidos' ? 'block' : 'none';
   document.getElementById('tab-afiliados').style.display = tab === 'afiliados' ? 'block' : 'none';
   document.getElementById('tab-metrics').style.display   = tab === 'metrics'   ? 'block' : 'none';
+  document.getElementById('tab-config').style.display    = tab === 'config'    ? 'block' : 'none';
   if (tab === 'metrics')   renderMetrics();
   if (tab === 'referidos') loadPeerReferrals();
   if (tab === 'afiliados') loadAfiliados();
+  if (tab === 'config')    loadAppSettings();
+}
+
+// ── APP SETTINGS (config tab) ─────────────────────────────────────────────────
+let _adminWppPollTimer = null;
+
+async function loadAppSettings() {
+  try {
+    const res = await fetch('/api/admin/settings', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    const s = data.settings || {};
+
+    document.getElementById('cfg-welcome-enabled').checked = s.welcome_wpp_enabled === 'true';
+    document.getElementById('cfg-welcome-msg').value = s.welcome_wpp_message || '';
+
+    await refreshAdminWppStatus();
+  } catch(e) {
+    document.getElementById('cfg-save-msg').textContent = 'Error al cargar config';
+    document.getElementById('cfg-save-msg').style.color = 'var(--r)';
+  }
+}
+
+async function refreshAdminWppStatus() {
+  try {
+    const res = await fetch('/api/admin/wpp/status', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    const statusEl  = document.getElementById('cfg-wpp-status');
+    const connectBtn = document.getElementById('cfg-wpp-connect-btn');
+    const resetBtn   = document.getElementById('cfg-wpp-reset-btn');
+    const qrWrap     = document.getElementById('cfg-wpp-qr-wrap');
+
+    if (data.connected) {
+      statusEl.innerHTML = `<span style="color:#4ade80">● Conectado</span>${data.phone ? ` — <strong>${esc(data.phone)}</strong>` : ''}`;
+      connectBtn.style.display = 'none';
+      resetBtn.style.display = 'inline-block';
+      qrWrap.style.display = 'none';
+      if (_adminWppPollTimer) { clearInterval(_adminWppPollTimer); _adminWppPollTimer = null; }
+    } else {
+      statusEl.innerHTML = `<span style="color:rgba(255,255,255,.5)">○ Desconectado</span>`;
+      connectBtn.style.display = 'inline-block';
+      resetBtn.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('cfg-wpp-status').textContent = 'Error al consultar estado';
+  }
+}
+
+async function adminWppConnect() {
+  const btn = document.getElementById('cfg-wpp-connect-btn');
+  btn.disabled = true; btn.textContent = 'Generando QR...';
+  try {
+    const res = await fetch('/api/admin/wpp/connect', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (data.connected) {
+      await refreshAdminWppStatus();
+      return;
+    }
+    if (data.qr) {
+      document.getElementById('cfg-wpp-qr').src = data.qr;
+      document.getElementById('cfg-wpp-qr-wrap').style.display = 'block';
+      // Poll cada 3s hasta detectar conexión
+      if (_adminWppPollTimer) clearInterval(_adminWppPollTimer);
+      _adminWppPollTimer = setInterval(refreshAdminWppStatus, 3000);
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo obtener el QR'));
+    }
+  } catch(e) { alert('Error al conectar: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '📱 Conectar WhatsApp'; }
+}
+
+async function adminWppReset() {
+  if (!confirm('¿Desconectar WhatsApp del remitente admin?')) return;
+  try {
+    await fetch('/api/admin/wpp/reset', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    await refreshAdminWppStatus();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function saveAppSettings() {
+  const enabled = document.getElementById('cfg-welcome-enabled').checked ? 'true' : 'false';
+  const msg     = document.getElementById('cfg-welcome-msg').value;
+  const msgEl   = document.getElementById('cfg-save-msg');
+
+  try {
+    const res = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: {
+        welcome_wpp_enabled: enabled,
+        welcome_wpp_message: msg,
+      }})
+    });
+    if (!res.ok) throw new Error('Error al guardar');
+    msgEl.textContent = '✅ Guardado';
+    msgEl.style.color = '#4ade80';
+    setTimeout(() => msgEl.textContent = '', 3000);
+  } catch(e) {
+    msgEl.textContent = '❌ ' + e.message;
+    msgEl.style.color = 'var(--r)';
+  }
 }
 
 async function loadPeerReferrals() {
