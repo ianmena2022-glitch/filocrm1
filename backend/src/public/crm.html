@@ -6972,6 +6972,8 @@ async function loadSettings() {
     document.getElementById('cfg-timezone').value = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Argentina/Buenos_Aires';
     const slotEl = document.getElementById('cfg-slot-interval');
     if (slotEl) slotEl.value = String(settings.slot_interval_minutes || 30);
+    // Activar auto-save una vez los campos ya están poblados (evita disparos en el render inicial)
+    setTimeout(initCfgAutoSave, 100);
 
     // Home service toggle
     const homeService = settings.home_service || false;
@@ -7147,7 +7149,29 @@ async function deletePaymentMethod(id) {
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
-async function saveSettings() {
+// ── AUTO-SAVE de Configuración ──────────────────────────────────────────────
+// Cualquier cambio (blur o select/cambio de valor) en un input/select/textarea
+// dentro de #sec-configuracion dispara saveSettings() automáticamente, con un
+// debounce corto para evitar disparos repetidos seguidos.
+let _cfgSaveTimer = null;
+function _cfgAutoSave() {
+  clearTimeout(_cfgSaveTimer);
+  _cfgSaveTimer = setTimeout(() => { saveSettings(true); }, 400);
+}
+function initCfgAutoSave() {
+  const sec = document.getElementById('sec-configuracion');
+  if (!sec || sec.dataset.autosaveBound === '1') return;
+  sec.dataset.autosaveBound = '1';
+  sec.addEventListener('change', (e) => {
+    const t = e.target;
+    if (!t || !t.matches) return;
+    // Excluir toggles que ya guardan por su cuenta
+    if (t.id && /^toggle-/.test(t.id)) return;
+    if (t.matches('input, select, textarea')) _cfgAutoSave();
+  });
+}
+
+async function saveSettings(silent = false) {
   const body = {
     name: document.getElementById('cfg-name').value.trim(),
     city: document.getElementById('cfg-city').value.trim(),
@@ -7173,7 +7197,8 @@ async function saveSettings() {
     currentShop = { ...currentShop, ...res.shop };
     localStorage.setItem('filo_shop', JSON.stringify(currentShop));
     if (res.shop?.booking_slug) showBookingLink(res.shop.booking_slug);
-    showToast('✅', 'Configuración guardada', '');
+    if (silent) showToast('💾', 'Guardado', '', 1200);
+    else        showToast('✅', 'Configuración guardada', '');
   } catch (e) {
     showToast('❌', 'Error', e.message);
   }
@@ -7264,9 +7289,9 @@ function switchCfgTab(name, btn) {
   if (pane) pane.classList.add('active');
   // Activate clicked button
   if (btn) btn.classList.add('active');
-  // Show/hide "Guardar cambios" only on General tab
+  // Mostrar siempre el botón "Guardar cambios" (los cambios se guardan también solos)
   const saveBtn = document.querySelector('#sec-configuracion .btn-add');
-  if (saveBtn) saveBtn.style.display = (name === 'general') ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = '';
 }
 
 async function renderQR(qrData) {
