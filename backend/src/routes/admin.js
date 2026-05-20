@@ -179,6 +179,32 @@ router.post('/wpp/connect', adminAuth, async (req, res) => {
   }
 });
 
+// POST /api/admin/wpp/send-welcome/:shopId — enviar mensaje de bienvenida custom a un shop
+router.post('/wpp/send-welcome/:shopId', adminAuth, async (req, res) => {
+  const targetShopId = parseInt(req.params.shopId);
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: 'message es requerido' });
+
+  try {
+    const target = await pool.query('SELECT phone FROM shops WHERE id=$1', [targetShopId]);
+    if (!target.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
+    const phone = target.rows[0].phone;
+    if (!phone) return res.status(400).json({ error: 'El shop no tiene teléfono registrado' });
+
+    const sender = await getOrCreateAdminSenderShop();
+    if (!sender.wpp_connected) {
+      return res.status(400).json({ error: 'El WhatsApp admin no está conectado. Conectalo desde el tab Config.' });
+    }
+
+    const wpp = require('../services/whatsapp');
+    await wpp.sendText(sender.id, phone, message);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Admin send-welcome:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/admin/wpp/reset — desconectar y limpiar sesión
 router.post('/wpp/reset', adminAuth, async (req, res) => {
   try {

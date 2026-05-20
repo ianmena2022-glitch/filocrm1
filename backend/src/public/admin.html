@@ -840,6 +840,28 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
   </div>
 </div>
 
+<div class="modal-overlay" id="welcome-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>💬 MENSAJE DE BIENVENIDA</h3>
+      <button class="modal-close" onclick="closeModal('welcome-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--g);margin-bottom:4px">Para</div>
+      <div id="welcome-target" style="font-size:14px;color:var(--w);margin-bottom:14px"></div>
+
+      <div style="font-size:12px;color:var(--g);margin-bottom:6px">Mensaje (editable)</div>
+      <textarea id="welcome-msg" rows="9" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+      <div id="welcome-warning" style="margin-top:10px;font-size:12px;color:#f87171;display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <a id="welcome-wa-link" href="#" target="_blank" rel="noopener" class="btn-sm" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.1);text-decoration:none">Abrir WhatsApp Web</a>
+      <button class="btn-sm gray" onclick="closeModal('welcome-modal')">Cancelar</button>
+      <button class="btn-sm" id="btn-send-welcome" onclick="sendWelcomeFromAdmin()" style="background:#25D366;color:#0a2a14;border:none;font-weight:700">📤 Enviar desde el bot</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <div class="modal-header">
@@ -1083,7 +1105,7 @@ function renderTreeRow(a, depth, parentId) {
     <td data-label="WPP" style="font-size:12px">${wppDot}</td>
     <td data-label="Acciones" style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
-      ${a.phone ? `<a class="action-btn" href="https://wa.me/${esc(String(a.phone).replace(/\D/g,''))}" target="_blank" rel="noopener" style="background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.3);color:#25D366;text-decoration:none" title="Abrir WhatsApp con ${esc(a.phone)}">💬 Chat</a>` : ''}
+      ${a.phone ? `<button class="action-btn" onclick="openWelcomeModal(${a.id})" style="background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.3);color:#25D366" title="Enviar mensaje de bienvenida a ${esc(a.phone)}">💬 Chat</button>` : ''}
       ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},'${esc(a.name)}')" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
       <button class="action-btn" onclick="resetWpp(${a.id},'${esc(a.name)}')" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
       <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
@@ -1434,6 +1456,77 @@ async function adminWppReset() {
     });
     await refreshAdminWppStatus();
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── WELCOME MESSAGE MODAL (botón Chat en cada shop) ───────────────────────────
+let _welcomeTargetShop = null;
+
+async function openWelcomeModal(shopId) {
+  const shop = (allAccounts || []).find(a => a.id === shopId);
+  if (!shop) return;
+  _welcomeTargetShop = shop;
+
+  document.getElementById('welcome-target').innerHTML = `<strong>${esc(shop.name)}</strong> <span style="color:var(--g)">— 📞 ${esc(shop.phone || '')}</span>`;
+
+  // Cargar plantilla del settings y aplicar variables
+  let template = '';
+  try {
+    const res = await fetch('/api/admin/settings', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const data = await res.json();
+    template = (data.settings || {}).welcome_wpp_message || '';
+  } catch(_) {}
+
+  const link = window.location.origin + '/app';
+  const msg = (template || `¡Hola {nombre}! 👋\n\nSoy *Ian*, tu asesor de FILO ✂️\n\nBienvenido — tu cuenta ya está activa: {link}\n\nCualquier duda, escribime por acá.`)
+    .replace(/\{nombre\}/g, shop.name || '')
+    .replace(/\{email\}/g, shop.email || '')
+    .replace(/\{link\}/g, link);
+  document.getElementById('welcome-msg').value = msg;
+
+  // Actualizar link de WhatsApp Web fallback
+  const updateLink = () => {
+    const phoneClean = String(shop.phone || '').replace(/\D/g, '');
+    const txt = encodeURIComponent(document.getElementById('welcome-msg').value);
+    document.getElementById('welcome-wa-link').href = `https://wa.me/${phoneClean}?text=${txt}`;
+  };
+  updateLink();
+  document.getElementById('welcome-msg').oninput = updateLink;
+  document.getElementById('welcome-warning').style.display = 'none';
+
+  document.getElementById('welcome-modal').classList.add('open');
+}
+
+async function sendWelcomeFromAdmin() {
+  if (!_welcomeTargetShop) return;
+  const message = document.getElementById('welcome-msg').value.trim();
+  const warnEl  = document.getElementById('welcome-warning');
+  const btn     = document.getElementById('btn-send-welcome');
+
+  if (!message) {
+    warnEl.textContent = 'El mensaje no puede estar vacío';
+    warnEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  try {
+    const res = await fetch(`/api/admin/wpp/send-welcome/${_welcomeTargetShop.id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al enviar');
+    closeModal('welcome-modal');
+    alert('✅ Mensaje enviado a ' + _welcomeTargetShop.name);
+  } catch(e) {
+    warnEl.textContent = '❌ ' + e.message;
+    warnEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Enviar desde el bot';
+  }
 }
 
 async function saveAppSettings() {
