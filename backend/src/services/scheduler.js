@@ -103,10 +103,11 @@ async function runCajaAutoClose() {
 }
 
 // ── Auto-expiración de trials vencidos ────────────────────────────────────────
-// Pasa a 'expired' las cuentas que llevan más de 10 días con trial vencido
-// sin haber pagado (cubre casos donde el usuario nunca volvió a loguearse)
+// Pasa a 'expired' las cuentas con trial vencido + 3 días de gracia (coincide
+// con el paywall) para que el estado en admin refleje el bloqueo real.
 async function runTrialExpiration() {
   try {
+    const GRACE = 3;
     const { rowCount } = await pool.query(`
       UPDATE shops
          SET subscription_status = 'expired',
@@ -116,9 +117,9 @@ async function runTrialExpiration() {
          AND (is_test IS NULL OR is_test = FALSE)
          AND plan IS DISTINCT FROM 'test'
          AND (
-           (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - INTERVAL '10 days')
+           (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - INTERVAL '${GRACE} days')
            OR
-           (trial_ends_at IS NULL AND created_at < NOW() - INTERVAL '17 days')
+           (trial_ends_at IS NULL AND created_at < NOW() - INTERVAL '${7 + GRACE} days')
          )
     `);
     if (rowCount > 0) console.log(`[TRIAL] ${rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
