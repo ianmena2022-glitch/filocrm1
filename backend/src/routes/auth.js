@@ -92,7 +92,7 @@ function normalizeArgPhone(raw) {
 
 // POST /api/auth/register — guarda en pending_registrations, NO crea la cuenta todavía
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan, referral_code, timezone } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code, aff_code, timezone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
@@ -111,6 +111,7 @@ router.post('/register', async (req, res) => {
     const validFiloPlans = ['starter', 'staff', 'enterprise'];
     const filoPlan = validFiloPlans.includes(filo_plan) ? filo_plan : 'starter';
 
+    // Vendor: busca código en tabla vendors
     let vendorId = null;
     const codeNorm = referral_code ? referral_code.trim().toUpperCase() : null;
     if (codeNorm) {
@@ -118,19 +119,29 @@ router.post('/register', async (req, res) => {
       if (vendorQ.rows.length) vendorId = vendorQ.rows[0].id;
     }
 
-    const tz = timezone || 'America/Argentina/Buenos_Aires';
+    // Afiliado: busca código en tabla affiliates (puede venir como aff_code o si vendor no matcheó, probar como afiliado)
+    let affiliateId = null;
+    const affNorm = aff_code ? aff_code.trim().toUpperCase() : (vendorId ? null : codeNorm);
+    if (affNorm) {
+      const affQ = await pool.query('SELECT id FROM affiliates WHERE code=$1', [affNorm]);
+      if (affQ.rows.length) affiliateId = affQ.rows[0].id;
+    }
+
+    // Algunos browsers devuelven 'America/Buenos_Aires' (alias viejo no reconocido por PG)
+    const tz = (timezone === 'America/Buenos_Aires' ? 'America/Argentina/Buenos_Aires' : timezone)
+      || 'America/Argentina/Buenos_Aires';
     const verifyCode    = generateCode();
     const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
 
     // Upsert en pending_registrations (si ya intentó antes, reemplaza)
     await pool.query(
       `INSERT INTO pending_registrations
-         (email, name, password_hash, phone, filo_plan, vendor_id, referral_code, timezone, is_enterprise, verify_code, verify_expires)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10)
+         (email, name, password_hash, phone, filo_plan, vendor_id, referral_code, timezone, is_enterprise, verify_code, verify_expires, affiliate_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10,$11)
        ON CONFLICT (email) DO UPDATE SET
          name=$2, password_hash=$3, phone=$4, filo_plan=$5, vendor_id=$6,
-         referral_code=$7, timezone=$8, verify_code=$9, verify_expires=$10, created_at=NOW()`,
-      [emailNorm, name.trim(), hash, phoneNorm, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString()]
+         referral_code=$7, timezone=$8, verify_code=$9, verify_expires=$10, affiliate_id=$11, created_at=NOW()`,
+      [emailNorm, name.trim(), hash, phoneNorm, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString(), affiliateId]
     );
 
     console.log(`[REGISTRO PENDIENTE] ${emailNorm} → plan ${filoPlan}`);
@@ -402,12 +413,12 @@ router.post('/verify-email', async (req, res) => {
 
       const r = await pool.query(
         `INSERT INTO shops (name, email, password, phone, plan, filo_plan, trial_ends_at,
-           subscription_status, is_enterprise_owner, vendor_id, referral_code, timezone, email_verified)
-         VALUES ($1,$2,$3,$4,'starter',$5,$6,'trial',$7,$8,$9,$10,TRUE)
+           subscription_status, is_enterprise_owner, vendor_id, referral_code, timezone, email_verified, affiliate_id)
+         VALUES ($1,$2,$3,$4,'starter',$5,$6,'trial',$7,$8,$9,$10,TRUE,$11)
          RETURNING *`,
         [pending.name, emailNorm, pending.password_hash, pending.phone,
          pending.filo_plan, trialEnds.toISOString(), isEnterpriseOwner,
-         pending.vendor_id, pending.referral_code, pending.timezone]
+         pending.vendor_id, pending.referral_code, pending.timezone, pending.affiliate_id]
       );
       shop = r.rows[0];
 

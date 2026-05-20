@@ -4272,6 +4272,9 @@ async function register() {
   const phoneRaw = document.getElementById('reg-phone').value.trim();
   const phone    = normalizeArgPhone(phoneRaw);
   const referral = document.getElementById('reg-referral').value.trim().toUpperCase() || null;
+  // El input es compartido: el código tipeado puede ser vendor, peer-ref o afiliado.
+  // Mandamos los 3 al backend y él decide cuál matchea.
+  const affFromUrl = getStoredAffCode();
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
   if (!phone) return showAuthError('El número de WhatsApp es inválido. Ej: +54 9 11 1234 5678');
   const btn = document.querySelector('#form-register .btn-primary');
@@ -4281,7 +4284,7 @@ async function register() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), aff_code: getStoredAffCode(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), aff_code: affFromUrl || referral, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');
@@ -8571,15 +8574,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('auth-screen').style.display = 'flex';
   }
 
-  // Leer ?ref=CODIGO de la URL y pre-rellenar el campo de referido en el registro
-  const refCode = new URLSearchParams(window.location.search).get('ref');
+  // Leer ?ref= o ?aff= de la URL y pre-rellenar el campo de referido en el registro
+  const _urlParams = new URLSearchParams(window.location.search);
+  const refCode = _urlParams.get('ref') || _urlParams.get('aff') || getStoredAffCode() || getStoredRefSlug();
   if (refCode) {
     const refInput = document.getElementById('reg-referral');
     const refGroup = document.getElementById('reg-referral-group');
-    if (refInput) refInput.value = refCode.toUpperCase();
+    if (refInput) refInput.value = String(refCode).toUpperCase();
     if (refGroup) refGroup.style.display = 'block';
     // Limpiar el param de la URL sin recargar
-    window.history.replaceState({}, '', window.location.pathname);
+    if (_urlParams.get('ref') || _urlParams.get('aff')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }
 // ─── EDITAR CLIENTE ───
 });

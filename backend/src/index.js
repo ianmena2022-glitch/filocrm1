@@ -303,13 +303,13 @@ app.get('/sitemap.xml', async (req, res) => {
   let dynamicPages = [];
   try {
     const result = await pool.query(
-      `SELECT booking_slug, updated_at, points_enabled FROM shops
+      `SELECT booking_slug, created_at, points_enabled FROM shops
        WHERE booking_slug IS NOT NULL AND booking_slug != ''
          AND subscription_status IN ('active','trial')
-       ORDER BY updated_at DESC LIMIT 500`
+       ORDER BY created_at DESC LIMIT 500`
     );
     result.rows.forEach(r => {
-      const lastmod = r.updated_at ? new Date(r.updated_at).toISOString().split('T')[0] : now;
+      const lastmod = r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : now;
       dynamicPages.push({
         url: `/reservar/${r.booking_slug}`,
         priority: '0.7',
