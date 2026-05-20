@@ -1784,8 +1784,9 @@ select.form-input { padding-right: 32px; }
         <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres">
       </div>
       <div class="form-group">
-        <label>Tu número de WhatsApp (con código de país)</label>
-        <input type="tel" id="reg-phone" value="+54" placeholder="+54 9113425876">
+        <label>Tu número de WhatsApp (celular argentino)</label>
+        <input type="tel" id="reg-phone" value="+54 9 " placeholder="+54 9 + cód. área + número" oninput="updatePhonePreview()">
+        <div id="reg-phone-preview" style="margin-top:6px;font-size:12px;color:rgba(255,255,255,.45);min-height:16px"></div>
       </div>
 
       <div class="form-group" id="reg-referral-group">
@@ -4210,13 +4211,49 @@ function selectRegPlan(plan) {
   });
 }
 
+function normalizeArgPhone(raw) {
+  if (!raw) return null;
+  let p = String(raw).replace(/\D/g, '');
+  if (!p) return null;
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('54')) {
+    if (p.charAt(2) !== '9') p = '549' + p.slice(2);
+  } else {
+    if (p.startsWith('0')) p = p.slice(1);
+    p = p.startsWith('9') ? '54' + p : '549' + p;
+  }
+  if (!/^549\d{9,11}$/.test(p)) return null;
+  return p;
+}
+
+function updatePhonePreview() {
+  const raw = document.getElementById('reg-phone').value;
+  const el  = document.getElementById('reg-phone-preview');
+  if (!el) return;
+  const norm = normalizeArgPhone(raw);
+  if (!raw || raw.replace(/\D/g, '').length < 8) {
+    el.textContent = 'Ej: +54 9 11 1234 5678 (cód. país + 9 + cód. área + número)';
+    el.style.color = 'rgba(255,255,255,.45)';
+    return;
+  }
+  if (!norm) {
+    el.textContent = '⚠ Número inválido. Debe ser un celular argentino con código de área.';
+    el.style.color = '#f87171';
+    return;
+  }
+  el.textContent = `✓ Se va a guardar como: +${norm}`;
+  el.style.color = '#4ade80';
+}
+
 async function register() {
   const name     = document.getElementById('reg-name').value.trim();
   const email    = document.getElementById('reg-email').value.trim();
   const pass     = document.getElementById('reg-pass').value;
-  const phone    = document.getElementById('reg-phone').value.trim();
+  const phoneRaw = document.getElementById('reg-phone').value.trim();
+  const phone    = normalizeArgPhone(phoneRaw);
   const referral = document.getElementById('reg-referral').value.trim().toUpperCase() || null;
   if (!name || !email || !pass) return showAuthError('Completá todos los campos obligatorios');
+  if (!phone) return showAuthError('El número de WhatsApp es inválido. Ej: +54 9 11 1234 5678');
   const btn = document.querySelector('#form-register .btn-primary');
   btn.disabled = true; btn.textContent = 'Creando tu cuenta...';
   try {

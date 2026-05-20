@@ -72,11 +72,32 @@ function trialDaysLeft(trial_ends_at) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+// Normaliza un teléfono argentino al formato 549 + area + número (sin +, sin 0, sin 15).
+// Devuelve null si no es válido.
+function normalizeArgPhone(raw) {
+  if (!raw) return null;
+  let p = String(raw).replace(/\D/g, '');
+  if (!p) return null;
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('54')) {
+    if (p.charAt(2) !== '9') p = '549' + p.slice(2);
+  } else {
+    if (p.startsWith('0')) p = p.slice(1);
+    p = p.startsWith('9') ? '54' + p : '549' + p;
+  }
+  // Argentina móvil: 549 + 10 dígitos en total = 13. Acepto 12-14 para variantes.
+  if (!/^549\d{9,11}$/.test(p)) return null;
+  return p;
+}
+
 // POST /api/auth/register — guarda en pending_registrations, NO crea la cuenta todavía
 router.post('/register', async (req, res) => {
   const { name, email, password, phone, filo_plan, referral_code, timezone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+
+  const phoneNorm = normalizeArgPhone(phone);
+  if (!phoneNorm) return res.status(400).json({ error: 'El número de WhatsApp es inválido. Debe ser un celular argentino (ej: +54 9 11 1234 5678).' });
 
   const emailNorm = email.toLowerCase().trim();
 
@@ -109,7 +130,7 @@ router.post('/register', async (req, res) => {
        ON CONFLICT (email) DO UPDATE SET
          name=$2, password_hash=$3, phone=$4, filo_plan=$5, vendor_id=$6,
          referral_code=$7, timezone=$8, verify_code=$9, verify_expires=$10, created_at=NOW()`,
-      [emailNorm, name.trim(), hash, phone || null, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString()]
+      [emailNorm, name.trim(), hash, phoneNorm, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString()]
     );
 
     console.log(`[REGISTRO PENDIENTE] ${emailNorm} → plan ${filoPlan}`);
@@ -133,6 +154,9 @@ router.post('/register-enterprise', async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
+  const phoneNorm = normalizeArgPhone(phone);
+  if (!phoneNorm) return res.status(400).json({ error: 'El número de WhatsApp es inválido. Debe ser un celular argentino (ej: +54 9 11 1234 5678).' });
+
   const emailNorm = email.toLowerCase().trim();
 
   try {
@@ -150,7 +174,7 @@ router.post('/register-enterprise', async (req, res) => {
        ON CONFLICT (email) DO UPDATE SET
          name=$2, password_hash=$3, phone=$4, filo_plan='enterprise', is_enterprise=TRUE,
          verify_code=$5, verify_expires=$6, created_at=NOW()`,
-      [emailNorm, name.trim(), hash, phone || null, verifyCode, verifyExpires.toISOString()]
+      [emailNorm, name.trim(), hash, phoneNorm, verifyCode, verifyExpires.toISOString()]
     );
 
     console.log(`[ENTERPRISE PENDIENTE] ${emailNorm}`);
