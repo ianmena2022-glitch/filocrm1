@@ -47,22 +47,29 @@ router.post('/branches', auth, enterpriseOnly, async (req, res) => {
   if (!name || !email || !password)
     return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
 
+  const emailNorm = email.toLowerCase().trim();
+
   try {
-    // Verificar que no exista cuenta con ese email
-    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [email.toLowerCase()]);
+    // Verificar que no exista cuenta con ese email (ni confirmada ni pendiente)
+    const exists = await pool.query('SELECT id FROM shops WHERE email=$1', [emailNorm]);
     if (exists.rows.length)
       return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
 
+    const pending = await pool.query('SELECT email FROM pending_registrations WHERE email=$1', [emailNorm]);
+    if (pending.rows.length)
+      return res.status(400).json({ error: 'Hay un registro pendiente de verificación con ese email' });
+
     const hash = await bcrypt.hash(password, 12);
 
+    // email_verified=TRUE: la sucursal la crea el enterprise owner, no necesita verificación por mail
     const result = await pool.query(
       `INSERT INTO shops
          (name, email, password, plan, filo_plan,
           is_branch, parent_enterprise_id, branch_label,
-          subscription_status, trial_ends_at)
-       VALUES ($1,$2,$3,'staff','enterprise',TRUE,$4,$5,'active','2099-12-31')
+          subscription_status, trial_ends_at, email_verified)
+       VALUES ($1,$2,$3,'staff','enterprise',TRUE,$4,$5,'active','2099-12-31',TRUE)
        RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, req.shopId, branch_label || null]
+      [name.trim(), emailNorm, hash, req.shopId, branch_label || null]
     );
 
     const branch = result.rows[0];
