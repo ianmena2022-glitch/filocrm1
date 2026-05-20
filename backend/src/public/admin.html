@@ -1035,7 +1035,10 @@ function renderTreeRow(a, depth, parentId) {
 
   return `<tr data-id="${a.id}" class="row-level-${depth} ${childClass}" style="${depth > 0 ? 'display:none' : ''}">
     <td style="${indentPad}"><div class="row-indent">${connector}${toggleEl}${nameHtml}</div></td>
-    <td data-label="Email" style="color:var(--g);font-size:12px">${esc(a.email||'')}</td>
+    <td data-label="Email" style="color:var(--g);font-size:12px">
+      <div>${esc(a.email||'')}</div>
+      ${a.phone ? `<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">📞 ${esc(a.phone)}</div>` : ''}
+    </td>
     <td data-label="Plan">${planBadge}</td>
     <td data-label="Estado">${statusBadge}</td>
     <td data-label="Trial">${dateInfo}</td>
