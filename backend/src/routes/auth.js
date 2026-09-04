@@ -401,13 +401,34 @@ router.post('/verify-email', async (req, res) => {
     const pendingQ = await pool.query('SELECT * FROM pending_registrations WHERE email=$1', [emailNorm]);
     const pending  = pendingQ.rows[0];
 
-    // Si no hay pendiente, puede que ya verificó antes — intentar login normal
+    // Si no hay pendiente, puede que ya verificó antes O sea un shop existente
+    // con email_verified=FALSE que pidió re-envío del código
     if (!pending) {
       const shopQ = await pool.query('SELECT * FROM shops WHERE email=$1', [emailNorm]);
-      if (shopQ.rows[0]?.email_verified) {
+      const existingShop = shopQ.rows[0];
+      if (!existingShop) return res.status(404).json({ error: 'No existe una cuenta con ese email' });
+      if (existingShop.email_verified) {
         return res.status(400).json({ error: 'Este email ya fue verificado. Iniciá sesión.' });
       }
-      return res.status(404).json({ error: 'No hay registro pendiente para este email' });
+      // Validar código guardado en shops (via /resend-verification)
+      if (!existingShop.verify_code) {
+        return res.status(400).json({ error: 'No hay código activo. Solicitá uno nuevo.' });
+      }
+      if (existingShop.verify_code !== String(code).trim()) {
+        return res.status(400).json({ error: 'Código incorrecto' });
+      }
+      if (!existingShop.verify_expires || new Date(existingShop.verify_expires) < new Date()) {
+        return res.status(400).json({ error: 'El código expiró. Solicitá uno nuevo.' });
+      }
+      // Marcar como verificado y limpiar código
+      const upd = await pool.query(
+        `UPDATE shops SET email_verified=TRUE, verify_code=NULL, verify_expires=NULL
+         WHERE id=$1 RETURNING *`,
+        [existingShop.id]
+      );
+      const shop = upd.rows[0];
+      console.log(`[VERIFY] Shop existente verificado: ${emailNorm}`);
+      return res.json({ token: makeToken(shop), shop: shopPayload(shop) });
     }
 
     if (pending.verify_code !== String(code).trim()) {
@@ -506,21 +527,40 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Email requerido' });
 
   const emailNorm = email.toLowerCase().trim();
+  const verifyCode    = generateCode();
+  const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
 
   try {
-    const pendingQ = await pool.query('SELECT * FROM pending_registrations WHERE email=$1', [emailNorm]);
-    const pending  = pendingQ.rows[0];
-    if (!pending) return res.status(404).json({ error: 'No hay registro pendiente para este email' });
+    // Caso 1: registro en pending_registrations (todavía no verificó por primera vez)
+    const pendingQ = await pool.query('SELECT name FROM pending_registrations WHERE email=$1', [emailNorm]);
+    if (pendingQ.rows.length) {
+      await pool.query(
+        'UPDATE pending_registrations SET verify_code=$1, verify_expires=$2 WHERE email=$3',
+        [verifyCode, verifyExpires.toISOString(), emailNorm]
+      );
+      await sendVerificationEmail(emailNorm, pendingQ.rows[0].name, verifyCode);
+      console.log(`[VERIFY] Código reenviado a ${emailNorm} (pending)`);
+      return res.json({ ok: true });
+    }
 
-    const verifyCode    = generateCode();
-    const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
-    await pool.query(
-      'UPDATE pending_registrations SET verify_code=$1, verify_expires=$2 WHERE email=$3',
-      [verifyCode, verifyExpires.toISOString(), emailNorm]
+    // Caso 2: cuenta ya existe en shops pero email_verified=FALSE
+    // (cuentas viejas, sucursales, o casos donde la verificación quedó a medias)
+    const shopQ = await pool.query(
+      'SELECT id, name, email_verified FROM shops WHERE email=$1',
+      [emailNorm]
     );
-
-    await sendVerificationEmail(emailNorm, pending.name, verifyCode);
-    console.log(`[VERIFY] Código reenviado a ${emailNorm}`);
+    if (!shopQ.rows.length) {
+      return res.status(404).json({ error: 'No existe una cuenta con ese email' });
+    }
+    if (shopQ.rows[0].email_verified) {
+      return res.status(400).json({ error: 'Este email ya fue verificado. Iniciá sesión.' });
+    }
+    await pool.query(
+      'UPDATE shops SET verify_code=$1, verify_expires=$2 WHERE id=$3',
+      [verifyCode, verifyExpires.toISOString(), shopQ.rows[0].id]
+    );
+    await sendVerificationEmail(emailNorm, shopQ.rows[0].name, verifyCode);
+    console.log(`[VERIFY] Código reenviado a ${emailNorm} (shop existente)`);
     res.json({ ok: true });
   } catch (e) {
     console.error('Resend verification error:', e.message);
