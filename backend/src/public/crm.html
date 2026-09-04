@@ -4144,6 +4144,9 @@ async function login() {
       showVerifyScreen(data.email || email);
       return;
     }
+    if (res.status === 403 && data.error === 'orphan_barber') {
+      return showAuthError(data.message || 'Fuiste dado de baja del equipo. Pedile al dueño un nuevo link de invitación.');
+    }
     if (!res.ok) return showAuthError(data.error || 'Error al iniciar sesión');
 
     token = data.token;

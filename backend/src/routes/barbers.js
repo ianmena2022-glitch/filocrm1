@@ -96,10 +96,13 @@ router.put('/:id', auth, ownerOnly, async (req, res) => {
 });
 
 // DELETE /api/barbers/:id — eliminar barbero del equipo
+// Mantiene is_barber=TRUE para que el login lo detecte como huérfano
+// (evita que caiga en flujo de shop normal + paywall) y para que un futuro
+// invite lo pueda re-vincular preservando su historia.
 router.delete('/:id', auth, ownerOnly, async (req, res) => {
   try {
     await pool.query(
-      'UPDATE shops SET parent_shop_id=NULL, is_barber=FALSE WHERE id=$1 AND parent_shop_id=$2',
+      'UPDATE shops SET parent_shop_id=NULL WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
       [req.params.id, req.shopId]
     );
     res.json({ ok: true });

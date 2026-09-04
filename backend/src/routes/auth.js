@@ -228,9 +228,10 @@ router.post('/register-barber', async (req, res) => {
     let shop;
     if (exists.rows.length) {
       const existing = exists.rows[0];
-      // Caso especial: cuenta de ex-barbero huérfano (fue eliminado del equipo).
+      // Cuenta de ex-barbero huérfano (fue eliminado del equipo, sin parent_shop).
+      // Cubre tanto orphans viejos (is_barber=FALSE) como nuevos (is_barber=TRUE).
       // Re-vincular al mismo shop conservando historia (turnos, comisiones, etc.)
-      const isOrphanBarber = existing.is_barber === false && existing.parent_shop_id === null;
+      const isOrphanBarber = existing.parent_shop_id === null;
       if (!isOrphanBarber) {
         return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
       }
@@ -276,6 +277,14 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     if (!shop.email_verified) {
       return res.status(403).json({ error: 'email_not_verified', email: shop.email });
+    }
+
+    // Barbero huérfano: fue eliminado del equipo. Debe usar un link de invitación nuevo.
+    if (shop.is_barber && !shop.parent_shop_id) {
+      return res.status(403).json({
+        error: 'orphan_barber',
+        message: 'Fuiste dado de baja del equipo. Pedile al dueño de la barbería un nuevo link de invitación.'
+      });
     }
 
     // Verificar si el trial expiró y aún no tiene suscripción activa
