@@ -7500,6 +7500,13 @@ async function resetEntWpp() {
 function openModal(id) {
   // Set defaults for turno modal
   if (id === 'modal-turno') {
+    // Si por algún motivo no se cargaron servicios/clientes al iniciar, reintentar ahora
+    if (!Array.isArray(services) || services.length === 0) {
+      loadServices();
+    }
+    if (!Array.isArray(clients) || clients.length === 0) {
+      loadClients();
+    }
     document.getElementById('t-date').value = agendaDate;
     // Cargar barberos si hay comisiones activas
     const barberField = document.getElementById('t-barber-field');

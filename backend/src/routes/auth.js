@@ -217,16 +217,38 @@ router.post('/register-barber', async (req, res) => {
     if (!invite.rows.length) return res.status(400).json({ error: 'Código de invitación inválido o expirado' });
     const inv = invite.rows[0];
 
-    const exists = await pool.query('SELECT id FROM shops WHERE email = $1', [email.toLowerCase()]);
-    if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
-
+    const emailNorm = email.toLowerCase().trim();
     const hash = await bcrypt.hash(password, 12);
-    const result = await pool.query(
-      `INSERT INTO shops (name, email, password, plan, is_barber, parent_shop_id)
-       VALUES ($1, $2, $3, 'staff', TRUE, $4) RETURNING *`,
-      [name.trim(), email.toLowerCase().trim(), hash, inv.shop_id]
+
+    const exists = await pool.query(
+      'SELECT id, is_barber, parent_shop_id FROM shops WHERE email = $1',
+      [emailNorm]
     );
-    const shop = result.rows[0];
+
+    let shop;
+    if (exists.rows.length) {
+      const existing = exists.rows[0];
+      // Caso especial: cuenta de ex-barbero huérfano (fue eliminado del equipo).
+      // Re-vincular al mismo shop conservando historia (turnos, comisiones, etc.)
+      const isOrphanBarber = existing.is_barber === false && existing.parent_shop_id === null;
+      if (!isOrphanBarber) {
+        return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
+      }
+      const reactivated = await pool.query(
+        `UPDATE shops SET name=$1, password=$2, is_barber=TRUE, parent_shop_id=$3, plan='staff'
+         WHERE id=$4 RETURNING *`,
+        [name.trim(), hash, inv.shop_id, existing.id]
+      );
+      shop = reactivated.rows[0];
+      console.log(`[BARBER] ex-barbero ${emailNorm} re-vinculado a shop ${inv.shop_id}`);
+    } else {
+      const result = await pool.query(
+        `INSERT INTO shops (name, email, password, plan, is_barber, parent_shop_id)
+         VALUES ($1, $2, $3, 'staff', TRUE, $4) RETURNING *`,
+        [name.trim(), emailNorm, hash, inv.shop_id]
+      );
+      shop = result.rows[0];
+    }
 
     await pool.query(
       'UPDATE staff_invites SET used=TRUE, used_by=$1 WHERE id=$2',
