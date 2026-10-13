@@ -5291,7 +5291,10 @@ function copyFilaLink() {
 
 function showFilaQR() {
   const slug = _queueSlug;
-  if (!slug) return;
+  if (!slug) {
+    showToast('⚠️ No se encontró el link de la fila. Recargá la página e intentá de nuevo.');
+    return;
+  }
   const rawLink = `${window.location.origin}/fila/${slug}`;
   const qrUrl   = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=14&data=${encodeURIComponent(rawLink)}`;
 

@@ -237,10 +237,22 @@ router.get('/', auth, async (req, res) => {
 
     // paused + slug
     const shopRes = await pool.query(
-      'SELECT queue_paused, booking_slug FROM shops WHERE id=$1',
+      'SELECT queue_paused, booking_slug, name FROM shops WHERE id=$1',
       [shopId]
     );
     const shop = shopRes.rows[0] || {};
+
+    // Auto-generar booking_slug si no existe (así el QR de la fila siempre funciona)
+    if (!shop.booking_slug) {
+      const generated = (shop.name || 'barberia')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40) + '-' + shopId;
+      await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2 AND (booking_slug IS NULL OR booking_slug = \'\')', [generated, shopId]);
+      shop.booking_slug = generated;
+    }
 
     // Si el que pide es un barbero, filtrar: solo ve sus entries + las sin asignar
     const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
