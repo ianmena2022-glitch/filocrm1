@@ -8,7 +8,7 @@ const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
 router.post('/:slug/join', async (req, res) => {
   try {
     const { slug } = req.params;
-    const { name, phone, service_name, price } = req.body;
+    const { name, phone, service_name, price, barber_id } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'El nombre es obligatorio' });
@@ -43,11 +43,21 @@ router.post('/:slug/join', async (req, res) => {
       }
     }
 
-    // Insert entry (with optional service pre-selection)
+    // Validar que el barbero elegido pertenezca a este shop (si vino uno)
+    let validBarberId = null;
+    if (barber_id) {
+      const bChk = await pool.query(
+        'SELECT id FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [parseInt(barber_id), shop.id]
+      );
+      if (bChk.rows.length) validBarberId = bChk.rows[0].id;
+    }
+
+    // Insert entry (con servicio y barbero opcional)
     const insertRes = await pool.query(
-      `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price)
-       VALUES ($1, $2, $3, $4, 'waiting', $5, $6) RETURNING id`,
-      [shop.id, resolvedName, phone || null, clientId, service_name || null, parseFloat(price) || 0]
+      `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price, barber_id)
+       VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7) RETURNING id`,
+      [shop.id, resolvedName, phone || null, clientId, service_name || null, parseFloat(price) || 0, validBarberId]
     );
     const entry_id = insertRes.rows[0].id;
 
@@ -168,6 +178,23 @@ router.get('/:slug/status', async (req, res) => {
 });
 
 // ─── PUBLIC: get services for a shop (used by fila.html) ────────────────────
+// ─── PUBLIC: list barbers for the barber selector in fila ────────────────────
+router.get('/:slug/barbers', async (req, res) => {
+  try {
+    const shopRes = await pool.query(
+      'SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]
+    );
+    if (!shopRes.rows.length) return res.json([]);
+    const bRes = await pool.query(
+      `SELECT id, name, barber_color FROM shops
+        WHERE parent_shop_id=$1 AND is_barber=TRUE
+        ORDER BY name ASC`,
+      [shopRes.rows[0].id]
+    );
+    res.json(bRes.rows);
+  } catch(e) { res.status(500).json([]); }
+});
+
 router.get('/:slug/services', async (req, res) => {
   try {
     const shopRes = await pool.query(
@@ -215,15 +242,26 @@ router.get('/', auth, async (req, res) => {
     );
     const shop = shopRes.rows[0] || {};
 
+    // Si el que pide es un barbero, filtrar: solo ve sus entries + las sin asignar
+    const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
+    const callerIsBarber = callerRes.rows[0]?.is_barber || false;
+
+    const barberFilter = callerIsBarber
+      ? 'AND (barber_id = $2 OR barber_id IS NULL)'
+      : '';
+    const params = callerIsBarber ? [shopId, req.shopId] : [shopId];
+
     // entries (waiting + called)
     const entriesRes = await pool.query(
-      `SELECT id, client_name, client_phone, status, created_at, called_at,
-              service_name, price,
-              EXTRACT(EPOCH FROM (NOW() - created_at))/60 AS minutes_waiting
-       FROM queue_entries
-       WHERE shop_id=$1 AND status IN ('waiting','called')
-       ORDER BY created_at ASC`,
-      [shopId]
+      `SELECT q.id, q.client_name, q.client_phone, q.status, q.created_at, q.called_at,
+              q.service_name, q.price, q.barber_id,
+              b.name AS barber_name,
+              EXTRACT(EPOCH FROM (NOW() - q.created_at))/60 AS minutes_waiting
+       FROM queue_entries q
+       LEFT JOIN shops b ON b.id = q.barber_id
+       WHERE q.shop_id=$1 AND q.status IN ('waiting','called') ${barberFilter}
+       ORDER BY q.created_at ASC`,
+      params
     );
 
     // avg wait
@@ -279,21 +317,25 @@ router.post('/next', auth, async (req, res) => {
     const shopRes = await pool.query('SELECT name FROM shops WHERE id=$1', [shopId]);
     const shopName = shopRes.rows[0]?.name || 'la barbería';
 
-    // Get first waiting entry
-    const entryRes = await pool.query(
-      `SELECT id, client_name, client_phone FROM queue_entries
-       WHERE shop_id=$1 AND status='waiting'
-       ORDER BY created_at ASC LIMIT 1`,
-      [shopId]
-    );
+    // Si el que llama es barbero: priorizar entries asignadas a él, después "cualquier barbero" (NULL)
+    const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
+    const isBarber = callerRes.rows[0]?.is_barber || false;
+
+    const entryQuery = isBarber
+      ? `SELECT id, client_name, client_phone FROM queue_entries
+         WHERE shop_id=$1 AND status='waiting' AND (barber_id = $2 OR barber_id IS NULL)
+         ORDER BY (barber_id IS NULL) ASC, created_at ASC LIMIT 1`
+      : `SELECT id, client_name, client_phone FROM queue_entries
+         WHERE shop_id=$1 AND status='waiting'
+         ORDER BY created_at ASC LIMIT 1`;
+    const entryParams = isBarber ? [shopId, req.shopId] : [shopId];
+
+    const entryRes = await pool.query(entryQuery, entryParams);
     if (!entryRes.rows.length) {
-      return res.json({ ok: false, message: 'No hay nadie en la fila' });
+      return res.json({ ok: false, message: 'No hay nadie en la fila para vos' });
     }
     const entry = entryRes.rows[0];
 
-    // Assign barber if caller is a barber (not owner)
-    const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
-    const isBarber = callerRes.rows[0]?.is_barber || false;
     const assignedBarberId = isBarber ? req.shopId : null;
     await pool.query(
       `UPDATE queue_entries SET status='called', called_at=NOW(), barber_id=COALESCE(barber_id,$1) WHERE id=$2`,

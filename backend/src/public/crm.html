@@ -5059,8 +5059,8 @@ function walkInRowHtml(entry, isCalled, position) {
     ? `<span style="font-size:11px;color:var(--gray)">${entry.client_phone}</span>`
     : '';
   const barberBadge = entry.barber_id
-    ? `<span style="font-size:10px;background:rgba(0,200,117,.08);color:#4ade80;border-radius:4px;padding:2px 6px" id="barber-badge-${entry.id}">Asignado</span>`
-    : '';
+    ? `<span style="font-size:10px;background:rgba(0,200,117,.08);color:#4ade80;border-radius:4px;padding:2px 6px" id="barber-badge-${entry.id}">${entry.barber_name ? escHtml(entry.barber_name) : 'Asignado'}</span>`
+    : `<span style="font-size:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border-radius:4px;padding:2px 6px">Cualquiera</span>`;
   const posHtml = isCalled
     ? `<span style="font-family:'Oswald',sans-serif;font-size:18px;color:#4ade80;font-weight:700">✂</span>`
     : `<span style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--yellow);min-width:24px;text-align:center">${position}</span>`;

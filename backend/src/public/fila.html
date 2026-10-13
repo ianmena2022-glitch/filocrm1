@@ -425,6 +425,12 @@
         </select>
         <div class="service-price-tag" id="service-price-tag" style="display:none"></div>
       </div>
+      <div class="field" id="field-barber" style="display:none">
+        <label>Profesional 💈</label>
+        <select id="input-barber">
+          <option value="">— Cualquier profesional disponible —</option>
+        </select>
+      </div>
       <button class="btn-primary" id="btn-join" onclick="joinQueue()">Anotarme en la fila ✂️</button>
     </div>
 
@@ -590,9 +596,10 @@
 
     async function checkQueueStatus() {
       try {
-        const [statusRes, svcRes] = await Promise.all([
+        const [statusRes, svcRes, barbRes] = await Promise.all([
           apiGet(`/api/queue/${slug}/status`),
-          apiGet(`/api/queue/${slug}/services`)
+          apiGet(`/api/queue/${slug}/services`),
+          apiGet(`/api/queue/${slug}/barbers`)
         ]);
         if (!statusRes.ok) { setState('join'); return; }
         const data = await statusRes.json();
@@ -604,6 +611,14 @@
             _filaServices = await svcRes.json();
             populateServicesDropdown(_filaServices);
           } catch(e) { _filaServices = []; }
+        }
+
+        // Populate barbers dropdown if available
+        if (barbRes.ok) {
+          try {
+            const barbers = await barbRes.json();
+            populateBarbersDropdown(barbers);
+          } catch(e) {}
         }
 
         if (data.queue_paused) {
@@ -633,6 +648,22 @@
         sel.appendChild(opt);
       });
       field.style.display = 'block';
+    }
+
+    function populateBarbersDropdown(barbers) {
+      const sel = document.getElementById('input-barber');
+      const field = document.getElementById('field-barber');
+      if (!sel || !field || !barbers || !barbers.length) return;
+      // Clear existing options except the first "cualquiera"
+      while (sel.options.length > 1) sel.remove(1);
+      barbers.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.name;
+        sel.appendChild(opt);
+      });
+      // Mostrar solo si hay más de 1 barbero (si hay solo 1, no tiene sentido elegir)
+      if (barbers.length >= 1) field.style.display = 'block';
     }
 
     function onFilaServiceChange() {
@@ -765,6 +796,10 @@
         price = parseFloat(opt?.dataset?.price || 0) || 0;
       }
 
+      // Get selected barber (optional, "" = cualquiera)
+      const barberEl = document.getElementById('input-barber');
+      const barber_id = barberEl && barberEl.value ? parseInt(barberEl.value) : null;
+
       btn.disabled = true;
       btn.textContent = 'Anotando...';
 
@@ -772,7 +807,8 @@
         const r = await apiPost(`/api/queue/${slug}/join`, {
           name,
           phone: phone || undefined,
-          ...(service_name ? { service_name, price } : {})
+          ...(service_name ? { service_name, price } : {}),
+          ...(barber_id ? { barber_id } : {})
         });
         const data = await r.json();
 

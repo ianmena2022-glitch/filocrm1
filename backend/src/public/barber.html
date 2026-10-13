@@ -1171,11 +1171,14 @@ async function loadFila() {
     } else {
       listEl.innerHTML = waitingEntries.map((e, i) => {
         const mins = Math.round(e.minutes_waiting || 0);
+        const barberTag = e.barber_id
+          ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,209,0,.12);color:var(--yellow);font-weight:700">PARA MÍ</span>`
+          : `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);font-weight:700">CUALQUIERA</span>`;
         return `<div class="queue-item">
           <div class="queue-pos">${i + 1}°</div>
-          <div>
-            <div class="queue-name">${e.client_name}</div>
-            <div class="queue-meta">${e.client_phone ? `📞 ${e.client_phone} · ` : ''}${mins}min esperando</div>
+          <div style="flex:1">
+            <div class="queue-name" style="display:flex;align-items:center;gap:8px">${e.client_name} ${barberTag}</div>
+            <div class="queue-meta">${e.client_phone ? `📞 ${e.client_phone} · ` : ''}${mins}min esperando${e.service_name ? ` · ✂️ ${e.service_name}` : ''}</div>
           </div>
         </div>`;
       }).join('');
