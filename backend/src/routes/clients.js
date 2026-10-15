@@ -49,15 +49,25 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+// Normaliza birthday: null si vacío/inválido, formato YYYY-MM-DD si viene bien
+function parseBirthday(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const t = raw.trim();
+  if (!t) return null;
+  // Acepta YYYY-MM-DD (el input type="date" devuelve este formato)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  return t;
+}
+
 // POST /api/clients
 router.post('/', auth, async (req, res) => {
-  const { name, phone, notes, address } = req.body;
+  const { name, phone, notes, address, birthday } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
   try {
     const result = await pool.query(
-      'INSERT INTO clients (shop_id, name, phone, notes, address) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [req.shopId, name.trim(), phone?.trim() || null, notes?.trim() || null, address?.trim() || null]
+      'INSERT INTO clients (shop_id, name, phone, notes, address, birthday) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [req.shopId, name.trim(), phone?.trim() || null, notes?.trim() || null, address?.trim() || null, parseBirthday(birthday)]
     );
     res.status(201).json(result.rows[0]);
   } catch (e) {
@@ -67,7 +77,7 @@ router.post('/', auth, async (req, res) => {
 
 // PUT /api/clients/:id
 router.put('/:id', auth, async (req, res) => {
-  const { name, phone, notes, _add_points, _note } = req.body;
+  const { name, phone, notes, birthday, _add_points, _note } = req.body;
   try {
     // Modo referido: solo sumar puntos sin tocar otros campos (solo dueños, no barberos)
     if (_add_points !== undefined) {
@@ -85,11 +95,36 @@ router.put('/:id', auth, async (req, res) => {
     // Modo edición normal
     const { address } = req.body;
     const result = await pool.query(
-      `UPDATE clients SET name=$1, phone=$2, notes=$3, address=$4 WHERE id=$5 AND shop_id=$6 RETURNING *`,
-      [name, phone || null, notes || null, address || null, req.params.id, req.shopId]
+      `UPDATE clients SET name=$1, phone=$2, notes=$3, address=$4, birthday=$5 WHERE id=$6 AND shop_id=$7 RETURNING *`,
+      [name, phone || null, notes || null, address || null, parseBirthday(birthday), req.params.id, req.shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/clients/birthdays/today — clientes que cumplen hoy (zona horaria del shop)
+router.get('/birthdays/today', auth, async (req, res) => {
+  try {
+    const effectiveShopId = req.parentShopId || req.shopId;
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const shopFilter = isEnterprise
+      ? `(shop_id = $1 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $1 AND is_branch = TRUE))`
+      : `shop_id = $1`;
+    const result = await pool.query(
+      `SELECT id, name, phone, birthday,
+              EXTRACT(YEAR FROM AGE(birthday))::int AS age
+         FROM clients
+        WHERE ${shopFilter}
+          AND birthday IS NOT NULL
+          AND EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM CURRENT_DATE)
+          AND EXTRACT(DAY FROM birthday)   = EXTRACT(DAY FROM CURRENT_DATE)
+        ORDER BY name`,
+      [effectiveShopId]
+    );
+    res.json(result.rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

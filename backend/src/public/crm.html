@@ -1984,6 +1984,18 @@ select.form-input { padding-right: 32px; }
 
       <!-- Panel Dashboard — Layout dos columnas (Prototipo C) -->
       <div id="dash-panel-dashboard">
+
+        <!-- 🎂 Banner de cumpleaños (visible solo cuando hay clientes de cumple hoy) -->
+        <div id="birthday-banner" style="display:none;margin:0 20px 12px;padding:14px 18px;background:linear-gradient(135deg,rgba(255,209,0,.14),rgba(255,145,0,.08));border:1px solid rgba(255,209,0,.3);border-radius:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:22px">🎂</span>
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:13px;font-weight:700;color:var(--yellow);letter-spacing:.3px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;margin-bottom:4px">Cumpleaños hoy</div>
+              <div id="birthday-list" style="font-size:14px;color:var(--w);line-height:1.5"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="dash-two-col">
 
           <!-- Columna izquierda: KPIs + acciones -->
@@ -3703,6 +3715,10 @@ select.form-input { padding-right: 32px; }
         <input type="text" id="c-address" placeholder="Av. Rivadavia 1234">
       </div>
       <div class="form-field">
+        <label>Cumpleaños <span style="font-weight:400;font-size:11px;color:var(--gray)">— opcional</span></label>
+        <input type="date" id="c-birthday">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
         <label>Notas (opcional)</label>
         <input type="text" id="c-notes" placeholder="Corte fade, alérgico a...">
       </div>
@@ -3952,6 +3968,10 @@ select.form-input { padding-right: 32px; }
         <input type="text" id="edit-c-address" placeholder="Av. Rivadavia 1234">
       </div>
       <div class="form-field">
+        <label>Cumpleaños <span style="font-weight:400;font-size:11px;color:var(--gray)">— opcional</span></label>
+        <input type="date" id="edit-c-birthday">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
         <label>Notas (opcional)</label>
         <input type="text" id="edit-c-notes" placeholder="Corte fade, alérgico a...">
       </div>
@@ -5432,9 +5452,34 @@ function printFilaQR() {
 // ─── DASHBOARD ───
 let _dashCalOffset = 0; // semanas desde hoy
 
+async function loadBirthdayBanner() {
+  const banner = document.getElementById('birthday-banner');
+  const list = document.getElementById('birthday-list');
+  if (!banner || !list) return;
+  try {
+    const rows = await api('GET', '/clients/birthdays/today');
+    if (!Array.isArray(rows) || rows.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+    list.innerHTML = rows.map(c => {
+      const ageStr = c.age ? ` <span style="color:var(--gray);font-size:12px">(${c.age} años)</span>` : '';
+      const phoneBtn = c.phone
+        ? ` <a href="https://wa.me/${String(c.phone).replace(/\D/g,'')}" target="_blank" rel="noopener" title="Saludar por WhatsApp" style="margin-left:6px;font-size:12px;color:#25D366;text-decoration:none">💬</a>`
+        : '';
+      return `<div><strong>${escHtml(c.name)}</strong>${ageStr}${phoneBtn}</div>`;
+    }).join('');
+    banner.style.display = 'block';
+  } catch (e) {
+    banner.style.display = 'none';
+  }
+}
+
 async function loadDashboard() {
   // Mostrar banner de referidos (solo primera vez)
   initReferralBanner();
+  // Mostrar banner de cumpleaños (no bloquea el resto si falla)
+  loadBirthdayBanner().catch(() => {});
   try {
     const [today, month, chart, prodVentas, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
@@ -6165,15 +6210,17 @@ async function createClient() {
   const phoneRaw = document.getElementById('c-phone').value.trim();
   const phone = (phoneRaw === '+54' || phoneRaw === '') ? '' : phoneRaw;
   const notes = document.getElementById('c-notes').value.trim();
+  const birthday = document.getElementById('c-birthday')?.value || null;
   if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
   closeModal('modal-cliente');
   document.getElementById('c-name').value = '';
   document.getElementById('c-phone').value = '+54';
   document.getElementById('c-notes').value = '';
+  const bEl = document.getElementById('c-birthday'); if (bEl) bEl.value = '';
   showToast('✅', 'Cliente agregado', name + ' ya está en tu base');
   try {
     const address = document.getElementById('c-address').value.trim();
-    await api('POST', '/clients', { name, phone, notes, address });
+    await api('POST', '/clients', { name, phone, notes, address, birthday });
     loadClients(); // refresca para obtener id real y datos completos
   } catch (e) {
     showToast('❌', 'Error', e.message);
@@ -8658,6 +8705,8 @@ function editClientById(id) {
   document.getElementById('edit-c-phone').value = c.phone || '+54';
   document.getElementById('edit-c-notes').value = c.notes || '';
   document.getElementById('edit-c-address').value = c.address || '';
+  const bEl = document.getElementById('edit-c-birthday');
+  if (bEl) bEl.value = c.birthday ? String(c.birthday).slice(0, 10) : '';
   openModal('modal-edit-cliente');
 }
 
@@ -8666,10 +8715,11 @@ async function saveEditClient() {
   const name  = document.getElementById('edit-c-name').value.trim();
   const phone = document.getElementById('edit-c-phone').value.trim();
   const notes = document.getElementById('edit-c-notes').value.trim();
+  const birthday = document.getElementById('edit-c-birthday')?.value || null;
   if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
   try {
     const address = document.getElementById('edit-c-address').value.trim();
-    await api('PUT', `/clients/${id}`, { name, phone: (phone === '+54' ? '' : phone), notes, address });
+    await api('PUT', `/clients/${id}`, { name, phone: (phone === '+54' ? '' : phone), notes, address, birthday });
     closeModal('modal-edit-cliente');
     showToast('✅', 'Cliente actualizado', name);
     await loadClients();
