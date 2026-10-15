@@ -125,12 +125,16 @@ router.post('/', auth, async (req, res) => {
     let svcName = service_name || null;
     let svcCost = cost || 0;
     let duration = 30;
+    let svcCommissionPct = null; // comisión custom del servicio (null = usar la del barbero)
     if (service_id) {
       const svc = await pool.query('SELECT * FROM services WHERE id=$1 AND shop_id=$2', [service_id, shopId]);
       if (svc.rows.length) {
         svcName = svc.rows[0].name;
         svcCost = svc.rows[0].cost;
         duration = svc.rows[0].duration_minutes || 30;
+        if (svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+          svcCommissionPct = parseInt(svc.rows[0].commission_pct);
+        }
       }
     }
 
@@ -186,17 +190,23 @@ router.post('/', auth, async (req, res) => {
     console.log(`[APPT] Auto-asignando barber_id=${assignedBarberId} para shop=${shopId} fecha=${date}`);
 
     // Obtener comision real del barbero asignado (0 si no hay barbero asignado)
+    // Prioridad: comisión custom del servicio > comisión del barbero > 50% default
     let realCommissionPct = 0;
     if (assignedBarberId) {
-      realCommissionPct = 50; // default si hay barbero pero sin % configurado
-      const barberData = await pool.query(
-        'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
-      );
-      if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
-        realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
+      if (svcCommissionPct !== null) {
+        realCommissionPct = svcCommissionPct;
+        console.log(`[APPT] usando commission_pct custom del servicio: ${svcCommissionPct}%`);
+      } else {
+        realCommissionPct = 50; // default si hay barbero pero sin % configurado
+        const barberData = await pool.query(
+          'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+        );
+        if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
+          realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
+        }
+        console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
       }
     }
-    console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
 
     // Verificar solapamiento: mismo barbero, mismo día, mismo bloque horario
     if (assignedBarberId) {

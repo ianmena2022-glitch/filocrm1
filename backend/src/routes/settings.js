@@ -117,14 +117,22 @@ router.get('/services', auth, async (req, res) => {
   }
 });
 
+// Normaliza commission_pct: null si vacío/null/invalid, sino 0-100 clamped
+function parseSvcCommission(raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = parseInt(raw);
+  if (isNaN(n)) return null;
+  return Math.min(100, Math.max(0, n));
+}
+
 router.post('/services', auth, async (req, res) => {
-  const { name, price, cost, duration_minutes } = req.body;
+  const { name, price, cost, duration_minutes, commission_pct } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
   try {
     const result = await pool.query(
-      `INSERT INTO services (shop_id, name, price, cost, duration_minutes)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.shopId, name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30)]
+      `INSERT INTO services (shop_id, name, price, cost, duration_minutes, commission_pct)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.shopId, name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30), parseSvcCommission(commission_pct)]
     );
     res.status(201).json(result.rows[0]);
   } catch (e) {
@@ -134,13 +142,13 @@ router.post('/services', auth, async (req, res) => {
 
 // PUT /api/settings/services/:id — editar servicio
 router.put('/services/:id', auth, async (req, res) => {
-  const { name, price, cost, duration_minutes } = req.body;
+  const { name, price, cost, duration_minutes, commission_pct } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
   try {
     const result = await pool.query(
-      `UPDATE services SET name=$1, price=$2, cost=$3, duration_minutes=$4
-       WHERE id=$5 AND shop_id=$6 RETURNING *`,
-      [name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30), req.params.id, req.shopId]
+      `UPDATE services SET name=$1, price=$2, cost=$3, duration_minutes=$4, commission_pct=$5
+       WHERE id=$6 AND shop_id=$7 RETURNING *`,
+      [name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30), parseSvcCommission(commission_pct), req.params.id, req.shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Servicio no encontrado' });
     res.json(result.rows[0]);

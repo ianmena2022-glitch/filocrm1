@@ -1,0 +1,1 @@
+ALTER TABLE services ADD COLUMN IF NOT EXISTS commission_pct INT DEFAULT NULL;

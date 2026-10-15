@@ -3882,6 +3882,13 @@ select.form-input { padding-right: 32px; }
         <label>Duración (minutos)</label>
         <input type="number" id="svc-duration" placeholder="45" value="30">
       </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Comisión personalizada (%) <span style="font-weight:400;font-size:11px;color:var(--gray)">— opcional</span></label>
+        <input type="number" id="svc-commission" placeholder="Ej: 40" min="0" max="100" step="1">
+        <div style="font-size:11px;color:var(--gray);margin-top:4px;line-height:1.4">
+          Si lo dejás vacío, se usa la comisión del barbero configurada en <strong>Configuración</strong>.
+        </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="createService()">✅ Guardar servicio</button>
@@ -4017,6 +4024,13 @@ select.form-input { padding-right: 32px; }
       <div class="form-field">
         <label>Duración (minutos)</label>
         <input type="number" id="edit-s-duration" placeholder="30">
+      </div>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Comisión personalizada (%) <span style="font-weight:400;font-size:11px;color:var(--gray)">— opcional</span></label>
+        <input type="number" id="edit-s-commission" placeholder="Ej: 40" min="0" max="100" step="1">
+        <div style="font-size:11px;color:var(--gray);margin-top:4px;line-height:1.4">
+          Si lo dejás vacío, se usa la comisión del barbero configurada en <strong>Configuración</strong>.
+        </div>
       </div>
     </div>
     <div class="modal-actions">
@@ -6230,6 +6244,8 @@ async function createService() {
   const price = document.getElementById('svc-price').value;
   const cost = document.getElementById('svc-cost').value;
   const duration = document.getElementById('svc-duration').value;
+  const commissionRaw = document.getElementById('svc-commission')?.value;
+  const commission_pct = commissionRaw === '' || commissionRaw == null ? null : parseInt(commissionRaw);
   if (!name || !price) return showToast('⚠️', 'Nombre y precio son obligatorios', '');
   closeModal('modal-servicio');
   showToast('✅', 'Servicio guardado', name);
@@ -6247,7 +6263,7 @@ async function createService() {
       </div>`);
   }
   try {
-    await api('POST', '/settings/services', { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30) });
+    await api('POST', '/settings/services', { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30), commission_pct });
     loadServices();
   } catch (e) {
     showToast('❌', 'Error', e.message);
@@ -8715,6 +8731,8 @@ function editServiceById(id) {
   document.getElementById('edit-s-price').value = s.price || '';
   document.getElementById('edit-s-cost').value = s.cost || 0;
   document.getElementById('edit-s-duration').value = s.duration_minutes || 30;
+  const commEl = document.getElementById('edit-s-commission');
+  if (commEl) commEl.value = (s.commission_pct !== null && s.commission_pct !== undefined) ? s.commission_pct : '';
   openModal('modal-edit-servicio');
 }
 
@@ -8724,9 +8742,11 @@ async function saveEditService() {
   const price    = document.getElementById('edit-s-price').value;
   const cost     = document.getElementById('edit-s-cost').value;
   const duration = document.getElementById('edit-s-duration').value;
+  const commRaw  = document.getElementById('edit-s-commission')?.value;
+  const commission_pct = commRaw === '' || commRaw == null ? null : parseInt(commRaw);
   if (!name || !price) return showToast('⚠️', 'Nombre y precio son obligatorios', '');
   try {
-    await api('PUT', `/settings/services/${id}`, { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30) });
+    await api('PUT', `/settings/services/${id}`, { name, price: parseFloat(price), cost: parseFloat(cost||0), duration_minutes: parseInt(duration||30), commission_pct });
     closeModal('modal-edit-servicio');
     showToast('✅', 'Servicio actualizado', name);
     loadServices();
