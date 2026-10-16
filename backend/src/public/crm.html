@@ -3665,7 +3665,8 @@ select.form-input { padding-right: 32px; }
       </div>
       <div class="form-field">
         <label>Hora</label>
-        <input type="time" id="t-time">
+        <input type="time" id="t-time" step="60">
+        <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Cualquier hora (futura). No se aplica el intervalo configurado.</div>
       </div>
       <!-- Barbero (visible solo si el plan tiene comisiones activas) -->
       <div class="form-field" id="t-barber-field" style="display:none">
@@ -6439,6 +6440,16 @@ async function createAppointment() {
   }
 
   if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
+
+  // Bloquear fecha/hora pasada (comparación local)
+  try {
+    const [hh, mm] = time.split(':').map(Number);
+    const [yy, mo, dd] = date.split('-').map(Number);
+    const chosen = new Date(yy, mo - 1, dd, hh, mm);
+    if (chosen.getTime() < Date.now() - 60 * 1000) { // tolerancia de 1 min
+      return showToast('⚠️', 'Fecha u hora pasada', 'El turno no puede ser anterior a este momento.');
+    }
+  } catch(_) {}
 
   try {
     // Si hay nombre pero no hay cliente seleccionado, crear el cliente primero
