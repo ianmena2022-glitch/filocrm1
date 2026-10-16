@@ -231,17 +231,18 @@ router.post('/', auth, async (req, res) => {
       }
     }
 
-    // Verificar solapamiento: mismo barbero, mismo día, mismo bloque horario
+    // En alta MANUAL del dueño/barbero se permite overlap: solo rechazamos si
+    // hay otro turno con la MISMA hora exacta de inicio para ese barbero.
     if (assignedBarberId) {
       const conflict = await pool.query(
         `SELECT id FROM appointments
          WHERE shop_id=$1 AND barber_id=$2 AND date=$3
            AND status NOT IN ('cancelled','noshow')
-           AND time_start < $4 AND time_end > $5`,
-        [shopId, assignedBarberId, date, time_end, time_start]
+           AND time_start = $4`,
+        [shopId, assignedBarberId, date, time_start]
       );
       if (conflict.rows.length) {
-        return res.status(409).json({ error: `El barbero ya tiene un turno de ${time_start} a ${time_end}. Elegí otro horario.` });
+        return res.status(409).json({ error: `El barbero ya tiene un turno a las ${time_start}. Elegí otra hora.` });
       }
     }
 
@@ -432,22 +433,22 @@ router.put('/:id', auth, async (req, res) => {
   const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
   try {
-    // Si cambia el barbero, verificar solapamiento con sus otros turnos
+    // Al reasignar barbero, permitimos overlap y solo rechazamos si otro turno
+    // del mismo barbero empieza EXACTAMENTE a la misma hora.
     if (hasBarberField && newBarberId) {
-      const curr = await pool.query('SELECT date, time_start, time_end FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
+      const curr = await pool.query('SELECT date, time_start FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
       if (!curr.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
       const d  = curr.rows[0].date;
       const ts = time_start || curr.rows[0].time_start;
-      const te = time_end   || curr.rows[0].time_end;
       const conflict = await pool.query(
         `SELECT id FROM appointments
          WHERE shop_id=$1 AND barber_id=$2 AND date=$3 AND id<>$4
            AND status NOT IN ('cancelled','noshow')
-           AND time_start < $5 AND time_end > $6`,
-        [shopId, newBarberId, d, req.params.id, te, ts]
+           AND time_start = $5`,
+        [shopId, newBarberId, d, req.params.id, ts]
       );
       if (conflict.rows.length) {
-        return res.status(409).json({ error: `El barbero ya tiene un turno de ${ts} a ${te}. Elegí otro horario.` });
+        return res.status(409).json({ error: `El barbero ya tiene un turno a las ${ts}. Elegí otra hora.` });
       }
     }
 
