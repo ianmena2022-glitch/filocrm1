@@ -120,18 +120,6 @@ router.post('/', auth, async (req, res) => {
 
   const shopId = realShopId(req);
 
-  // Rechazar fecha/hora pasada usando la zona horaria del shop
-  try {
-    const tz = await getShopTz(shopId);
-    const nowStr   = new Date().toLocaleString('sv-SE', { timeZone: tz }); // "YYYY-MM-DD HH:MM:SS"
-    const todayShop = nowStr.slice(0, 10);
-    const nowHHMM   = nowStr.slice(11, 16);
-    const t = String(time_start).slice(0, 5);
-    if (date < todayShop || (date === todayShop && t < nowHHMM)) {
-      return res.status(400).json({ error: 'La fecha/hora del turno no puede ser pasada' });
-    }
-  } catch(_) { /* si falla el chequeo de tz, no bloqueamos */ }
-
   try {
     // Resolver servicio
     let svcName = service_name || null;
