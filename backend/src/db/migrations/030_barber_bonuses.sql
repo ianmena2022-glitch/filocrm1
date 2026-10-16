@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS barber_bonuses (id SERIAL PRIMARY KEY, shop_id INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE, barber_id INT NOT NULL REFERENCES shops(id) ON DELETE CASCADE, amount NUMERIC(10,2) NOT NULL, note TEXT, commission_settled BOOLEAN NOT NULL DEFAULT FALSE, settlement_id INT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), settled_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS idx_barber_bonuses_pending ON barber_bonuses(barber_id, shop_id, commission_settled);

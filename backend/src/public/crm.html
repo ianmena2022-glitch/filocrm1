@@ -2499,6 +2499,35 @@ select.form-input { padding-right: 32px; }
       </div>
     </div>
 
+    <!-- Modal bonus a barbero -->
+    <div class="modal-overlay" id="modal-bonus" style="display:none" onclick="if(event.target===this)document.getElementById('modal-bonus').style.display='none'">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <h2>🎁 Dar bonus</h2>
+          <button class="modal-close" onclick="document.getElementById('modal-bonus').style.display='none'">×</button>
+        </div>
+        <div class="modal-body">
+          <div style="font-size:12px;color:var(--gray);margin-bottom:4px">Barbero</div>
+          <div id="bonus-barber-name" style="font-size:16px;font-weight:700;color:var(--w);margin-bottom:16px"></div>
+          <div class="form-group">
+            <label class="form-label">Monto ($)</label>
+            <input type="number" class="form-input" id="bonus-amount" placeholder="Ej: 10000" min="1" step="100" autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nota (opcional)</label>
+            <input type="text" class="form-input" id="bonus-note" placeholder="Ej: Premio por buen desempeño">
+          </div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;padding:10px 12px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:8px">
+            💡 El monto se suma 100% a la próxima liquidación del barbero. No se descuenta comisión.
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal-bonus').style.display='none'">Cancelar</button>
+          <button class="btn-primary" id="btn-confirm-bonus" onclick="confirmBonus()" style="background:#4ade80;color:#0a2a14">🎁 Dar bonus</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Configuración Enterprise -->
     <div class="modal-overlay" id="modal-ent-config" style="display:none" onclick="if(event.target===this)this.style.display='none'">
       <div class="modal" style="max-width:480px">
@@ -8325,6 +8354,7 @@ async function loadEquipo() {
         <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end">
           <div style="display:flex;gap:8px">
             <button class="appt-btn" onclick="editBarber(${b.id})" title="Editar">✏️</button>
+            <button class="appt-btn" onclick="openBonusModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Dar bonus" style="background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80">🎁 Bonus</button>
             <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
           </div>
           ${hasPending ? `<button class="btn-add" style="font-size:12px;padding:6px 12px;background:linear-gradient(135deg,#FFD100,#ff9800)" onclick="openSettlementModal(${b.id},'${b.name.replace(/'/g,"\\'")}')">💸 Liquidar</button>` : `<button class="appt-btn" style="font-size:11px;opacity:0.5" onclick="openSettlementHistory(${b.id},'${b.name.replace(/'/g,"\\'")}')">📋 Historial</button>`}
@@ -8484,6 +8514,35 @@ async function removeBarber(id, name) {
 let _settlementBarberId = null;
 let _settlementData = null;
 
+let _bonusBarberId = null;
+function openBonusModal(barberId, barberName) {
+  _bonusBarberId = barberId;
+  document.getElementById('bonus-barber-name').textContent = barberName;
+  document.getElementById('bonus-amount').value = '';
+  document.getElementById('bonus-note').value = '';
+  document.getElementById('modal-bonus').style.display = 'flex';
+  setTimeout(() => document.getElementById('bonus-amount').focus(), 100);
+}
+
+async function confirmBonus() {
+  if (!_bonusBarberId) return;
+  const amount = parseFloat(document.getElementById('bonus-amount').value);
+  const note = document.getElementById('bonus-note').value.trim();
+  if (!amount || amount <= 0) return showToast('⚠️', 'El monto debe ser mayor a 0', '');
+  const btn = document.getElementById('btn-confirm-bonus');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    await api('POST', `/barbers/${_bonusBarberId}/bonus`, { amount, note: note || null });
+    document.getElementById('modal-bonus').style.display = 'none';
+    showToast('🎁', 'Bonus agregado', `$${amount.toLocaleString('es-AR')} se sumarán a la próxima liquidación`);
+    if (typeof loadBarbers === 'function') loadBarbers();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🎁 Dar bonus';
+  }
+}
+
 async function openSettlementModal(barberId, barberName) {
   _settlementBarberId = barberId;
   _settlementData = null;
@@ -8493,7 +8552,7 @@ async function openSettlementModal(barberId, barberName) {
   try {
     const data = await api('GET', `/barbers/${barberId}/pending-settlement`);
     _settlementData = data;
-    if (!data.count && !(data.product_sales && data.product_sales.length)) {
+    if (!data.count && !(data.product_sales && data.product_sales.length) && !(data.bonuses && data.bonuses.length)) {
       document.getElementById('settlement-preview').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">✅ No hay comisiones pendientes para este barbero.</div>';
       return;
     }
@@ -8535,6 +8594,10 @@ async function openSettlementModal(barberId, barberName) {
         ${prodComm > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <span style="color:rgba(192,132,252,0.8);font-size:12px">🛒 Comisión productos (${(data.product_sales||[]).length})</span>
           <span style="color:#c084fc;font-size:12px">$${fmt0(prodComm)}</span>
+        </div>` : ''}
+        ${parseFloat(data.bonus_total||0) > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:rgba(74,222,128,0.9);font-size:12px">🎁 Bonus (${(data.bonuses||[]).length})</span>
+          <span style="color:#4ade80;font-size:12px">$${fmt0(parseFloat(data.bonus_total||0))}</span>
         </div>` : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:10px;margin:12px 0">
           <span style="color:var(--yellow);font-size:14px;font-weight:700">💸 Total a pagar</span>

@@ -123,6 +123,7 @@ router.get('/stats', auth, ownerOnly, async (req, res) => {
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
   + COALESCE(SUM(a.tip) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
   + COALESCE((SELECT SUM(ps.barber_commission_amount) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0)
+  + COALESCE((SELECT SUM(bb.amount) FROM barber_bonuses bb WHERE bb.barber_id=s.id AND bb.commission_settled=FALSE AND bb.shop_id=$1), 0)
   AS pending_commission,
   COUNT(a.id) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)) AS pending_appointments,
   COALESCE((SELECT COUNT(*) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0) AS pending_product_sales
@@ -223,7 +224,16 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
       [barber.id, req.shopId]
     );
     const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
-    const totalCommission = apptCommission + productCommission + tipsTotal;
+
+    const bonusesQ = await pool.query(
+      `SELECT id, amount, note, created_at FROM barber_bonuses
+        WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE
+        ORDER BY created_at DESC`,
+      [barber.id, req.shopId]
+    );
+    const bonusTotal = bonusesQ.rows.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
+
+    const totalCommission = apptCommission + productCommission + tipsTotal + bonusTotal;
 
     res.json({
       barber,
@@ -234,9 +244,35 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
       tips_total: tipsTotal,
       product_sales: productSalesQ.rows,
       product_commission: productCommission,
+      bonuses: bonusesQ.rows,
+      bonus_total: bonusTotal,
       commission_amount: totalCommission
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/barbers/:id/bonus — agregar un bonus 100% al barbero (sin comisión)
+router.post('/:id/bonus', auth, ownerOnly, async (req, res) => {
+  const { amount, note } = req.body;
+  const amt = parseFloat(amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  try {
+    const barberQ = await pool.query(
+      'SELECT id, name FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+      [req.params.id, req.shopId]
+    );
+    if (!barberQ.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
+
+    const result = await pool.query(
+      `INSERT INTO barber_bonuses (shop_id, barber_id, amount, note)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.shopId, req.params.id, amt, (note || '').trim() || null]
+    );
+    console.log(`[BONUS] +$${amt} a barbero ${barberQ.rows[0].name} (${req.params.id})`);
+    res.status(201).json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // POST /api/barbers/:id/settle — crear liquidación
@@ -263,7 +299,13 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       [barber.id, req.shopId]
     );
 
-    if (!appts.rows.length && !productSalesQ.rows.length) {
+    const bonusesQ = await pool.query(
+      `SELECT id, amount FROM barber_bonuses
+        WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
+      [barber.id, req.shopId]
+    );
+
+    if (!appts.rows.length && !productSalesQ.rows.length && !bonusesQ.rows.length) {
       return res.status(400).json({ error: 'No hay comisiones pendientes para liquidar' });
     }
 
@@ -274,12 +316,14 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     }, 0);
     const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
     const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
-    const commissionAmount = apptCommission + productCommission + tipsTotal;
+    const bonusTotal = bonusesQ.rows.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
+    const commissionAmount = apptCommission + productCommission + tipsTotal + bonusTotal;
 
     const notesExtra = [
       appts.rows.length ? `${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}` : null,
       tipsTotal > 0 ? `propinas $${Math.round(tipsTotal).toLocaleString('es-AR')}` : null,
       productSalesQ.rows.length ? `${productSalesQ.rows.length} venta${productSalesQ.rows.length !== 1 ? 's' : ''} de producto` : null,
+      bonusesQ.rows.length ? `${bonusesQ.rows.length} bonus ($${Math.round(bonusTotal).toLocaleString('es-AR')})` : null,
     ].filter(Boolean).join(' · ');
 
     const settlement = await pool.query(
@@ -301,6 +345,14 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     if (productSalesQ.rows.length) {
       await pool.query(
         `UPDATE product_sales SET commission_settled=TRUE, settlement_id=$1
+         WHERE barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE`,
+        [settlement.rows[0].id, barber.id, req.shopId]
+      );
+    }
+
+    if (bonusesQ.rows.length) {
+      await pool.query(
+        `UPDATE barber_bonuses SET commission_settled=TRUE, settlement_id=$1, settled_at=NOW()
          WHERE barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE`,
         [settlement.rows[0].id, barber.id, req.shopId]
       );
