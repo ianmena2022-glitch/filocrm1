@@ -4044,6 +4044,12 @@ select.form-input { padding-right: 32px; }
           <option value="cancelled">Cancelado</option>
         </select>
       </div>
+      <div class="form-field" id="edit-a-barber-field" style="grid-column:1/-1;display:none">
+        <label>Barbero</label>
+        <select id="edit-a-barber">
+          <option value="">— Sin asignar —</option>
+        </select>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-primary" onclick="saveEditAppt()">✅ Guardar cambios</button>
@@ -7606,24 +7612,21 @@ function openModal(id) {
       loadClients();
     }
     document.getElementById('t-date').value = agendaDate;
-    // Cargar barberos si hay comisiones activas
+    // Cargar barberos (siempre visible si hay barberos cargados)
     const barberField = document.getElementById('t-barber-field');
     const barberSel   = document.getElementById('t-barber-select');
-    if (currentShop?.commission_enabled) {
-      const barbers = window._barbersList || [];
+    const renderBarberOpts = (list) => {
       barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-        barbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
-      barberField.style.display = '';
-      // Si no hay lista cacheada, intentar cargar
-      if (!barbers.length) {
-        api('GET', '/barbers').then(list => {
-          window._barbersList = list;
-          barberSel.innerHTML = '<option value="">— Sin asignar —</option>' +
-            list.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('');
-        }).catch(() => {});
-      }
-    } else {
-      barberField.style.display = 'none';
+        list.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)}${currentShop?.commission_enabled ? ` (${b.barber_commission_pct||50}%)` : ''}</option>`).join('');
+      barberField.style.display = list.length ? '' : 'none';
+    };
+    const cached = window._barbersList || [];
+    renderBarberOpts(cached);
+    if (!cached.length) {
+      api('GET', '/barbers').then(list => {
+        window._barbersList = list || [];
+        renderBarberOpts(window._barbersList);
+      }).catch(() => {});
     }
   }
   if (id === 'modal-turno') {
@@ -8816,6 +8819,23 @@ function editApptById(id) {
     document.getElementById('edit-a-price').value = a.price || '';
     document.getElementById('edit-a-status').value = a.status || 'pending';
   }
+  // Poblar selector de barbero
+  const bField = document.getElementById('edit-a-barber-field');
+  const bSel   = document.getElementById('edit-a-barber');
+  const currentBarberId = (_editApptCache[id] && _editApptCache[id].barber_id) || '';
+  const renderEditBarberOpts = (list) => {
+    bSel.innerHTML = '<option value="">— Sin asignar —</option>' +
+      list.map(b => `<option value="${b.id}" ${String(b.id)===String(currentBarberId)?'selected':''}>${escHtml(b.name)}</option>`).join('');
+    bField.style.display = list.length ? '' : 'none';
+  };
+  const cachedB = window._barbersList || [];
+  renderEditBarberOpts(cachedB);
+  if (!cachedB.length) {
+    api('GET', '/barbers').then(list => {
+      window._barbersList = list || [];
+      renderEditBarberOpts(window._barbersList);
+    }).catch(() => {});
+  }
   openModal('modal-edit-turno');
 }
 
@@ -8826,8 +8846,10 @@ async function saveEditAppt() {
   const timeEnd    = document.getElementById('edit-a-time-end').value;
   const price      = document.getElementById('edit-a-price').value;
   const status     = document.getElementById('edit-a-status').value;
+  const barberVal  = document.getElementById('edit-a-barber').value;
+  const barberId   = barberVal === '' ? null : parseInt(barberVal);
   try {
-    await api('PUT', `/appointments/${id}`, { client_name: clientName, time_start: timeStart, time_end: timeEnd, price: parseFloat(price||0), status });
+    await api('PUT', `/appointments/${id}`, { client_name: clientName, time_start: timeStart, time_end: timeEnd, price: parseFloat(price||0), status, barber_id: barberId });
     closeModal('modal-edit-turno');
     showToast('✅', 'Turno actualizado', '');
     loadAgenda();

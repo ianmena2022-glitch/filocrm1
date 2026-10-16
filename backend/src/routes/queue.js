@@ -29,17 +29,33 @@ router.post('/:slug/join', async (req, res) => {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
     }
 
-    // Look up client by phone — link if already registered
+    // Look up client by phone — link if already registered, auto-create si es nuevo
     let clientId = null;
     let resolvedName = name.trim();
     if (phone) {
+      const phoneClean = phone.trim();
       const clientRes = await pool.query(
         'SELECT id, name FROM clients WHERE shop_id=$1 AND phone=$2 LIMIT 1',
-        [shop.id, phone.trim()]
+        [shop.id, phoneClean]
       );
       if (clientRes.rows.length) {
         clientId    = clientRes.rows[0].id;
         resolvedName = clientRes.rows[0].name; // use the stored name for known clients
+      } else {
+        // Cliente nuevo — crear en la base para que gane puntos y quede en el CRM
+        try {
+          const created = await pool.query(
+            `INSERT INTO clients (shop_id, name, phone, notes)
+             VALUES ($1, $2, $3, 'Alta automática desde fila virtual')
+             RETURNING id`,
+            [shop.id, resolvedName, phoneClean]
+          );
+          clientId = created.rows[0].id;
+          console.log(`[QUEUE] cliente nuevo auto-creado shop=${shop.id} id=${clientId} phone=${phoneClean}`);
+        } catch (createErr) {
+          // No bloquear el join si falla el alta del cliente (ej: unique constraint race)
+          console.error('[QUEUE] no se pudo crear cliente auto:', createErr.message);
+        }
       }
     }
 

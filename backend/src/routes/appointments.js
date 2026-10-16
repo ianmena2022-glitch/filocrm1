@@ -391,18 +391,70 @@ router.put('/:id/status', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   const { client_name, time_start, time_end, price, status } = req.body;
   const shopId = realShopId(req);
+
+  // barber_id: puede venir como null explícito (desasignar) o número
+  const hasBarberField = Object.prototype.hasOwnProperty.call(req.body, 'barber_id');
+  const newBarberId = hasBarberField
+    ? (req.body.barber_id === null || req.body.barber_id === '' ? null : parseInt(req.body.barber_id))
+    : undefined;
+
   try {
+    // Si cambia el barbero, verificar solapamiento con sus otros turnos
+    if (hasBarberField && newBarberId) {
+      const curr = await pool.query('SELECT date, time_start, time_end FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
+      if (!curr.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
+      const d  = curr.rows[0].date;
+      const ts = time_start || curr.rows[0].time_start;
+      const te = time_end   || curr.rows[0].time_end;
+      const conflict = await pool.query(
+        `SELECT id FROM appointments
+         WHERE shop_id=$1 AND barber_id=$2 AND date=$3 AND id<>$4
+           AND status NOT IN ('cancelled','noshow')
+           AND time_start < $5 AND time_end > $6`,
+        [shopId, newBarberId, d, req.params.id, te, ts]
+      );
+      if (conflict.rows.length) {
+        return res.status(409).json({ error: `El barbero ya tiene un turno de ${ts} a ${te}. Elegí otro horario.` });
+      }
+    }
+
+    // Recalcular commission_pct si cambia el barbero (respeta comisión custom del servicio)
+    let newCommissionPct = null;
+    if (hasBarberField) {
+      const curr = await pool.query('SELECT service_id FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
+      if (curr.rows.length) {
+        let svcPct = null;
+        if (curr.rows[0].service_id) {
+          const svc = await pool.query('SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2', [curr.rows[0].service_id, shopId]);
+          if (svc.rows.length && svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+            svcPct = parseInt(svc.rows[0].commission_pct);
+          }
+        }
+        if (newBarberId === null) {
+          newCommissionPct = 0;
+        } else if (svcPct !== null) {
+          newCommissionPct = svcPct;
+        } else {
+          const b = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [newBarberId]);
+          newCommissionPct = (b.rows.length && b.rows[0].barber_commission_pct) ? parseInt(b.rows[0].barber_commission_pct) : 50;
+        }
+      }
+    }
+
     const result = await pool.query(
       `UPDATE appointments SET
-         client_name = COALESCE($1, client_name),
-         time_start  = COALESCE($2, time_start),
-         time_end    = COALESCE($3, time_end),
-         price       = COALESCE($4, price),
-         status      = COALESCE($5, status)
+         client_name    = COALESCE($1, client_name),
+         time_start     = COALESCE($2, time_start),
+         time_end       = COALESCE($3, time_end),
+         price          = COALESCE($4, price),
+         status         = COALESCE($5, status),
+         barber_id      = CASE WHEN $8::boolean THEN $9::int ELSE barber_id END,
+         commission_pct = CASE WHEN $8::boolean THEN $10::int ELSE commission_pct END
        WHERE id=$6 AND shop_id=$7 RETURNING *`,
       [client_name||null, time_start||null, time_end||null,
        price !== undefined ? parseFloat(price) : null,
-       status||null, req.params.id, shopId]
+       status||null, req.params.id, shopId,
+       hasBarberField, newBarberId, newCommissionPct]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
     res.json(result.rows[0]);
