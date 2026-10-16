@@ -554,6 +554,8 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       delete qrAttempts[shopId];
       delete qrCooldownUntil[shopId];
       delete statuses[`${shopId}_reconnect`]; // reset contador de reconexión
+      // NO reseteamos _440_count ni _440_firstAt — para que si conecta y se cae de nuevo
+      // por 440, siga sumando dentro de la ventana de 2 minutos y detecte el loop.
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
       await saveSessionToDB(shopId);
       if (onConnected) onConnected();
@@ -570,7 +572,37 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
         delete statuses[`${shopId}_reconnect`];
+        delete statuses[`${shopId}_440_count`];
+        delete statuses[`${shopId}_440_firstAt`];
         if (onDisconnected) onDisconnected();
+      } else if (code === 440 || code === DisconnectReason.connectionReplaced) {
+        // 440 = "Session replaced" → otro dispositivo tomó la sesión.
+        // Reconectar genera un loop infinito (ambos clientes se pisan).
+        // Cortamos después de 3 ocurrencias en 2 minutos y pedimos acción manual.
+        const now = Date.now();
+        const firstAt = statuses[`${shopId}_440_firstAt`] || now;
+        const windowMs = 2 * 60 * 1000;
+        if (now - firstAt > windowMs) {
+          statuses[`${shopId}_440_count`] = 1;
+          statuses[`${shopId}_440_firstAt`] = now;
+        } else {
+          statuses[`${shopId}_440_count`] = (statuses[`${shopId}_440_count`] || 0) + 1;
+          if (!statuses[`${shopId}_440_firstAt`]) statuses[`${shopId}_440_firstAt`] = now;
+        }
+        const count440 = statuses[`${shopId}_440_count`];
+        if (count440 >= 3) {
+          console.log(`[WPP] Shop ${shopId}: ⚠️ ${count440} desconexiones 440 (sesión reemplazada) en ventana corta. Deteniendo reconexión — hay otro dispositivo usando esta sesión de WhatsApp. El cliente debe cerrar WhatsApp Web en otros dispositivos (Celular → Dispositivos vinculados) y reconectar manualmente desde Configuración.`);
+          await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);
+          delete sockets[shopId];
+          delete statuses[`${shopId}_reconnect`];
+          delete statuses[`${shopId}_440_count`];
+          delete statuses[`${shopId}_440_firstAt`];
+          if (onDisconnected) onDisconnected();
+        } else {
+          const delay = 30 * 1000; // delay fijo largo para no pisar al otro cliente
+          console.log(`[WPP] Shop ${shopId}: desconexión 440 ${count440}/3 — reintentando en ${delay/1000}s (si sigue, el cliente tiene otro dispositivo con esta sesión)`);
+          setTimeout(() => connect(shopId, null, null, null), delay);
+        }
       } else {
         // Otros errores: reconectar con backoff exponencial
         const attempt = (statuses[`${shopId}_reconnect`] || 0) + 1;
