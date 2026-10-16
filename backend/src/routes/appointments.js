@@ -276,11 +276,14 @@ router.put('/:id/status', auth, async (req, res) => {
       ? `(shop_id = $5 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $5 AND is_branch = TRUE))`
       : `shop_id = $5`;
 
+    // Barberos solo pueden modificar sus propios turnos
+    const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
+
     const result = await pool.query(
       `UPDATE appointments SET status=$1,
          payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
          tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
-       WHERE id=$4 AND ${shopConditionStatus} RETURNING *`,
+       WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
       [status, payment_method || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
@@ -392,11 +395,14 @@ router.put('/:id', auth, async (req, res) => {
   const { client_name, time_start, time_end, price, status } = req.body;
   const shopId = realShopId(req);
 
-  // barber_id: puede venir como null explícito (desasignar) o número
-  const hasBarberField = Object.prototype.hasOwnProperty.call(req.body, 'barber_id');
+  // Barberos no pueden reasignar turno a otro barbero: ignoramos el campo si viene
+  const hasBarberField = !req.isBarber && Object.prototype.hasOwnProperty.call(req.body, 'barber_id');
   const newBarberId = hasBarberField
     ? (req.body.barber_id === null || req.body.barber_id === '' ? null : parseInt(req.body.barber_id))
     : undefined;
+
+  // Barberos solo pueden editar sus propios turnos
+  const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
   try {
     // Si cambia el barbero, verificar solapamiento con sus otros turnos
@@ -450,7 +456,7 @@ router.put('/:id', auth, async (req, res) => {
          status         = COALESCE($5, status),
          barber_id      = CASE WHEN $8::boolean THEN $9::int ELSE barber_id END,
          commission_pct = CASE WHEN $8::boolean THEN $10::int ELSE commission_pct END
-       WHERE id=$6 AND shop_id=$7 RETURNING *`,
+       WHERE id=$6 AND shop_id=$7${barberCondition} RETURNING *`,
       [client_name||null, time_start||null, time_end||null,
        price !== undefined ? parseFloat(price) : null,
        status||null, req.params.id, shopId,
@@ -547,8 +553,11 @@ router.delete('/:id', auth, async (req, res) => {
       ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
       : `shop_id = $2`;
 
+    // Barberos solo pueden borrar sus propios turnos
+    const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
+
     const result = await pool.query(
-      `DELETE FROM appointments WHERE id=$1 AND ${shopConditionDel} RETURNING id`,
+      `DELETE FROM appointments WHERE id=$1 AND ${shopConditionDel}${barberCondition} RETURNING id`,
       [req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });

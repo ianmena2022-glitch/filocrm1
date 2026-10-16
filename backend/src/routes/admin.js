@@ -3,7 +3,10 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const pool    = require('../db/pool');
 
-const ADMIN_SECRET = process.env.ADMIN_PASSWORD || 'filo-admin-2026';
+const ADMIN_SECRET = process.env.ADMIN_PASSWORD;
+if (!ADMIN_SECRET) {
+  console.error('[ADMIN] FATAL: ADMIN_PASSWORD no está configurada. Login admin deshabilitado.');
+}
 
 // Rate limiting simple para login admin (máx 10 intentos por IP cada 15 min)
 const loginAttempts = new Map();
@@ -40,6 +43,9 @@ router.post('/login', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   if (checkRateLimit(ip)) {
     return res.status(429).json({ error: 'Demasiados intentos. Esperá 15 minutos.' });
+  }
+  if (!ADMIN_SECRET) {
+    return res.status(503).json({ error: 'Login admin no configurado en el servidor' });
   }
   const { password } = req.body;
   if (!password || password !== ADMIN_SECRET) {

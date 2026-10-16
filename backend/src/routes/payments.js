@@ -1,9 +1,49 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 
 const MP_BASE = 'https://api.mercadopago.com';
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
+const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
+
+// Verifica la firma x-signature de Mercado Pago (HMAC-SHA256).
+// Formato: "ts=<ts>,v1=<hash>" · manifest = `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
+function verifyMpSignature(req) {
+  if (!MP_WEBHOOK_SECRET) {
+    // Sin secret configurada, no podemos validar: en producción esto debe fallar.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[MP] FATAL: MP_WEBHOOK_SECRET no configurada — rechazando webhook');
+      return false;
+    }
+    console.warn('[MP] MP_WEBHOOK_SECRET no configurada (dev) — aceptando sin verificar');
+    return true;
+  }
+  try {
+    const sigHeader = req.headers['x-signature'] || '';
+    const requestId = req.headers['x-request-id'] || '';
+    const dataId    = req.query['data.id'] || req.body?.data?.id || '';
+    if (!sigHeader || !dataId) return false;
+
+    const parts = {};
+    sigHeader.split(',').forEach(p => {
+      const [k, v] = p.split('=').map(s => s && s.trim());
+      if (k && v) parts[k] = v;
+    });
+    const ts = parts.ts;
+    const v1 = parts.v1;
+    if (!ts || !v1) return false;
+
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    const expected = crypto.createHmac('sha256', MP_WEBHOOK_SECRET).update(manifest).digest('hex');
+    const a = Buffer.from(v1, 'hex');
+    const b = Buffer.from(expected, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) {
+    console.error('[MP] Error verificando firma:', e.message);
+    return false;
+  }
+}
 
 async function mpFetch(method, path, body) {
   const res = await fetch(`${MP_BASE}${path}`, {
@@ -89,6 +129,10 @@ router.post('/subscription', auth, async (req, res) => {
 
 // POST /api/payments/webhook — MP notifica cambios de estado
 router.post('/webhook', async (req, res) => {
+  if (!verifyMpSignature(req)) {
+    console.warn('[MP Webhook] firma inválida — rechazando');
+    return res.sendStatus(401);
+  }
   try {
     const { type, data } = req.body;
     console.log(`[MP Webhook] type=${type} id=${data?.id}`);
@@ -243,15 +287,28 @@ router.post('/qr-order', auth, async (req, res) => {
 
 // POST /api/payments/webhook-qr — MP notifica pago aprobado (QR / Checkout)
 router.post('/webhook-qr', async (req, res) => {
+  if (!verifyMpSignature(req)) {
+    console.warn('[QR Webhook] firma inválida — rechazando');
+    return res.sendStatus(401);
+  }
   try {
     const { type, data, action } = req.body;
     console.log(`[QR Webhook] type=${type} action=${action} id=${data?.id}`);
 
     const isPaymentEvent = type === 'payment' || action === 'payment.created' || action === 'payment.updated';
     if (isPaymentEvent && data?.id) {
-      const payment = await mpFetch('GET', `/v1/payments/${data.id}`);
+      const paymentId = String(data.id);
+
+      // Idempotencia: si ya procesamos este payment_id, no volvemos a activar
+      const already = await pool.query('SELECT 1 FROM mp_processed_payments WHERE payment_id=$1', [paymentId]);
+      if (already.rows.length) {
+        console.log(`[QR Webhook] pago ${paymentId} ya procesado, ignorando`);
+        return res.sendStatus(200);
+      }
+
+      const payment = await mpFetch('GET', `/v1/payments/${paymentId}`);
       const { status, external_reference, transaction_amount } = payment;
-      console.log(`[QR Webhook] pago ${data.id} → ${status} · ref=${external_reference}`);
+      console.log(`[QR Webhook] pago ${paymentId} → ${status} · ref=${external_reference}`);
 
       if (status === 'approved' && external_reference?.startsWith('filo:')) {
         const parts   = external_reference.split(':');
@@ -295,6 +352,13 @@ router.post('/webhook-qr', async (req, res) => {
         );
 
         if (updated.rows.length) {
+          // Marcar payment_id como procesado para evitar doble activación en reintentos del webhook
+          await pool.query(
+            `INSERT INTO mp_processed_payments (payment_id, shop_id, plan, amount)
+             VALUES ($1,$2,$3,$4) ON CONFLICT (payment_id) DO NOTHING`,
+            [paymentId, shopId, plan, paidAmount]
+          );
+
           const shop = updated.rows[0];
           const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
           console.log(`[QR Webhook] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
