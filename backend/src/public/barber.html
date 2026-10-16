@@ -508,6 +508,11 @@ body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-s
             <div class="stat-value" id="stat-comision" style="font-size:22px">$0</div>
             <div class="stat-sub" id="stat-comision-sub">sobre completados</div>
           </div>
+          <div class="stat-card" id="pending-card" style="display:none;background:linear-gradient(135deg,rgba(255,209,0,0.08),rgba(74,222,128,0.05));border:1px solid rgba(255,209,0,0.25)">
+            <div class="stat-label" style="color:var(--yellow)">💰 A cobrar</div>
+            <div class="stat-value" id="stat-pending" style="font-size:22px;color:#FFD100">$0</div>
+            <div class="stat-sub" id="stat-pending-sub">pendiente de liquidación</div>
+          </div>
         </div>
 
         <!-- Calendario semanal -->
@@ -822,6 +827,23 @@ async function loadDashboard() {
 
   const commCard = document.getElementById('commission-card');
   if (commCard) commCard.style.display = me.commission_enabled ? 'block' : 'none';
+
+  // Cargar total pendiente a liquidar (acumulado histórico)
+  try {
+    const pend = await api('GET', '/barbers/my-pending');
+    const pendCard = document.getElementById('pending-card');
+    const pendVal  = document.getElementById('stat-pending');
+    const pendSub  = document.getElementById('stat-pending-sub');
+    if (pendCard && pendVal) {
+      pendCard.style.display = 'block';
+      pendVal.textContent = '$' + Math.round(pend.total_pending || 0).toLocaleString('es-AR');
+      const parts = [];
+      if (pend.appt_count > 0)        parts.push(pend.appt_count + ' turno' + (pend.appt_count !== 1 ? 's' : ''));
+      if (pend.product_sales_count>0) parts.push(pend.product_sales_count + ' venta' + (pend.product_sales_count !== 1 ? 's' : ''));
+      if (pend.bonuses_count > 0)     parts.push(pend.bonuses_count + ' bonus');
+      if (pendSub) pendSub.textContent = parts.length ? parts.join(' · ') : 'sin pendientes';
+    }
+  } catch(e) { console.error('[pending]', e.message); }
 
   // Load today's appointments for dashboard
   try {

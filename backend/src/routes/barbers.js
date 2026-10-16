@@ -189,6 +189,58 @@ router.get('/parent-config', auth, async (req, res) => {
   }
 });
 
+// GET /api/barbers/my-pending — pendiente a cobrar del barbero logueado
+router.get('/my-pending', auth, async (req, res) => {
+  if (!req.isBarber || !req.parentShopId) return res.status(403).json({ error: 'Solo barberos' });
+  const barberId = req.shopId;
+  const shopId   = req.parentShopId;
+  try {
+    const barber = (await pool.query(
+      'SELECT id, name, barber_commission_pct FROM shops WHERE id=$1', [barberId]
+    )).rows[0];
+    if (!barber) return res.status(404).json({ error: 'No encontrado' });
+
+    const appts = await pool.query(
+      `SELECT COUNT(*)::int AS n,
+              COALESCE(SUM(price),0)::float AS total_price,
+              COALESCE(SUM(COALESCE(tip,0)),0)::float AS tips_total,
+              COALESCE(SUM(price * COALESCE(commission_pct, $3) / 100.0), 0)::float AS appt_commission
+         FROM appointments
+        WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
+          AND (commission_settled IS NULL OR commission_settled=FALSE)`,
+      [shopId, barberId, parseInt(barber.barber_commission_pct || 50)]
+    );
+    const ps = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(barber_commission_amount),0)::float AS total
+         FROM product_sales WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
+      [barberId, shopId]
+    );
+    const bn = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(amount),0)::float AS total
+         FROM barber_bonuses WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
+      [barberId, shopId]
+    );
+
+    const apptRow = appts.rows[0];
+    const total = (apptRow.appt_commission || 0) + (apptRow.tips_total || 0)
+                + (ps.rows[0].total || 0) + (bn.rows[0].total || 0);
+
+    res.json({
+      appt_count: apptRow.n,
+      appt_total_price: apptRow.total_price,
+      appt_commission:  apptRow.appt_commission,
+      tips_total:       apptRow.tips_total,
+      product_sales_count: ps.rows[0].n,
+      product_commission:  ps.rows[0].total,
+      bonuses_count: bn.rows[0].n,
+      bonus_total:   bn.rows[0].total,
+      total_pending: total
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/barbers/:id/pending-settlement — turnos completados sin liquidar
 router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
   try {
