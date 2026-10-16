@@ -184,8 +184,6 @@ router.post('/:id/sell', auth, async (req, res) => {
 
     const precio = parseFloat(unit_price) || parseFloat(p.precio_venta);
     const total  = precio * qty;
-    const stockAntes   = parseInt(p.stock);
-    const stockDespues = stockAntes - qty;
 
     // Resolver comisión del barbero
     // product_sale_commission_pct tiene prioridad; si es null, cae a barber_commission_pct
@@ -230,6 +228,8 @@ router.post('/:id/sell', auth, async (req, res) => {
       await pool.query('DELETE FROM product_sales WHERE id=$1', [venta.rows[0].id]);
       return res.status(409).json({ error: 'Stock insuficiente (conflicto de concurrencia)' });
     }
+    const stockDespues = parseInt(dec.rows[0].stock);
+    const stockAntes   = stockDespues + qty;
 
     // Movimiento de stock
     await pool.query(
