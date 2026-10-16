@@ -117,11 +117,11 @@ async function runTrialExpiration() {
          AND (is_test IS NULL OR is_test = FALSE)
          AND plan IS DISTINCT FROM 'test'
          AND (
-           (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - INTERVAL '${GRACE} days')
+           (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - ($1::int || ' days')::interval)
            OR
-           (trial_ends_at IS NULL AND created_at < NOW() - INTERVAL '${7 + GRACE} days')
+           (trial_ends_at IS NULL AND created_at < NOW() - ($2::int || ' days')::interval)
          )
-    `);
+    `, [GRACE, 7 + GRACE]);
     if (rowCount > 0) console.log(`[TRIAL] ${rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
   } catch (e) {
     console.error('[TRIAL] Error auto-expiración:', e.message);
@@ -143,8 +143,8 @@ async function runActiveExpiration() {
          AND (is_test IS NULL OR is_test = FALSE)
          AND plan IS DISTINCT FROM 'test'
          AND trial_ends_at IS NOT NULL
-         AND trial_ends_at < NOW() - INTERVAL '${GRACE} days'
-    `);
+         AND trial_ends_at < NOW() - ($1::int || ' days')::interval
+    `, [GRACE]);
     if (rowCount > 0) console.log(`[ACTIVE-EXP] ${rowCount} cuenta(s) 'active' pasaron a 'expired' por falta de renovación`);
   } catch (e) {
     console.error('[ACTIVE-EXP] Error auto-expiración:', e.message);
@@ -171,13 +171,14 @@ async function runExpiredCleanup() {
            -- caso 1: ya marcado expired con fecha registrada
            (subscription_status = 'expired'
             AND expired_at IS NOT NULL
-            AND expired_at < NOW() - INTERVAL '${CANCEL_AFTER_DAYS} days')
+            AND expired_at < NOW() - ($1::int || ' days')::interval)
            OR
            -- caso 2: trial/active pero hace mucho que venció y nunca entró
            (subscription_status IN ('trial','active')
             AND trial_ends_at IS NOT NULL
-            AND trial_ends_at < NOW() - INTERVAL '${GRACE + CANCEL_AFTER_DAYS} days')
-         )`
+            AND trial_ends_at < NOW() - ($2::int || ' days')::interval)
+         )`,
+      [CANCEL_AFTER_DAYS, GRACE + CANCEL_AFTER_DAYS]
     );
 
     if (!rows.length) return;
@@ -209,25 +210,42 @@ async function runExpiredCleanup() {
 }
 
 // ── Arrancar scheduler ────────────────────────────────────────────────────────
+const _schedulerHandles = [];
+function _addInterval(fn, ms) {
+  const h = setInterval(fn, ms);
+  if (typeof h.unref === 'function') h.unref();
+  _schedulerHandles.push(h);
+  return h;
+}
+function _addTimeout(fn, ms) {
+  const h = setTimeout(fn, ms);
+  if (typeof h.unref === 'function') h.unref();
+  _schedulerHandles.push(h);
+  return h;
+}
+
 function startScheduler() {
   console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min)');
 
-  // Primera ejecución al arrancar (por si el servidor se reinició después del cierre)
-  setTimeout(runCajaAutoClose, 10_000); // 10s después del arranque
+  _addTimeout(runCajaAutoClose, 10_000);
+  _addInterval(runCajaAutoClose, 30 * 60 * 1000);
 
-  // Cada 30 minutos
-  setInterval(runCajaAutoClose, 30 * 60 * 1000);
+  _addTimeout(runTrialExpiration, 60_000);
+  _addInterval(runTrialExpiration, 24 * 60 * 60 * 1000);
 
-  // Auto-expiración de trials + limpieza: una vez al día
-  setTimeout(runTrialExpiration, 60_000);
-  setInterval(runTrialExpiration, 24 * 60 * 60 * 1000);
+  _addTimeout(runActiveExpiration, 75_000);
+  _addInterval(runActiveExpiration, 24 * 60 * 60 * 1000);
 
-  // Auto-expiración de cuentas active sin renovar (3 días gracia)
-  setTimeout(runActiveExpiration, 75_000);
-  setInterval(runActiveExpiration, 24 * 60 * 60 * 1000);
-
-  setTimeout(runExpiredCleanup, 90_000); // 1.5 min después (corre tras la expiración)
-  setInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
+  _addTimeout(runExpiredCleanup, 90_000);
+  _addInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
 }
 
-module.exports = { startScheduler };
+function stopScheduler() {
+  for (const h of _schedulerHandles) {
+    clearInterval(h);
+    clearTimeout(h);
+  }
+  _schedulerHandles.length = 0;
+}
+
+module.exports = { startScheduler, stopScheduler };

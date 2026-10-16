@@ -31,12 +31,13 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Fix #15: limpiar entradas de ciphertextLastWarning con más de 10 minutos
-setInterval(() => {
+const _ciphertextCleanupInterval = setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const jid of Object.keys(ciphertextLastWarning)) {
     if (ciphertextLastWarning[jid] < cutoff) delete ciphertextLastWarning[jid];
   }
 }, 10 * 60 * 1000);
+if (typeof _ciphertextCleanupInterval.unref === 'function') _ciphertextCleanupInterval.unref();
 
 // Limpiar sesión completamente (tmp + DB)
 async function clearSession(shopId) {
@@ -918,18 +919,32 @@ async function closeSession(shopId) {
   }
 }
 
-// Al iniciar el servidor, reconectar shops que tenían WhatsApp conectado
+// Al iniciar el servidor, reconectar shops que tenían WhatsApp conectado.
+// Limita concurrencia y stagger entre arranques para evitar rate-limit de WhatsApp.
 async function reconnectAllShops() {
+  const CONCURRENCY = 3;
+  const STAGGER_MS  = 1500;
   try {
     const result = await pool.query(
       'SELECT id FROM shops WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL'
     );
-    for (const shop of result.rows) {
-      console.log(`Baileys: reconectando shop ${shop.id}...`);
-      connect(shop.id, null, null, null).catch(e =>
-        console.error(`Error reconectando shop ${shop.id}:`, e.message)
-      );
+    const queue = result.rows.map(r => r.id);
+    console.log(`Baileys: reconectando ${queue.length} shop(s) con concurrencia=${CONCURRENCY}`);
+
+    async function worker() {
+      while (queue.length) {
+        const shopId = queue.shift();
+        try {
+          console.log(`Baileys: reconectando shop ${shopId}...`);
+          await connect(shopId, null, null, null);
+        } catch (e) {
+          console.error(`Error reconectando shop ${shopId}:`, e.message);
+        }
+        await new Promise(r => setTimeout(r, STAGGER_MS));
+      }
     }
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker);
+    await Promise.all(workers);
   } catch (e) {
     console.error('reconnectAllShops error:', e.message);
   }

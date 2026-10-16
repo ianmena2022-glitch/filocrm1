@@ -189,7 +189,18 @@ router.post('/', auth, async (req, res) => {
     // 1) Si lo manda el frontend explícitamente, usarlo
     // 2) Si el que crea el turno ES un barbero, asignárselo a sí mismo
     // 3) Si es el dueño y no especificó, auto-asignar al barbero con menos turnos
-    let assignedBarberId = barber_id ? parseInt(barber_id) : null;
+    let assignedBarberId = null;
+    if (barber_id !== null && barber_id !== undefined && barber_id !== '') {
+      const parsed = parseInt(barber_id);
+      if (Number.isNaN(parsed)) return res.status(400).json({ error: 'barber_id inválido' });
+      // Validar que el barbero pertenezca al shop
+      const bCheck = await pool.query(
+        'SELECT 1 FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [parsed, shopId]
+      );
+      if (!bCheck.rows.length) return res.status(400).json({ error: 'Barbero inválido para este shop' });
+      assignedBarberId = parsed;
+    }
 
     if (!assignedBarberId && req.isBarber) {
       assignedBarberId = req.shopId;
@@ -356,14 +367,17 @@ router.put('/:id/status', auth, async (req, res) => {
            total_spent  = total_spent + $1,
            last_visit   = $2,
            points       = points + $3
-         WHERE id = $4
+         WHERE id = $4 AND shop_id = $5
          RETURNING id, name, phone, points`,
-        [appt.price, appt.date, pointsEarned, appt.client_id]
+        [appt.price, appt.date, pointsEarned, appt.client_id, shopId]
       );
+      if (!updatedClient.rows.length) {
+        console.warn(`[APPT] cliente ${appt.client_id} no pertenece al shop ${shopId}, no se actualizan puntos`);
+      }
 
       const client = updatedClient.rows[0];
 
-      if (client.phone && shopData.wpp_connected) {
+      if (client && client.phone && shopData.wpp_connected) {
         try {
           const wpp = require('../services/whatsapp');
           const { generateMessage } = require('../services/ai');

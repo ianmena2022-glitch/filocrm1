@@ -27,19 +27,33 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days, sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days, sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes, booking_slug } = req.body;
 
   try {
-    // Auto-generar booking_slug si no existe
+    // Resolver booking_slug: usar el que mande el cliente (sanitizado) o autogenerar si no hay
     const existingSlug = await pool.query('SELECT booking_slug FROM shops WHERE id=$1', [req.shopId]);
     let slug = existingSlug.rows[0]?.booking_slug;
-    if (!slug && name) {
+
+    if (booking_slug !== undefined && booking_slug !== null && String(booking_slug).trim() !== '') {
+      // Sanitizar: solo [a-z0-9-], 3..60 chars
+      const clean = String(booking_slug).toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 60);
+      if (clean.length < 3) return res.status(400).json({ error: 'El slug debe tener al menos 3 caracteres v\u00e1lidos (a-z, 0-9, -)' });
+      if (clean !== slug) {
+        const dup = await pool.query('SELECT 1 FROM shops WHERE booking_slug=$1 AND id<>$2', [clean, req.shopId]);
+        if (dup.rows.length) return res.status(409).json({ error: 'Ese link ya est\u00e1 en uso por otra barber\u00eda' });
+        slug = clean;
+      }
+    } else if (!slug && name) {
       slug = name.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 40) + '-' + req.shopId;
-      await pool.query('UPDATE shops SET booking_slug=$1 WHERE id=$2', [slug, req.shopId]);
     }
 
     // Asegurar slug actualizado en el mismo UPDATE
@@ -52,7 +66,7 @@ router.put('/', auth, async (req, res) => {
          service_radius_km=COALESCE($5, service_radius_km),
          churn_days=COALESCE($6, churn_days),
          msg_templates=COALESCE($7, msg_templates),
-         booking_slug=COALESCE(booking_slug, $8),
+         booking_slug=COALESCE($8, booking_slug),
          commission_enabled=COALESCE($9, commission_enabled),
          membership_plans=COALESCE($10, membership_plans),
          filo_plan=COALESCE($11, filo_plan),

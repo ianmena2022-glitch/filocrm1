@@ -1274,6 +1274,9 @@ body {
   .settings-grid { grid-template-columns: 1fr; gap: 14px; }
 
   .modal { padding: 18px 14px; max-height: 85vh; border-radius: 18px 18px 0 0; }
+  /* Forzar 85vh también en modales con style inline (modal-settlement, modal-ent-config, etc) */
+  .modal[style*="max-height"] { max-height: 85vh !important; }
+  #walkin-payment-popup > div { max-height: 85vh !important; }
   .modal-overlay { align-items: flex-end; padding: 0; }
   .modal-overlay.open { display: flex; }
   .form-grid { grid-template-columns: 1fr; }
@@ -1965,7 +1968,7 @@ select.form-input { padding-right: 32px; }
           <p id="dash-date">Cargando...</p>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          <span id="last-refresh" style="font-size:11px;color:rgba(255,255,255,.25)"></span>
+          <span class="last-refresh" style="font-size:11px;color:rgba(255,255,255,.45)"></span>
           <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
           <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
@@ -2189,7 +2192,7 @@ select.form-input { padding-right: 32px; }
           <p id="agenda-date-label">Hoy</p>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          <span id="last-refresh" style="font-size:11px;color:rgba(255,255,255,.25)"></span>
+          <span class="last-refresh" style="font-size:11px;color:rgba(255,255,255,.45)"></span>
           <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
           <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
@@ -2465,9 +2468,13 @@ select.form-input { padding-right: 32px; }
         <div class="modal-sub">Se genera un código único para que el barbero cree su cuenta</div>
         <div id="invite-result" style="display:none;margin-bottom:16px;padding:16px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.3);border-radius:10px">
           <div style="font-size:12px;color:var(--gray);margin-bottom:6px">Código de invitación (válido 7 días):</div>
-          <div id="invite-code" style="font-size:28px;font-weight:900;letter-spacing:6px;color:var(--yellow);font-family:'Oswald',sans-serif"></div>
+          <div id="invite-code" style="font-size:clamp(18px, 7vw, 28px);font-weight:900;letter-spacing:clamp(2px, 1.2vw, 6px);color:var(--yellow);font-family:'Oswald',sans-serif;word-break:break-all;overflow-wrap:anywhere"></div>
           <div style="font-size:12px;color:var(--gray);margin-top:8px">O compartí el link:</div>
           <div id="invite-link" style="font-size:12px;color:var(--yellow);word-break:break-all;margin-top:4px;cursor:pointer" onclick="copyInviteLink()"></div>
+          <div class="modal-actions" style="margin-top:14px">
+            <button class="btn-modal-primary" onclick="copyInviteLink()">📋 Copiar link</button>
+            <button class="btn-modal-secondary" onclick="closeModal('modal-invite')">Listo</button>
+          </div>
         </div>
         <div id="invite-form">
           <div class="form-field">
@@ -4939,8 +4946,8 @@ function startPolling() {
       else if (activeSection === 'sec-clientes') await loadClients();
       else if (activeSection === 'sec-membresias') await loadMemberships();
       // Actualizar indicador de refresh
-      const el = document.getElementById('last-refresh');
-      if (el) el.textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const stamp = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      document.querySelectorAll('.last-refresh').forEach(el => el.textContent = stamp);
     } catch(e) { console.warn('[polling] error:', e.message); }
   }, 15000);
 }
@@ -9025,7 +9032,7 @@ async function saveEditStoreItem() {
 /* ── MOBILE: tab lateral derecha ── */
 @media(max-width:768px){
   #copilot-widget{bottom:auto;top:12px;right:0;transform:none}
-  #last-refresh{display:none !important}
+  .last-refresh{display:none !important}
   #copilot-pill .cp-pill-label,
   #copilot-pill .cp-pill-sub,
   #copilot-pill .cp-dot,

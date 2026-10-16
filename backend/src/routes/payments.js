@@ -51,7 +51,7 @@ async function mpFetch(method, path, body) {
     headers: {
       'Authorization': `Bearer ${MP_TOKEN}`,
       'Content-Type': 'application/json',
-      'X-Idempotency-Key': Date.now().toString()
+      'X-Idempotency-Key': crypto.randomUUID()
     },
     body: body ? JSON.stringify(body) : undefined
   });

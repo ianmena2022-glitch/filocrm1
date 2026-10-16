@@ -376,6 +376,12 @@ router.post('/:slug/reserve', async (req, res) => {
   if (!client_name || !date || !time_start) {
     return res.status(400).json({ error: 'Nombre, fecha y hora son requeridos' });
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' });
+  }
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(time_start)) {
+    return res.status(400).json({ error: 'Formato de hora inválido (HH:MM)' });
+  }
 
   // Fix #14: si viene redeem pero no hay teléfono, no se puede asociar cliente
   if (redeem_item_id && !client_phone) {
@@ -578,7 +584,7 @@ router.post('/:slug/reserve', async (req, res) => {
           assignedBarberId = chosenId;
           assignedBarberCommission = parseInt(chosenBarber.barber_commission_pct) || 50;
         } else {
-          // Auto-assign: solo barberos que trabajan en esa fecha/hora
+          // Auto-assign: solo barberos que trabajan en esa fecha/hora Y están libres en ese slot
           const barbers = await pgClient.query(
             'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
             [barberShopId]
@@ -587,6 +593,21 @@ router.post('/:slug/reserve', async (req, res) => {
             isBarberAvailable(b.barber_schedule, date, time_start)
           );
           if (availableBarbers.length) {
+            // Filtrar los que YA tienen un turno pisándose en ese horario (anti double-booking)
+            const busy = await pgClient.query(
+              `SELECT DISTINCT barber_id FROM appointments
+                WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL
+                  AND status NOT IN ('cancelled','noshow')
+                  AND time_start < $3 AND time_end > $4`,
+              [shopData.id, date, time_end, time_start]
+            );
+            const busySet = new Set(busy.rows.map(r => r.barber_id));
+            const freeBarbers = availableBarbers.filter(b => !busySet.has(b.id));
+            if (!freeBarbers.length) {
+              await pgClient.query('ROLLBACK');
+              pgClient.release();
+              return res.status(409).json({ error: 'Ningún barbero está libre en ese horario. Elegí otro.' });
+            }
             const counts = await pgClient.query(
               `SELECT barber_id, COUNT(*) as total FROM appointments
                WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
@@ -595,7 +616,7 @@ router.post('/:slug/reserve', async (req, res) => {
             const countMap = {};
             counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
             let minCount = Infinity;
-            for (const b of availableBarbers) {
+            for (const b of freeBarbers) {
               const c = countMap[b.id] || 0;
               if (c < minCount) { minCount = c; assignedBarberId = b.id; assignedBarberCommission = parseInt(b.barber_commission_pct) || 50; }
             }
