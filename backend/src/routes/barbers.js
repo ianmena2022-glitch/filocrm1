@@ -275,6 +275,42 @@ router.post('/:id/bonus', auth, ownerOnly, async (req, res) => {
   }
 });
 
+// DELETE /api/barbers/:id/bonus/:bonusId — eliminar bonus pendiente (no liquidado)
+router.delete('/:id/bonus/:bonusId', auth, ownerOnly, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM barber_bonuses
+       WHERE id=$1 AND barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE
+       RETURNING id`,
+      [req.params.bonusId, req.params.id, req.shopId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Bonus no encontrado o ya fue liquidado' });
+    console.log(`[BONUS] eliminado bonus ${req.params.bonusId} de barbero ${req.params.id}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/barbers/:id/bonus/:bonusId — editar monto/nota de bonus pendiente
+router.put('/:id/bonus/:bonusId', auth, ownerOnly, async (req, res) => {
+  const { amount, note } = req.body;
+  const amt = parseFloat(amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  try {
+    const result = await pool.query(
+      `UPDATE barber_bonuses SET amount=$1, note=$2
+       WHERE id=$3 AND barber_id=$4 AND shop_id=$5 AND commission_settled=FALSE
+       RETURNING *`,
+      [amt, (note || '').trim() || null, req.params.bonusId, req.params.id, req.shopId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Bonus no encontrado o ya fue liquidado' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/barbers/:id/settle — crear liquidación
 router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
   const { notes } = req.body;

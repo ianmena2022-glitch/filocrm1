@@ -8546,6 +8546,40 @@ async function confirmBonus() {
   }
 }
 
+async function deleteBonus(bonusId) {
+  if (!_settlementBarberId) return;
+  if (!confirm('¿Eliminar este bonus? Esta acción no se puede deshacer.')) return;
+  try {
+    await api('DELETE', `/barbers/${_settlementBarberId}/bonus/${bonusId}`);
+    showToast('🗑️', 'Bonus eliminado', '');
+    // Refrescar preview de liquidación
+    const name = _settlementData?.barber?.name || '';
+    openSettlementModal(_settlementBarberId, name);
+    if (typeof loadBarbers === 'function') loadBarbers();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
+async function editBonus(bonusId, currentAmount, currentNote) {
+  if (!_settlementBarberId) return;
+  const newAmountStr = prompt('Nuevo monto del bonus:', currentAmount);
+  if (newAmountStr === null) return;
+  const newAmount = parseFloat(newAmountStr);
+  if (!newAmount || newAmount <= 0) return showToast('⚠️', 'Monto inválido', '');
+  const newNote = prompt('Nota (opcional):', currentNote || '');
+  if (newNote === null) return;
+  try {
+    await api('PUT', `/barbers/${_settlementBarberId}/bonus/${bonusId}`, { amount: newAmount, note: newNote });
+    showToast('✅', 'Bonus actualizado', '');
+    const name = _settlementData?.barber?.name || '';
+    openSettlementModal(_settlementBarberId, name);
+    if (typeof loadBarbers === 'function') loadBarbers();
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+
 async function openSettlementModal(barberId, barberName) {
   _settlementBarberId = barberId;
   _settlementData = null;
@@ -8620,6 +8654,20 @@ async function openSettlementModal(barberId, barberName) {
         <div style="padding:6px 8px;font-size:11px;color:rgba(192,132,252,0.7);font-weight:600;background:rgba(168,85,247,0.06)">VENTAS DE PRODUCTOS</div>
         <table style="width:100%;border-collapse:collapse">
           <tbody>${prodRows}${prodExtra}</tbody>
+        </table>
+      </div>` : ''}
+      ${(data.bonuses && data.bonuses.length) ? `<div style="background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.15);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:6px 8px;font-size:11px;color:rgba(74,222,128,0.8);font-weight:600;background:rgba(74,222,128,0.07)">BONUS</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tbody>${data.bonuses.map(b => `<tr>
+            <td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${new Date(b.created_at).toLocaleDateString('es-AR')}</td>
+            <td style="padding:6px 4px;font-size:12px">${escHtml(b.note || 'Bonus')}</td>
+            <td style="padding:6px 4px;font-size:12px;color:#4ade80;text-align:right">$${fmt0(parseFloat(b.amount||0))}</td>
+            <td style="padding:6px 4px;width:1%;white-space:nowrap">
+              <button onclick="editBonus(${b.id}, ${parseFloat(b.amount||0)}, ${JSON.stringify(b.note||'').replace(/"/g,'&quot;')})" title="Editar" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer;margin-right:4px">✏️</button>
+              <button onclick="deleteBonus(${b.id})" title="Eliminar" style="background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);color:#ff8080;border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer">🗑️</button>
+            </td>
+          </tr>`).join('')}</tbody>
         </table>
       </div>` : ''}
       <div>
