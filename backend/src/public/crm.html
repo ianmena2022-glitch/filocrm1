@@ -3645,6 +3645,10 @@ select.form-input { padding-right: 32px; }
         <label>WhatsApp (sin +54)</label>
         <input type="tel" id="t-client-phone" placeholder="Ej: 1134567890">
       </div>
+      <div class="form-field" id="t-new-client-birthday-field" style="display:none">
+        <label>🎂 Cumpleaños (opcional)</label>
+        <input type="date" id="t-client-birthday">
+      </div>
       <div class="form-field">
         <label>Servicio</label>
         <select id="t-service" onchange="fillServicePrice()">
@@ -6410,6 +6414,7 @@ async function createAppointment() {
   let clientId = document.getElementById('t-client').value;
   const clientName = document.getElementById('t-client-name').value.trim();
   const clientPhone = document.getElementById('t-client-phone').value.trim();
+  const clientBirthday = document.getElementById('t-client-birthday').value || null;
   const serviceId = document.getElementById('t-service').value;
   const price = document.getElementById('t-price').value;
   const date = document.getElementById('t-date').value || agendaDate;
@@ -6439,7 +6444,7 @@ async function createAppointment() {
     // Si hay nombre pero no hay cliente seleccionado, crear el cliente primero
     if (!clientId && clientName) {
       try {
-        const newClient = await api('POST', '/clients', { name: clientName, phone: clientPhone || null });
+        const newClient = await api('POST', '/clients', { name: clientName, phone: clientPhone || null, birthday: clientBirthday });
         clientId = String(newClient.id);
         // Agregar al select para futuras interacciones en la sesión
         const sel = document.getElementById('t-client');
@@ -7634,6 +7639,7 @@ function openModal(id) {
     const hasClient = !!document.getElementById('t-client').value;
     document.getElementById('t-new-client-fields').style.display = hasClient ? 'none' : 'block';
     document.getElementById('t-new-client-phone-field').style.display = hasClient ? 'none' : 'block';
+    document.getElementById('t-new-client-birthday-field').style.display = hasClient ? 'none' : 'block';
   }
   document.getElementById(id).classList.add('open');
 }
@@ -7647,8 +7653,10 @@ function closeModal(id) {
     document.getElementById('t-client').value = '';
     document.getElementById('t-client-name').value = '';
     document.getElementById('t-client-phone').value = '';
+    document.getElementById('t-client-birthday').value = '';
     document.getElementById('t-new-client-fields').style.display = 'none';
     document.getElementById('t-new-client-phone-field').style.display = 'none';
+    document.getElementById('t-new-client-birthday-field').style.display = 'none';
     const bSel = document.getElementById('t-barber-select');
     if (bSel) bSel.value = '';
     document.getElementById('t-barber').value = '';
