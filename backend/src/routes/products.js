@@ -161,6 +161,15 @@ router.post('/:id/sell', auth, async (req, res) => {
   const autoBarberId   = isBarber ? req.shopId : (barber_id ? parseInt(barber_id) : null);
   const autoCommPct    = isBarber ? null : (barber_commission_pct ? parseFloat(barber_commission_pct) : null);
 
+  // Si el que vende es dueño/sucursal y pasó barber_id, validar que el barbero pertenezca al shop
+  if (!isBarber && barber_id) {
+    const bCheck = await pool.query(
+      'SELECT 1 FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+      [parseInt(barber_id), shopId]
+    );
+    if (!bCheck.rows.length) return res.status(400).json({ error: 'Barbero inválido para este shop' });
+  }
+
   try {
     // Verificar stock
     const prod = await pool.query(
@@ -211,11 +220,16 @@ router.post('/:id/sell', auth, async (req, res) => {
        barberId, commPct, commAmt]
     );
 
-    // Descontar stock
-    await pool.query(
-      'UPDATE products SET stock=stock-$1 WHERE id=$2 AND shop_id=$3',
+    // Descontar stock (atómico: WHERE stock>=qty evita stock negativo en concurrencia)
+    const dec = await pool.query(
+      'UPDATE products SET stock=stock-$1 WHERE id=$2 AND shop_id=$3 AND stock>=$1 RETURNING stock',
       [qty, req.params.id, shopId]
     );
+    if (!dec.rows.length) {
+      // Otra venta concurrente ya se llevó el stock → revertir la venta
+      await pool.query('DELETE FROM product_sales WHERE id=$1', [venta.rows[0].id]);
+      return res.status(409).json({ error: 'Stock insuficiente (conflicto de concurrencia)' });
+    }
 
     // Movimiento de stock
     await pool.query(

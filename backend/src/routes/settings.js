@@ -3,6 +3,11 @@ const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const wpp    = require('../services/whatsapp');
 
+function ownerOnly(req, res, next) {
+  if (req.isBarber) return res.status(403).json({ error: 'Solo el dueño puede hacer esto' });
+  next();
+}
+
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
   try {
@@ -125,7 +130,7 @@ function parseSvcCommission(raw) {
   return Math.min(100, Math.max(0, n));
 }
 
-router.post('/services', auth, async (req, res) => {
+router.post('/services', auth, ownerOnly, async (req, res) => {
   const { name, price, cost, duration_minutes, commission_pct } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
   try {
@@ -141,7 +146,7 @@ router.post('/services', auth, async (req, res) => {
 });
 
 // PUT /api/settings/services/:id — editar servicio
-router.put('/services/:id', auth, async (req, res) => {
+router.put('/services/:id', auth, ownerOnly, async (req, res) => {
   const { name, price, cost, duration_minutes, commission_pct } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
   try {
@@ -157,7 +162,7 @@ router.put('/services/:id', auth, async (req, res) => {
   }
 });
 
-router.delete('/services/:id', auth, async (req, res) => {
+router.delete('/services/:id', auth, ownerOnly, async (req, res) => {
   try {
     await pool.query(
       'UPDATE services SET active=FALSE WHERE id=$1 AND shop_id=$2',

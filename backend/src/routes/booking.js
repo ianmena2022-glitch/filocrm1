@@ -235,7 +235,8 @@ router.get('/:slug/available', async (req, res) => {
             if (!barberMap[a.barber_id]) continue;
             const [sh, sm] = String(a.time_start).split(':').map(Number);
             const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
-            barberMap[a.barber_id].ranges.push({ from: sh * 60 + sm, to: eh * 60 + em || sh * 60 + sm + 30 });
+            const endMin = eh * 60 + em;
+            barberMap[a.barber_id].ranges.push({ from: sh * 60 + sm, to: endMin > 0 ? endMin : sh * 60 + sm + 30 });
           }
         } else {
           barberMap = null; // sin barberos disponibles este día → usar lógica normal
@@ -256,7 +257,8 @@ router.get('/:slug/available', async (req, res) => {
       occupiedRanges = occupied.rows.map(a => {
         const [sh, sm] = String(a.time_start).split(':').map(Number);
         const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
-        return { from: sh * 60 + sm, to: eh * 60 + em || sh * 60 + sm + 30 };
+        const endMin = eh * 60 + em;
+        return { from: sh * 60 + sm, to: endMin > 0 ? endMin : sh * 60 + sm + 30 };
       });
     }
 
@@ -423,7 +425,7 @@ router.post('/:slug/reserve', async (req, res) => {
     // Validar membresía activa con créditos disponibles (re-verificar en el servidor)
     if (is_member_booking && membership_id) {
       const mem = await pool.query(
-        `SELECT id, credits_remaining, active FROM memberships WHERE id=$1 AND client_id IN (
+        `SELECT id, credits_total, credits_used, active FROM memberships WHERE id=$1 AND client_id IN (
            SELECT id FROM clients WHERE shop_id=$2
          )`,
         [parseInt(membership_id), shopData.id]
@@ -431,7 +433,9 @@ router.post('/:slug/reserve', async (req, res) => {
       if (!mem.rows.length || !mem.rows[0].active) {
         return res.status(400).json({ error: 'La membresía no está activa.' });
       }
-      if (mem.rows[0].credits_remaining !== null && mem.rows[0].credits_remaining <= 0) {
+      const m = mem.rows[0];
+      const remaining = m.credits_total !== null ? (parseInt(m.credits_total) - parseInt(m.credits_used || 0)) : null;
+      if (remaining !== null && remaining <= 0) {
         return res.status(400).json({ error: 'Sin créditos disponibles en la membresía.' });
       }
     }
@@ -459,7 +463,8 @@ router.post('/:slug/reserve', async (req, res) => {
     // Determinar si se requiere seña
     const senaCbu = shopData.sena_cbu || shopData.sena_alias;
     const requiresSena = !is_member_booking && shopData.sena_enabled && svcPrice > 0 && senaCbu;
-    const senaAmount = requiresSena ? Math.ceil(svcPrice * (shopData.sena_pct || 30) / 100) : 0;
+    const senaPct = (shopData.sena_pct !== null && shopData.sena_pct !== undefined) ? parseFloat(shopData.sena_pct) : 30;
+    const senaAmount = requiresSena ? Math.ceil(svcPrice * senaPct / 100) : 0;
     const senaExpiresAt = requiresSena ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null;
     const apptStatus = requiresSena ? 'waiting_sena' : 'pending';
 

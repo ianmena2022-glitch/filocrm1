@@ -334,7 +334,8 @@ router.put('/:id/status', auth, async (req, res) => {
     if (status === 'completed' && appt.client_id) {
       const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);
       const shopData = shop.rows[0];
-      const pointsPerPeso = parseFloat(shopData.points_per_peso || 0.01);
+      const rawPpp = shopData.points_per_peso;
+      const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
       const pointsEarned = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
 
       const updatedClient = await pool.query(
