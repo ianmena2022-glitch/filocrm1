@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const bcrypt = require('bcryptjs');
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const wpp    = require('../services/whatsapp');
@@ -14,7 +15,8 @@ router.get('/', auth, async (req, res) => {
     const result = await pool.query(
       `SELECT id, name, email, phone, city, address, calendly_url,
               service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
-              sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes
+              sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes,
+              revenue_pin_enabled
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -338,6 +340,96 @@ router.get('/whatsapp/status', auth, async (req, res) => {
   } catch (e) {
     res.json({ connected: false, error: e.message });
   }
+});
+
+// ── PIN para facturaciones mensuales ──────────────────────────
+function isValidPin(p) {
+  return typeof p === 'string' && /^\d{4}$/.test(p);
+}
+
+async function verifyAccountPassword(shopId, password) {
+  if (!password) return false;
+  const r = await pool.query('SELECT password FROM shops WHERE id=$1', [shopId]);
+  if (!r.rows.length || !r.rows[0].password) return false;
+  return bcrypt.compare(password, r.rows[0].password);
+}
+
+async function verifyStoredPin(shopId, pin) {
+  if (!isValidPin(pin)) return false;
+  const r = await pool.query('SELECT revenue_pin_hash, revenue_pin_enabled FROM shops WHERE id=$1', [shopId]);
+  if (!r.rows.length || !r.rows[0].revenue_pin_enabled || !r.rows[0].revenue_pin_hash) return false;
+  return bcrypt.compare(pin, r.rows[0].revenue_pin_hash);
+}
+
+// Activar PIN: requiere la contraseña de la cuenta + un pin nuevo (4 dígitos)
+router.post('/revenue-pin/enable', auth, ownerOnly, async (req, res) => {
+  const { password, pin } = req.body || {};
+  if (!isValidPin(pin)) return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos' });
+  if (!(await verifyAccountPassword(req.shopId, password))) {
+    return res.status(401).json({ error: 'Contraseña de la cuenta incorrecta' });
+  }
+  try {
+    const hash = await bcrypt.hash(pin, 10);
+    await pool.query(
+      'UPDATE shops SET revenue_pin_hash=$1, revenue_pin_enabled=TRUE WHERE id=$2',
+      [hash, req.shopId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Desactivar: pide PIN actual (o contraseña como fallback)
+router.post('/revenue-pin/disable', auth, ownerOnly, async (req, res) => {
+  const { pin, password } = req.body || {};
+  const okPin = await verifyStoredPin(req.shopId, pin);
+  const okPwd = !okPin && password ? await verifyAccountPassword(req.shopId, password) : false;
+  if (!okPin && !okPwd) return res.status(401).json({ error: 'PIN o contraseña incorrectos' });
+  try {
+    await pool.query('UPDATE shops SET revenue_pin_hash=NULL, revenue_pin_enabled=FALSE WHERE id=$1', [req.shopId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cambiar PIN sabiendo el anterior
+router.post('/revenue-pin/change', auth, ownerOnly, async (req, res) => {
+  const { old_pin, new_pin } = req.body || {};
+  if (!isValidPin(new_pin)) return res.status(400).json({ error: 'El nuevo PIN debe ser de 4 dígitos' });
+  if (!(await verifyStoredPin(req.shopId, old_pin))) return res.status(401).json({ error: 'PIN actual incorrecto' });
+  try {
+    const hash = await bcrypt.hash(new_pin, 10);
+    await pool.query('UPDATE shops SET revenue_pin_hash=$1, revenue_pin_enabled=TRUE WHERE id=$2', [hash, req.shopId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Resetear PIN con la contraseña de la cuenta (olvidó el PIN)
+router.post('/revenue-pin/reset', auth, ownerOnly, async (req, res) => {
+  const { password, new_pin } = req.body || {};
+  if (!isValidPin(new_pin)) return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos' });
+  if (!(await verifyAccountPassword(req.shopId, password))) {
+    return res.status(401).json({ error: 'Contraseña de la cuenta incorrecta' });
+  }
+  try {
+    const hash = await bcrypt.hash(new_pin, 10);
+    await pool.query('UPDATE shops SET revenue_pin_hash=$1, revenue_pin_enabled=TRUE WHERE id=$2', [hash, req.shopId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Verificar PIN para destapar valores (frontend llama esto al clickear 👁️)
+router.post('/revenue-pin/verify', auth, ownerOnly, async (req, res) => {
+  const { pin } = req.body || {};
+  const ok = await verifyStoredPin(req.shopId, pin);
+  if (!ok) return res.status(401).json({ error: 'PIN incorrecto' });
+  res.json({ ok: true });
 });
 
 module.exports = router;

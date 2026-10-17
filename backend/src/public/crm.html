@@ -3246,6 +3246,39 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        <!-- Privacidad / PIN de facturaciones mensuales -->
+        <div class="settings-section" style="padding:0;overflow:hidden">
+          <div onclick="toggleTpl('cfg-pin-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
+            <div class="settings-section-title" style="margin-bottom:0">🔒 PIN para facturaciones mensuales</div>
+            <span class="tpl-arrow" id="arrow-cfg-pin-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
+          </div>
+          <div id="cfg-pin-body" style="display:none;padding:0 22px 18px">
+            <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px;line-height:1.5">
+              Oculta los totales mensuales (dashboard, caja, P&amp;L). Las facturaciones diarias siguen siendo visibles.
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px">
+              <div>
+                <div style="font-size:14px;color:var(--w);font-weight:600">Pedir PIN para ver mensuales</div>
+                <div id="cfg-pin-status" style="font-size:11px;color:rgba(255,255,255,.5);margin-top:3px">Desactivado</div>
+              </div>
+              <label class="toggle-switch" style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0;cursor:pointer">
+                <input type="checkbox" id="cfg-pin-toggle" style="opacity:0;width:0;height:0" onchange="onRevenuePinToggle(this.checked)">
+                <span style="position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:26px;transition:.2s"></span>
+                <span style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s"></span>
+              </label>
+            </div>
+            <div id="cfg-pin-actions" style="display:none;margin-top:12px;gap:8px;flex-wrap:wrap">
+              <button type="button" onclick="openChangeRevenuePin()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--w);padding:9px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif">🔑 Cambiar PIN</button>
+              <button type="button" onclick="openForgotRevenuePin()" style="background:transparent;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65);padding:9px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif">❓ Olvidé mi PIN</button>
+            </div>
+          </div>
+        </div>
+        <style>
+          /* Switch estilo iOS para el toggle de PIN */
+          .toggle-switch input:checked + span { background: #4ade80 !important; }
+          .toggle-switch input:checked + span + span { transform: translateX(20px); }
+        </style>
+
         <!-- Horarios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-schedule-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -5576,18 +5609,29 @@ async function loadDashboard() {
     }
     if (turnosSub) turnosSub.textContent = `${m.completed} listos · ${m.pending} pend.`;
 
-    // Métricas del mes
-    animNum('dash-month-revenue', month.revenue);
+    // Métricas del mes (monto sensible → se enmascara si el PIN está activo)
+    const monthRevStr = '$' + Math.round(month.revenue || 0).toLocaleString('es-AR');
+    if (isRevenueUnlocked()) {
+      animNum('dash-month-revenue', month.revenue);
+    } else {
+      applyRevenueMask('dash-month-revenue', monthRevStr);
+    }
     document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
     document.getElementById('dash-new-clients').textContent = month.new_clients;
     document.getElementById('dash-noshow-rate').textContent = month.noshow_rate + '%';
 
     // Tendencia vs mes anterior
     const trendEl = document.getElementById('dash-month-trend');
+    let trendHTML = '';
     if (month.prev_revenue > 0) {
       const diff = ((month.revenue - month.prev_revenue) / month.prev_revenue * 100).toFixed(0);
       const up = diff >= 0;
-      trendEl.innerHTML = `<span style="color:${up ? 'var(--green)' : 'var(--red)'}">${up ? '▲' : '▼'} ${Math.abs(diff)}% vs mes anterior</span>`;
+      trendHTML = `<span style="color:${up ? 'var(--green)' : 'var(--red)'}">${up ? '▲' : '▼'} ${Math.abs(diff)}% vs mes anterior</span>`;
+    }
+    if (isRevenueUnlocked()) {
+      trendEl.innerHTML = trendHTML;
+    } else {
+      applyRevenueMask('dash-month-trend', trendHTML || '—');
     }
 
     // MRR
@@ -7129,6 +7173,10 @@ async function loadSettings() {
     document.getElementById('cfg-timezone').value = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Argentina/Buenos_Aires';
     const slotEl = document.getElementById('cfg-slot-interval');
     if (slotEl) slotEl.value = String(settings.slot_interval_minutes || 30);
+
+    // PIN de facturaciones mensuales
+    if (currentShop) currentShop.revenue_pin_enabled = !!settings.revenue_pin_enabled;
+    try { refreshRevenuePinUI(); } catch(_){}
     // Activar auto-save una vez los campos ya están poblados (evita disparos en el render inicial)
     setTimeout(initCfgAutoSave, 100);
 
@@ -9477,6 +9525,14 @@ async function loadPnLWeek() {
 async function loadPnLMonthly() {
   const monthsEl = document.getElementById('pnl-months-list');
   const totalsEl = document.getElementById('pnl-annual-totals');
+  if (!isRevenueUnlocked()) {
+    monthsEl.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--gray)">
+      <div style="font-size:28px;letter-spacing:5px;margin-bottom:8px">••••••</div>
+      <button type="button" onclick="askRevenuePin()" style="background:transparent;border:1px solid rgba(255,255,255,.15);color:var(--yellow);padding:8px 16px;border-radius:9px;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif">👁️ Mostrar con PIN</button>
+    </div>`;
+    if (totalsEl) totalsEl.innerHTML = '';
+    return;
+  }
   monthsEl.innerHTML = '<div style="color:var(--gray);font-size:13px">Cargando...</div>';
   try {
     const d = await api('GET', `/dashboard/cash/monthly?year=${_pnlYear}`);
@@ -10140,11 +10196,17 @@ async function loadEnterpriseDashboard() {
     document.getElementById('ent-revenue-week').textContent   = fmt(t.revenue_week);
     document.getElementById('ent-cuts-week').textContent      = t.cuts_week;
     document.getElementById('ent-avg-ticket').textContent     = fmt(t.avg_ticket);
-    // KPIs MES
-    document.getElementById('ent-revenue-month').textContent  = fmt(t.revenue_month);
+    // KPIs MES — ent-cuts-month es cantidad, se muestra siempre
     document.getElementById('ent-cuts-month').textContent     = t.cuts_month;
-    document.getElementById('ent-expenses-month').textContent = fmt(t.expenses_month);
-    document.getElementById('ent-profit-month').textContent   = fmt(t.profit_month);
+    if (isRevenueUnlocked()) {
+      document.getElementById('ent-revenue-month').textContent  = fmt(t.revenue_month);
+      document.getElementById('ent-expenses-month').textContent = fmt(t.expenses_month);
+      document.getElementById('ent-profit-month').textContent   = fmt(t.profit_month);
+    } else {
+      applyRevenueMask('ent-revenue-month',  fmt(t.revenue_month));
+      applyRevenueMask('ent-expenses-month', fmt(t.expenses_month));
+      applyRevenueMask('ent-profit-month',   fmt(t.profit_month));
+    }
     // KPIs EQUIPO
     document.getElementById('ent-branch-count').textContent   = data.branches.length;
     document.getElementById('ent-barber-count').textContent   = t.barber_count;
@@ -11897,6 +11959,142 @@ async function bcmSave(id) {
     if (e.key === 'Escape') { window.tourSkip(); }
   });
 })();
+
+// ─── PIN de facturaciones mensuales ────────────────────────────────────────
+window._revenuePinSessionOk = false; // destapado para esta sesión del navegador
+
+function isRevenuePinEnabled() { return !!(currentShop && currentShop.revenue_pin_enabled); }
+function isRevenueUnlocked() { return !isRevenuePinEnabled() || !!window._revenuePinSessionOk; }
+
+// Reemplaza el textContent de un elemento por puntos+ojo si corresponde ocultarlo
+function applyRevenueMask(elId, realValue) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (isRevenueUnlocked()) {
+    el.innerHTML = typeof realValue === 'string' ? realValue : (realValue?.toString() || '');
+    el.dataset.realValue = '';
+    return;
+  }
+  el.dataset.realValue = typeof realValue === 'string' ? realValue : (realValue?.toString() || '');
+  el.innerHTML = `<span style="letter-spacing:3px">••••••</span> <button type="button" onclick="askRevenuePin()" title="Mostrar" style="background:transparent;border:none;cursor:pointer;color:inherit;font-size:.85em;padding:0 4px;vertical-align:middle">👁️</button>`;
+}
+
+// Marca todos los nodos monthly como ocultos tras lock (sin saber los valores reales)
+function maskAllMonthlyRevenue() {
+  const ids = ['dash-month-revenue','dash-month-trend','ent-revenue-month','ent-expenses-month','ent-profit-month'];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) applyRevenueMask(id, el.dataset.realValue || el.textContent);
+  }
+  const grid = document.getElementById('dash-month-grid');
+  if (grid) grid.style.filter = 'blur(8px)', grid.style.pointerEvents = 'none';
+  const pnlList = document.getElementById('pnl-months-list');
+  if (pnlList) pnlList.style.filter = 'blur(8px)', pnlList.style.pointerEvents = 'none';
+}
+
+// Quita el blur/mask tras unlock
+function unmaskAllMonthlyRevenue() {
+  const grid = document.getElementById('dash-month-grid');
+  if (grid) grid.style.filter = '', grid.style.pointerEvents = '';
+  const pnlList = document.getElementById('pnl-months-list');
+  if (pnlList) pnlList.style.filter = '', pnlList.style.pointerEvents = '';
+  // Re-ejecutar el loader del dashboard para que repueble los valores
+  if (typeof loadDashboard === 'function') loadDashboard();
+  if (typeof loadEnterprise === 'function') try { loadEnterprise(); } catch(_){}
+}
+
+// Modal de unlock
+function askRevenuePin() {
+  const pin = prompt('Ingresá tu PIN de 4 dígitos para ver las facturaciones mensuales:');
+  if (pin === null) return;
+  if (!/^\d{4}$/.test(pin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
+  api('POST', '/settings/revenue-pin/verify', { pin })
+    .then(() => {
+      window._revenuePinSessionOk = true;
+      showToast('🔓','Desbloqueado','Las facturaciones mensuales están visibles en esta sesión');
+      unmaskAllMonthlyRevenue();
+    })
+    .catch(e => showToast('❌','PIN incorrecto', e.message));
+}
+
+// Toggle en configuración
+async function onRevenuePinToggle(checked) {
+  if (checked) {
+    // Activar: pedir password + nuevo PIN
+    const password = prompt('Confirmá tu contraseña de la cuenta:');
+    if (!password) { document.getElementById('cfg-pin-toggle').checked = false; return; }
+    const pin = prompt('Elegí un PIN de 4 dígitos:');
+    if (!pin) { document.getElementById('cfg-pin-toggle').checked = false; return; }
+    if (!/^\d{4}$/.test(pin)) { document.getElementById('cfg-pin-toggle').checked = false; return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos'); }
+    const confirmPin = prompt('Confirmá el PIN:');
+    if (confirmPin !== pin) { document.getElementById('cfg-pin-toggle').checked = false; return showToast('⚠️','No coinciden','Los PIN no coinciden'); }
+    try {
+      await api('POST', '/settings/revenue-pin/enable', { password, pin });
+      if (currentShop) currentShop.revenue_pin_enabled = true;
+      window._revenuePinSessionOk = true; // recién lo seteó, no tiene sentido pedirlo ya
+      document.getElementById('cfg-pin-status').textContent = 'Activado · Se pide PIN para ver los mensuales';
+      document.getElementById('cfg-pin-actions').style.display = 'flex';
+      showToast('🔒','PIN activado','Los mensuales se van a ocultar en la próxima recarga');
+    } catch(e) {
+      document.getElementById('cfg-pin-toggle').checked = false;
+      showToast('❌','Error', e.message);
+    }
+  } else {
+    // Desactivar: pedir PIN actual
+    const pin = prompt('Ingresá tu PIN actual para desactivar:');
+    if (!pin) { document.getElementById('cfg-pin-toggle').checked = true; return; }
+    try {
+      await api('POST', '/settings/revenue-pin/disable', { pin });
+      if (currentShop) currentShop.revenue_pin_enabled = false;
+      window._revenuePinSessionOk = false;
+      document.getElementById('cfg-pin-status').textContent = 'Desactivado';
+      document.getElementById('cfg-pin-actions').style.display = 'none';
+      unmaskAllMonthlyRevenue();
+      showToast('✅','PIN desactivado','');
+    } catch(e) {
+      document.getElementById('cfg-pin-toggle').checked = true;
+      showToast('❌','Error', e.message);
+    }
+  }
+}
+
+async function openChangeRevenuePin() {
+  const oldPin = prompt('PIN actual:');
+  if (!oldPin) return;
+  const newPin = prompt('Nuevo PIN de 4 dígitos:');
+  if (!newPin || !/^\d{4}$/.test(newPin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
+  const conf = prompt('Confirmá el nuevo PIN:');
+  if (conf !== newPin) return showToast('⚠️','No coinciden','');
+  try {
+    await api('POST', '/settings/revenue-pin/change', { old_pin: oldPin, new_pin: newPin });
+    showToast('✅','PIN actualizado','');
+  } catch(e) { showToast('❌','Error', e.message); }
+}
+
+async function openForgotRevenuePin() {
+  const password = prompt('Ingresá tu contraseña de la cuenta para resetear el PIN:');
+  if (!password) return;
+  const newPin = prompt('Nuevo PIN de 4 dígitos:');
+  if (!newPin || !/^\d{4}$/.test(newPin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
+  const conf = prompt('Confirmá el nuevo PIN:');
+  if (conf !== newPin) return showToast('⚠️','No coinciden','');
+  try {
+    await api('POST', '/settings/revenue-pin/reset', { password, new_pin: newPin });
+    showToast('✅','PIN reseteado','Ya podés usarlo');
+  } catch(e) { showToast('❌','Error', e.message); }
+}
+
+// Al abrir configuración, reflejar estado del toggle
+function refreshRevenuePinUI() {
+  const t = document.getElementById('cfg-pin-toggle');
+  const s = document.getElementById('cfg-pin-status');
+  const a = document.getElementById('cfg-pin-actions');
+  if (!t) return;
+  const on = isRevenuePinEnabled();
+  t.checked = on;
+  if (s) s.textContent = on ? 'Activado · Se pide PIN para ver los mensuales' : 'Desactivado';
+  if (a) a.style.display = on ? 'flex' : 'none';
+}
 </script>
 
 </body>
