@@ -4985,7 +4985,7 @@ function startPolling() {
       const stamp = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
       document.querySelectorAll('.last-refresh').forEach(el => el.textContent = stamp);
     } catch(e) { console.warn('[polling] error:', e.message); }
-  }, 15000);
+  }, 30000); // 30s — antes 15s causaba jank visible por animNum + reflow en cada tick
 }
 
 // ─── NAVIGATION ───
@@ -5026,6 +5026,11 @@ function initStaffUI() {
 }
 
 function showSection(name) {
+  // Al salir de configuración, cancelar polls de QR de WhatsApp para no gastar red en background
+  if (name !== 'configuracion') {
+    if (window._wppQrCheckInterval)    { clearInterval(window._wppQrCheckInterval);    window._wppQrCheckInterval = null; }
+    if (window._wppEntQrCheckInterval) { clearInterval(window._wppEntQrCheckInterval); window._wppEntQrCheckInterval = null; }
+  }
   document.querySelectorAll('.section').forEach(s => {
     s.classList.remove('active');
     // Forzar reflow para que la animación se retrigger al volver a la misma sección
@@ -5595,6 +5600,10 @@ async function loadDashboard() {
       const el = document.getElementById(id);
       if (!el) return;
       const numVal = typeof endVal === 'number' ? endVal : parseFloat(String(endVal).replace(/[^0-9.-]/g,'')) || 0;
+      // Skip early si el valor no cambió desde el último render (evita jank en polls)
+      const prev = parseFloat(el.dataset.lastVal || 'NaN');
+      if (!Number.isNaN(prev) && Math.round(prev) === Math.round(numVal)) return;
+      el.dataset.lastVal = String(numVal);
       animateCount(el, numVal, 600, prefix, suffix);
       el.classList.remove('num-updated');
       void el.offsetWidth;
@@ -7602,17 +7611,20 @@ async function connectWhatsapp() {
     if (res.qr) {
       await renderQR(res.qr);
       showToast('📱', 'Escaneá el QR', 'Abrí WhatsApp → Dispositivos vinculados');
-      const check = setInterval(async () => {
+      // Cancelar cualquier polling previo del QR y guardar el nuevo handle globalmente
+      if (window._wppQrCheckInterval) clearInterval(window._wppQrCheckInterval);
+      window._wppQrCheckInterval = setInterval(async () => {
+        if (document.hidden) return; // pausar si la pestaña está en background
         try {
           const status = await api('GET', '/settings/whatsapp/status');
-          if (status.connected) { clearInterval(check); onWppConnected(); }
+          if (status.connected) { clearInterval(window._wppQrCheckInterval); window._wppQrCheckInterval = null; onWppConnected(); }
           else if (status.status === 'qr_limit') {
-            clearInterval(check);
+            clearInterval(window._wppQrCheckInterval); window._wppQrCheckInterval = null;
             const mins = status.cooldownMinutes || 30;
             document.getElementById('wpp-status-text').textContent = `⏳ Demasiados intentos — esperá ${mins} min`;
             showToast('⚠️', 'Rate limit de WhatsApp', `Esperá ${mins} minuto${mins !== 1 ? 's' : ''} antes de volver a intentar`);
           }
-        } catch { clearInterval(check); }
+        } catch { clearInterval(window._wppQrCheckInterval); window._wppQrCheckInterval = null; }
       }, 5000);
     } else if (res.connected) {
       onWppConnected();
@@ -7702,18 +7714,20 @@ async function connectEntWpp() {
     if (res.qr) {
       await renderEntQR(res.qr);
       showToast('📱', 'Escaneá el QR', 'Abrí WhatsApp → Dispositivos vinculados');
-      const check = setInterval(async () => {
+      if (window._wppEntQrCheckInterval) clearInterval(window._wppEntQrCheckInterval);
+      window._wppEntQrCheckInterval = setInterval(async () => {
+        if (document.hidden) return;
         try {
           const status = await api('GET', '/settings/whatsapp/status');
-          if (status.connected) { clearInterval(check); onEntWppConnected(); }
+          if (status.connected) { clearInterval(window._wppEntQrCheckInterval); window._wppEntQrCheckInterval = null; onEntWppConnected(); }
           else if (status.status === 'qr_limit') {
-            clearInterval(check);
+            clearInterval(window._wppEntQrCheckInterval); window._wppEntQrCheckInterval = null;
             const mins = status.cooldownMinutes || 30;
             const txt = document.getElementById('ent-wpp-status-text');
             if (txt) txt.textContent = `⏳ Demasiados intentos — esperá ${mins} min`;
             showToast('⚠️', 'Rate limit de WhatsApp', `Esperá ${mins} minuto${mins !== 1 ? 's' : ''} antes de volver a intentar`);
           }
-        } catch { clearInterval(check); }
+        } catch { clearInterval(window._wppEntQrCheckInterval); window._wppEntQrCheckInterval = null; }
       }, 5000);
     } else if (res.connected) {
       onEntWppConnected();
