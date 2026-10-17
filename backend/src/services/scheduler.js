@@ -18,31 +18,25 @@ function nowArgentina() {
 }
 
 // ── Cierre automático de caja ─────────────────────────────────────────────────
+// Corre cada 30 min y cierra la caja del DÍA ANTERIOR (siempre a partir de las 00:00
+// de cada día). Idempotente vía ON CONFLICT: si entran ventas tardías del día anterior
+// después de medianoche, se van reflejando al próximo tick.
 async function runCajaAutoClose() {
   const now  = nowArgentina();
-  const { date, mins, day } = now;
+  // Fecha de AYER en Argentina (hoy ya es "nuevo día", así que cerramos ayer)
+  const yesterday = new Date(Date.now() - 3 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000)
+                      .toISOString().split('T')[0];
+  const date = yesterday;
   let closed = 0;
 
   try {
     const shops = await pool.query(
-      `SELECT id, schedule FROM shops
-       WHERE (is_barber IS NULL OR is_barber = FALSE)
-         AND schedule IS NOT NULL`
+      `SELECT id FROM shops
+       WHERE (is_barber IS NULL OR is_barber = FALSE)`
     );
 
     for (const shop of shops.rows) {
       try {
-        const schedule = JSON.parse(shop.schedule);
-        const daySchedule = schedule[day];
-        if (!daySchedule?.active || !daySchedule?.end) continue;
-
-        const [endH, endM] = daySchedule.end.split(':').map(Number);
-        const closeMins = endH * 60 + endM;
-
-        // Cerrar si ya pasó la hora de cierre (con al menos 30min de gracia)
-        // y no se cerró aún hoy — ON CONFLICT actualiza, es idempotente
-        if (mins < closeMins + 30) continue;
-
         // Calcular totales del día
         const appts = await pool.query(
           `SELECT
