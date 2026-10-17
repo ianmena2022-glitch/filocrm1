@@ -115,12 +115,15 @@ router.delete('/:id', auth, ownerOnly, async (req, res) => {
 // GET /api/barbers/stats — stats del equipo para el dashboard del dueño
 router.get('/stats', auth, ownerOnly, async (req, res) => {
   try {
+    // Timezone del shop para que CURRENT_DATE y 'month' NOW() reflejen el día local real
+    const tzRow = await pool.query('SELECT timezone FROM shops WHERE id=$1', [req.shopId]);
+    const tz = tzRow.rows[0]?.timezone || 'America/Argentina/Buenos_Aires';
     const result = await pool.query(
       `SELECT s.id, s.name, s.barber_color, s.barber_commission_pct, s.product_sale_commission_pct,
-  COUNT(a.id) FILTER (WHERE a.date = CURRENT_DATE AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
-  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())) AS completados_mes,
-  COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS facturado_mes,
-  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz) = date_trunc('month', NOW())), 0) AS comision_mes,
+  COUNT(a.id) FILTER (WHERE a.date = (NOW() AT TIME ZONE $2)::date AND a.status NOT IN ('cancelled','noshow')) AS turnos_hoy,
+  COUNT(a.id) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz AT TIME ZONE $2) = date_trunc('month', NOW() AT TIME ZONE $2)) AS completados_mes,
+  COALESCE(SUM(a.price) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz AT TIME ZONE $2) = date_trunc('month', NOW() AT TIME ZONE $2)), 0) AS facturado_mes,
+  COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND date_trunc('month', a.date::timestamptz AT TIME ZONE $2) = date_trunc('month', NOW() AT TIME ZONE $2)), 0) AS comision_mes,
   COALESCE(SUM(a.price * a.commission_pct / 100.0) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
   + COALESCE(SUM(a.tip) FILTER (WHERE a.status = 'completed' AND (a.commission_settled IS NULL OR a.commission_settled = FALSE)), 0)
   + COALESCE((SELECT SUM(ps.barber_commission_amount) FROM product_sales ps WHERE ps.barber_id=s.id AND ps.commission_settled=FALSE AND ps.shop_id=$1), 0)
@@ -134,7 +137,7 @@ LEFT JOIN appointments a ON a.barber_id = s.id
 WHERE s.parent_shop_id = $1 AND s.is_barber = TRUE
 GROUP BY s.id, s.name, s.barber_color, s.barber_commission_pct, s.product_sale_commission_pct
 ORDER BY s.name`,
-      [req.shopId]
+      [req.shopId, tz]
     );
     res.json(result.rows);
   } catch (e) {

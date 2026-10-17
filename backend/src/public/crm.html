@@ -8697,23 +8697,26 @@ async function confirmBonus() {
   }
 }
 
-async function deleteBonus(bonusId) {
-  if (!_settlementBarberId) return;
+// barberId pasado por parámetro (no se depende del global _settlementBarberId)
+// para evitar bugs si el usuario abre dos modales de liquidación en secuencia rápida.
+async function deleteBonus(bonusId, barberId) {
+  const bId = barberId || _settlementBarberId;
+  if (!bId) return;
   if (!confirm('¿Eliminar este bonus? Esta acción no se puede deshacer.')) return;
   try {
-    await api('DELETE', `/barbers/${_settlementBarberId}/bonus/${bonusId}`);
+    await api('DELETE', `/barbers/${bId}/bonus/${bonusId}`);
     showToast('🗑️', 'Bonus eliminado', '');
-    // Refrescar preview de liquidación
     const name = _settlementData?.barber?.name || '';
-    openSettlementModal(_settlementBarberId, name);
+    openSettlementModal(bId, name);
     if (typeof loadBarbers === 'function') loadBarbers();
   } catch (e) {
     showToast('❌', 'Error', e.message);
   }
 }
 
-async function editBonus(bonusId, currentAmount, currentNote) {
-  if (!_settlementBarberId) return;
+async function editBonus(bonusId, currentAmount, currentNote, barberId) {
+  const bId = barberId || _settlementBarberId;
+  if (!bId) return;
   const newAmountStr = prompt('Nuevo monto del bonus:', currentAmount);
   if (newAmountStr === null) return;
   const newAmount = parseFloat(newAmountStr);
@@ -8721,10 +8724,10 @@ async function editBonus(bonusId, currentAmount, currentNote) {
   const newNote = prompt('Nota (opcional):', currentNote || '');
   if (newNote === null) return;
   try {
-    await api('PUT', `/barbers/${_settlementBarberId}/bonus/${bonusId}`, { amount: newAmount, note: newNote });
+    await api('PUT', `/barbers/${bId}/bonus/${bonusId}`, { amount: newAmount, note: newNote });
     showToast('✅', 'Bonus actualizado', '');
     const name = _settlementData?.barber?.name || '';
-    openSettlementModal(_settlementBarberId, name);
+    openSettlementModal(bId, name);
     if (typeof loadBarbers === 'function') loadBarbers();
   } catch (e) {
     showToast('❌', 'Error', e.message);
@@ -8815,8 +8818,8 @@ async function openSettlementModal(barberId, barberName) {
             <td style="padding:6px 4px;font-size:12px">${escHtml(b.note || 'Bonus')}</td>
             <td style="padding:6px 4px;font-size:12px;color:#4ade80;text-align:right">$${fmt0(parseFloat(b.amount||0))}</td>
             <td style="padding:6px 4px;width:1%;white-space:nowrap">
-              <button onclick="editBonus(${b.id}, ${parseFloat(b.amount||0)}, ${JSON.stringify(b.note||'').replace(/"/g,'&quot;')})" title="Editar" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer;margin-right:4px">✏️</button>
-              <button onclick="deleteBonus(${b.id})" title="Eliminar" style="background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);color:#ff8080;border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer">🗑️</button>
+              <button class="js-edit-bonus" data-bid="${b.id}" data-barberid="${_settlementBarberId}" data-amount="${parseFloat(b.amount||0)}" data-note="${escHtml(b.note || '')}" title="Editar" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer;margin-right:4px">✏️</button>
+              <button class="js-delete-bonus" data-bid="${b.id}" data-barberid="${_settlementBarberId}" title="Eliminar" style="background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);color:#ff8080;border-radius:6px;padding:4px 7px;font-size:11px;cursor:pointer">🗑️</button>
             </td>
           </tr>`).join('')}</tbody>
         </table>
@@ -8827,6 +8830,26 @@ async function openSettlementModal(barberId, barberName) {
       </div>
     `;
     document.getElementById('settlement-actions').style.display = 'flex';
+
+    // Enganchar los botones de bonus (data-* en vez de inline JSON.stringify para
+    // soportar notas con comillas, backticks o chars raros).
+    const previewEl = document.getElementById('settlement-preview');
+    previewEl.querySelectorAll('.js-edit-bonus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const bid    = parseInt(btn.dataset.bid);
+        const bbId   = parseInt(btn.dataset.barberid) || _settlementBarberId;
+        const amount = parseFloat(btn.dataset.amount || 0);
+        const note   = btn.dataset.note || '';
+        editBonus(bid, amount, note, bbId);
+      });
+    });
+    previewEl.querySelectorAll('.js-delete-bonus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const bid  = parseInt(btn.dataset.bid);
+        const bbId = parseInt(btn.dataset.barberid) || _settlementBarberId;
+        deleteBonus(bid, bbId);
+      });
+    });
   } catch(e) {
     document.getElementById('settlement-preview').innerHTML = `<div style="color:var(--danger);padding:16px">${e.message}</div>`;
   }
@@ -10386,10 +10409,21 @@ function openBranchDetail(encoded) {
     ${b.city || b.address ? `<div style="font-size:12px;color:var(--gray);margin-bottom:12px">📍 ${[b.city,b.address].filter(Boolean).join(' · ')}</div>` : ''}
     ${b.next_appt ? `<div style="font-size:12px;color:#4CAF50;margin-bottom:12px">⏰ Próximo turno hoy: ${b.next_appt.substring(0,5)}</div>` : ''}
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="ent-btn-edit" style="flex:1;padding:10px" onclick="document.getElementById('modal-ent-branch-detail').style.display='none';openBranchCaja('${b.id}','${b.name.replace(/'/g,"\\'")}')">💰 Ver caja</button>
-      <button class="ent-btn-edit" style="flex:1;padding:10px" onclick="document.getElementById('modal-ent-branch-detail').style.display='none';openEditBranchModal(decodeURIComponent('${encoded}'))">✏️ Editar sucursal</button>
+      <button class="ent-btn-edit js-branch-caja" data-bid="${b.id}" data-bname="${escHtml(b.name)}" style="flex:1;padding:10px">💰 Ver caja</button>
+      <button class="ent-btn-edit js-branch-edit" data-encoded="${encoded}" style="flex:1;padding:10px">✏️ Editar sucursal</button>
     </div>`;
-  document.getElementById('modal-ent-branch-detail').style.display = 'flex';
+  const modalEl = document.getElementById('modal-ent-branch-detail');
+  modalEl.querySelector('.js-branch-caja').addEventListener('click', (ev) => {
+    modalEl.style.display = 'none';
+    const bid   = parseInt(ev.currentTarget.dataset.bid);
+    const bname = ev.currentTarget.dataset.bname || '';
+    openBranchCaja(bid, bname);
+  });
+  modalEl.querySelector('.js-branch-edit').addEventListener('click', (ev) => {
+    modalEl.style.display = 'none';
+    openEditBranchModal(decodeURIComponent(ev.currentTarget.dataset.encoded));
+  });
+  modalEl.style.display = 'flex';
 }
 
 let _entSharedWpp = false;
