@@ -62,6 +62,7 @@ function shopPayload(shop) {
     is_branch:            shop.is_branch            || false,
     parent_enterprise_id: shop.parent_enterprise_id || null,
     branch_label:         shop.branch_label         || null,
+    revenue_pin_enabled:  shop.revenue_pin_enabled  || false,
   };
 }
 

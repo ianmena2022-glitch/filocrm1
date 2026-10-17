@@ -5563,6 +5563,18 @@ async function loadDashboard() {
   initReferralBanner();
   // Mostrar banner de cumpleaños (no bloquea el resto si falla)
   loadBirthdayBanner().catch(() => {});
+  // Sync del flag revenue_pin_enabled: si el user activó/desactivó el PIN desde
+  // configuración o si tiene un currentShop viejo cacheado sin este campo,
+  // acá nos actualizamos antes de pintar los montos.
+  try {
+    if (!currentShop || currentShop.revenue_pin_enabled === undefined) {
+      const s = await api('GET', '/settings');
+      if (currentShop) {
+        currentShop.revenue_pin_enabled = !!s.revenue_pin_enabled;
+        try { localStorage.setItem('filo_shop', JSON.stringify(currentShop)); } catch(_){}
+      }
+    }
+  } catch(_){}
   try {
     const [today, month, chart, prodVentas, topClients] = await Promise.all([
       api('GET', '/dashboard/today'),
@@ -12053,10 +12065,15 @@ async function onRevenuePinToggle(checked) {
     try {
       await api('POST', '/settings/revenue-pin/enable', { password, pin });
       if (currentShop) currentShop.revenue_pin_enabled = true;
-      window._revenuePinSessionOk = true;
+      try { localStorage.setItem('filo_shop', JSON.stringify(currentShop)); } catch(_){}
+      // Dejamos la sesión BLOQUEADA para que inmediatamente aparezca el ojo
+      window._revenuePinSessionOk = false;
       document.getElementById('cfg-pin-status').textContent = 'Activado · Se pide PIN para ver los mensuales';
       document.getElementById('cfg-pin-actions').style.display = 'flex';
-      showToast('🔒','PIN activado','Los mensuales se van a ocultar en la próxima recarga');
+      showToast('🔒','PIN activado','Los mensuales quedaron ocultos — tocá el 👁️ para destaparlos');
+      // Reaplicar máscara ya mismo si estamos en una sección que mostraba montos
+      try { maskAllMonthlyRevenue(); } catch(_){}
+      if (typeof loadDashboard === 'function') try { loadDashboard(); } catch(_){}
     } catch(e) {
       toggle.checked = false;
       showToast('❌','Error', e.message);
@@ -12067,6 +12084,7 @@ async function onRevenuePinToggle(checked) {
     try {
       await api('POST', '/settings/revenue-pin/disable', { pin });
       if (currentShop) currentShop.revenue_pin_enabled = false;
+      try { localStorage.setItem('filo_shop', JSON.stringify(currentShop)); } catch(_){}
       window._revenuePinSessionOk = false;
       document.getElementById('cfg-pin-status').textContent = 'Desactivado';
       document.getElementById('cfg-pin-actions').style.display = 'none';
