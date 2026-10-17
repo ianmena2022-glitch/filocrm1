@@ -273,4 +273,4 @@ function stopScheduler() {
   _schedulerHandles.length = 0;
 }
 
-module.exports = { startScheduler, stopScheduler };
+module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina };

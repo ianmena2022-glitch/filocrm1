@@ -569,4 +569,25 @@ function getLastUserMessage(shopId, phone) {
   return null;
 }
 
-module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText, getLastUserMessage };
+// Testing helpers — permiten resetear estado entre tests
+function _testPushUserMessage(shopId, phone, content) {
+  const key = `${shopId}:${phone}`;
+  if (!conversations[key]) conversations[key] = [];
+  conversations[key].push({ role: 'user', content });
+  lastActivity[key] = Date.now();
+}
+function _testReset() {
+  for (const k of Object.keys(conversations))  delete conversations[k];
+  for (const k of Object.keys(lastActivity))   delete lastActivity[k];
+  for (const k of Object.keys(rateLimiter))    delete rateLimiter[k];
+  for (const k of Object.keys(rateLimitWarned))delete rateLimitWarned[k];
+  for (const k of Object.keys(convLocks))      delete convLocks[k];
+}
+
+module.exports = {
+  getAIResponse, isBarberiaRelated, generateMessage,
+  verifyComprobante, verifyComprobanteFromText, getLastUserMessage,
+  // Pure helpers expuestos para tests
+  looksLikeBarberia, checkRateLimit,
+  _testPushUserMessage, _testReset
+};

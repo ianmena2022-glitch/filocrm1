@@ -91,6 +91,18 @@ function stopHealthCheck(shopId) {
 // Dedup de mensajes entrantes por shopId:msgId
 const processedMsgIds = new Set();
 
+// Normaliza un teléfono AR al formato E.164 sin '+' (549 + area + número).
+// Acepta variantes comunes y devuelve string con solo dígitos.
+function normalizePhoneAR(phone) {
+  if (phone == null) return '';
+  let p = String(phone).replace(/\D/g, '');
+  if (!p) return '';
+  if (p.length === 10) p = '549' + p;                               // 1123456789 → 5491123456789
+  else if (p.length === 11 && p.startsWith('15')) p = '54911' + p.slice(2);
+  else if (p.length === 12 && p.startsWith('54')) p = '549' + p.slice(2); // 54XXXXXXXXXX → 549XXXXXXXXXX
+  return p;
+}
+
 // Renderiza un template "Hola {nombre}, tu turno {fecha}" reemplazando case-insensitive
 // y globalmente las claves. Toda {variable} que no haya sido pasada se elimina del texto
 // para no mostrar "{clientname}" literal al cliente.
@@ -1021,15 +1033,7 @@ async function sendText(shopId, phone, message) {
     if (!sock) throw new Error('No se pudo reconectar WhatsApp');
   }
 
-  // Normalización AR: si vino sin país y arranca con 11, 15, área AR (10 dígitos) → +549
-  let phoneClean = phone.replace(/\D/g, '');
-  if (phoneClean.length === 10) phoneClean = '549' + phoneClean;         // 1123456789 → 5491123456789
-  if (phoneClean.length === 11 && phoneClean.startsWith('15')) {
-    phoneClean = '54911' + phoneClean.slice(2);                           // raro, defensivo
-  }
-  if (phoneClean.length === 12 && phoneClean.startsWith('54')) {
-    phoneClean = '549' + phoneClean.slice(2);                             // 54XXXXXXXXXX → 549XXXXXXXXXX
-  }
+  const phoneClean = normalizePhoneAR(phone);
   const jid = `${phoneClean}@s.whatsapp.net`;
 
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
@@ -1108,4 +1112,4 @@ async function reconnectAllShops() {
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate };
+module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR };
