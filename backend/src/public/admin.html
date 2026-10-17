@@ -1026,6 +1026,7 @@ function toggleChildren(id) {
 
   btn.dataset.expanded = isExpanded ? '0' : '1';
   btn.textContent = isExpanded ? '▶' : '▼';
+  btn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
 }
 
 function renderTreeRow(a, depth, parentId) {
@@ -1075,7 +1076,7 @@ function renderTreeRow(a, depth, parentId) {
 
   // Nombre con indentación
   const toggleEl = hasKids
-    ? `<button class="toggle-btn" id="toggle-${a.id}" data-expanded="0" onclick="toggleChildren(${a.id})">▶</button>`
+    ? `<button class="toggle-btn" id="toggle-${a.id}" data-expanded="0" aria-expanded="false" aria-label="Mostrar/ocultar sub-cuentas" onclick="toggleChildren(${a.id})">▶</button>`
     : `<span class="toggle-placeholder"></span>`;
   const connector = depth === 1 ? `<span class="child-line">└</span>` : depth === 2 ? `<span class="child-line">└</span>` : '';
   const indentPad = depth === 1 ? 'padding-left:20px' : depth === 2 ? 'padding-left:42px' : '';

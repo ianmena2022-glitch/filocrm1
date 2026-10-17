@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tienda de Puntos FILO</title>
-<meta name="description" content="Canjea tus puntos FILO por premios en la tienda de tu barbería. Acumulá puntos con cada turno y elegí tu recompensa.">
+<meta name="description" content="Canjeá tus puntos FILO por premios en la tienda de tu barbería. Acumulá puntos con cada turno y elegí tu recompensa.">
 <meta name="robots" content="index, follow">
 <link rel="icon" type="image/png" href="/logo_f.png" />
 <link rel="apple-touch-icon" href="/logo_f.png" />
@@ -14,13 +14,13 @@
 <meta property="og:site_name" content="FILO">
 <meta property="og:locale" content="es_AR">
 <meta property="og:title" content="Tienda de Puntos FILO">
-<meta property="og:description" content="Canjea tus puntos FILO por premios. Acumulá puntos con cada turno en tu barbería.">
+<meta property="og:description" content="Canjeá tus puntos FILO por premios. Acumulá puntos con cada turno en tu barbería.">
 <meta property="og:image" content="https://filocrm.com.ar/logo_filo.png">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Tienda de Puntos FILO">
-<meta name="twitter:description" content="Canjea tus puntos FILO por premios en la tienda de tu barbería.">
+<meta name="twitter:description" content="Canjeá tus puntos FILO por premios en la tienda de tu barbería.">
 <meta name="twitter:image" content="https://filocrm.com.ar/logo_filo.png">
 
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -160,19 +160,23 @@ async function init() {
     document.getElementById('shop-name-label').textContent = shopData.name;
     document.getElementById('store-name').textContent = shopData.store_name || 'Tienda de Puntos';
     document.title = `${shopData.store_name || 'Tienda'} — ${shopData.name}`;
-    document.getElementById('shop-logo').textContent = shopData.name.charAt(0).toUpperCase();
+    // Primera letra "normalizada": strip acentos y me quedo con la primera A-Z,
+    // si no hay (ej. nombre que arranca con emoji), uso '✂'
+    const normName = (shopData.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const match = normName.match(/[A-Za-z0-9]/);
+    document.getElementById('shop-logo').textContent = match ? match[0].toUpperCase() : '✂';
 
     // SEO dinámico
     const ogTitle = document.querySelector('meta[property="og:title"]');
     const ogDesc  = document.querySelector('meta[property="og:description"]');
     if (ogTitle) ogTitle.setAttribute('content', `${shopData.store_name || 'Tienda de Puntos'} — ${shopData.name}`);
-    if (ogDesc)  ogDesc.setAttribute('content', `Canjea tus puntos en la tienda de ${shopData.name}. Acumulá puntos con cada visita y elegí tu premio.`);
+    if (ogDesc)  ogDesc.setAttribute('content', `Canjeá tus puntos en la tienda de ${shopData.name}. Acumulá puntos con cada visita y elegí tu premio.`);
     const ld = {
       "@context": "https://schema.org",
       "@type": "Store",
       "name": `${shopData.store_name || 'Tienda de Puntos'} — ${shopData.name}`,
       "url": window.location.href,
-      "description": `Tienda de puntos de ${shopData.name}. Canjea puntos por premios.`
+      "description": `Tienda de puntos de ${shopData.name}. Canjeá puntos por premios.`
     };
     let ldEl = document.getElementById('ld-store');
     if (!ldEl) { ldEl = document.createElement('script'); ldEl.id = 'ld-store'; ldEl.type = 'application/ld+json'; document.head.appendChild(ldEl); }
@@ -193,6 +197,13 @@ async function init() {
 async function checkPoints() {
   const phone = document.getElementById('phone-input').value.trim().replace(/\D/g, '');
   if (!phone) return;
+  // Validación mínima: AR tiene 10 (sin país) o hasta 13 dígitos (54+9+10). Rechazamos basura.
+  if (phone.length < 8 || phone.length > 15) {
+    document.getElementById('client-name-display').textContent = 'Número inválido. Ingresá tu WhatsApp con código de área.';
+    document.getElementById('client-points').textContent = '—';
+    clientPoints = null;
+    return;
+  }
 
   const btn = document.querySelector('.btn-check');
   btn.textContent = '...'; btn.disabled = true;

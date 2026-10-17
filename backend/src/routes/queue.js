@@ -69,11 +69,12 @@ router.post('/:slug/join', async (req, res) => {
       if (bChk.rows.length) validBarberId = bChk.rows[0].id;
     }
 
-    // Insert entry (con servicio y barbero opcional)
+    // Insert entry (con servicio y barbero opcional). Precio no puede ser negativo.
+    const safePrice = Math.max(0, parseFloat(price) || 0);
     const insertRes = await pool.query(
       `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price, barber_id)
        VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7) RETURNING id`,
-      [shop.id, resolvedName, phone || null, clientId, service_name || null, parseFloat(price) || 0, validBarberId]
+      [shop.id, resolvedName, phone || null, clientId, service_name || null, safePrice, validBarberId]
     );
     const entry_id = insertRes.rows[0].id;
 
