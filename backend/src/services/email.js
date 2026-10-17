@@ -1,6 +1,16 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy init para no crashear al cargar si falta RESEND_API_KEY (p.ej. en tests o builds locales)
+let _resend = null;
+function resend() {
+  if (!_resend) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY no configurada — no se pueden enviar emails');
+    }
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
 // RESEND_FROM debe apuntar a un dominio verificado en Resend.
 // Mientras no esté verificado filocrm.com.ar, usar onboarding@resend.dev (funciona sin verificación).
 const FROM   = process.env.RESEND_FROM || 'onboarding@resend.dev';
@@ -67,7 +77,7 @@ async function sendVerificationEmail(email, name, code) {
     return;
   }
   try {
-    await resend.emails.send({
+    await resend().emails.send({
       from:    FROM,
       to:      email,
       subject: `${code} — Tu código de verificación FILO`,

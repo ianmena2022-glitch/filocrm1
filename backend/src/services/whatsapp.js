@@ -744,27 +744,10 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   });
 
   // Errores de descifrado — v7 los reporta acá
-  sock.ev.on('messages.decrypt-fail', async (failedMessages) => {
-    console.log(`[WPP] Error de descifrado para shop ${shopId} — ${failedMessages?.length || 0} mensajes fallidos`);
-    decryptErrors[shopId] = (decryptErrors[shopId] || 0) + (failedMessages?.length || 1);
-
-    if (decryptErrors[shopId] >= 3) {
-      console.log(`[WPP] Demasiados errores de descifrado para shop ${shopId}, limpiando keys Signal...`);
-      try {
-        const dir = authDir(shopId);
-        const files = fs.readdirSync(dir);
-        for (const f of files) {
-          if (f.startsWith('session-') || f.includes('pre-key') || f.includes('sender-key')) {
-            fs.unlinkSync(path.join(dir, f));
-          }
-        }
-        decryptErrors[shopId] = 0;
-        console.log(`[WPP] Keys Signal limpiadas para shop ${shopId}`);
-      } catch(e) {
-        console.error('[WPP] Error limpiando keys Signal:', e.message);
-      }
-    }
-  });
+  // NOTA: el evento 'messages.decrypt-fail' existía en Baileys ≤ rc9 pero fue
+  // removido en rc10+. En las versiones actuales los mensajes que no descifran
+  // llegan como messages.upsert con message vacío o messageStubType=CIPHERTEXT,
+  // que ya manejamos abajo con clearJidSession por-JID (más granular).
 
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
