@@ -719,6 +719,8 @@ async function login() {
 }
 
 function logout() {
+  // Confirmación simple nativa (barber.html no tiene design-system de modal custom)
+  if (!confirm('¿Cerrar sesión?')) return;
   localStorage.removeItem('barber_token');
   localStorage.removeItem('barber_me');
   location.reload();

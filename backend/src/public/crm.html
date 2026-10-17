@@ -8146,6 +8146,23 @@ function copyStoreLink(btn) {
   });
 }
 
+// ─── Accesibilidad: espeja title → aria-label en todos los botones ───
+// Para screen readers un botón icon-only con solo title puede no anunciarse bien.
+// Esta función copia title → aria-label donde falte. Se corre tras cada render masivo.
+function syncAriaLabelsFromTitle(root) {
+  const scope = root || document;
+  scope.querySelectorAll('button[title]:not([aria-label]), a[title]:not([aria-label])').forEach(el => {
+    const t = el.getAttribute('title');
+    if (t && t.trim()) el.setAttribute('aria-label', t.trim());
+  });
+}
+// Correr una vez al cargar y después de cada DOM mutation importante (via MutationObserver)
+document.addEventListener('DOMContentLoaded', () => {
+  syncAriaLabelsFromTitle();
+  const mo = new MutationObserver(() => syncAriaLabelsFromTitle());
+  mo.observe(document.body, { childList: true, subtree: true });
+});
+
 // ─── KEYBOARD ───
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {

@@ -383,9 +383,15 @@ body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-heig
         </div>
         <div style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:14px;padding:20px;margin-bottom:20px;text-align:center">
           <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(192,132,252,.7);margin-bottom:8px">Alias de transferencia</div>
-          <div id="sena-alias-display" style="font-size:22px;font-weight:800;color:#c084fc;font-family:monospace;letter-spacing:1px"></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+            <div id="sena-alias-display" style="font-size:22px;font-weight:800;color:#c084fc;font-family:monospace;letter-spacing:1px"></div>
+            <button type="button" id="sena-alias-copy" onclick="copySenaField('sena-alias-display', this)" aria-label="Copiar alias" title="Copiar" style="background:rgba(168,85,247,.2);border:1px solid rgba(168,85,247,.4);color:#c084fc;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">📋 Copiar</button>
+          </div>
           <div style="margin-top:16px;font-size:13px;color:rgba(255,255,255,.6)">Monto a transferir</div>
-          <div id="sena-amount-display" style="font-size:28px;font-weight:800;color:#fff;margin-top:4px"></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+            <div id="sena-amount-display" style="font-size:28px;font-weight:800;color:#fff;margin-top:4px"></div>
+            <button type="button" onclick="copySenaField('sena-amount-display', this, true)" aria-label="Copiar monto" title="Copiar monto" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;margin-top:4px">📋</button>
+          </div>
         </div>
         <div style="background:rgba(255,145,0,0.08);border:1px solid rgba(255,145,0,0.2);border-radius:10px;padding:14px;margin-bottom:20px;font-size:13px;color:rgba(255,200,100,.9);text-align:left;line-height:1.5">
           ⏰ <strong>Tenés 60 minutos</strong> para realizar la transferencia.<br>
@@ -493,6 +499,18 @@ function loadShopData(data) {
   barbers  = data.barbers || [];
   const step4El = document.getElementById('step-4');
   if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
+  // Renumerar visualmente los dots según los steps visibles (si step-4 queda hidden,
+  // step-5 pasa a mostrar "4" en el dot) → evita el hueco "1 2 3 _ 5"
+  const visibleSteps = Array.from(document.querySelectorAll('.step'))
+    .filter(s => s.id !== 'step-0' && (s.style.display !== 'none'));
+  visibleSteps.forEach((s, i) => {
+    const dot = s.querySelector('.step-dot');
+    // Si el dot original tenía emoji (step-0=📍), lo respetamos
+    if (dot && !/^[0-9]+$/.test(dot.textContent.trim()) === false || /^[0-9]+$/.test(dot.textContent.trim())) {
+      // Solo renumeramos si el contenido actual es numérico (no toca icono)
+      if (/^[0-9]+$/.test(dot.textContent.trim())) dot.textContent = String(i + 1);
+    }
+  });
   if (shopData.home_service) {
     const af = document.getElementById('client-address-field');
     if (af) af.style.display = 'block';
@@ -1005,6 +1023,35 @@ function goBack(toStep) {
     const screens = ['service','date','time','form'];
     showScreen(screens[toStep - 1]);
     setStep(toStep);
+  }
+}
+
+// Copia el textContent de un elemento al clipboard (alias, monto). Si isAmount=true,
+// extrae solo los dígitos para que no copie el símbolo $.
+function copySenaField(elId, btn, isAmount) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  let text = (el.textContent || '').trim();
+  if (isAmount) text = text.replace(/[^\d]/g, '');
+  if (!text) return;
+  const done = () => {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Copiado';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      try {
+        const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+      } catch(_){}
+    });
+  } else {
+    try {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+    } catch(_){}
   }
 }
 
