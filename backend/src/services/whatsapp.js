@@ -905,7 +905,14 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         if (reply) {
           console.log(`[WPP] Respondiendo a ${phone}: "${reply}"`);
-          const sendJid = (jid.endsWith('@lid') && msg.senderPn) ? msg.senderPn : msg.key.remoteJid;
+          // Normalizar senderPn: puede venir como "5491135899641:0@s.whatsapp.net"
+          // (con device suffix) → quedarnos con "5491135899641@s.whatsapp.net"
+          let sendJid = msg.key.remoteJid;
+          if (jid.endsWith('@lid') && msg.senderPn) {
+            const cleanPn = String(msg.senderPn).split(':')[0];
+            if (cleanPn.includes('@')) sendJid = cleanPn;
+            else sendJid = cleanPn + '@s.whatsapp.net';
+          }
           await sock.sendMessage(sendJid, { text: reply });
         } else {
           console.log(`[WPP] AI no respondió (ignorado por clasificador o sin contexto)`);

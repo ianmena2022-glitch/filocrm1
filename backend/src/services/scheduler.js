@@ -5,16 +5,48 @@
  */
 const pool = require('../db/pool');
 
-// Argentina = UTC-3
-function nowArgentina() {
-  const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  return {
-    date:    d.toISOString().split('T')[0],          // "YYYY-MM-DD"
-    hours:   d.getUTCHours(),
-    minutes: d.getUTCMinutes(),
-    mins:    d.getUTCHours() * 60 + d.getUTCMinutes(),
-    day:     ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][d.getUTCDay()]
-  };
+// Devuelve {date, hours, minutes, mins, day} para la timezone dada (respeta DST).
+// Si tz es inválido o no se pasa, cae a America/Argentina/Buenos_Aires.
+function nowInTz(tz) {
+  const TZ = tz || 'America/Argentina/Buenos_Aires';
+  try {
+    // es-ES Intl para armar "YYYY-MM-DD HH:MM" en la timezone del shop
+    const str = new Date().toLocaleString('sv-SE', { timeZone: TZ });
+    const [datePart, timePart] = str.split(' ');
+    const [h, m] = timePart.split(':').map(Number);
+    const d = new Date(datePart + 'T00:00:00Z');
+    return {
+      date:    datePart,
+      hours:   h,
+      minutes: m,
+      mins:    h * 60 + m,
+      day:     ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][d.getUTCDay()]
+    };
+  } catch (_) {
+    // Fallback UTC-3
+    const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    return {
+      date:    d.toISOString().split('T')[0],
+      hours:   d.getUTCHours(),
+      minutes: d.getUTCMinutes(),
+      mins:    d.getUTCHours() * 60 + d.getUTCMinutes(),
+      day:     ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][d.getUTCDay()]
+    };
+  }
+}
+
+// Compat: la mayoría de los callers usan Argentina sin más
+function nowArgentina() { return nowInTz('America/Argentina/Buenos_Aires'); }
+
+function yesterdayInTz(tz) {
+  const TZ = tz || 'America/Argentina/Buenos_Aires';
+  try {
+    const d = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+    return d.toLocaleString('sv-SE', { timeZone: TZ }).split(' ')[0];
+  } catch (_) {
+    return new Date(Date.now() - 3 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000)
+             .toISOString().split('T')[0];
+  }
 }
 
 // ── Cierre automático de caja ─────────────────────────────────────────────────
@@ -22,21 +54,20 @@ function nowArgentina() {
 // de cada día). Idempotente vía ON CONFLICT: si entran ventas tardías del día anterior
 // después de medianoche, se van reflejando al próximo tick.
 async function runCajaAutoClose() {
-  const now  = nowArgentina();
-  // Fecha de AYER en Argentina (hoy ya es "nuevo día", así que cerramos ayer)
-  const yesterday = new Date(Date.now() - 3 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000)
-                      .toISOString().split('T')[0];
-  const date = yesterday;
+  const now  = nowArgentina(); // sólo para el log general
   let closed = 0;
 
   try {
     const shops = await pool.query(
-      `SELECT id FROM shops
+      `SELECT id, timezone FROM shops
        WHERE (is_barber IS NULL OR is_barber = FALSE)`
     );
 
     for (const shop of shops.rows) {
       try {
+        // Fecha de AYER en la timezone del shop (si no está seteada, cae a AR)
+        const date = yesterdayInTz(shop.timezone);
+
         // Calcular totales del día
         const appts = await pool.query(
           `SELECT
@@ -90,7 +121,7 @@ async function runCajaAutoClose() {
       }
     }
 
-    if (closed > 0) console.log(`[CAJA AUTO] ${closed} caja(s) cerrada(s) · ${date} ${now.hours}:${String(now.minutes).padStart(2,'0')}`);
+    if (closed > 0) console.log(`[CAJA AUTO] ${closed} caja(s) cerrada(s) · ${now.hours}:${String(now.minutes).padStart(2,'0')} AR`);
   } catch(e) {
     console.error('[CAJA AUTO] Error general:', e.message);
   }

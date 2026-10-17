@@ -5,6 +5,24 @@ const conversations  = {};
 const lastActivity   = {};
 const CONVERSATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
 
+// Lock por conversación: si llegan dos mensajes del mismo cliente mientras procesamos
+// el primero, el segundo espera a que termine para preservar el orden.
+const convLocks = {};
+async function withConvLock(key, fn) {
+  const prev = convLocks[key] || Promise.resolve();
+  let release;
+  const current = new Promise(r => { release = r; });
+  convLocks[key] = current;
+  await prev.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    release();
+    // Limpiar sólo si no se encadenó otro trabajo
+    if (convLocks[key] === current) delete convLocks[key];
+  }
+}
+
 // Rate limiting: tope generoso para que no silencie clientes activos
 const rateLimiter = {};
 const RATE_LIMIT_MAX = 15;    // antes 6 — muy restrictivo
@@ -271,6 +289,12 @@ function looksLikeBarberia(text) {
 }
 
 async function getAIResponse(shopId, phone, userMessage) {
+  // Serializar por conversación: si llega otro mensaje del mismo cliente mientras
+  // procesamos éste, espera a que termine (sin corromper conversations[key]).
+  return withConvLock(`${shopId}:${phone}`, () => _getAIResponseImpl(shopId, phone, userMessage));
+}
+
+async function _getAIResponseImpl(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
