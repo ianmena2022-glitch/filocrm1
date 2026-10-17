@@ -8146,6 +8146,49 @@ function copyStoreLink(btn) {
   });
 }
 
+// ─── withBusy(btn, promiseFn) — bloquea un botón durante un request async ───
+// Uso:
+//   await withBusy(btnEl, async () => await api('POST', '/foo'));
+//   onclick="withBusy(this, async () => await api(...))"
+// Mientras corre: disabled=true + opacity + textContent 'Procesando...' (o custom)
+async function withBusy(btn, fn, opts) {
+  opts = opts || {};
+  if (!btn || typeof fn !== 'function') return fn && fn();
+  const prevText = btn.textContent;
+  const prevDisabled = btn.disabled;
+  const prevOpacity = btn.style.opacity;
+  btn.disabled = true;
+  if (opts.text !== false) btn.textContent = opts.text || 'Procesando…';
+  btn.style.opacity = '0.6';
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = prevDisabled;
+    if (opts.text !== false) btn.textContent = prevText;
+    btn.style.opacity = prevOpacity;
+  }
+}
+
+// ─── Anti doble-click en botones primarios (debounce 1.2s) ───
+// Previene que un dueño ansioso clickeé 2 veces "Guardar"/"Enviar"/"Confirmar"
+// y dispare 2 requests. No afecta botones secundarios (cancel, close).
+(function antiDoubleClick() {
+  const DEBOUNCE_MS = 1200;
+  const PRIMARY_SELECTORS = '.btn-primary, .btn-modal-primary, .btn-add, .btn-y, .btn-complete, #btn-confirm-bonus, .btn-motor-primary';
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (!btn.matches(PRIMARY_SELECTORS)) return;
+    if (btn.disabled) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    btn.disabled = true;
+    const prevOpacity = btn.style.opacity;
+    btn.style.opacity = '0.7';
+    setTimeout(() => {
+      if (document.body.contains(btn)) { btn.disabled = false; btn.style.opacity = prevOpacity; }
+    }, DEBOUNCE_MS);
+  }, true); // capture para interceptar antes del handler
+})();
+
 // ─── Accesibilidad: espeja title → aria-label en todos los botones ───
 // Para screen readers un botón icon-only con solo title puede no anunciarse bien.
 // Esta función copia title → aria-label donde falte. Se corre tras cada render masivo.
