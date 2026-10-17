@@ -1439,6 +1439,16 @@ select.form-input { padding-right: 32px; }
   from { opacity: 0; transform: scale(0.94) translateY(14px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
+@keyframes modalOut {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.96) translateY(8px); }
+}
+@keyframes backdropOut {
+  from { background: rgba(0,0,0,0.7); }
+  to   { background: rgba(0,0,0,0); }
+}
+.modal-overlay.closing { animation: backdropOut 0.14s ease forwards; }
+.modal-overlay.closing .modal { animation: modalOut 0.14s ease-in forwards; }
 @keyframes cardIn {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -7798,11 +7808,25 @@ function openModal(id) {
     document.getElementById('t-new-client-phone-field').style.display = hasClient ? 'none' : 'block';
     document.getElementById('t-new-client-birthday-field').style.display = hasClient ? 'none' : 'block';
   }
-  document.getElementById(id).classList.add('open');
+  const modalEl = document.getElementById(id);
+  modalEl.classList.add('open');
+  // Autofocus: primer input, textarea o select visible y editable (ignora type=hidden y disabled)
+  setTimeout(() => {
+    const focusable = modalEl.querySelector(
+      'input:not([type=hidden]):not([disabled]):not([readonly]), textarea:not([disabled]), select:not([disabled])'
+    );
+    if (focusable) try { focusable.focus(); if (focusable.select) focusable.select(); } catch(_){}
+  }, 60);
 }
 
 function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
+  const modalEl = document.getElementById(id);
+  if (!modalEl) return;
+  // Animación de salida: agregamos .closing, al terminar sacamos .open
+  modalEl.classList.add('closing');
+  setTimeout(() => {
+    modalEl.classList.remove('open', 'closing');
+  }, 140);
   if (id === 'modal-turno') {
     document.getElementById('t-redeem-section').style.display = 'none';
     document.getElementById('t-redeem-item').value = '';
@@ -8125,7 +8149,13 @@ function copyStoreLink(btn) {
 // ─── KEYBOARD ───
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    // 1) Modales declarados en HTML (modal-overlay.open) → usar closeModal para animar
+    const openModals = document.querySelectorAll('.modal-overlay.open');
+    openModals.forEach(m => { if (m.id) closeModal(m.id); else m.classList.remove('open'); });
+    // 2) Popups custom creados vía document.body.appendChild() que no son .modal-overlay
+    //    Convención: ids que terminan en '-popup' o '-overlay' con z-index alto
+    const popups = document.querySelectorAll('[id$="-popup"], #secure-prompt-overlay, #confirm-modal-overlay, #walkin-payment-popup, #payment-popup, #debt-pay-popup');
+    popups.forEach(p => { try { p.remove(); } catch(_){} });
   }
 });
 
