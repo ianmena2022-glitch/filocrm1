@@ -88,6 +88,20 @@ function stopHealthCheck(shopId) {
   delete healthFailures[shopId];
 }
 
+// Dedup de mensajes entrantes por shopId:msgId
+const processedMsgIds = new Set();
+
+// Throttle de envío por shop: mínimo 500ms entre sendText para evitar flags de WhatsApp
+const lastSendAt = {};
+async function throttleSend(shopId) {
+  const MIN_GAP = 500;
+  const now = Date.now();
+  const last = lastSendAt[shopId] || 0;
+  const wait = Math.max(0, (last + MIN_GAP) - now);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastSendAt[shopId] = Date.now();
+}
+
 // Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
 const reconnectTimers = {};
 function scheduleReconnect(shopId, delay) {
@@ -738,6 +752,22 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
         const isIndividual = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
         if (!isIndividual) continue;
 
+        // Dedup: si vemos el mismo msg.key.id dos veces (common en Baileys), ignoramos
+        const msgId = msg.key?.id;
+        if (msgId) {
+          const dedupKey = `${shopId}:${msgId}`;
+          if (processedMsgIds.has(dedupKey)) {
+            console.log(`[WPP] dedup: msg ${msgId} ya procesado`);
+            continue;
+          }
+          processedMsgIds.add(dedupKey);
+          // Limpiar set si pasa 500 entradas (evita memory bloat)
+          if (processedMsgIds.size > 500) {
+            const toDelete = Array.from(processedMsgIds).slice(0, 250);
+            toDelete.forEach(k => processedMsgIds.delete(k));
+          }
+        }
+
         // Ignorar mensajes de status/broadcast
         if (jid === 'status@broadcast') continue;
 
@@ -815,13 +845,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
               }
             }
           } else {
-            // Fallback: buscar cliente pendiente en DB
-            try {
-              const pending = await findAnyPendingPayment(shopId);
-              if (pending?.clientPhone) {
-                await sendText(shopId, pending.clientPhone, warning);
-              }
-            } catch(e) { console.error('[WPP] CIPHERTEXT fallback error:', e.message); }
+            // NO hacer fallback a "primer pago pendiente del shop" porque podría
+            // mandarle el aviso al cliente equivocado. Preferimos no avisar.
+            console.log('[WPP] CIPHERTEXT: no se pudo resolver JID, no se envía aviso (anti-cross-user)');
           }
           continue;
         }
@@ -983,6 +1009,8 @@ async function sendText(shopId, phone, message) {
 
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
 
+  await throttleSend(wppShopId);
+
   // Timeout corto: si el socket es zombie, no colgamos el request HTTP del CRM 30s.
   // Marcamos el socket como caído y disparamos reconexión en background.
   const result = await Promise.race([
@@ -1033,6 +1061,12 @@ async function reconnectAllShops() {
     async function worker() {
       while (queue.length) {
         const shopId = queue.shift();
+        // Si ya hay socket conectado para este shop (p.ej. restoreSessionFromDB
+        // disparado por un sendText temprano), no abrimos otro para evitar 440.
+        if (sockets[shopId] && statuses[shopId] === 'connected') {
+          console.log(`Baileys: shop ${shopId} ya conectado, skip`);
+          continue;
+        }
         try {
           console.log(`Baileys: reconectando shop ${shopId}...`);
           await connect(shopId, null, null, null);
