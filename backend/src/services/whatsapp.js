@@ -8,7 +8,13 @@ async function getBaileys() {
 const { Boom } = require('@hapi/boom');
 const pool = require('../db/pool');
 const fs   = require('fs');
+const os   = require('os');
 const path = require('path');
+
+// Directorio base para sesiones Baileys (override con BAILEYS_DIR)
+const BAILEYS_BASE = process.env.BAILEYS_DIR || path.join(os.tmpdir(), 'filo_baileys');
+try { fs.mkdirSync(BAILEYS_BASE, { recursive: true }); } catch(_){}
+function baileysDir(shopId) { return path.join(BAILEYS_BASE, `shop_${shopId}`); }
 
 // Mapa de sockets activos por shopId
 const sockets  = {};
@@ -24,11 +30,14 @@ const MAX_QR_ATTEMPTS  = 5;               // máx QRs sin que nadie escanee
 const QR_COOLDOWN_MS   = 30 * 60 * 1000; // 30 minutos de cooldown
 
 // Registrar una única vez el handler de unhandledRejection para errores de conexión no fatales
-process.on('unhandledRejection', (reason) => {
-  if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
-    console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
-  }
-});
+if (!global.__filoWppUnhandledRejectionBound) {
+  global.__filoWppUnhandledRejectionBound = true;
+  process.on('unhandledRejection', (reason) => {
+    if (reason?.message?.includes('Connection Closed') || reason?.output?.statusCode === 428) {
+      console.log(`[WPP] Error de conexión capturado (no fatal): ${reason.message}`);
+    }
+  });
+}
 
 // Fix #15: limpiar entradas de ciphertextLastWarning con más de 10 minutos
 const _ciphertextCleanupInterval = setInterval(() => {
@@ -39,13 +48,31 @@ const _ciphertextCleanupInterval = setInterval(() => {
 }, 10 * 60 * 1000);
 if (typeof _ciphertextCleanupInterval.unref === 'function') _ciphertextCleanupInterval.unref();
 
+// Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
+const reconnectTimers = {};
+function scheduleReconnect(shopId, delay) {
+  if (reconnectTimers[shopId]) clearTimeout(reconnectTimers[shopId]);
+  reconnectTimers[shopId] = setTimeout(() => {
+    delete reconnectTimers[shopId];
+    connect(shopId, null, null, null).catch(e => console.error(`[WPP] reconnect ${shopId}:`, e.message));
+  }, delay);
+  if (typeof reconnectTimers[shopId].unref === 'function') reconnectTimers[shopId].unref();
+}
+function cancelReconnect(shopId) {
+  if (reconnectTimers[shopId]) {
+    clearTimeout(reconnectTimers[shopId]);
+    delete reconnectTimers[shopId];
+  }
+}
+
 // Limpiar sesión completamente (tmp + DB)
 async function clearSession(shopId) {
   try {
-    const dir = path.join('/tmp', `baileys_${shopId}`);
+    cancelReconnect(shopId);
+    const dir = baileysDir(shopId);
     if (fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true });
-      console.log(`Baileys: sesion limpiada en /tmp para shop ${shopId}`);
+      console.log(`Baileys: sesion limpiada en ${dir} para shop ${shopId}`);
     }
     await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
     console.log(`Baileys: sesion limpiada en DB para shop ${shopId}`);
@@ -93,7 +120,7 @@ async function clearJidSession(shopId, jid, resolvedPhone) {
 // Limpiar solo las session keys de Signal (no las credenciales principales)
 async function clearSignalKeys(shopId) {
   try {
-    const dir = path.join('/tmp', `baileys_${shopId}`);
+    const dir = baileysDir(shopId);
     if (fs.existsSync(dir)) {
       const files = fs.readdirSync(dir);
       let removed = 0;
@@ -111,7 +138,7 @@ async function clearSignalKeys(shopId) {
 }
 
 function authDir(shopId) {
-  const dir = path.join('/tmp', `baileys_${shopId}`);
+  const dir = baileysDir(shopId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -600,18 +627,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           delete statuses[`${shopId}_440_firstAt`];
           if (onDisconnected) onDisconnected();
         } else {
-          const delay = 30 * 1000; // delay fijo largo para no pisar al otro cliente
+          const delay = 30 * 1000;
           console.log(`[WPP] Shop ${shopId}: desconexión 440 ${count440}/3 — reintentando en ${delay/1000}s (si sigue, el cliente tiene otro dispositivo con esta sesión)`);
-          setTimeout(() => connect(shopId, null, null, null), delay);
+          scheduleReconnect(shopId, delay);
         }
       } else {
         // Otros errores: reconectar con backoff exponencial
         const attempt = (statuses[`${shopId}_reconnect`] || 0) + 1;
         statuses[`${shopId}_reconnect`] = attempt;
         if (attempt <= 10) {
-          const delay = Math.min(5000 * attempt, 60000); // 5s, 10s, ... máx 60s
+          const delay = Math.min(5000 * attempt, 60000);
           console.log(`[WPP] Shop ${shopId}: reconectando en ${delay/1000}s (intento ${attempt}/10)...`);
-          setTimeout(() => connect(shopId, null, null, null), delay);
+          scheduleReconnect(shopId, delay);
         } else {
           console.log(`[WPP] Shop ${shopId}: demasiados intentos de reconexión, abortando`);
           await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);

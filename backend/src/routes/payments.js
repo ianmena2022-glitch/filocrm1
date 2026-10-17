@@ -7,6 +7,11 @@ const MP_BASE = 'https://api.mercadopago.com';
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
 
+if (process.env.NODE_ENV === 'production') {
+  if (!MP_TOKEN)          console.error('[MP] FATAL: MP_ACCESS_TOKEN no configurado');
+  if (!MP_WEBHOOK_SECRET) console.error('[MP] FATAL: MP_WEBHOOK_SECRET no configurado');
+}
+
 // Verifica la firma x-signature de Mercado Pago (HMAC-SHA256).
 // Formato: "ts=<ts>,v1=<hash>" · manifest = `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
 function verifyMpSignature(req) {
@@ -46,6 +51,7 @@ function verifyMpSignature(req) {
 }
 
 async function mpFetch(method, path, body) {
+  if (!MP_TOKEN) throw new Error('MP_ACCESS_TOKEN no configurado');
   const res = await fetch(`${MP_BASE}${path}`, {
     method,
     headers: {

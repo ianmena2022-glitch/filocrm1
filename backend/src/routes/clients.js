@@ -144,8 +144,12 @@ router.put('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const effectiveShopId = req.parentShopId || req.shopId;
+    const isEnterprise = req.isEnterpriseOwner || false;
+    const shopFilter = isEnterprise
+      ? `(shop_id=$2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$2 AND is_branch=TRUE))`
+      : `shop_id=$2`;
     const result = await pool.query(
-      'DELETE FROM clients WHERE id=$1 AND shop_id=$2 RETURNING id',
+      `DELETE FROM clients WHERE id=$1 AND ${shopFilter} RETURNING id`,
       [req.params.id, effectiveShopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });

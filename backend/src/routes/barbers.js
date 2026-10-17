@@ -101,10 +101,11 @@ router.put('/:id', auth, ownerOnly, async (req, res) => {
 // invite lo pueda re-vincular preservando su historia.
 router.delete('/:id', auth, ownerOnly, async (req, res) => {
   try {
-    await pool.query(
-      'UPDATE shops SET parent_shop_id=NULL WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+    const result = await pool.query(
+      'UPDATE shops SET parent_shop_id=NULL WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE RETURNING id',
       [req.params.id, req.shopId]
     );
+    if (!result.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -163,10 +164,13 @@ router.post('/assign', auth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'No hay barberos disponibles' });
     const barber = result.rows[0];
 
-    await pool.query(
-      'UPDATE appointments SET barber_id=$1, barber_name=$2 WHERE id=$3 AND shop_id=$4',
+    const upd = await pool.query(
+      `UPDATE appointments SET barber_id=$1, barber_name=$2
+       WHERE id=$3 AND shop_id=$4 AND status IN ('pending','confirmed','waiting_sena')
+       RETURNING id`,
       [barber.id, barber.name, appointment_id, ownerShopId]
     );
+    if (!upd.rows.length) return res.status(400).json({ error: 'Turno no encontrado o ya finalizado' });
 
     res.json({ ok: true, barber });
   } catch (e) {

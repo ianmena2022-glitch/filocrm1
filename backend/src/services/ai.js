@@ -388,7 +388,7 @@ Reglas:
 Solo el JSON, sin texto extra.`;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -403,7 +403,7 @@ Solo el JSON, sin texto extra.`;
         max_tokens: 200,
         temperature: 0,
       })
-    });
+    }, 30000);
     if (!response.ok) {
       const errBody = await response.text().catch(() => '');
       console.error(`[AI] verifyComprobante API error ${response.status}: ${errBody}`);
@@ -446,7 +446,7 @@ ${pdfText.slice(0, 2000)}
 Solo el JSON, sin texto extra.`;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -455,7 +455,7 @@ Solo el JSON, sin texto extra.`;
         max_tokens: 200,
         temperature: 0,
       })
-    });
+    }, 20000);
     if (!response.ok) {
       const errBody = await response.text().catch(() => '');
       console.error(`[AI] verifyComprobanteFromText API error ${response.status}: ${errBody}`);
@@ -474,7 +474,7 @@ Solo el JSON, sin texto extra.`;
 }
 
 // Limpiar rateLimiter y conversaciones expiradas cada 30 min
-setInterval(() => {
+const _aiCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const k of Object.keys(rateLimiter)) {
     rateLimiter[k] = rateLimiter[k].filter(t => now - t < RATE_LIMIT_WINDOW);
@@ -487,5 +487,6 @@ setInterval(() => {
     }
   }
 }, 30 * 60 * 1000);
+if (typeof _aiCleanupInterval.unref === 'function') _aiCleanupInterval.unref();
 
 module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText };

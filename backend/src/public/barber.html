@@ -836,7 +836,7 @@ async function loadDashboard() {
     const pendSub  = document.getElementById('stat-pending-sub');
     if (pendCard && pendVal) {
       pendCard.style.display = 'block';
-      pendVal.textContent = '$' + Math.round(pend.total_pending || 0).toLocaleString('es-AR');
+      pendVal.textContent = '$' + Math.round(Number(pend.total_pending) || 0).toLocaleString('es-AR');
       const parts = [];
       if (pend.appt_count > 0)        parts.push(pend.appt_count + ' turno' + (pend.appt_count !== 1 ? 's' : ''));
       if (pend.product_sales_count>0) parts.push(pend.product_sales_count + ' venta' + (pend.product_sales_count !== 1 ? 's' : ''));
