@@ -2205,6 +2205,9 @@ select.form-input { padding-right: 32px; }
           <button onclick="changeAgendaDate(1)">→</button>
         </div>
         <input type="date" id="agenda-date-picker" class="search-input" style="max-width:180px" onchange="setAgendaDate(this.value)">
+        <select id="agenda-barber-filter" class="search-input" style="max-width:200px;display:none" onchange="setAgendaBarberFilter(this.value)">
+          <option value="">👥 Todos los barberos</option>
+        </select>
         <div style="margin-left:auto;font-size:13px;color:var(--gray)" id="agenda-summary"></div>
       </div>
 
@@ -5955,12 +5958,26 @@ function formatDateLabel(dateStr) {
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+var agendaBarberFilter = ''; // '' = todos, 'unassigned' = sin asignar, id string = ese barbero
+
+function populateAgendaBarberFilter(barbers, hasUnassigned) {
+  const sel = document.getElementById('agenda-barber-filter');
+  if (!sel) return;
+  if (!barbers.length) { sel.style.display = 'none'; return; }
+  const prev = agendaBarberFilter;
+  sel.innerHTML = '<option value="">👥 Todos los barberos</option>'
+    + barbers.map(b => `<option value="${b.id}">${escHtml(b.name)}</option>`).join('')
+    + (hasUnassigned ? '<option value="unassigned">— Sin asignar —</option>' : '');
+  sel.value = prev;
+  sel.style.display = '';
+}
+
 async function loadAgenda() {
   document.getElementById('agenda-date-display').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-label').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-picker').value = agendaDate;
 
-  // Cargar barberos (si todavía no están) para poder agrupar
+  // Cargar barberos (si todavía no están) para poder agrupar / filtrar
   if (!window._barbersList) {
     try { window._barbersList = await api('GET', '/barbers'); } catch(_) { window._barbersList = []; }
   }
@@ -5969,6 +5986,8 @@ async function loadAgenda() {
   try {
     const appts = await api('GET', `/appointments?date=${agendaDate}`);
     const el = document.getElementById('agenda-list');
+    const hasUnassigned = appts.some(a => a.barber_id == null);
+    populateAgendaBarberFilter(barbers, hasUnassigned);
 
     if (!appts.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">📅</div><h3>Sin turnos</h3><p>No hay turnos para este día.<br>Usá el botón + para agregar uno.</p></div>';
@@ -5985,16 +6004,23 @@ async function loadAgenda() {
         if (bid && groups.has(bid)) groups.get(bid).appts.push(a);
         else unassigned.push(a);
       }
-      // Solo renderizar grupos con ≥1 turno
+      // Aplicar filtro si corresponde
       const sections = [];
-      for (const [, g] of groups) {
-        if (!g.appts.length) continue;
-        sections.push(renderBarberSection(g.name, g.color, g.appts));
+      if (agendaBarberFilter === 'unassigned') {
+        if (unassigned.length) sections.push(renderBarberSection('— Sin asignar —', null, unassigned, true));
+      } else if (agendaBarberFilter) {
+        const g = groups.get(agendaBarberFilter);
+        if (g && g.appts.length) sections.push(renderBarberSection(g.name, g.color, g.appts));
+      } else {
+        for (const [, g] of groups) {
+          if (!g.appts.length) continue;
+          sections.push(renderBarberSection(g.name, g.color, g.appts));
+        }
+        if (unassigned.length) sections.push(renderBarberSection('— Sin asignar —', null, unassigned, true));
       }
-      if (unassigned.length) {
-        sections.push(renderBarberSection('— Sin asignar —', null, unassigned, true));
-      }
-      el.innerHTML = sections.join('');
+      el.innerHTML = sections.length
+        ? sections.join('')
+        : '<div class="empty-state"><div class="icon">👤</div><h3>Sin turnos para ese barbero</h3><p>Probá cambiar de barbero o fecha.</p></div>';
     }
 
     const total = appts.reduce((s, a) => s + (a.status === 'completed' ? parseFloat(a.price||0) : 0), 0);
@@ -6003,6 +6029,11 @@ async function loadAgenda() {
   } catch (e) {
     console.error(e);
   }
+}
+
+function setAgendaBarberFilter(val) {
+  agendaBarberFilter = val || '';
+  loadAgenda();
 }
 
 function renderBarberSection(name, color, appts, isUnassigned) {
