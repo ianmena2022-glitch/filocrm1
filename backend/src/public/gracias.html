@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-AR">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -367,22 +367,34 @@
   </div>
 
   <script>
-    // Countdown y redirect automático
+    // Countdown y redirect automático. Si el usuario hace cualquier interacción
+    // (click en el CTA, scroll o click en cualquier parte), cancelamos el redirect
+    // para no interrumpir mientras lee los perks.
     let secs = 5;
     const timerEl = document.getElementById('timer');
+    let cancelled = false;
     const interval = setInterval(() => {
+      if (cancelled) { clearInterval(interval); return; }
       secs--;
       timerEl.textContent = secs;
       if (secs <= 0) {
         clearInterval(interval);
-        window.location.href = '/app';
+        if (!cancelled) window.location.href = '/app';
       }
     }, 1000);
 
-    // Click manual cancela el countdown
-    document.getElementById('cta-btn').addEventListener('click', () => {
+    function cancelCountdown() {
+      cancelled = true;
       clearInterval(interval);
-    });
+      if (timerEl) timerEl.textContent = '—';
+    }
+    // Click en el CTA: cancelar primero para que no se dispare el redirect del countdown
+    // en paralelo (se navega vía href del botón, sin race).
+    document.getElementById('cta-btn').addEventListener('click', cancelCountdown);
+    // Cualquier otra interacción también cancela
+    document.addEventListener('scroll',   cancelCountdown, { once: true, passive: true });
+    document.addEventListener('keydown',  cancelCountdown, { once: true });
+    document.addEventListener('touchmove',cancelCountdown, { once: true, passive: true });
   </script>
 </body>
 </html>
