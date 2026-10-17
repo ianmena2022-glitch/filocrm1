@@ -133,11 +133,11 @@ footer{text-align:center;padding:24px;font-size:12px;color:var(--g);border-top:1
     </div>
   </div>
 
-  <a href="#" id="reserve-link" class="cta-reserve">✂ Reservar mi próximo turno</a>
+  <a href="#" id="reserve-link" class="cta-reserve" onclick="if(this.getAttribute('href')==='#'){event.preventDefault();alert('Cargando datos del shop, probá en un segundo');}">✂ Reservar mi próximo turno</a>
 
 </div>
 
-<footer>FILO CRM — El sistema del barbero inteligente ✂</footer>
+<footer style="margin-bottom:60px">FILO CRM — El sistema del barbero inteligente ✂</footer>
 
 <script>
 const pathParts = window.location.pathname.split('/');
@@ -240,16 +240,17 @@ function renderStore() {
     const canAfford = clientPoints !== null && clientPoints >= item.points_cost;
     const missing = clientPoints !== null ? item.points_cost - clientPoints : null;
 
+    const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     return `<div class="store-item ${canAfford ? 'affordable' : ''}">
       <div class="item-icon">${getItemIcon(item.name)}</div>
       <div class="item-info">
-        <div class="item-name">${item.name}</div>
-        <div class="item-desc">${item.description || ''}</div>
+        <div class="item-name">${esc(item.name)}</div>
+        <div class="item-desc">${esc(item.description || '')}</div>
         ${canAfford ? '<div class="item-badge">✓ Podés canjear</div>' : ''}
         ${!canAfford && missing !== null ? `<div class="item-missing">Te faltan ${missing.toLocaleString('es-AR')} puntos</div>` : ''}
       </div>
       <div class="item-cost">
-        <div class="item-pts">${item.points_cost.toLocaleString('es-AR')}</div>
+        <div class="item-pts">${Number(item.points_cost||0).toLocaleString('es-AR')}</div>
         <div class="item-pts-lbl">puntos</div>
       </div>
     </div>`;
