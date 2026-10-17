@@ -8464,10 +8464,11 @@ async function loadEquipo() {
     const statsEl = document.getElementById('equipo-stats-grid');
     const totalHoy = barbers.reduce((s, b) => s + parseInt(b.turnos_hoy || 0), 0);
     const facturadoMes = stats.reduce((s, b) => s + parseFloat(b.facturado_mes || 0), 0);
+    const facturadoMesStr = '$' + facturadoMes.toLocaleString('es-AR');
     statsEl.innerHTML = `
       <div class="metric-card"><div class="metric-label">BARBEROS ACTIVOS</div><div class="metric-value">${barbers.length}</div></div>
       <div class="metric-card"><div class="metric-label">TURNOS HOY (EQUIPO)</div><div class="metric-value">${totalHoy}</div></div>
-      <div class="metric-card"><div class="metric-label">FACTURADO MES</div><div class="metric-value">$${facturadoMes.toLocaleString('es-AR')}</div></div>
+      <div class="metric-card"><div class="metric-label">FACTURADO MES</div><div class="metric-value" id="equipo-facturado-mes">${isRevenueUnlocked() ? facturadoMesStr : fmtMoneyMasked(facturadoMes)}</div></div>
     `;
     document.getElementById('equipo-stats').textContent = `${barbers.length} barberos en el equipo`;
 
@@ -8496,12 +8497,12 @@ async function loadEquipo() {
           <div class="client-meta">
             <span>📅 ${b.turnos_hoy || 0} turnos hoy</span>
             <span>✅ ${stat.completados_mes || 0} completados este mes</span>
-            <span>💰 $${parseFloat(stat.facturado_mes || 0).toLocaleString('es-AR')} facturado</span>
+            <span>💰 ${fmtMoneyMasked(parseFloat(stat.facturado_mes || 0))} facturado</span>
             <span style="color:var(--yellow)">🤝 ${bcmLabel(b)}</span>
           </div>
           ${hasPending ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,209,0,0.08);border:1px solid rgba(255,209,0,0.25);border-radius:8px;padding:4px 10px;font-size:12px">
             <span style="color:rgba(255,209,0,0.9)">💸 Pendiente de liquidar:</span>
-            <strong style="color:#FFD100">$${pendingComm.toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
+            <strong style="color:#FFD100">${fmtMoneyMasked(pendingComm)}</strong>
             <span style="color:rgba(255,255,255,0.4)">(${pendingAppts > 0 ? `${pendingAppts} turno${pendingAppts !== 1 ? 's' : ''}` : ''}${pendingAppts > 0 && pendingProdSales > 0 ? ' · ' : ''}${pendingProdSales > 0 ? `${pendingProdSales} producto${pendingProdSales !== 1 ? 's' : ''}` : ''})</span>
           </div>` : `<div style="margin-top:6px;font-size:12px;color:rgba(255,255,255,0.3)">✅ Todo liquidado</div>`}
         </div>
@@ -12097,9 +12098,10 @@ function unmaskAllMonthlyRevenue() {
   if (grid) grid.style.filter = '', grid.style.pointerEvents = '';
   const pnlList = document.getElementById('pnl-months-list');
   if (pnlList) pnlList.style.filter = '', pnlList.style.pointerEvents = '';
-  // Re-ejecutar el loader del dashboard para que repueble los valores
+  // Re-ejecutar los loaders que pintan montos sensibles
   if (typeof loadDashboard === 'function') loadDashboard();
   if (typeof loadEnterprise === 'function') try { loadEnterprise(); } catch(_){}
+  if (typeof loadEquipo === 'function')   try { loadEquipo(); }   catch(_){}
 }
 
 // Modal de unlock — PIN enmascarado + rate limit cliente (bloqueo tras 5 intentos)
