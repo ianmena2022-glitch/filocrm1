@@ -386,11 +386,12 @@ router.put('/:id/status', auth, async (req, res) => {
           if (!msg) {
             const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
             const tplBase = tpls.completado || '✂️ *¡Servicio completado!* Gracias {nombre}.\n⭐ Puntos acumulados: +{puntos} (total: {total})\n🎁 Ver premios: {link}\n¡Hasta la próxima! 💈';
-            msg = tplBase
-              .replace('{nombre}', client.name)
-              .replace('{puntos}', pointsEarned)
-              .replace('{total}', client.points)
-              .replace('{link}', tiendaLink || '');
+            msg = wpp.renderTemplate(tplBase, {
+              nombre: client.name,
+              puntos: pointsEarned,
+              total:  client.points,
+              link:   tiendaLink || ''
+            });
           }
 
           await wpp.sendText(wppShopId, client.phone, msg);

@@ -91,6 +91,21 @@ function stopHealthCheck(shopId) {
 // Dedup de mensajes entrantes por shopId:msgId
 const processedMsgIds = new Set();
 
+// Renderiza un template "Hola {nombre}, tu turno {fecha}" reemplazando case-insensitive
+// y globalmente las claves. Toda {variable} que no haya sido pasada se elimina del texto
+// para no mostrar "{clientname}" literal al cliente.
+function renderTemplate(tpl, vars) {
+  if (!tpl) return '';
+  let out = String(tpl);
+  for (const k of Object.keys(vars || {})) {
+    const re = new RegExp('\\{' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\}', 'gi');
+    out = out.replace(re, vars[k] == null ? '' : String(vars[k]));
+  }
+  // Limpiar variables sin resolver + espacios dobles / salto de línea triple
+  out = out.replace(/\{[^{}]{1,40}\}/g, '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return out;
+}
+
 // Throttle de envío por shop: mínimo 500ms entre sendText para evitar flags de WhatsApp
 const lastSendAt = {};
 async function throttleSend(shopId) {
@@ -148,20 +163,20 @@ async function clearJidSession(shopId, jid, resolvedPhone) {
     const dir = authDir(shopId);
     const user = jid.split('@')[0];
     const phoneClean = (resolvedPhone || '').replace(/\D/g, '');
-    const files = fs.readdirSync(dir);
+    // fs.promises evita bloquear el event loop en shops con muchos contactos
+    const files = await fs.promises.readdir(dir);
     const sessionFiles = files.filter(f => f.startsWith('session-'));
     let removed = 0;
+    const unlinks = [];
     for (const f of sessionFiles) {
-      // useMultiFileAuthState: session-{user}.{device}.json o session-{user}-{device}.json (fixFileName convierte ':' a '-')
       const base = f.replace(/^session-/, '').replace(/\.json$/, '');
-      const fileUser = base.replace(/_\d+(\.\d+)*$/, ''); // strip _1.0, _1.89, etc (formato Baileys v7)
+      const fileUser = base.replace(/_\d+(\.\d+)*$/, '');
       if (fileUser === user || (phoneClean && fileUser === phoneClean)) {
-        fs.unlinkSync(path.join(dir, f));
-        removed++;
+        unlinks.push(fs.promises.unlink(path.join(dir, f)).then(() => removed++).catch(()=>{}));
       }
     }
+    await Promise.all(unlinks);
     if (removed === 0) {
-      // Log arquivos para diagnóstico
       console.log(`[WPP] clearJidSession: sin match para "${user}" / "${phoneClean}". Archivos: ${sessionFiles.slice(0,10).join(', ')}`);
     } else {
       console.log(`[WPP] clearJidSession: ${removed} sesión(es) eliminada(s) para ${jid}`);
@@ -373,12 +388,11 @@ async function findAnyPendingPayment(shopId) {
 async function findPendingPayment(shopId, phone) {
   try {
     const phoneDigits = phone.replace(/[^0-9]/g, '');
-    // WPP a veces resuelve @lid a números de 14 dígitos con un 0 al final
-    // (ej: 54911266042470 en vez de 5491126604247). Normalizamos quitando ese 0 extra.
-    const phoneNorm = (phoneDigits.length >= 14 && phoneDigits.endsWith('0'))
-      ? phoneDigits.slice(0, -1)
-      : phoneDigits;
-    const phoneSuffix = phoneNorm.slice(-10);
+    // Usamos SIEMPRE los últimos 10 dígitos como match: para AR es área+número y
+    // es estable sin importar si viene con 54, 549, @lid con sufijo, etc.
+    // (El fix previo asumía que todo número de 14 que termina en 0 era @lid, lo
+    // que corrompía matching de números reales que terminan en 0.)
+    const phoneSuffix = phoneDigits.slice(-10);
 
     const senaRes = await pool.query(
       `SELECT a.id, a.sena_amount, s.sena_cbu
@@ -450,7 +464,11 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
       const buffer = await downloadMediaBuffer(mediaMsg, 'document');
       try {
         const pdfParse = require('pdf-parse');
-        const pdfData = await pdfParse(buffer);
+        // Timeout 8s para pdf-parse (bloquea event loop si es muy grande)
+        const pdfData = await Promise.race([
+          pdfParse(buffer),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('pdf_parse_timeout_8s')), 8000))
+        ]);
         if (!pdfData.text?.trim()) {
           await sock.sendMessage(remoteJid, { text: 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.' });
           return true;
@@ -1083,4 +1101,4 @@ async function reconnectAllShops() {
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes };
+module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate };

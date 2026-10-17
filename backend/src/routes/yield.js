@@ -96,11 +96,13 @@ router.post('/send-flash-offer', auth, async (req, res) => {
       // Fallback: usar template de la DB si la IA falla
       if (!msg) {
         const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
-        msg = (tpls.sillon || '¡Hola {nombre}! 👋\n\nTenemos un sillón libre hoy a las *{hora}* en {barberia}.\n\n{incentivo}\n\n¿Te anotamos? ✂️')
-          .replace('{nombre}', c.name)
-          .replace('{hora}', slot)
-          .replace('{barberia}', shopData.name)
-          .replace('{incentivo}', incentivo || '');
+        const tplBase = tpls.sillon || '¡Hola {nombre}! 👋\n\nTenemos un sillón libre hoy a las *{hora}* en {barberia}.\n\n{incentivo}\n\n¿Te anotamos? ✂️';
+        msg = wpp.renderTemplate(tplBase, {
+          nombre: c.name,
+          hora: slot,
+          barberia: shopData.name,
+          incentivo: incentivo || ''
+        });
       }
 
       try {
@@ -185,9 +187,8 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
     });
     if (!msg) {
       const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
-      msg = (tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.')
-        .replace('{nombre}', client.name)
-        .replace('{barberia}', shopData.name);
+      const tplBase = tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.';
+      msg = wpp.renderTemplate(tplBase, { nombre: client.name, barberia: shopData.name });
     }
 
     await wpp.sendText(req.shopId, client.phone, msg);
