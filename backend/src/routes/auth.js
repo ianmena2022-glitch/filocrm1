@@ -339,10 +339,16 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// POST /api/auth/setup-test
+// POST /api/auth/setup-test — SOLO en entornos no productivos
 router.post('/setup-test', async (req, res) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SETUP_TEST !== 'true') {
+    return res.status(404).json({ error: 'Endpoint no disponible' });
+  }
   const { secret, password } = req.body;
-  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'No autorizado' });
+  // Requiere un secret dedicado (SETUP_TEST_SECRET), no el JWT_SECRET
+  const expected = process.env.SETUP_TEST_SECRET;
+  if (!expected) return res.status(503).json({ error: 'SETUP_TEST_SECRET no configurado' });
+  if (secret !== expected) return res.status(403).json({ error: 'No autorizado' });
 
   try {
     const hash = await bcrypt.hash(password || 'filo2026test', 12);
@@ -359,15 +365,27 @@ router.post('/setup-test', async (req, res) => {
 
 
 // DELETE /api/auth/delete-account — borrar cuenta permanentemente
+// Requiere JWT válido Y re-confirmación de la contraseña en el body
 router.delete('/delete-account', async (req, res) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Token requerido' });
 
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'Debés confirmar tu contraseña para eliminar la cuenta' });
+
   try {
     const jwt = require('jsonwebtoken');
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const shopId = payload.shopId;
+
+    // Re-verificar password del dueño antes de borrar
+    const pwdCheck = await pool.query('SELECT password FROM shops WHERE id=$1', [shopId]);
+    if (!pwdCheck.rows.length || !pwdCheck.rows[0].password) {
+      return res.status(401).json({ error: 'Cuenta no encontrada' });
+    }
+    const ok = await bcrypt.compare(password, pwdCheck.rows[0].password);
+    if (!ok) return res.status(401).json({ error: 'Contraseña incorrecta' });
 
     // Cancelar suscripción en MP si existe
     const shopData = await pool.query(

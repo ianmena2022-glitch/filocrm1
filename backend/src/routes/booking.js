@@ -368,8 +368,32 @@ router.get('/:slug/barber-counts', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Rate limit por IP+slug para /reserve: máx 10 reservas / 10 min
+const _reserveAttempts = new Map();
+const _reserveCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _reserveAttempts) if (now > v.resetAt) _reserveAttempts.delete(k);
+}, 15 * 60 * 1000);
+if (typeof _reserveCleanup.unref === 'function') _reserveCleanup.unref();
+function reserveRateLimit(req, res, next) {
+  const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().split(',')[0].trim();
+  const key = `${ip}:${req.params.slug}`;
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const MAX = 10;
+  let e = _reserveAttempts.get(key);
+  if (!e || now > e.resetAt) e = { count: 0, resetAt: now + windowMs };
+  e.count++;
+  _reserveAttempts.set(key, e);
+  if (e.count > MAX) {
+    res.set('Retry-After', String(Math.ceil((e.resetAt - now) / 1000)));
+    return res.status(429).json({ error: 'Demasiadas reservas. Esperá unos minutos.' });
+  }
+  next();
+}
+
 // POST /api/booking/:slug/reserve — crear reserva
-router.post('/:slug/reserve', async (req, res) => {
+router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
   const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
   console.log(`[booking POST] slug=${req.params.slug} client=${client_name} date=${date} time=${time_start} phone=${client_phone||'null'}`);
 
@@ -428,18 +452,25 @@ router.post('/:slug/reserve', async (req, res) => {
       }
     }
 
-    // Validar membresía activa con créditos disponibles (re-verificar en el servidor)
+    // Validar membresía activa + que el teléfono del body sea el dueño de la membresía
     if (is_member_booking && membership_id) {
+      if (!client_phone) return res.status(400).json({ error: 'Para reservar con membresía necesitás tu número.' });
+      const normPhone = String(client_phone).replace(/\D/g, '').slice(-10);
       const mem = await pool.query(
-        `SELECT id, credits_total, credits_used, active FROM memberships WHERE id=$1 AND client_id IN (
-           SELECT id FROM clients WHERE shop_id=$2
-         )`,
+        `SELECT m.id, m.credits_total, m.credits_used, m.active, c.phone
+         FROM memberships m
+         JOIN clients c ON c.id = m.client_id
+         WHERE m.id=$1 AND c.shop_id=$2`,
         [parseInt(membership_id), shopData.id]
       );
       if (!mem.rows.length || !mem.rows[0].active) {
         return res.status(400).json({ error: 'La membresía no está activa.' });
       }
       const m = mem.rows[0];
+      const memPhone = String(m.phone || '').replace(/\D/g, '').slice(-10);
+      if (!memPhone || memPhone !== normPhone) {
+        return res.status(403).json({ error: 'Esta membresía no te pertenece.' });
+      }
       const remaining = m.credits_total !== null ? (parseInt(m.credits_total) - parseInt(m.credits_used || 0)) : null;
       if (remaining !== null && remaining <= 0) {
         return res.status(400).json({ error: 'Sin créditos disponibles en la membresía.' });
@@ -485,9 +516,10 @@ router.post('/:slug/reserve', async (req, res) => {
     try {
       await pgClient.query('BEGIN');
 
-      // Advisory lock por shop+date: serializa reservas concurrentes del mismo slot
-      const dateInt = parseInt(date.replace(/-/g, '')) % 2147483647;
-      await pgClient.query('SELECT pg_advisory_xact_lock($1, $2)', [shopData.id, dateInt]);
+      // Advisory lock por shop+date: serializa reservas concurrentes del mismo slot.
+      // Usamos hash estable (sin colisión por fechas) basado en md5 → int32
+      const dateHash = parseInt(require('crypto').createHash('md5').update(date).digest('hex').slice(0, 8), 16) & 0x7fffffff;
+      await pgClient.query('SELECT pg_advisory_xact_lock($1, $2)', [shopData.id, dateHash]);
 
       // Verificar que el slot sigue disponible (dentro de la transacción con lock)
       // Si se eligió un barbero específico, solo verificar conflicto para ese barbero
@@ -566,6 +598,11 @@ router.post('/:slug/reserve', async (req, res) => {
         if (chosen_barber_id && shopData.allow_barber_choice) {
           // Elección manual: validar que el barbero trabaja en esa fecha/hora
           const chosenId = parseInt(chosen_barber_id);
+          if (Number.isNaN(chosenId)) {
+            await pgClient.query('ROLLBACK');
+            pgClient.release();
+            return res.status(400).json({ error: 'ID de barbero inválido' });
+          }
           const barberData = await pgClient.query(
             'SELECT id, barber_commission_pct, barber_schedule FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
             [chosenId, barberShopId]

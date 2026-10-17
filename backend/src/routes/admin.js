@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const bcrypt  = require('bcryptjs');
+const crypto  = require('crypto');
 const jwt     = require('jsonwebtoken');
 const pool    = require('../db/pool');
 
@@ -23,6 +24,12 @@ function checkRateLimit(ip) {
   loginAttempts.set(ip, entry);
   return entry.count > maxAttempts;
 }
+// Cleanup periódico del Map (evita crecimiento ilimitado)
+const _adminLoginCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of loginAttempts) if (now > v.resetAt) loginAttempts.delete(k);
+}, 15 * 60 * 1000);
+if (typeof _adminLoginCleanup.unref === 'function') _adminLoginCleanup.unref();
 
 // Middleware de autenticación admin
 function adminAuth(req, res, next) {
@@ -48,7 +55,11 @@ router.post('/login', async (req, res) => {
     return res.status(503).json({ error: 'Login admin no configurado en el servidor' });
   }
   const { password } = req.body;
-  if (!password || password !== ADMIN_SECRET) {
+  if (!password) return res.status(401).json({ error: 'Contraseña incorrecta' });
+  // Comparación en tiempo constante para prevenir timing attacks
+  const a = Buffer.from(password);
+  const b = Buffer.from(ADMIN_SECRET);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
   const token = jwt.sign({ isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '8h' });

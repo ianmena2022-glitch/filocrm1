@@ -421,9 +421,15 @@ router.put('/:id', auth, async (req, res) => {
   const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
   try {
-    // Al reasignar barbero, permitimos overlap y solo rechazamos si otro turno
-    // del mismo barbero empieza EXACTAMENTE a la misma hora.
+    // Al reasignar barbero, validar que pertenezca al shop y permitir overlap
+    // (solo rechazamos si otro turno del mismo barbero empieza EXACTAMENTE a la misma hora).
     if (hasBarberField && newBarberId) {
+      if (Number.isNaN(newBarberId)) return res.status(400).json({ error: 'barber_id inválido' });
+      const bCheck = await pool.query(
+        'SELECT 1 FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [newBarberId, shopId]
+      );
+      if (!bCheck.rows.length) return res.status(400).json({ error: 'Barbero inválido para este shop' });
       const curr = await pool.query('SELECT date, time_start FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
       if (!curr.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
       const d  = curr.rows[0].date;
