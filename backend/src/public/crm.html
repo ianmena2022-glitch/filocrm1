@@ -4606,7 +4606,7 @@ function canRedeemFreeMonth() {
 async function redeemFreeMonth() {
   const freeMonths = parseInt(currentShop?.free_months) || 0;
   if (freeMonths <= 0) return showToast('⚠️', 'Sin meses disponibles', 'No tenés meses gratis para canjear');
-  if (!confirm(`¿Canjear 1 mes gratis? Tu acceso se extenderá 30 días.\nTe quedarán ${freeMonths - 1} mes${freeMonths - 1 !== 1 ? 'es' : ''} disponible${freeMonths - 1 !== 1 ? 's' : ''}.`)) return;
+  if (!(await confirmModal(`¿Canjear 1 mes gratis? Tu acceso se extenderá 30 días.\nTe quedarán ${freeMonths - 1} mes${freeMonths - 1 !== 1 ? 'es' : ''} disponible${freeMonths - 1 !== 1 ? 's' : ''}.`))) return;
   try {
     const data = await api('POST', '/referrals/redeem');
     if (!data.ok) return showToast('❌', 'Error', data.error || 'No se pudo canjear');
@@ -5395,7 +5395,7 @@ function updateQueuePauseBtn() {
 }
 
 async function clearQueue() {
-  if (!confirm('¿Limpiar toda la fila? Se marcarán todos como "salió".')) return;
+  if (!(await confirmModal('¿Limpiar toda la fila? Se marcarán todos como "salió".'))) return;
   try { await api('DELETE', '/queue'); loadQueue(); } catch(e) {}
 }
 
@@ -6142,7 +6142,7 @@ async function updateApptStatus(id, status) {
 }
 
 async function confirmSena(id) {
-  if (!confirm('¿Recibiste la seña? El turno pasará a estado Pendiente.')) return;
+  if (!(await confirmModal('¿Recibiste la seña? El turno pasará a estado Pendiente.'))) return;
   try {
     await api('PUT', `/appointments/${id}/sena`, { action: 'confirm' });
     showToast('✅', 'Seña confirmada', 'El turno está pendiente');
@@ -6151,7 +6151,7 @@ async function confirmSena(id) {
 }
 
 async function cancelSena(id) {
-  if (!confirm('¿Marcar la seña como perdida? El turno se cancelará.')) return;
+  if (!(await confirmModal('¿Marcar la seña como perdida? El turno se cancelará.'))) return;
   try {
     await api('PUT', `/appointments/${id}/sena`, { action: 'lost' });
     showToast('⚠️', 'Seña perdida', 'Turno cancelado');
@@ -6263,7 +6263,7 @@ async function confirmPayment(apptId) {
 }
 
 async function deleteAppt(id) {
-  if (!confirm('¿Eliminar este turno?')) return;
+  if (!(await confirmModal('¿Eliminar este turno?'))) return;
   const card = document.querySelector(`[onclick*="deleteAppt(${id})"]`)?.closest('.appointment-card');
   if (card) {
     card.classList.add('removing');
@@ -6407,7 +6407,7 @@ async function createClient() {
 }
 
 async function deleteClient(id) {
-  if (!confirm('¿Eliminar este cliente?')) return;
+  if (!(await confirmModal('¿Eliminar este cliente?'))) return;
   // Remover card al instante
   const card = document.querySelector(`[onclick*="deleteClient(${id})"]`)?.closest('.client-card');
   if (card) card.remove();
@@ -6497,7 +6497,7 @@ async function createService() {
 }
 
 async function deleteService(id) {
-  if (!confirm('¿Eliminar este servicio?')) return;
+  if (!(await confirmModal('¿Eliminar este servicio?'))) return;
   const row = document.querySelector(`[onclick*="deleteService(${id})"]`)?.closest('div[style*="border-bottom"]');
   if (row) row.remove();
   try {
@@ -6761,7 +6761,7 @@ async function rescueClient(clientId, name) {
 }
 
 async function quickRescue(clientId, name) {
-  if (!confirm(`¿Enviar mensaje de rescate a ${name}?`)) return;
+  if (!(await confirmModal(`¿Enviar mensaje de rescate a ${name}?`))) return;
   await rescueClient(clientId, name);
 }
 
@@ -6972,7 +6972,7 @@ async function confirmLinkMP() {
 }
 
 async function cancelMembership(id) {
-  if (!confirm('¿Cancelar esta membresía?')) return;
+  if (!(await confirmModal('¿Cancelar esta membresía?'))) return;
   const card = document.querySelector(`[onclick*="cancelMembership(${id})"]`)?.closest('.memb-card');
   if (card) card.style.opacity = '0.4';
   try {
@@ -6997,7 +6997,7 @@ async function sendPaymentReminder(id) {
 }
 
 async function markMembershipPaid(id) {
-  if (!confirm('¿Confirmar que recibiste el pago de esta membresía?')) return;
+  if (!(await confirmModal('¿Confirmar que recibiste el pago de esta membresía?'))) return;
   try {
     await api('PUT', `/memberships/${id}/mark-paid`);
     showToast('✅', 'Pago confirmado', 'Se notificó al cliente y se renovaron los créditos');
@@ -7396,7 +7396,7 @@ function openEditPaymentMethod(id) {
 }
 
 async function deletePaymentMethod(id) {
-  if (!confirm('¿Eliminar este método de pago?')) return;
+  if (!(await confirmModal('¿Eliminar este método de pago?'))) return;
   try {
     await api('DELETE', `/payment-methods/${id}`);
     await loadPaymentMethodsSettings();
@@ -7635,7 +7635,7 @@ async function connectWhatsapp() {
 }
 
 async function resetWhatsapp() {
-  if (!confirm('¿Hacer una reconexión limpia? Se va a cerrar la sesión actual y necesitás escanear el QR de nuevo.')) return;
+  if (!(await confirmModal('¿Hacer una reconexión limpia? Se va a cerrar la sesión actual y necesitás escanear el QR de nuevo.'))) return;
   try {
     showToast('🔄', 'Limpiando sesión...', 'Esperá un momento');
     await api('POST', '/settings/whatsapp/reset');
@@ -7735,7 +7735,7 @@ async function connectEntWpp() {
 }
 
 async function resetEntWpp() {
-  if (!confirm('¿Reconexión limpia? Se borra la sesión y tenés que escanear el QR de nuevo.')) return;
+  if (!(await confirmModal('¿Reconexión limpia? Se borra la sesión y tenés que escanear el QR de nuevo.'))) return;
   try {
     showToast('🔄', 'Limpiando sesión...', '');
     await api('POST', '/settings/whatsapp/reset');
@@ -7882,14 +7882,26 @@ document.addEventListener('DOMContentLoaded', initRipple);
 
 // ─── TOAST ───
 let toastTimer;
-function showToast(icon, title, msg) {
-  document.getElementById('toast-icon').textContent = icon;
-  document.getElementById('toast-title').textContent = title;
-  document.getElementById('toast-msg').textContent = msg;
+// showToast(icon, title, msg, opts?) — tolerante a signatures viejas:
+//   showToast('mensaje')               → warning con solo mensaje
+//   showToast('✅', 'título')           → sin msg
+//   showToast('❌', 'título', 'detalle')
+//   showToast('❌', 'título', 'detalle', { duration: 7000 })  → errores críticos más tiempo
+function showToast(icon, title, msg, opts) {
+  // Fix: si llega solo 1 string, interpretarlo como mensaje de advertencia
+  if (title === undefined && msg === undefined) {
+    msg = icon; title = 'Aviso'; icon = '⚠️';
+  }
+  document.getElementById('toast-icon').textContent  = icon  || '';
+  document.getElementById('toast-title').textContent = title || '';
+  document.getElementById('toast-msg').textContent   = msg   || '';
   const toast = document.getElementById('toast');
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 3500);
+  // Error (❌) o explícito: duración extendida; resto: 3.5s
+  const isError = (icon === '❌') || (opts && opts.duration);
+  const duration = (opts && opts.duration) || (isError ? 6000 : 3500);
+  toastTimer = setTimeout(hideToast, duration);
 }
 
 function hideToast() {
@@ -7899,6 +7911,76 @@ function hideToast() {
     toast.classList.remove('show', 'hiding');
   }, 200);
 }
+
+// ─── confirmModal — reemplaza window.confirm() nativo con un modal del design system
+// Devuelve Promise<boolean>. Formas de uso:
+//   await confirmModal('¿Eliminar?')                        // 1 string → title='¿Eliminar?', body=''
+//   await confirmModal('título', 'descripción')             // title + body
+//   await confirmModal('título', 'desc', { danger:true, destructiveKey:'ELIMINAR' })
+// Si body contiene '\n', la 1era línea pasa a title (compat con confirm() nativo).
+function confirmModal(title, body, opts) {
+  // Compat con confirm(msg) nativo: 1 solo arg
+  if (body === undefined || typeof body === 'object') {
+    if (typeof body === 'object') opts = body;
+    const raw = String(title || '');
+    const parts = raw.split('\n');
+    title = parts[0] || '¿Confirmar?';
+    body  = parts.slice(1).join('<br>');
+  }
+  opts = opts || {};
+  return new Promise(resolve => {
+    const existing = document.getElementById('confirm-modal-overlay');
+    if (existing) existing.remove();
+    const danger = !!opts.danger;
+    const confirmText = opts.confirmText || (danger ? 'Eliminar' : 'Confirmar');
+    const cancelText  = opts.cancelText  || 'Cancelar';
+    const needsType   = typeof opts.destructiveKey === 'string' ? opts.destructiveKey : null;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Barlow,sans-serif;animation:fadeIn .15s ease-out';
+    overlay.innerHTML = `
+      <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;width:100%;max-width:400px;animation:modalIn .18s ease-out">
+        <div style="font-size:16px;font-weight:700;color:${danger ? '#ff8080' : 'var(--w, #fff)'};margin-bottom:8px;display:flex;align-items:center;gap:8px">
+          ${danger ? '⚠️' : '❓'} ${escHtml(title)}
+        </div>
+        <div style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:${needsType ? '12px' : '18px'}">${body || ''}</div>
+        ${needsType ? `<input id="confirm-modal-type" type="text" placeholder='Escribí "${needsType}" para confirmar' style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,80,80,.4);border-radius:8px;padding:10px 12px;color:#fff;font-size:14px;outline:none;font-family:Barlow,sans-serif;box-sizing:border-box;margin-bottom:16px" autocomplete="off">` : ''}
+        <div style="display:flex;gap:8px">
+          <button id="confirm-modal-cancel" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-family:Barlow,sans-serif;font-size:13px">${escHtml(cancelText)}</button>
+          <button id="confirm-modal-ok" ${needsType ? 'disabled style="opacity:.4;cursor:not-allowed;"' : ''} style="flex:1;background:${danger ? 'linear-gradient(135deg,#ff5050,#c82333)' : 'var(--yellow, #FFD100)'};border:none;color:${danger ? '#fff' : '#000'};padding:11px;border-radius:10px;cursor:pointer;font-weight:700;font-family:Barlow,sans-serif;font-size:13px">${escHtml(confirmText)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const okBtn = overlay.querySelector('#confirm-modal-ok');
+    const cancelBtn = overlay.querySelector('#confirm-modal-cancel');
+    const typeInput = overlay.querySelector('#confirm-modal-type');
+    const close = (val) => { overlay.remove(); resolve(val); };
+    cancelBtn.onclick = () => close(false);
+    okBtn.onclick = () => {
+      if (needsType && typeInput.value.trim() !== needsType) return;
+      close(true);
+    };
+    if (typeInput) {
+      typeInput.addEventListener('input', () => {
+        const ok = typeInput.value.trim() === needsType;
+        okBtn.disabled = !ok;
+        okBtn.style.opacity = ok ? '1' : '.4';
+        okBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+      });
+      setTimeout(() => typeInput.focus(), 50);
+    } else {
+      setTimeout(() => cancelBtn.focus(), 50);
+    }
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close(false);
+      if (e.key === 'Enter' && !okBtn.disabled) close(true);
+    });
+  });
+}
+// Shortcut: window.confirm compatible
+window.confirmModal = confirmModal;
 
 // ─── PUNTOS / TIENDA ───
 
@@ -7961,7 +8043,7 @@ async function createStoreItem() {
 }
 
 async function deleteStoreItem(id) {
-  if (!confirm('¿Eliminar este premio?')) return;
+  if (!(await confirmModal('¿Eliminar este premio?'))) return;
   try {
     await api('DELETE', '/points/store/' + id);
     showToast('🗑', 'Premio eliminado', '');
@@ -8444,7 +8526,7 @@ async function toggleRecurrente(id, active) {
 }
 
 async function deleteRecurrente(id) {
-  if (!confirm('¿Eliminar este turno fijo?\nSe cancelarán los turnos futuros pendientes.')) return;
+  if (!(await confirmModal('¿Eliminar este turno fijo?\nSe cancelarán los turnos futuros pendientes.'))) return;
   try {
     await api('DELETE', `/recurring/${id}?cancel_future=true`);
     loadRecurrentes();
@@ -8655,7 +8737,7 @@ async function saveBarberEdit() {
 }
 
 async function removeBarber(id, name) {
-  if (!confirm(`¿Eliminar a ${name} del equipo?`)) return;
+  if (!(await confirmModal(`¿Eliminar a ${name} del equipo?`))) return;
   try {
     await api('DELETE', `/barbers/${id}`);
     showToast('🗑', `${name} eliminado del equipo`, '');
@@ -8703,7 +8785,7 @@ async function confirmBonus() {
 async function deleteBonus(bonusId, barberId) {
   const bId = barberId || _settlementBarberId;
   if (!bId) return;
-  if (!confirm('¿Eliminar este bonus? Esta acción no se puede deshacer.')) return;
+  if (!(await confirmModal('¿Eliminar este bonus? Esta acción no se puede deshacer.'))) return;
   try {
     await api('DELETE', `/barbers/${bId}/bonus/${bonusId}`);
     showToast('🗑️', 'Bonus eliminado', '');
@@ -9460,7 +9542,7 @@ async function loadSubscriptionStatus() {
 }
 
 async function cancelFiloSubscription() {
-  if (!confirm('¿Estás seguro que querés cancelar tu suscripción a FILO?\n\nSeguís teniendo acceso hasta el final del período actual. Después se bloquea el acceso.')) return;
+  if (!(await confirmModal('¿Estás seguro que querés cancelar tu suscripción a FILO?\n\nSeguís teniendo acceso hasta el final del período actual. Después se bloquea el acceso.'))) return;
   try {
     await fetch('/api/payments/filo-cancel', {
       method: 'POST',
@@ -9474,10 +9556,13 @@ async function cancelFiloSubscription() {
 }
 
 async function deleteAccount() {
-  const confirm1 = confirm('⚠️ Esta acción es IRREVERSIBLE.\n\nSe borrarán todos tus datos: clientes, turnos, membresías y configuración.\n\n¿Estás seguro?');
-  if (!confirm1) return;
-  const confirm2 = prompt('Para confirmar, escribí DELETE en mayúsculas:');
-  if (confirm2 !== 'DELETE') return showToast('❌', 'Cancelado', 'No se borró nada');
+  // Doble confirmación: modal con typing de "ELIMINAR" para habilitar el botón
+  const ok = await confirmModal(
+    '⚠️ Eliminar cuenta FILO',
+    'Esta acción es <strong style="color:#ff8080">IRREVERSIBLE</strong>. Se borrarán todos tus datos: clientes, turnos, membresías y configuración.',
+    { danger: true, confirmText: 'Eliminar cuenta', destructiveKey: 'ELIMINAR' }
+  );
+  if (!ok) return;
   try {
     await fetch('/api/auth/delete-account', {
       method: 'DELETE',
@@ -10123,7 +10208,7 @@ async function saveExpense() {
 }
 
 async function deleteExpense(id) {
-  if (!confirm('¿Eliminar este gasto?')) return;
+  if (!(await confirmModal('¿Eliminar este gasto?'))) return;
   try {
     await api('DELETE', `/dashboard/expenses/${id}`);
     showToast('🗑','Gasto eliminado','');
@@ -10561,7 +10646,7 @@ async function saveBranchEdit() {
 }
 
 async function deactivateBranch(id, name) {
-  if (!confirm(`¿Desactivar la sucursal "${name}"? Los datos se conservan.`)) return;
+  if (!(await confirmModal(`¿Desactivar la sucursal "${name}"? Los datos se conservan.`))) return;
   try {
     await api('DELETE', `/enterprise/branches/${id}`);
     showToast('🗑', 'Sucursal desactivada', '');
