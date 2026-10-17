@@ -5,20 +5,29 @@ const conversations  = {};
 const lastActivity   = {};
 const CONVERSATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
 
-// Rate limiting: máx mensajes por ventana de tiempo
+// Rate limiting: tope generoso para que no silencie clientes activos
 const rateLimiter = {};
-const RATE_LIMIT_MAX = 6;     // máx respuestas
+const RATE_LIMIT_MAX = 15;    // antes 6 — muy restrictivo
 const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // por 5 minutos
+const rateLimitWarned = {};   // avisado en esta ventana al cliente
 
+// Devuelve 'ok' (puede responder), 'warn' (debe avisar que espere, es la primera vez
+// en la ventana que satura), o 'silent' (ya avisamos antes, no spameamos).
 function checkRateLimit(shopId, phone) {
   const key = `${shopId}:${phone}`;
   const now = Date.now();
   if (!rateLimiter[key]) rateLimiter[key] = [];
-  // limpiar entradas viejas
   rateLimiter[key] = rateLimiter[key].filter(t => now - t < RATE_LIMIT_WINDOW);
-  if (rateLimiter[key].length >= RATE_LIMIT_MAX) return false;
-  rateLimiter[key].push(now);
-  return true;
+  if (rateLimiter[key].length < RATE_LIMIT_MAX) {
+    rateLimiter[key].push(now);
+    delete rateLimitWarned[key];
+    return 'ok';
+  }
+  if (!rateLimitWarned[key] || now - rateLimitWarned[key] > RATE_LIMIT_WINDOW) {
+    rateLimitWarned[key] = now;
+    return 'warn';
+  }
+  return 'silent';
 }
 
 function hasActiveConversation(shopId, phone) {
@@ -239,43 +248,78 @@ Profesional y cercano. Usá "vos". Máximo 3 líneas por mensaje. Sin markdown, 
   }
 }
 
+// Heurística local rápida: palabras típicas de barbería / consultas de turno
+// Si matchea, respondemos sin llamar al clasificador (ahorra latencia y evita falsos negativos).
+const BARBER_KEYWORDS = [
+  'turno','turnos','hora','horario','horarios','reservar','reserva','sacar','agendar',
+  'precio','precios','cuánto','cuanto','vale','sale','cobran','cobras',
+  'corte','corten','fade','barba','afeitada','color','tinte','cejas',
+  'cancelar','cancelo','mover','cambiar','posponer','reagendar',
+  'puntos','premio','premios','canjear',
+  'abierto','abren','cierran','ubicacion','ubicación','donde','dónde','direccion','dirección',
+  'cuando','cuándo','disponible','libre','mañana','hoy','pasado',
+  'barbero','barberos','disponibilidad','consulta','consultar',
+  'confirmar','confirmo','listo','perfecto','gracias',
+  'ok','dale','si','sí','bueno','buenas','buenisimo','buenísimo'
+];
+function looksLikeBarberia(text) {
+  const t = String(text || '').toLowerCase();
+  if (t.length < 2) return false;
+  if (t.includes('?')) return true; // cualquier pregunta cuenta
+  if (/\d{1,2}[:h]\d{0,2}/.test(t)) return true; // hora tipo "15:30" o "15h"
+  return BARBER_KEYWORDS.some(k => t.includes(k));
+}
+
 async function getAIResponse(shopId, phone, userMessage) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) { console.error('GROQ_API_KEY no configurada'); return null; }
 
-  // Si el que escribe es un prospecto, usar el responder de ventas
+  // Si el que escribe es un prospecto Y NO es cliente del shop, usar el responder de ventas
   try {
-    const isProspect = await pool.query(
-      'SELECT id FROM prospects WHERE shop_id=$1 AND phone=$2 LIMIT 1',
-      [shopId, phone]
+    const isClient = await pool.query(
+      'SELECT 1 FROM clients WHERE shop_id=$1 AND phone LIKE $2 LIMIT 1',
+      [shopId, '%' + String(phone).replace(/\D/g, '').slice(-8) + '%']
     );
-    if (isProspect.rows.length) {
-      return getProspectResponse(shopId, phone, userMessage, apiKey);
+    if (!isClient.rows.length) {
+      const isProspect = await pool.query(
+        'SELECT id FROM prospects WHERE shop_id=$1 AND phone=$2 LIMIT 1',
+        [shopId, phone]
+      );
+      if (isProspect.rows.length) {
+        return getProspectResponse(shopId, phone, userMessage, apiKey);
+      }
     }
   } catch (e) {
     console.error('[AI] prospect check error:', e.message);
   }
 
-  // Rate limiting
-  if (!checkRateLimit(shopId, phone)) {
-    console.log(`[AI] Rate limit alcanzado para ${phone} — ignorando`);
+  // Rate limit con 3 estados: ok / warn (primer rebote) / silent
+  const rl = checkRateLimit(shopId, phone);
+  if (rl === 'silent') {
+    console.log(`[AI] Rate limit silent para ${phone}`);
     return null;
+  }
+  if (rl === 'warn') {
+    console.log(`[AI] Rate limit warn para ${phone} — mandando aviso de espera`);
+    return '👋 Recibí varios mensajes seguidos. Dame unos minutos y te respondo. Gracias!';
   }
 
   const activeConv = hasActiveConversation(shopId, phone);
-  if (activeConv) {
-    // Dentro de conversación activa: clasificación laxa — solo bloquear temas totalmente ajenos
-    const related = await isBarberiaRelated(userMessage, apiKey, false);
-    if (!related) {
-      console.log(`[AI] Ignorado dentro de conversación activa (off-topic): "${userMessage}"`);
-      return null;
-    }
-  } else {
-    // Primer mensaje: clasificación estricta
-    const related = await isBarberiaRelated(userMessage, apiKey, true);
-    if (!related) {
-      console.log(`[AI] Ignorado (no relacionado con barbería): "${userMessage}"`);
-      return null;
+  const localHit   = looksLikeBarberia(userMessage);
+
+  // Si NO hay conversación activa y el mensaje no matchea la heurística local,
+  // recién ahí consultamos al clasificador LLM. Si Groq falla/timeout, por default
+  // dejamos pasar (mejor responder algo que silenciar).
+  if (!activeConv && !localHit) {
+    try {
+      const related = await isBarberiaRelated(userMessage, apiKey, true);
+      if (!related) {
+        console.log(`[AI] Ignorado por clasificador: "${userMessage}"`);
+        return null;
+      }
+    } catch (e) {
+      console.warn('[AI] clasificador falló, dejamos pasar:', e.message);
+      // intencional: no silenciamos por error de Groq
     }
   }
 
@@ -489,4 +533,16 @@ const _aiCleanupInterval = setInterval(() => {
 }, 30 * 60 * 1000);
 if (typeof _aiCleanupInterval.unref === 'function') _aiCleanupInterval.unref();
 
-module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText };
+// Devuelve el último user message cacheado para un (shopId, phone), usado por
+// Baileys.getMessage para poder re-descifrar retries de WhatsApp.
+function getLastUserMessage(shopId, phone) {
+  const key = `${shopId}:${phone}`;
+  const conv = conversations[key];
+  if (!conv) return null;
+  for (let i = conv.length - 1; i >= 0; i--) {
+    if (conv[i].role === 'user' && conv[i].content) return conv[i].content;
+  }
+  return null;
+}
+
+module.exports = { getAIResponse, isBarberiaRelated, generateMessage, verifyComprobante, verifyComprobanteFromText, getLastUserMessage };

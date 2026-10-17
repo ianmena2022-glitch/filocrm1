@@ -48,6 +48,46 @@ const _ciphertextCleanupInterval = setInterval(() => {
 }, 10 * 60 * 1000);
 if (typeof _ciphertextCleanupInterval.unref === 'function') _ciphertextCleanupInterval.unref();
 
+// Health check: cada 2 min verifica que el socket siga vivo con sendPresenceUpdate.
+// Si falla 2 veces consecutivas, marcamos wpp_connected=FALSE y lanzamos reconexión.
+// Esto detecta sockets zombies (WS muerto sin disparar connection.close) que normalmente
+// hacían que sendText se cuelgue 30s.
+const healthIntervals = {};
+const healthFailures = {};
+function startHealthCheck(shopId) {
+  stopHealthCheck(shopId);
+  healthFailures[shopId] = 0;
+  const h = setInterval(async () => {
+    const sock = sockets[shopId];
+    if (!sock || statuses[shopId] !== 'connected') { stopHealthCheck(shopId); return; }
+    try {
+      // Timeout agresivo para detectar zombies
+      await Promise.race([
+        sock.sendPresenceUpdate('available'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('health_timeout')), 10000))
+      ]);
+      healthFailures[shopId] = 0;
+    } catch (e) {
+      healthFailures[shopId] = (healthFailures[shopId] || 0) + 1;
+      console.warn(`[WPP health] shop ${shopId} fallo ${healthFailures[shopId]}/2: ${e.message}`);
+      if (healthFailures[shopId] >= 2) {
+        console.warn(`[WPP health] shop ${shopId} zombie detectado — forzando reconexión`);
+        statuses[shopId] = 'disconnected';
+        try { sock.end?.(new Error('zombie detected')); } catch(_){}
+        delete sockets[shopId];
+        stopHealthCheck(shopId);
+        scheduleReconnect(shopId, 2000);
+      }
+    }
+  }, 2 * 60 * 1000);
+  if (typeof h.unref === 'function') h.unref();
+  healthIntervals[shopId] = h;
+}
+function stopHealthCheck(shopId) {
+  if (healthIntervals[shopId]) { clearInterval(healthIntervals[shopId]); delete healthIntervals[shopId]; }
+  delete healthFailures[shopId];
+}
+
 // Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
 const reconnectTimers = {};
 function scheduleReconnect(shopId, delay) {
@@ -69,6 +109,7 @@ function cancelReconnect(shopId) {
 async function clearSession(shopId) {
   try {
     cancelReconnect(shopId);
+    stopHealthCheck(shopId);
     const dir = baileysDir(shopId);
     if (fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -521,11 +562,22 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     keepAliveIntervalMs: 15000,
     syncFullHistory: false,
     markOnlineOnConnect: false,
-    retryRequestDelayMs: 0,
-    maxMsgRetryCount: 0,
-    fireInitQueries: false,
+    retryRequestDelayMs: 500,
+    maxMsgRetryCount: 3,
+    fireInitQueries: true,
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
     getMessage: async (key) => {
+      // Devolver el último texto del cliente desde ai.conversations si lo tenemos,
+      // para que Baileys pueda re-descifrar en retries.
+      try {
+        const { getLastUserMessage } = require('./ai');
+        if (typeof getLastUserMessage === 'function') {
+          const jid = key?.remoteJid || '';
+          const phone = jid.split('@')[0];
+          const text = getLastUserMessage(shopId, phone);
+          if (text) return { conversation: text };
+        }
+      } catch(_) {}
       return { conversation: '' };
     },
     shouldIgnoreJid: (jid) => {
@@ -578,14 +630,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       console.log(`Baileys conectado para shop ${shopId}`);
       statuses[shopId] = 'connected';
       qrCodes[shopId]  = null;
-      // Reset backoff al conectarse exitosamente
       delete qrAttempts[shopId];
       delete qrCooldownUntil[shopId];
-      delete statuses[`${shopId}_reconnect`]; // reset contador de reconexión
-      // NO reseteamos _440_count ni _440_firstAt — para que si conecta y se cae de nuevo
-      // por 440, siga sumando dentro de la ventana de 2 minutos y detecte el loop.
+      delete statuses[`${shopId}_reconnect`];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
       await saveSessionToDB(shopId);
+      startHealthCheck(shopId);
       if (onConnected) onConnected();
     }
 
@@ -920,12 +970,34 @@ async function sendText(shopId, phone, message) {
     if (!sock) throw new Error('No se pudo reconectar WhatsApp');
   }
 
-  const phoneClean = phone.replace(/\D/g, '');
+  // Normalización AR: si vino sin país y arranca con 11, 15, área AR (10 dígitos) → +549
+  let phoneClean = phone.replace(/\D/g, '');
+  if (phoneClean.length === 10) phoneClean = '549' + phoneClean;         // 1123456789 → 5491123456789
+  if (phoneClean.length === 11 && phoneClean.startsWith('15')) {
+    phoneClean = '54911' + phoneClean.slice(2);                           // raro, defensivo
+  }
+  if (phoneClean.length === 12 && phoneClean.startsWith('54')) {
+    phoneClean = '549' + phoneClean.slice(2);                             // 54XXXXXXXXXX → 549XXXXXXXXXX
+  }
   const jid = `${phoneClean}@s.whatsapp.net`;
 
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
 
-  const result = await sock.sendMessage(jid, { text: message });
+  // Timeout corto: si el socket es zombie, no colgamos el request HTTP del CRM 30s.
+  // Marcamos el socket como caído y disparamos reconexión en background.
+  const result = await Promise.race([
+    sock.sendMessage(jid, { text: message }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('sendText_timeout_8s')), 8000))
+  ]).catch(err => {
+    if (err.message === 'sendText_timeout_8s') {
+      console.warn(`[WPP] sendText timeout en shop ${wppShopId} — marcando zombie`);
+      statuses[wppShopId] = 'disconnected';
+      try { sock.end?.(new Error('sendText timeout')); } catch(_){}
+      delete sockets[wppShopId];
+      scheduleReconnect(wppShopId, 1000);
+    }
+    throw err;
+  });
   console.log(`Baileys sendText OK → ${result?.key?.id}`);
   return result;
 }
