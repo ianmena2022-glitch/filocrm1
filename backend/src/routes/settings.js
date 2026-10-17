@@ -347,6 +347,33 @@ function isValidPin(p) {
   return typeof p === 'string' && /^\d{4}$/.test(p);
 }
 
+// Rate limit por shop para intentos de PIN: máx 10 intentos / 10 min
+const pinAttempts = new Map(); // key = shopId → { count, resetAt }
+function pinRateLimit(req, res, next) {
+  const key = String(req.shopId);
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const MAX = 10;
+  let e = pinAttempts.get(key);
+  if (!e || now > e.resetAt) {
+    e = { count: 0, resetAt: now + windowMs };
+    pinAttempts.set(key, e);
+  }
+  e.count++;
+  if (e.count > MAX) {
+    const retry = Math.ceil((e.resetAt - now) / 1000);
+    res.set('Retry-After', String(retry));
+    return res.status(429).json({ error: `Demasiados intentos. Probá de nuevo en ${Math.ceil(retry/60)} min.` });
+  }
+  next();
+}
+// Limpiar entradas expiradas cada 15 min (unref para no bloquear shutdown)
+const _pinCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [k, e] of pinAttempts) if (now > e.resetAt) pinAttempts.delete(k);
+}, 15 * 60 * 1000);
+if (typeof _pinCleanup.unref === 'function') _pinCleanup.unref();
+
 async function verifyAccountPassword(shopId, password) {
   if (!password) return false;
   const r = await pool.query('SELECT password FROM shops WHERE id=$1', [shopId]);
@@ -381,7 +408,7 @@ router.post('/revenue-pin/enable', auth, ownerOnly, async (req, res) => {
 });
 
 // Desactivar: pide PIN actual (o contraseña como fallback)
-router.post('/revenue-pin/disable', auth, ownerOnly, async (req, res) => {
+router.post('/revenue-pin/disable', auth, ownerOnly, pinRateLimit, async (req, res) => {
   const { pin, password } = req.body || {};
   const okPin = await verifyStoredPin(req.shopId, pin);
   const okPwd = !okPin && password ? await verifyAccountPassword(req.shopId, password) : false;
@@ -395,7 +422,7 @@ router.post('/revenue-pin/disable', auth, ownerOnly, async (req, res) => {
 });
 
 // Cambiar PIN sabiendo el anterior
-router.post('/revenue-pin/change', auth, ownerOnly, async (req, res) => {
+router.post('/revenue-pin/change', auth, ownerOnly, pinRateLimit, async (req, res) => {
   const { old_pin, new_pin } = req.body || {};
   if (!isValidPin(new_pin)) return res.status(400).json({ error: 'El nuevo PIN debe ser de 4 dígitos' });
   if (!(await verifyStoredPin(req.shopId, old_pin))) return res.status(401).json({ error: 'PIN actual incorrecto' });
@@ -425,7 +452,7 @@ router.post('/revenue-pin/reset', auth, ownerOnly, async (req, res) => {
 });
 
 // Verificar PIN para destapar valores (frontend llama esto al clickear 👁️)
-router.post('/revenue-pin/verify', auth, ownerOnly, async (req, res) => {
+router.post('/revenue-pin/verify', auth, ownerOnly, pinRateLimit, async (req, res) => {
   const { pin } = req.body || {};
   const ok = await verifyStoredPin(req.shopId, pin);
   if (!ok) return res.status(401).json({ error: 'PIN incorrecto' });

@@ -5610,10 +5610,11 @@ async function loadDashboard() {
     if (turnosSub) turnosSub.textContent = `${m.completed} listos · ${m.pending} pend.`;
 
     // Métricas del mes (monto sensible → se enmascara si el PIN está activo)
-    const monthRevStr = '$' + Math.round(month.revenue || 0).toLocaleString('es-AR');
+    // Chequeamos el estado ANTES de animNum para evitar el flash del valor real
     if (isRevenueUnlocked()) {
       animNum('dash-month-revenue', month.revenue);
     } else {
+      const monthRevStr = '$' + Math.round(month.revenue || 0).toLocaleString('es-AR');
       applyRevenueMask('dash-month-revenue', monthRevStr);
     }
     document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
@@ -10252,7 +10253,7 @@ function renderEntBranches(branches) {
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:9px;color:var(--gray);letter-spacing:.5px">MES</div>
-          <div style="font-size:15px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(b.revenue_month)}</div>
+          <div style="font-size:15px;font-weight:700;font-family:'Oswald',sans-serif">${fmtMoneyMasked(b.revenue_month)}</div>
           <div style="font-size:10px;color:var(--gray)">${b.cuts_month} cortes</div>
         </div>
       </div>
@@ -10278,10 +10279,11 @@ function renderEntRanking(branches) {
   const sorted = [...branches].sort((a,b) => parseFloat(b.revenue_month||0) - parseFloat(a.revenue_month||0));
   const maxRev = parseFloat(sorted[0]?.revenue_month || 1);
   const medals = ['🥇','🥈','🥉'];
+  const unlocked = isRevenueUnlocked();
   el.innerHTML = `
     <div style="font-size:11px;color:var(--gray);font-weight:700;letter-spacing:1px;margin-bottom:12px">RANKING MES — POR FACTURACIÓN</div>
     ${sorted.map((b, i) => {
-      const pct = Math.round(parseFloat(b.revenue_month||0) / maxRev * 100);
+      const pct = unlocked ? Math.round(parseFloat(b.revenue_month||0) / maxRev * 100) : 0;
       const avgTicket = b.cuts_month > 0 ? parseFloat(b.revenue_month) / b.cuts_month : 0;
       return `
       <div style="margin-bottom:16px">
@@ -10289,12 +10291,12 @@ function renderEntRanking(branches) {
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:18px">${medals[i] || '#' + (i+1)}</span>
             <div>
-              <div style="font-size:13px;font-weight:700">${b.name}${b.is_main ? ` <span style="font-size:9px;color:var(--yellow);font-weight:700;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:3px;padding:1px 5px">⭐ PRINCIPAL</span>` : b.branch_label ? ` <span style="font-size:10px;color:var(--yellow);font-weight:400">${b.branch_label}</span>` : ''}</div>
-              <div style="font-size:11px;color:var(--gray)">${b.cuts_month} cortes · Ticket prom. ${fmt(avgTicket)}</div>
+              <div style="font-size:13px;font-weight:700">${escHtml(b.name)}${b.is_main ? ` <span style="font-size:9px;color:var(--yellow);font-weight:700;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:3px;padding:1px 5px">⭐ PRINCIPAL</span>` : b.branch_label ? ` <span style="font-size:10px;color:var(--yellow);font-weight:400">${escHtml(b.branch_label)}</span>` : ''}</div>
+              <div style="font-size:11px;color:var(--gray)">${b.cuts_month} cortes · Ticket prom. ${unlocked ? fmt(avgTicket) : '••••'}</div>
             </div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:16px;font-weight:700;font-family:'Oswald',sans-serif">${fmt(b.revenue_month)}</div>
+            <div style="font-size:16px;font-weight:700;font-family:'Oswald',sans-serif">${fmtMoneyMasked(b.revenue_month)}</div>
             <div style="font-size:10px;color:var(--gray)">${b.new_clients_month} clientes nuevos</div>
           </div>
         </div>
@@ -10316,13 +10318,13 @@ function openBranchDetail(encoded) {
       ${[
         ['HOY',           fmt(b.revenue_today),  '#fff'],
         ['CORTES HOY',    b.cuts_today,           '#fff'],
-        ['MES',           fmt(b.revenue_month),   '#fff'],
+        ['MES',           fmtMoneyMasked(b.revenue_month),   '#fff'],
         ['CORTES MES',    b.cuts_month,           '#fff'],
         ['SEMANA',        fmt(b.revenue_week),    '#fff'],
         ['TICKET PROM.',  fmt(b.avg_ticket_month||0), 'var(--gray)'],
-        ['COMISIONES MES',fmt(b.commissions_month),'#FF9800'],
-        ['GASTOS MES',    fmt(b.expenses_month),  '#FF4343'],
-        ['GANANCIA NETA', fmt(profit),             profit>=0?'var(--yellow)':'#FF4343'],
+        ['COMISIONES MES',fmtMoneyMasked(b.commissions_month),'#FF9800'],
+        ['GASTOS MES',    fmtMoneyMasked(b.expenses_month),  '#FF4343'],
+        ['GANANCIA NETA', fmtMoneyMasked(profit),             profit>=0?'var(--yellow)':'#FF4343'],
         ['CLIENTES TOTAL',b.client_count,         '#4CAF50'],
         ['CLIENTES NUEVOS',b.new_clients_month,   '#4CAF50'],
         ['BARBEROS',      b.barber_count,          '#fff'],
@@ -11962,9 +11964,23 @@ async function bcmSave(id) {
 
 // ─── PIN de facturaciones mensuales ────────────────────────────────────────
 window._revenuePinSessionOk = false; // destapado para esta sesión del navegador
+window._failedPinAttempts = 0;
 
-function isRevenuePinEnabled() { return !!(currentShop && currentShop.revenue_pin_enabled); }
+// Mientras currentShop no haya cargado todavía, consideramos POSIBLEMENTE activo
+// para no mostrar valores en claro durante el bootstrap (fix race).
+function isRevenuePinEnabled() {
+  if (!currentShop) return true; // conservador antes del bootstrap
+  return !!currentShop.revenue_pin_enabled;
+}
 function isRevenueUnlocked() { return !isRevenuePinEnabled() || !!window._revenuePinSessionOk; }
+
+// Devuelve el monto formateado o ••••+ojito si el PIN está activo y bloqueado.
+// Para usar en innerHTML donde no se puede swap post-render (listas, cards de enterprise).
+function fmtMoneyMasked(v) {
+  const str = '$' + Math.round(parseFloat(v||0)).toLocaleString('es-AR');
+  if (isRevenueUnlocked()) return str;
+  return `<span style="letter-spacing:3px">••••</span> <button type="button" onclick="askRevenuePin()" title="Mostrar" style="background:transparent;border:none;cursor:pointer;color:inherit;font-size:.85em;padding:0 2px;vertical-align:middle">👁️</button>`;
+}
 
 // Reemplaza el textContent de un elemento por puntos+ojo si corresponde ocultarlo
 function applyRevenueMask(elId, realValue) {
@@ -12003,46 +12019,51 @@ function unmaskAllMonthlyRevenue() {
   if (typeof loadEnterprise === 'function') try { loadEnterprise(); } catch(_){}
 }
 
-// Modal de unlock
-function askRevenuePin() {
-  const pin = prompt('Ingresá tu PIN de 4 dígitos para ver las facturaciones mensuales:');
-  if (pin === null) return;
-  if (!/^\d{4}$/.test(pin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
-  api('POST', '/settings/revenue-pin/verify', { pin })
-    .then(() => {
-      window._revenuePinSessionOk = true;
-      showToast('🔓','Desbloqueado','Las facturaciones mensuales están visibles en esta sesión');
-      unmaskAllMonthlyRevenue();
-    })
-    .catch(e => showToast('❌','PIN incorrecto', e.message));
+// Modal de unlock — PIN enmascarado + rate limit cliente (bloqueo tras 5 intentos)
+async function askRevenuePin() {
+  if ((window._failedPinAttempts || 0) >= 5) {
+    return showToast('⛔','Demasiados intentos','Recargá la página o esperá 5 min');
+  }
+  const pin = await openSecurePrompt({ title: '🔒 PIN requerido', label: 'Ingresá tu PIN de 4 dígitos para ver las facturaciones mensuales', type: 'pin', placeholder: '••••' });
+  if (!pin) return;
+  try {
+    await api('POST', '/settings/revenue-pin/verify', { pin });
+    window._revenuePinSessionOk = true;
+    window._failedPinAttempts = 0;
+    showToast('🔓','Desbloqueado','Las facturaciones mensuales están visibles en esta sesión');
+    unmaskAllMonthlyRevenue();
+  } catch(e) {
+    window._failedPinAttempts = (window._failedPinAttempts || 0) + 1;
+    showToast('❌','PIN incorrecto', `Intentos restantes: ${Math.max(0, 5 - window._failedPinAttempts)}`);
+    if (window._failedPinAttempts >= 5) setTimeout(() => { window._failedPinAttempts = 0; }, 5 * 60 * 1000);
+  }
 }
 
 // Toggle en configuración
 async function onRevenuePinToggle(checked) {
+  const toggle = document.getElementById('cfg-pin-toggle');
   if (checked) {
-    // Activar: pedir password + nuevo PIN
-    const password = prompt('Confirmá tu contraseña de la cuenta:');
-    if (!password) { document.getElementById('cfg-pin-toggle').checked = false; return; }
-    const pin = prompt('Elegí un PIN de 4 dígitos:');
-    if (!pin) { document.getElementById('cfg-pin-toggle').checked = false; return; }
-    if (!/^\d{4}$/.test(pin)) { document.getElementById('cfg-pin-toggle').checked = false; return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos'); }
-    const confirmPin = prompt('Confirmá el PIN:');
-    if (confirmPin !== pin) { document.getElementById('cfg-pin-toggle').checked = false; return showToast('⚠️','No coinciden','Los PIN no coinciden'); }
+    const password = await openSecurePrompt({ title: '🔒 Activar PIN', label: 'Confirmá tu contraseña de la cuenta', type: 'password', placeholder: '••••••••' });
+    if (!password) { toggle.checked = false; return; }
+    const pin = await openSecurePrompt({ title: '🔒 Elegir PIN', label: 'Elegí un PIN de 4 dígitos', type: 'pin' });
+    if (!pin) { toggle.checked = false; return; }
+    const confirmPin = await openSecurePrompt({ title: '🔒 Confirmar PIN', label: 'Volvé a ingresar el PIN', type: 'pin' });
+    if (!confirmPin) { toggle.checked = false; return; }
+    if (confirmPin !== pin) { toggle.checked = false; return showToast('⚠️','No coinciden','Los PIN no coinciden'); }
     try {
       await api('POST', '/settings/revenue-pin/enable', { password, pin });
       if (currentShop) currentShop.revenue_pin_enabled = true;
-      window._revenuePinSessionOk = true; // recién lo seteó, no tiene sentido pedirlo ya
+      window._revenuePinSessionOk = true;
       document.getElementById('cfg-pin-status').textContent = 'Activado · Se pide PIN para ver los mensuales';
       document.getElementById('cfg-pin-actions').style.display = 'flex';
       showToast('🔒','PIN activado','Los mensuales se van a ocultar en la próxima recarga');
     } catch(e) {
-      document.getElementById('cfg-pin-toggle').checked = false;
+      toggle.checked = false;
       showToast('❌','Error', e.message);
     }
   } else {
-    // Desactivar: pedir PIN actual
-    const pin = prompt('Ingresá tu PIN actual para desactivar:');
-    if (!pin) { document.getElementById('cfg-pin-toggle').checked = true; return; }
+    const pin = await openSecurePrompt({ title: '🔓 Desactivar PIN', label: 'Ingresá tu PIN actual', type: 'pin' });
+    if (!pin) { toggle.checked = true; return; }
     try {
       await api('POST', '/settings/revenue-pin/disable', { pin });
       if (currentShop) currentShop.revenue_pin_enabled = false;
@@ -12052,18 +12073,19 @@ async function onRevenuePinToggle(checked) {
       unmaskAllMonthlyRevenue();
       showToast('✅','PIN desactivado','');
     } catch(e) {
-      document.getElementById('cfg-pin-toggle').checked = true;
+      toggle.checked = true;
       showToast('❌','Error', e.message);
     }
   }
 }
 
 async function openChangeRevenuePin() {
-  const oldPin = prompt('PIN actual:');
+  const oldPin = await openSecurePrompt({ title: '🔑 Cambiar PIN', label: 'PIN actual', type: 'pin' });
   if (!oldPin) return;
-  const newPin = prompt('Nuevo PIN de 4 dígitos:');
-  if (!newPin || !/^\d{4}$/.test(newPin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
-  const conf = prompt('Confirmá el nuevo PIN:');
+  const newPin = await openSecurePrompt({ title: '🔑 Nuevo PIN', label: 'Elegí un nuevo PIN de 4 dígitos', type: 'pin' });
+  if (!newPin) return;
+  const conf = await openSecurePrompt({ title: '🔑 Confirmar', label: 'Volvé a ingresar el nuevo PIN', type: 'pin' });
+  if (!conf) return;
   if (conf !== newPin) return showToast('⚠️','No coinciden','');
   try {
     await api('POST', '/settings/revenue-pin/change', { old_pin: oldPin, new_pin: newPin });
@@ -12072,11 +12094,12 @@ async function openChangeRevenuePin() {
 }
 
 async function openForgotRevenuePin() {
-  const password = prompt('Ingresá tu contraseña de la cuenta para resetear el PIN:');
+  const password = await openSecurePrompt({ title: '❓ Olvidé mi PIN', label: 'Ingresá tu contraseña de la cuenta para resetearlo', type: 'password', placeholder: '••••••••' });
   if (!password) return;
-  const newPin = prompt('Nuevo PIN de 4 dígitos:');
-  if (!newPin || !/^\d{4}$/.test(newPin)) return showToast('⚠️','PIN inválido','Debe ser de 4 dígitos');
-  const conf = prompt('Confirmá el nuevo PIN:');
+  const newPin = await openSecurePrompt({ title: '🔑 Nuevo PIN', label: 'Elegí un nuevo PIN de 4 dígitos', type: 'pin' });
+  if (!newPin) return;
+  const conf = await openSecurePrompt({ title: '🔑 Confirmar', label: 'Volvé a ingresar el nuevo PIN', type: 'pin' });
+  if (!conf) return;
   if (conf !== newPin) return showToast('⚠️','No coinciden','');
   try {
     await api('POST', '/settings/revenue-pin/reset', { password, new_pin: newPin });
@@ -12094,6 +12117,50 @@ function refreshRevenuePinUI() {
   t.checked = on;
   if (s) s.textContent = on ? 'Activado · Se pide PIN para ver los mensuales' : 'Desactivado';
   if (a) a.style.display = on ? 'flex' : 'none';
+}
+
+// ─── Modal custom para prompts de PIN / password ──────────────────────────
+// Reemplaza window.prompt (bloqueante, feo en mobile, pide PIN visible)
+// Devuelve una Promise que resuelve con el valor o null si cancela.
+function openSecurePrompt({ title, label, type='text', pattern, placeholder }) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('secure-prompt-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'secure-prompt-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Barlow,sans-serif';
+    const inputType = type === 'pin' ? 'password' : (type === 'password' ? 'password' : 'text');
+    const inputMode = type === 'pin' ? 'numeric' : 'text';
+    const maxLen = type === 'pin' ? 4 : 128;
+    overlay.innerHTML = `
+      <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;width:100%;max-width:360px">
+        <div style="font-size:16px;font-weight:700;color:var(--w);margin-bottom:6px">${escHtml(title)}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px">${escHtml(label)}</div>
+        <input id="secure-prompt-input" type="${inputType}" inputmode="${inputMode}" ${type==='pin'?'maxlength="4"':''} ${pattern?`pattern="${pattern}"`:''} placeholder="${escHtml(placeholder||'')}" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;color:var(--w);font-size:${type==='pin'?'22px;letter-spacing:14px;text-align:center':'14px'};outline:none;font-family:Barlow,sans-serif;box-sizing:border-box" autocomplete="off">
+        <div id="secure-prompt-error" style="color:#ff6b6b;font-size:12px;margin-top:6px;min-height:16px"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button id="secure-prompt-cancel" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-family:Barlow,sans-serif">Cancelar</button>
+          <button id="secure-prompt-ok" style="flex:1;background:var(--yellow);border:none;color:#000;padding:11px;border-radius:10px;cursor:pointer;font-weight:700;font-family:Barlow,sans-serif">Aceptar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#secure-prompt-input');
+    const err   = overlay.querySelector('#secure-prompt-error');
+    setTimeout(() => input.focus(), 50);
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelector('#secure-prompt-cancel').onclick = () => close(null);
+    overlay.querySelector('#secure-prompt-ok').onclick = () => {
+      const v = input.value;
+      if (type === 'pin' && !/^\d{4}$/.test(v)) { err.textContent = 'Debe ser de 4 dígitos'; return; }
+      if (!v) { err.textContent = 'Campo obligatorio'; return; }
+      close(v);
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') overlay.querySelector('#secure-prompt-ok').click();
+      if (e.key === 'Escape') close(null);
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+  });
 }
 </script>
 
