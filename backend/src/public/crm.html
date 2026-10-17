@@ -2205,6 +2205,9 @@ select.form-input { padding-right: 32px; }
           <button onclick="changeAgendaDate(1)">→</button>
         </div>
         <input type="date" id="agenda-date-picker" class="search-input" style="max-width:180px" onchange="setAgendaDate(this.value)">
+        <select id="agenda-barber-filter" class="search-input" style="max-width:200px;display:none" onchange="setAgendaBarberFilter(this.value)">
+          <option value="">👥 Todos los barberos</option>
+        </select>
         <div style="margin-left:auto;font-size:13px;color:var(--gray)" id="agenda-summary"></div>
       </div>
 
@@ -5898,21 +5901,50 @@ function formatDateLabel(dateStr) {
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+var agendaBarberFilter = ''; // '' = todos, id string = ese barbero
+
+function populateAgendaBarberFilter() {
+  const sel = document.getElementById('agenda-barber-filter');
+  if (!sel) return;
+  const barbers = window._barbersList || [];
+  if (!barbers.length) { sel.style.display = 'none'; return; }
+  const prev = agendaBarberFilter;
+  sel.innerHTML = '<option value="">👥 Todos los barberos</option>'
+    + barbers.map(b => `<option value="${b.id}">${escHtml(b.name)}</option>`).join('');
+  sel.value = prev;
+  sel.style.display = '';
+}
+
 async function loadAgenda() {
   document.getElementById('agenda-date-display').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-label').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-picker').value = agendaDate;
 
+  // Cargar barberos (si todavía no están) para poblar el filtro
+  if (!window._barbersList || !window._barbersList.length) {
+    try { window._barbersList = await api('GET', '/barbers'); } catch(_) {}
+  }
+  populateAgendaBarberFilter();
+
   try {
     const appts = await api('GET', `/appointments?date=${agendaDate}`);
+    const filtered = agendaBarberFilter
+      ? appts.filter(a => String(a.barber_id || '') === String(agendaBarberFilter))
+      : appts;
     const el = document.getElementById('agenda-list');
-    if (!appts.length) {
-      el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>Sin turnos</h3><p>No hay turnos para este día.<br>Usá el botón + para agregar uno.</p></div>`;
+    if (!filtered.length) {
+      const emptyMsg = agendaBarberFilter
+        ? '<div class="empty-state"><div class="icon">👤</div><h3>Sin turnos para ese barbero</h3><p>Probá cambiar de barbero o fecha.</p></div>'
+        : '<div class="empty-state"><div class="icon">📅</div><h3>Sin turnos</h3><p>No hay turnos para este día.<br>Usá el botón + para agregar uno.</p></div>';
+      el.innerHTML = emptyMsg;
     } else {
-      el.innerHTML = appts.map(a => renderApptCard(a)).join('');
+      el.innerHTML = filtered.map(a => renderApptCard(a)).join('');
     }
-    const total = appts.reduce((s, a) => s + (a.status === 'completed' ? parseFloat(a.price||0) : 0), 0);
-    document.getElementById('agenda-summary').textContent = `${appts.length} turnos · $${total.toLocaleString('es-AR')} facturado`;
+    const total = filtered.reduce((s, a) => s + (a.status === 'completed' ? parseFloat(a.price||0) : 0), 0);
+    const label = agendaBarberFilter
+      ? `${filtered.length} turnos (filtrado) · $${total.toLocaleString('es-AR')} facturado`
+      : `${filtered.length} turnos · $${total.toLocaleString('es-AR')} facturado`;
+    document.getElementById('agenda-summary').textContent = label;
 
   } catch (e) {
     console.error(e);
@@ -5928,6 +5960,11 @@ function changeAgendaDate(delta) {
 
 function setAgendaDate(val) {
   agendaDate = val;
+  loadAgenda();
+}
+
+function setAgendaBarberFilter(val) {
+  agendaBarberFilter = val || '';
   loadAgenda();
 }
 
