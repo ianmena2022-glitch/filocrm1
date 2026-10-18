@@ -63,7 +63,7 @@ router.get('/:slug', async (req, res) => {
     let barbers = [];
     if (shopData.allow_barber_choice) {
       const barbersQ = await pool.query(
-        'SELECT id, name, barber_color, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
+        'SELECT id, name, barber_color, barber_schedule, profile_photo_url FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name',
         [barberShopId]
       );
       barbers = barbersQ.rows;

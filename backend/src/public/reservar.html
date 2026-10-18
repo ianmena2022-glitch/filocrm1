@@ -1228,7 +1228,9 @@ async function renderBarbers() {
          ${available ? `onclick="selectBarber(${b.id})"` : ''}
          id="barber-${b.id}"
          style="display:flex;align-items:center;gap:12px;padding:14px 16px;${unavailableStyle}">
-      <div style="width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${b.name.charAt(0).toUpperCase()}</div>
+      ${b.profile_photo_url
+        ? `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#0a1828"><img src="${b.profile_photo_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.outerHTML='<div style=\\'width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0\\'>${b.name.charAt(0).toUpperCase()}</div>'"></div>`
+        : `<div style="width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${b.name.charAt(0).toUpperCase()}</div>`}
       <div style="font-weight:600;font-size:15px">${b.name}</div>
       ${badge}
     </div>`;
