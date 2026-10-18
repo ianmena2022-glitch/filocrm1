@@ -605,4 +605,52 @@ router.post('/accounts/:id/wpp-reset', adminAuth, async (req, res) => {
   }
 });
 
+// ── Web Push admin ────────────────────────────────────────────────────────────
+
+// GET /api/admin/push/public-key — devuelve la VAPID public key para el browser
+router.get('/push/public-key', adminAuth, (req, res) => {
+  const push = require('../services/push');
+  const key = push.getPublicKey();
+  if (!key) return res.status(503).json({ error: 'Push no configurado' });
+  res.json({ key });
+});
+
+// POST /api/admin/push/subscribe — guarda una suscripción admin
+router.post('/push/subscribe', adminAuth, async (req, res) => {
+  const { endpoint, keys } = req.body || {};
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    return res.status(400).json({ error: 'subscription inválida' });
+  }
+  try {
+    const ua = (req.headers['user-agent'] || '').slice(0, 300);
+    await pool.query(
+      `INSERT INTO admin_push_subscriptions (endpoint, p256dh, auth, user_agent)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (endpoint) DO UPDATE
+         SET p256dh = EXCLUDED.p256dh,
+             auth    = EXCLUDED.auth,
+             user_agent = EXCLUDED.user_agent,
+             last_used_at = NOW()`,
+      [endpoint, keys.p256dh, keys.auth, ua]
+    );
+    console.log(`[admin push subscribe] ua="${ua.slice(0,80)}" endpoint=${endpoint.slice(0,60)}...`);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('[admin push subscribe]', e.message);
+    res.status(500).json({ error: 'Error al guardar suscripción' });
+  }
+});
+
+// POST /api/admin/push/test — envía un push de prueba
+router.post('/push/test', adminAuth, async (req, res) => {
+  const push = require('../services/push');
+  const r = await push.sendToAdmins({
+    title: '🔔 Admin push OK',
+    body:  'Las notificaciones admin están funcionando.',
+    icon:  '/favicon.ico',
+    data:  { url: '/admin' }
+  });
+  res.json(r);
+});
+
 module.exports = router;

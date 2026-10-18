@@ -514,6 +514,17 @@ router.post('/verify-email', async (req, res) => {
 
     console.log(`[VERIFY] Cuenta creada y verificada: ${emailNorm}`);
 
+    // Notificar admin (fire & forget)
+    try {
+      const push = require('../services/push');
+      push.sendToAdmins({
+        title: '🎉 Nueva cuenta FILO',
+        body:  `${shop.name || emailNorm} · plan ${shop.filo_plan || 'starter'}`,
+        icon:  '/favicon.ico',
+        data:  { url: '/admin', type: 'signup', shopId: shop.id }
+      }).catch(()=>{});
+    } catch(_) {}
+
     // Enviar mensaje de bienvenida por WhatsApp desde el shop admin (no bloquea si falla)
     try {
       const settingsQ = await pool.query(

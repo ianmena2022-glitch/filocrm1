@@ -72,4 +72,41 @@ async function sendToRecipient(shopId, payload) {
   return { sent, failed };
 }
 
-module.exports = { init, isReady, getPublicKey, sendToRecipient };
+// Envía un push a todas las suscripciones admin (panel /admin)
+async function sendToAdmins(payload) {
+  if (!isReady()) {
+    console.warn('[push admin] skip: VAPID no configurado');
+    return { sent: 0, failed: 0, reason: 'vapid_missing' };
+  }
+  let subs;
+  try {
+    subs = await pool.query(`SELECT id, endpoint, p256dh, auth FROM admin_push_subscriptions`);
+  } catch(e) {
+    console.warn('[push admin] skip: tabla no existe aún —', e.message);
+    return { sent: 0, failed: 0, reason: 'table_missing' };
+  }
+  if (!subs.rows.length) return { sent: 0, failed: 0, reason: 'no_subs' };
+  console.log(`[push admin] enviando a ${subs.rows.length} sub(s) title="${(payload?.title||'').slice(0,40)}"`);
+  let sent = 0, failed = 0;
+  const data = JSON.stringify(payload || {});
+  for (const row of subs.rows) {
+    try {
+      await _webpush.sendNotification({
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh, auth: row.auth }
+      }, data);
+      sent++;
+      pool.query(`UPDATE admin_push_subscriptions SET last_used_at=NOW() WHERE id=$1`, [row.id]).catch(()=>{});
+    } catch(err) {
+      failed++;
+      if (err && (err.statusCode === 404 || err.statusCode === 410)) {
+        pool.query(`DELETE FROM admin_push_subscriptions WHERE id=$1`, [row.id]).catch(()=>{});
+      } else {
+        console.warn(`[push admin] send error sub=${row.id}:`, err?.statusCode, err?.body?.slice?.(0,120) || err?.message);
+      }
+    }
+  }
+  return { sent, failed };
+}
+
+module.exports = { init, isReady, getPublicKey, sendToRecipient, sendToAdmins };

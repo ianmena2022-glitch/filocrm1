@@ -473,6 +473,17 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
     sse.emit(shopId, 'plan.activated', { plan, plan_label: planLabel, until: accessUntil.toISOString() });
   } catch(_) {}
 
+  // Notificar admin (fire & forget)
+  try {
+    const push = require('../services/push');
+    push.sendToAdmins({
+      title: '💰 Pago recibido',
+      body:  `${shop.name || 'Shop'} activó plan ${planLabel} ($${(paidAmount||0).toLocaleString('es-AR')})`,
+      icon:  '/favicon.ico',
+      data:  { url: '/admin', type: 'plan.activated', shopId, plan }
+    }).catch(()=>{});
+  } catch(_) {}
+
   // Notificación persistente
   try {
     const notif = require('../services/notifications');

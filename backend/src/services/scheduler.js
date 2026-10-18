@@ -133,7 +133,7 @@ async function runCajaAutoClose() {
 async function runTrialExpiration() {
   try {
     const GRACE = 3;
-    const { rowCount } = await pool.query(`
+    const r = await pool.query(`
       UPDATE shops
          SET subscription_status = 'expired',
              expired_at = COALESCE(expired_at, NOW()),
@@ -146,8 +146,22 @@ async function runTrialExpiration() {
            OR
            (trial_ends_at IS NULL AND created_at < NOW() - ($2::int || ' days')::interval)
          )
+       RETURNING id, name, email
     `, [GRACE, 7 + GRACE]);
-    if (rowCount > 0) console.log(`[TRIAL] ${rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
+    if (r.rowCount > 0) {
+      console.log(`[TRIAL] ${r.rowCount} cuenta(s) pasaron a 'expired' por trial vencido`);
+      try {
+        const push = require('./push');
+        for (const row of r.rows) {
+          push.sendToAdmins({
+            title: '⏰ Trial vencido',
+            body:  `${row.name || row.email} se quedó sin trial`,
+            icon:  '/favicon.ico',
+            data:  { url: '/admin', type: 'trial.expired', shopId: row.id }
+          }).catch(()=>{});
+        }
+      } catch(_) {}
+    }
   } catch (e) {
     console.error('[TRIAL] Error auto-expiración:', e.message);
   }

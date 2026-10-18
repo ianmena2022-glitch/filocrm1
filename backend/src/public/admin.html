@@ -952,6 +952,100 @@ function showPanel() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('panel').style.display = 'block';
   loadAll();
+  setTimeout(() => { adminPushInit(); }, 1500);
+}
+
+// ── Web Push admin ────────────────────────────────────────────────────────────
+let _adminPushReg = null;
+
+function urlBase64ToUint8(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function adminPushRegisterSW() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (_adminPushReg) return _adminPushReg;
+  try {
+    _adminPushReg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    return _adminPushReg;
+  } catch(e) { console.warn('[admin push] SW register:', e); return null; }
+}
+
+async function adminPushSubscribe() {
+  const reg = await adminPushRegisterSW();
+  if (!reg) return null;
+  try {
+    let existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await fetch('/api/admin/push/subscribe', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${adminToken}`},
+        body: JSON.stringify(existing.toJSON())
+      });
+      return existing;
+    }
+    const keyRes = await fetch('/api/admin/push/public-key', { headers:{'Authorization':`Bearer ${adminToken}`} }).then(r=>r.json());
+    if (!keyRes?.key) return null;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8(keyRes.key),
+    });
+    await fetch('/api/admin/push/subscribe', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${adminToken}`},
+      body: JSON.stringify(sub.toJSON())
+    });
+    return sub;
+  } catch(e) { console.warn('[admin push] subscribe:', e); return null; }
+}
+
+async function adminPushInit() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  await adminPushRegisterSW();
+  if (Notification.permission === 'granted') {
+    adminPushSubscribe();
+    return;
+  }
+  if (Notification.permission === 'denied') return;
+  if (sessionStorage.getItem('admin_push_dismissed')) return;
+  // Banner flotante
+  if (document.getElementById('admin-push-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'admin-push-banner';
+  b.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">🔔 Notificaciones admin</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.65);margin-bottom:10px;line-height:1.4">Recibí avisos de nuevas cuentas, pagos y trials vencidos.</div>
+    <div style="display:flex;gap:8px">
+      <button id="admin-push-activate" style="flex:1;background:#FFD100;color:#000;border:none;padding:9px 14px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer">Activar</button>
+      <button id="admin-push-dismiss" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.6);padding:9px 14px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer">Ahora no</button>
+    </div>`;
+  Object.assign(b.style, {
+    position:'fixed', bottom:'16px', right:'16px', left:'16px', maxWidth:'360px',
+    marginLeft:'auto', zIndex:'9800',
+    background:'rgba(5,13,24,.95)', border:'1px solid rgba(255,209,0,.3)',
+    borderRadius:'14px', padding:'14px', boxShadow:'0 20px 60px rgba(0,0,0,.6)',
+    backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)'
+  });
+  document.body.appendChild(b);
+  document.getElementById('admin-push-activate').onclick = async () => {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { alert('Permiso no concedido'); b.remove(); return; }
+      const sub = await adminPushSubscribe();
+      b.remove();
+      if (!sub) { alert('No se pudo suscribir'); return; }
+      const r = await fetch('/api/admin/push/test', { method:'POST', headers:{'Authorization':`Bearer ${adminToken}`} }).then(r=>r.json());
+      alert(r?.sent > 0 ? '✅ Suscripto — test enviado' : `⚠️ Suscripto pero sent=0 (${r?.reason||'?'})`);
+    } catch(e) { alert('Error: ' + e.message); }
+  };
+  document.getElementById('admin-push-dismiss').onclick = () => {
+    sessionStorage.setItem('admin_push_dismissed', '1');
+    b.remove();
+  };
 }
 
 // Auto-login si hay token en session
