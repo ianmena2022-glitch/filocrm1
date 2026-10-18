@@ -5870,6 +5870,35 @@ function pushDismissPrompt() {
   if (el) el.style.display = 'none';
 }
 
+// Fuerza re-suscripción + test — útil cuando el permiso ya está granted pero no llegan pushes
+async function pushForceReactivate() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { showToast('⚠️','Sin soporte','Agregá la app al inicio en iOS'); return; }
+    const reg = await pushRegisterSW();
+    if (!reg) { showToast('❌','SW falló',''); return; }
+    // Borrar suscripción existente si la hay para forzar una nueva
+    try {
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) await existing.unsubscribe();
+    } catch(_) {}
+    // Si permiso aún no fue dado, pedirlo (requiere gesto, estamos dentro de click)
+    if (Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { showToast('ℹ️','Permiso no dado','Ajustes → Notificaciones → FILO'); return; }
+    }
+    const sub = await pushSubscribe();
+    if (!sub) { showToast('❌','No se pudo suscribir',''); return; }
+    showToast('✅','Suscripto','Enviando test...');
+    const r = await api('POST', '/push/test', {});
+    if (r?.sent > 0) showToast('🔔','Test enviado',`${r.sent} dispositivo${r.sent!==1?'s':''}`);
+    else if (r?.reason === 'vapid_missing') showToast('⚠️','Sin VAPID','Faltan env vars en Railway');
+    else if (r?.reason === 'no_subs') showToast('⚠️','Sin subs guardadas','El subscribe falló');
+    else showToast('⚠️','sent=0',JSON.stringify(r||{}));
+  } catch(e) {
+    showToast('❌','Error', e.message || '');
+  }
+}
+
 async function pushRequestPermission() {
   try {
     if (!('Notification' in window)) { showToast('⚠️','Sin soporte','Este navegador no soporta notificaciones'); return; }
@@ -11108,6 +11137,7 @@ async function saveEditStoreItem() {
   <div class="notif-head">
     <div class="notif-head-title">🔔 Notificaciones</div>
     <div style="display:flex;align-items:center;gap:6px">
+      <button class="notif-mark-all" onclick="pushForceReactivate()" title="Re-activar push" style="color:rgba(80,200,255,.8)">⚙️ Push</button>
       <button class="notif-mark-all" onclick="notifMarkAllRead()">Marcar todas leídas</button>
       <button class="notif-close-btn" onclick="toggleNotifDropdown(event)" aria-label="Cerrar" title="Cerrar">×</button>
     </div>
