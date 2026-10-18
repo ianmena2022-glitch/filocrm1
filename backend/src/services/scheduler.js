@@ -249,8 +249,63 @@ function _addTimeout(fn, ms) {
   return h;
 }
 
+// ── POLLING DE TRANSFERENCIAS ENTRANTES ──────────────────────────────────
+// MP no notifica depósitos CVU por webhook de forma confiable. Cada 10s
+// consultamos los pagos recientes y los matcheamos contra pending_transfers.
+async function runTransferPolling() {
+  try {
+    const pool = require('../db/pool');
+    const pendingQ = await pool.query(
+      `SELECT 1 FROM pending_transfers WHERE matched=FALSE AND expires_at > NOW() LIMIT 1`
+    );
+    if (!pendingQ.rows.length) return;
+
+    const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
+    if (!MP_TOKEN) return;
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const url = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&status=approved&begin_date=${encodeURIComponent(since)}&end_date=NOW&range=date_created&limit=50`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Accept': 'application/json' } });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      if (!/404/.test(String(res.status))) console.warn(`[Poll Transfer] MP search ${res.status}: ${txt.slice(0,200)}`);
+      return;
+    }
+    const data = await res.json();
+    const results = data?.results || [];
+    if (!results.length) return;
+
+    const internals = require('../routes/payments')._internals || {};
+    const { tryMatchIncomingTransfer, activateShopPlan } = internals;
+    if (!tryMatchIncomingTransfer || !activateShopPlan) {
+      console.warn('[Poll Transfer] internals no disponibles en payments.js');
+      return;
+    }
+
+    for (const p of results) {
+      try {
+        const paymentId = String(p.id);
+        const already = await pool.query('SELECT 1 FROM mp_processed_payments WHERE payment_id=$1', [paymentId]);
+        if (already.rows.length) continue;
+        if (p.external_reference?.startsWith('filo:')) continue;
+
+        const match = await tryMatchIncomingTransfer(paymentId, p.transaction_amount);
+        if (match.matched) {
+          await activateShopPlan({
+            shopId: match.shopId,
+            plan:   match.plan,
+            paymentId,
+            paidAmount: parseFloat(p.transaction_amount) || 0
+          });
+        }
+      } catch(e) { console.error('[Poll Transfer] item error:', e.message); }
+    }
+  } catch(e) {
+    console.error('[Poll Transfer] error:', e.message);
+  }
+}
+
 function startScheduler() {
-  console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min)');
+  console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min + poll transferencias 10s)');
 
   _addTimeout(runCajaAutoClose, 10_000);
   _addInterval(runCajaAutoClose, 30 * 60 * 1000);
@@ -263,6 +318,8 @@ function startScheduler() {
 
   _addTimeout(runExpiredCleanup, 90_000);
   _addInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
+
+  _addInterval(runTransferPolling, 10 * 1000);
 }
 
 function stopScheduler() {
