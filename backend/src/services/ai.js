@@ -1,8 +1,8 @@
 const pool = require('../db/pool');
 
-// Modelos de Groq (overrideables por env). llama-3.3-70b-versatile fue decommissioned.
-// Default: llama-3.1-8b-instant (clasificador rápido/barato) y para el chat principal.
-const GROQ_MODEL        = process.env.GROQ_MODEL        || 'llama-3.1-8b-instant';
+// Modelos de Groq (overrideables por env). Groq va decomisionando modelos cada tanto;
+// cuando aparezca "model_not_found" cambiar acá o setear GROQ_MODEL en Railway.
+const GROQ_MODEL        = process.env.GROQ_MODEL        || 'llama-3.3-70b-versatile';
 const GROQ_MODEL_CHAT   = process.env.GROQ_MODEL_CHAT   || GROQ_MODEL;
 
 // Historial de conversaciones en memoria
