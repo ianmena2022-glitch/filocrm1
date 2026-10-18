@@ -307,8 +307,54 @@ async function runDailyTasks() {
 
 let _dailyTasksLastRun = null;
 
+// ── POLLING DE TRANSFERENCIAS ENTRANTES ──────────────────────────────────
+// MP no notifica depósitos CVU por webhook en forma confiable, así que
+// cada minuto consultamos los pagos recientes y los matcheamos contra
+// pending_transfers por monto exacto.
+async function pollIncomingTransfers() {
+  try {
+    const pendingQ = await pool.query(
+      `SELECT 1 FROM pending_transfers WHERE matched=FALSE AND expires_at > NOW() LIMIT 1`
+    );
+    if (!pendingQ.rows.length) return; // nada pending → no gastar la API
+
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // últimos 15 min
+    const url = `/v1/payments/search?sort=date_created&criteria=desc&status=approved&begin_date=${encodeURIComponent(since)}&end_date=NOW&range=date_created&limit=50`;
+    const data = await mpGet(url);
+    const results = data?.results || [];
+    if (!results.length) return;
+
+    const { tryMatchIncomingTransfer, activateShopPlan } = require('./routes/payments')._internals || {};
+    if (!tryMatchIncomingTransfer || !activateShopPlan) return;
+
+    for (const p of results) {
+      try {
+        const paymentId = String(p.id);
+        // Idempotencia: si ya procesamos este payment_id, saltar
+        const already = await pool.query('SELECT 1 FROM mp_processed_payments WHERE payment_id=$1', [paymentId]);
+        if (already.rows.length) continue;
+
+        // Si tiene external_reference nuestro, el webhook ya debería haberlo manejado
+        if (p.external_reference?.startsWith('filo:')) continue;
+
+        const match = await tryMatchIncomingTransfer(paymentId, p.transaction_amount);
+        if (match.matched) {
+          await activateShopPlan({
+            shopId: match.shopId,
+            plan:   match.plan,
+            paymentId,
+            paidAmount: parseFloat(p.transaction_amount) || 0
+          });
+        }
+      } catch(e) { console.error('[Poll Transfer] item error:', e.message); }
+    }
+  } catch(e) {
+    if (!/404/.test(e.message)) console.error('[Poll Transfer] error:', e.message);
+  }
+}
+
 function startScheduler() {
-  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + señas + rescate auto)');
+  console.log('⏰ Scheduler iniciado (recordatorios + cierre de caja + sync suscripciones + limpieza de cuentas + señas + rescate auto + poll transferencias)');
   runHourlyTasks();
   setInterval(runHourlyTasks, 60 * 60 * 1000);
 
@@ -322,6 +368,9 @@ function startScheduler() {
   };
   runDailyIfNeeded();
   setInterval(runDailyIfNeeded, 60 * 60 * 1000);
+
+  // Poll de transferencias cada 10s (la función hace early-return si no hay pendings)
+  setInterval(pollIncomingTransfers, 10 * 1000);
 }
 
 module.exports = { startScheduler };

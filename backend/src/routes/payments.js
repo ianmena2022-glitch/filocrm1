@@ -612,3 +612,6 @@ router.post('/test-change-plan', auth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Exportar helpers para que scheduler.js pueda hacer polling de transferencias.
+router._internals = { tryMatchIncomingTransfer, activateShopPlan };
