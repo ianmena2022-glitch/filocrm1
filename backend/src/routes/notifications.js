@@ -69,4 +69,22 @@ router.post('/read-all', auth, async (req, res) => {
   }
 });
 
+// POST /api/notifications/test — dispara una notificación de prueba al usuario actual
+router.post('/test', auth, async (req, res) => {
+  try {
+    const notif = require('../services/notifications');
+    const row = await notif.create({
+      shopId: req.shopId,
+      recipientShopId: req.shopId,
+      type: 'test',
+      title: '🔔 Notificación de prueba',
+      body:  'Si ves esto, el sistema funciona. Las reservas, pagos y membresías verificadas van a aparecer acá.',
+      icon:  '✨',
+    });
+    res.json({ ok: true, id: row?.id || null });
+  } catch(e) {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
 module.exports = router;
