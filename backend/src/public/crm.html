@@ -1787,6 +1787,52 @@ select.form-input { padding-right: 32px; }
 .bmenu__icon { display: inline-flex; flex: none; width: 16px; justify-content: center; font-size: 14px; }
 .bmenu__label { white-space: nowrap; }
 
+/* ─── POLISH VISUAL GLOBAL ─── */
+/* Scrollbars custom (webkit) — más finitos y acordes al tema oscuro */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 10px; transition: background .2s; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,209,0,.3); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent; }
+
+/* Focus visible unificado (teclado): anillo amarillo sutil, no el feo del browser */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid rgba(255,209,0,.55); outline-offset: 2px; border-radius: 6px; }
+button:focus-visible, a:focus-visible { outline-offset: 3px; }
+
+/* Hover-lift sutil en cards interactivas (desktop) */
+@media (hover:hover) {
+  .motor-card, .memb-card, .stat-card, .nav-item { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .motor-card:hover, .memb-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); border-color: rgba(255,209,0,.18); }
+}
+
+/* Success checkmark animation (para cobros, confirmaciones) */
+@keyframes checkPop { 0% { transform: scale(.6); opacity: 0 } 60% { transform: scale(1.1); opacity: 1 } 100% { transform: scale(1); opacity: 1 } }
+@keyframes checkDraw { to { stroke-dashoffset: 0 } }
+.success-pop { animation: checkPop .35s cubic-bezier(.34,1.56,.64,1) both; }
+.success-pop svg path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: checkDraw .45s ease-out .15s forwards; }
+
+/* Command palette (Cmd/Ctrl+K) */
+#kpalette { display: none; position: fixed; inset: 0; z-index: 10000; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+#kpalette .kp-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.65); backdrop-filter: blur(6px); }
+#kpalette .kp-box { position: relative; width: 90%; max-width: 560px; background: var(--navy-mid); border: 1px solid var(--navy-border); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.6); animation: modalIn .22s cubic-bezier(.34,1.2,.64,1); }
+#kpalette #kp-input { width: 100%; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); color: #fff; font-size: 16px; padding: 18px 20px; outline: none; font-family: 'Barlow', sans-serif; }
+#kpalette #kp-input::placeholder { color: rgba(255,255,255,.3); }
+#kpalette #kp-results { max-height: 55vh; overflow-y: auto; }
+#kpalette .kp-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 20px; background: none; border: 0; color: #fff; cursor: pointer; text-align: left; font-family: 'Barlow', sans-serif; transition: background .12s; }
+#kpalette .kp-item:hover, #kpalette .kp-item.is-active { background: rgba(255,209,0,.08); }
+#kpalette .kp-icon { font-size: 18px; width: 22px; flex-shrink: 0; }
+#kpalette .kp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#kpalette .kp-label { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#kpalette .kp-sub { font-size: 11px; color: var(--gray); }
+#kpalette .kp-kind { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.3); font-weight: 700; }
+#kpalette .kp-empty { padding: 20px; text-align: center; color: var(--gray); font-size: 13px; }
+#kpalette .kp-hint { padding: 10px 20px; font-size: 10px; color: rgba(255,255,255,.3); border-top: 1px solid rgba(255,255,255,.04); letter-spacing: .5px; text-align: center; }
+
+/* Skeleton loader (shimmer) para listas que todavía no cargaron */
+@keyframes skeleton-shimmer { 0% { background-position: -200px 0 } 100% { background-position: calc(200px + 100%) 0 } }
+.skeleton { background: linear-gradient(90deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.06) 100px, rgba(255,255,255,.03) 200px); background-size: calc(200px + 100%) 100%; animation: skeleton-shimmer 1.3s linear infinite; border-radius: 8px; display: block; }
+
 /* Oculta las tabs viejas (quedan solo para compat del tour y shortcuts del dashboard) */
 .cfg-tabs-nav { display: none !important; }
 /* Los cfg-tab-pane dejan de ser visualmente tabs — se vuelven contenedores transparentes */
@@ -2361,6 +2407,7 @@ select.form-input { padding-right: 32px; }
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <button class="btn-add" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);color:#00E676" onclick="openReferidoModal()">🤝 Referido</button>
+          <button class="btn-add" onclick="exportClientsCSV()" title="Exportar a Excel/CSV" style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.1)">⬇ CSV</button>
           <button class="btn-add" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
           <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
@@ -9006,18 +9053,165 @@ document.addEventListener('DOMContentLoaded', () => {
   mo.observe(document.body, { childList: true, subtree: true });
 });
 
-// ─── KEYBOARD ───
+// ─── EXPORT CSV GENÉRICO ───
+function downloadCSV(filename, rows) {
+  // rows: array de objetos {col: val}. Primera fila = headers.
+  if (!rows || !rows.length) { showToast('⚠️', 'Sin datos', 'No hay nada que exportar'); return; }
+  const cols = Object.keys(rows[0]);
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
+  // BOM para que Excel detecte UTF-8 bien
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+async function exportClientsCSV() {
+  try {
+    const clients = await api('GET', '/clients');
+    const rows = (clients || []).map(c => ({
+      Nombre: c.name || '',
+      Teléfono: c.phone || '',
+      Email: c.email || '',
+      'Último turno': c.last_visit || '',
+      Puntos: c.points || 0,
+      'Total turnos': c.total_appts || 0,
+      Notas: c.notes || '',
+      'Cumpleaños': c.birthday || '',
+    }));
+    const stamp = new Date().toISOString().slice(0,10);
+    downloadCSV(`clientes_filo_${stamp}.csv`, rows);
+    showToast('✅', 'Listo', `${rows.length} clientes exportados`);
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
+// ─── KEYBOARD SHORTCUTS GLOBAL ───
 document.addEventListener('keydown', e => {
+  // Si está tipeando en un input/textarea/contenteditable → ignorar atajos de letra
+  const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+
   if (e.key === 'Escape') {
     // 1) Modales declarados en HTML (modal-overlay.open) → usar closeModal para animar
     const openModals = document.querySelectorAll('.modal-overlay.open');
     openModals.forEach(m => { if (m.id) closeModal(m.id); else m.classList.remove('open'); });
     // 2) Popups custom creados vía document.body.appendChild() que no son .modal-overlay
-    //    Convención: ids que terminan en '-popup' o '-overlay' con z-index alto
     const popups = document.querySelectorAll('[id$="-popup"], #secure-prompt-overlay, #confirm-modal-overlay, #walkin-payment-popup, #payment-popup, #debt-pay-popup');
     popups.forEach(p => { try { p.remove(); } catch(_){} });
+    // 3) Palette global de search
+    const kp = document.getElementById('kpalette');
+    if (kp && kp.style.display !== 'none') { closeKPalette(); }
+    return;
+  }
+
+  if (inField) return;
+
+  // N → nuevo turno (si estás en agenda)
+  if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (document.getElementById('sec-agenda')?.classList.contains('active')) {
+      const addBtn = document.querySelector('#sec-agenda .btn-add');
+      if (addBtn) { e.preventDefault(); addBtn.click(); }
+    }
+  }
+
+  // Cmd/Ctrl + K → palette global
+  if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    openKPalette();
   }
 });
+
+// ─── PALETTE GLOBAL (Cmd/Ctrl+K) ───
+let _kpItems = [];
+function openKPalette() {
+  let el = document.getElementById('kpalette');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'kpalette';
+    el.innerHTML = `
+      <div class="kp-backdrop" onclick="closeKPalette()"></div>
+      <div class="kp-box">
+        <input id="kp-input" type="text" placeholder="Buscar clientes, barberos, secciones..." autocomplete="off">
+        <div id="kp-results"></div>
+        <div class="kp-hint">↑↓ navegar · Enter abrir · Esc cerrar</div>
+      </div>`;
+    document.body.appendChild(el);
+    el.querySelector('#kp-input').addEventListener('input', renderKPalette);
+    el.querySelector('#kp-input').addEventListener('keydown', handleKPaletteKeys);
+  }
+  el.style.display = 'flex';
+  // Build index on open
+  buildKPIndex().then(() => {
+    const inp = el.querySelector('#kp-input');
+    inp.value = '';
+    renderKPalette();
+    setTimeout(() => inp.focus(), 50);
+  });
+}
+function closeKPalette() {
+  const el = document.getElementById('kpalette');
+  if (el) el.style.display = 'none';
+}
+async function buildKPIndex() {
+  const sections = [
+    { kind: 'section', label: 'Dashboard',      icon: '📊', action: () => showSection('dashboard') },
+    { kind: 'section', label: 'Agenda',         icon: '📅', action: () => showSection('agenda') },
+    { kind: 'section', label: 'Clientes',       icon: '👥', action: () => showSection('clientes') },
+    { kind: 'section', label: 'Mi Equipo',      icon: '✂️', action: () => showSection('equipo') },
+    { kind: 'section', label: 'Fila',           icon: '⚡', action: () => showSection('fila') },
+    { kind: 'section', label: 'Caja',           icon: '💰', action: () => showSection('motores') },
+    { kind: 'section', label: 'Membresías',     icon: '🎫', action: () => showSection('membresias') },
+    { kind: 'section', label: 'Configuración',  icon: '⚙️', action: () => showSection('configuracion') },
+  ];
+  let clients = [];
+  try {
+    const list = await api('GET', '/clients');
+    clients = (list || []).slice(0, 500).map(c => ({
+      kind: 'client', label: c.name, sub: c.phone || '', icon: '👤',
+      action: () => { showSection('clientes'); setTimeout(() => renderClientDetail?.(c.id) || scrollToClient?.(c.id), 100); }
+    }));
+  } catch(_) {}
+  let barbers = (window._barbersList || []).map(b => ({
+    kind: 'barber', label: b.name, sub: 'Barbero', icon: '✂️',
+    action: () => { showSection('equipo'); }
+  }));
+  _kpItems = [...sections, ...barbers, ...clients];
+}
+function renderKPalette() {
+  const q = (document.getElementById('kp-input')?.value || '').toLowerCase().trim();
+  const list = q ? _kpItems.filter(it => (it.label + ' ' + (it.sub||'')).toLowerCase().includes(q)) : _kpItems;
+  const el = document.getElementById('kp-results');
+  if (!list.length) { el.innerHTML = '<div class="kp-empty">Sin resultados</div>'; return; }
+  el.innerHTML = list.slice(0, 25).map((it, i) => `
+    <button class="kp-item${i===0?' is-active':''}" data-i="${i}" onclick="runKPItem(${i})">
+      <span class="kp-icon">${it.icon}</span>
+      <span class="kp-text"><span class="kp-label">${(it.label||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}</span>${it.sub?`<span class="kp-sub">${it.sub}</span>`:''}</span>
+      <span class="kp-kind">${it.kind}</span>
+    </button>
+  `).join('');
+  // Store the filtered list for Enter handling
+  window._kpFiltered = list.slice(0, 25);
+}
+function handleKPaletteKeys(e) {
+  const items = document.querySelectorAll('.kp-item');
+  if (!items.length) return;
+  let idx = Array.from(items).findIndex(x => x.classList.contains('is-active'));
+  if (idx < 0) idx = 0;
+  if (e.key === 'ArrowDown') { e.preventDefault(); items[idx]?.classList.remove('is-active'); items[(idx+1) % items.length].classList.add('is-active'); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[idx]?.classList.remove('is-active'); items[(idx-1+items.length) % items.length].classList.add('is-active'); }
+  else if (e.key === 'Enter') { e.preventDefault(); runKPItem(idx); }
+}
+function runKPItem(i) {
+  const it = (window._kpFiltered || _kpItems)[i];
+  if (!it) return;
+  closeKPalette();
+  try { it.action(); } catch(e) { console.error('kpalette action error', e); }
+}
 
 // ─── TURNOS FIJOS / RECURRENTES ───────────────────────────────────────────
 
