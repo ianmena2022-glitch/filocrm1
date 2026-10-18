@@ -270,112 +270,23 @@ module.exports = router;
 
 // ── SISTEMA QR DINÁMICO ────────────────────────────────────────────────────
 
-// Bootstrap de la In-Store API de MP para QR interoperable (Transferencias 3.0).
-// El QR generado por este sistema es leído por cualquier billetera / app de banco
-// (MP, Modo, Ualá, Naranja X, Santander, Galicia, BBVA, etc.) — no sólo MP.
-let _mpUserIdCache  = null;
-let _filoStoreCache = null;              // numeric id del store "FILO-SUBS"
-const _posByShopCache = new Map();       // shopId → { external_id, qr_image }
+const QR_PLANS = {
+  starter:    { price: 40000,  label: 'FILO Starter'    },
+  staff:      { price: 80000,  label: 'FILO Staff'       },
+  enterprise: { price: 130000, label: 'FILO Enterprise'  },
+};
 
-async function getMpUserId() {
-  if (_mpUserIdCache) return _mpUserIdCache;
-  if (process.env.MP_USER_ID) { _mpUserIdCache = String(process.env.MP_USER_ID); return _mpUserIdCache; }
-  const me = await mpFetch('GET', '/users/me', null, MP_QR_TOKEN);
-  _mpUserIdCache = String(me.id);
-  return _mpUserIdCache;
-}
-
-// Si tenés el store_id en env var, lo usamos directo (ideal). Si no, intentamos crear
-// uno nuevo con external_id único por deploy y logueamos el id devuelto para que lo
-// guardes como MP_STORE_ID (one-time setup).
-const FILO_STORE_EXT_ID = 'FILOSUBS' + (process.env.MP_STORE_SUFFIX || '');
-
-async function ensureFiloStore() {
-  if (_filoStoreCache) return _filoStoreCache;
-  if (process.env.MP_STORE_ID) { _filoStoreCache = String(process.env.MP_STORE_ID); return _filoStoreCache; }
-  const userId = await getMpUserId();
-  try {
-    const store = await mpFetch('POST', `/users/${userId}/stores`, {
-      name: 'FILO CRM — Suscripciones',
-      external_id: FILO_STORE_EXT_ID,
-      location: {
-        street_number: '0',
-        street_name: 'Online',
-        city_name: 'Palermo',
-        state_name: 'Capital Federal',
-        latitude: -34.6037,
-        longitude: -58.3816
-      }
-    }, MP_QR_TOKEN);
-    _filoStoreCache = store.id;
-    console.log(`[MP] ⭐ STORE CREADO · id=${store.id} · external_id=${FILO_STORE_EXT_ID} · guardá MP_STORE_ID=${store.id} como env var`);
-    return _filoStoreCache;
-  } catch(e) {
-    console.error('[MP] ensureFiloStore failed:', e.message);
-    throw e;
-  }
-}
-
-async function findPosByExtId(extId) {
-  try {
-    const list = await mpFetch('GET', `/pos?external_id=${extId}`, null, MP_QR_TOKEN);
-    let results = Array.isArray(list) ? list : (list?.results || []);
-    const match = results.find(p => (p.external_id === extId));
-    return match || results[0] || null;
-  } catch(e) {
-    console.warn(`[MP] findPos failed: ${e.message}`);
-    return null;
-  }
-}
-
-async function ensurePosForShop(shopId) {
-  const cached = _posByShopCache.get(shopId);
-  if (cached) return cached;
-  // Nota: usamos sufijo D (dynamic) para forzar recreación del POS con qr dinámico
-  const extId   = `FILOSHOPD${shopId}`;
-  const storeId = await ensureFiloStore();
-  let pos = await findPosByExtId(extId);
-  if (!pos) {
-    try {
-      pos = await mpFetch('POST', '/pos', {
-        name: `FILO Shop ${shopId}`,
-        fixed_amount: false,
-        store_id: storeId,
-        external_id: extId,
-        external_store_id: FILO_STORE_EXT_ID,
-        category: 621102,
-      }, MP_QR_TOKEN);
-      console.log(`[MP] ✓ POS creado · id=${pos.id} · external_id=${extId} · qr_image=${pos.qr?.image || '(none)'}`);
-    } catch(e) {
-      if (/already (assigned|exists)/i.test(e.message)) {
-        pos = await findPosByExtId(extId);
-      } else {
-        throw e;
-      }
-    }
-  }
-  const result = { external_id: extId, qr_image: pos?.qr?.image || null };
-  _posByShopCache.set(shopId, result);
-  return result;
-}
-
-// POST /api/payments/qr-order — crear orden de pago único (30 días de acceso)
+// POST /api/payments/qr-order — crear orden Checkout Pro (QR escaneable + link).
+// El init_point abre Checkout Pro donde el cliente puede pagar con tarjeta, débito,
+// transferencia desde cualquier banco (Transferencias 3.0), MP, Rapipago o Pago Fácil.
 router.post('/qr-order', auth, async (req, res) => {
   const { plan } = req.body;
-  const validPlans = ['starter', 'staff', 'enterprise'];
-  if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Plan inválido' });
-
-  const QR_PLANS = {
-    starter:    { price: 40000,  label: 'FILO Starter'    },
-    staff:      { price: 80000,  label: 'FILO Staff'       },
-    enterprise: { price: 130000, label: 'FILO Enterprise'  },
-  };
+  if (!QR_PLANS[plan]) return res.status(400).json({ error: 'Plan inválido' });
   const planCfg = QR_PLANS[plan];
   const appUrl  = process.env.APP_URL || 'https://filocrm.com.ar';
   const extRef  = `filo:${req.shopId}:${plan}:${Date.now()}`;
 
   try {
-    // 1. Checkout Pro: fallback universal (tarjeta, débito, Rapipago, transferencia manual)
     const pref = await mpFetch('POST', '/checkout/preferences', {
       items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: planCfg.price, currency_id: 'ARS' }],
       external_reference: extRef,
@@ -384,69 +295,13 @@ router.post('/qr-order', auth, async (req, res) => {
       auto_return: 'approved',
     });
 
-    // 2. QR interoperable (Transferencias 3.0) — lo lee cualquier app de banco o billetera
-    let qrImage = null;
-    try {
-      const userId = await getMpUserId();
-      const pos    = await ensurePosForShop(req.shopId);
-      const orderBody = {
-        external_reference: extRef,
-        title: `${planCfg.label} — 30 días`,
-        description: '30 días de acceso a FILO',
-        notification_url: `${appUrl}/api/payments/webhook-qr`,
-        total_amount: planCfg.price,
-        items: [{
-          sku_number: `FILO${plan.toUpperCase()}`,
-          category: 'subscriptions',
-          title: `${planCfg.label} — 30 días`,
-          description: '30 días de acceso a FILO',
-          unit_price: planCfg.price,
-          quantity: 1,
-          unit_measure: 'unit',
-          total_amount: planCfg.price,
-        }]
-      };
-      // Probar varios paths porque MP devuelve 404 según cómo esté configurada la app
-      const orderPaths = [
-        `/instore/orders/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`,
-        `/instore/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`,
-        `/mp/collectors/${userId}/pos/${pos.external_id}/orders`,
-      ];
-      let orderOk = false;
-      let lastErr = null;
-      for (const p of orderPaths) {
-        try {
-          await mpFetch('PUT', p, orderBody, MP_QR_TOKEN);
-          console.log(`[MP] ✓ orden armada en POS vía ${p}`);
-          orderOk = true;
-          break;
-        } catch(err) { lastErr = err; }
-      }
-      if (!orderOk) throw lastErr || new Error('No pude armar la orden en el POS');
-      // El QR del POS no cambia; si ya lo cacheamos lo usamos, sino lo buscamos ahora.
-      if (!pos.qr_image) {
-        try {
-          const search = await mpFetch('GET', `/pos?external_id=${pos.external_id}`, null, MP_QR_TOKEN);
-          const posRow = search?.results?.[0];
-          if (posRow?.qr?.image) {
-            pos.qr_image = posRow.qr.image;
-            _posByShopCache.set(req.shopId, pos);
-          }
-        } catch(e) { /* seguir con checkout url */ }
-      }
-      qrImage = pos.qr_image;
-    } catch(interopErr) {
-      console.warn(`[QR Order] interop QR failed (fallback a checkout URL): ${interopErr.message}`);
-    }
-
     await pool.query("UPDATE shops SET mp_shop_status='pending_qr' WHERE id=$1", [req.shopId]);
 
-    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id} · interop=${qrImage ? 'ok' : 'no'}`);
+    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id}`);
     res.json({
       ok: true,
       preference_id: pref.id,
       init_point: pref.init_point,
-      qr_image: qrImage,       // null si el bootstrap falla → el frontend muestra solo CTA
       amount: planCfg.price,
       plan
     });
@@ -456,7 +311,179 @@ router.post('/qr-order', auth, async (req, res) => {
   }
 });
 
-// POST /api/payments/webhook-qr — MP notifica pago aprobado (QR / Checkout)
+// ── FLUJO TRANSFERENCIA BANCARIA CON AUTO-DETECCIÓN ────────────────────────
+// Genera un monto único (base + centavos random) para distinguir pagos pendientes.
+// MP notifica cuando ingresa plata a la cuenta; matcheamos por monto exacto.
+
+// POST /api/payments/transfer-order — crear orden de pago por transferencia
+router.post('/transfer-order', auth, async (req, res) => {
+  const { plan } = req.body;
+  if (!QR_PLANS[plan]) return res.status(400).json({ error: 'Plan inválido' });
+  const planCfg = QR_PLANS[plan];
+  const alias = process.env.MP_RECEIVER_ALIAS || '';
+  const cbu   = process.env.MP_RECEIVER_CBU   || '';
+  if (!alias && !cbu) {
+    return res.status(503).json({ error: 'Transferencia no configurada (falta MP_RECEIVER_ALIAS/CBU)' });
+  }
+
+  try {
+    // Expirar órdenes viejas no matcheadas (housekeeping)
+    await pool.query(
+      `UPDATE pending_transfers SET matched=TRUE, matched_at=NOW()
+       WHERE matched=FALSE AND expires_at < NOW()`
+    );
+
+    // Generar monto único: precio base + 1..999 centavos que no colisionen con pendings activos.
+    const baseCents = planCfg.price * 100;
+    let amountCents = null;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const candidate = baseCents + Math.floor(Math.random() * 999) + 1;
+      const dupe = await pool.query(
+        `SELECT 1 FROM pending_transfers
+         WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
+         LIMIT 1`,
+        [candidate]
+      );
+      if (!dupe.rows.length) { amountCents = candidate; break; }
+    }
+    if (!amountCents) return res.status(503).json({ error: 'No se pudo generar monto único, probá en unos segundos' });
+
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
+    const ins = await pool.query(
+      `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [req.shopId, plan, amountCents, expires.toISOString()]
+    );
+    const transferId = ins.rows[0].id;
+    console.log(`[Transfer] Shop ${req.shopId} · plan ${plan} · $${(amountCents/100).toFixed(2)} · id=${transferId}`);
+
+    res.json({
+      ok: true,
+      transfer_id: transferId,
+      alias,
+      cbu,
+      amount: amountCents / 100,
+      amount_cents: amountCents,
+      amount_formatted: (amountCents / 100).toFixed(2),
+      expires_at: expires.toISOString(),
+      plan,
+      receiver_name: process.env.MP_RECEIVER_NAME || 'FILO CRM',
+    });
+  } catch(e) {
+    console.error('[Transfer] Error:', e.message);
+    res.status(500).json({ error: 'Error al generar orden de transferencia' });
+  }
+});
+
+// GET /api/payments/transfer-status/:id — polling para saber si se matcheó
+router.get('/transfer-status/:id', auth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'id inválido' });
+    const q = await pool.query(
+      `SELECT matched, expires_at FROM pending_transfers
+       WHERE id=$1 AND shop_id=$2`,
+      [id, req.shopId]
+    );
+    if (!q.rows.length) return res.status(404).json({ error: 'no encontrada' });
+    const row = q.rows[0];
+    const expired = new Date(row.expires_at) < new Date() && !row.matched;
+    res.json({
+      status: row.matched ? 'matched' : (expired ? 'expired' : 'pending')
+    });
+  } catch(e) {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Función helper: intenta matchear un payment entrante (money_in) con una orden pending.
+// Devuelve { matched: true, shopId, plan } si matcheó, { matched: false } si no.
+async function tryMatchIncomingTransfer(paymentId, amount) {
+  const amountCents = Math.round(parseFloat(amount) * 100);
+  if (!amountCents) return { matched: false };
+  const q = await pool.query(
+    `SELECT id, shop_id, plan FROM pending_transfers
+     WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
+     ORDER BY created_at ASC LIMIT 1`,
+    [amountCents]
+  );
+  if (!q.rows.length) return { matched: false };
+  const row = q.rows[0];
+  await pool.query(
+    `UPDATE pending_transfers SET matched=TRUE, matched_at=NOW(), mp_payment_id=$1
+     WHERE id=$2`,
+    [String(paymentId), row.id]
+  );
+  console.log(`[Transfer] ✓ MATCH payment ${paymentId} ($${amount}) → shop ${row.shop_id} · plan ${row.plan}`);
+  return { matched: true, shopId: row.shop_id, plan: row.plan };
+}
+
+// Activa un plan mensual para una barbería. Centraliza la lógica (shops row,
+// idempotencia, referrals, afiliados, WhatsApp de confirmación). No tira; loguea errores.
+async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
+  const expectedPrice = QR_PLANS[plan]?.price;
+  if (expectedPrice && paidAmount < (expectedPrice - 1)) {
+    // Para transferencia el monto trae centavos extra, siempre es >= price. Para Checkout
+    // también. Solo rechazamos si está por debajo del plan base.
+    console.warn(`[Activate] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para ${plan} (esperado $${expectedPrice}). Ignorando.`);
+    return;
+  }
+
+  const shopRow = await pool.query('SELECT trial_ends_at FROM shops WHERE id=$1', [shopId]);
+  if (!shopRow.rows.length) { console.warn(`[Activate] shop ${shopId} no existe`); return; }
+  const currentExpiry = shopRow.rows[0].trial_ends_at;
+  const accessUntil = (currentExpiry && new Date(currentExpiry) > new Date())
+    ? new Date(currentExpiry)
+    : new Date();
+  accessUntil.setDate(accessUntil.getDate() + 30);
+
+  const isEnterprise = plan === 'enterprise';
+  const updated = await pool.query(
+    `UPDATE shops
+     SET subscription_status='active', mp_shop_status='authorized',
+         filo_plan=$1, trial_ends_at=$2, expired_at=NULL,
+         first_payment_at=COALESCE(first_payment_at, NOW()),
+         last_payment_at=NOW(),
+         is_enterprise_owner=$4,
+         is_branch=CASE WHEN $4 THEN FALSE ELSE is_branch END,
+         parent_enterprise_id=CASE WHEN $4 THEN NULL ELSE parent_enterprise_id END
+     WHERE id=$3
+     RETURNING name, phone, wpp_connected`,
+    [plan, accessUntil.toISOString(), shopId, isEnterprise]
+  );
+  if (!updated.rows.length) return;
+
+  await pool.query(
+    `INSERT INTO mp_processed_payments (payment_id, shop_id, plan, amount)
+     VALUES ($1,$2,$3,$4) ON CONFLICT (payment_id) DO NOTHING`,
+    [String(paymentId), shopId, plan, paidAmount]
+  );
+
+  const shop = updated.rows[0];
+  const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
+  console.log(`[Activate] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
+
+  try {
+    const { grantFreeMonthToReferrer } = require('./referrals');
+    await grantFreeMonthToReferrer(shopId);
+  } catch(e) { console.error('[Activate] grantFreeMonth:', e.message); }
+
+  try {
+    const { creditAffiliateCommission } = require('./affiliates');
+    await creditAffiliateCommission(shopId, plan);
+  } catch(e) { console.error('[Activate] creditAffiliate:', e.message); }
+
+  if (shop.wpp_connected && shop.phone) {
+    try {
+      const wpp = require('../services/whatsapp');
+      const fechaVto = accessUntil.toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
+      const msg = `🎉 *¡Plan FILO activado!*\n\n✅ Tu plan *${planLabel}* está activo.\n📅 Válido 30 días hasta el ${fechaVto}.\n\n¡Gracias por usar FILO! ✂️`;
+      await wpp.sendText(shopId, shop.phone, msg);
+    } catch(e) { console.error('[Activate] WPP:', e.message); }
+  }
+}
+
+// POST /api/payments/webhook-qr — MP notifica pago aprobado (QR / Checkout / Transferencia)
 router.post('/webhook-qr', async (req, res) => {
   if (!verifyMpSignature(req)) {
     console.warn('[QR Webhook] firma inválida — rechazando');
@@ -479,88 +506,24 @@ router.post('/webhook-qr', async (req, res) => {
 
       const payment = await mpFetch('GET', `/v1/payments/${paymentId}`);
       const { status, external_reference, transaction_amount } = payment;
-      console.log(`[QR Webhook] pago ${paymentId} → ${status} · ref=${external_reference}`);
+      console.log(`[QR Webhook] pago ${paymentId} → ${status} · ref=${external_reference} · $${transaction_amount}`);
 
-      if (status === 'approved' && external_reference?.startsWith('filo:')) {
-        const parts   = external_reference.split(':');
-        const shopId  = parseInt(parts[1]);
-        const plan    = parts[2];
-        if (!shopId || isNaN(shopId)) return res.sendStatus(200);
+      if (status !== 'approved') return res.sendStatus(200);
 
-        // Validar que el monto pagado corresponde al plan (tolerancia de $1 por redondeos)
-        const QR_PLANS = {
-          starter:    { price: 40000  },
-          staff:      { price: 80000  },
-          enterprise: { price: 130000 },
-        };
-        const expectedPrice = QR_PLANS[plan]?.price;
-        const paidAmount    = parseFloat(transaction_amount) || 0;
-        if (expectedPrice && paidAmount < expectedPrice - 1) {
-          console.warn(`[QR Webhook] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para plan ${plan} (esperado $${expectedPrice}). Ignorando.`);
-          return res.sendStatus(200);
-        }
+      let shopId = null, plan = null;
+      if (external_reference?.startsWith('filo:')) {
+        const parts = external_reference.split(':');
+        shopId = parseInt(parts[1]);
+        plan   = parts[2];
+      } else {
+        // No tiene external_reference nuestro → intentar match con pending_transfers por monto exacto
+        const match = await tryMatchIncomingTransfer(paymentId, transaction_amount);
+        if (match.matched) { shopId = match.shopId; plan = match.plan; }
+      }
 
-        const shopRow = await pool.query('SELECT trial_ends_at FROM shops WHERE id=$1', [shopId]);
-        const currentExpiry = shopRow.rows[0]?.trial_ends_at;
-        const accessUntil = (currentExpiry && new Date(currentExpiry) > new Date())
-          ? new Date(currentExpiry)
-          : new Date();
-        accessUntil.setDate(accessUntil.getDate() + 30);
-
-        const isEnterprise = plan === 'enterprise';
-        const updated = await pool.query(
-          `UPDATE shops
-           SET subscription_status='active', mp_shop_status='authorized',
-               filo_plan=$1, trial_ends_at=$2, expired_at=NULL,
-               first_payment_at=COALESCE(first_payment_at, NOW()),
-               last_payment_at=NOW(),
-               is_enterprise_owner=$4,
-               is_branch=CASE WHEN $4 THEN FALSE ELSE is_branch END,
-               parent_enterprise_id=CASE WHEN $4 THEN NULL ELSE parent_enterprise_id END
-           WHERE id=$3
-           RETURNING name, phone, wpp_connected`,
-          [plan, accessUntil.toISOString(), shopId, isEnterprise]
-        );
-
-        if (updated.rows.length) {
-          // Marcar payment_id como procesado para evitar doble activación en reintentos del webhook
-          await pool.query(
-            `INSERT INTO mp_processed_payments (payment_id, shop_id, plan, amount)
-             VALUES ($1,$2,$3,$4) ON CONFLICT (payment_id) DO NOTHING`,
-            [paymentId, shopId, plan, paidAmount]
-          );
-
-          const shop = updated.rows[0];
-          const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
-          console.log(`[QR Webhook] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
-
-          // Otorgar mes gratis al referidor peer-to-peer (si aplica)
-          try {
-            const { grantFreeMonthToReferrer } = require('./referrals');
-            await grantFreeMonthToReferrer(shopId);
-          } catch(refErr) {
-            console.error('[QR Webhook] grantFreeMonth error:', refErr.message);
-          }
-
-          // Acreditar comisión al afiliado (si aplica)
-          try {
-            const { creditAffiliateCommission } = require('./affiliates');
-            await creditAffiliateCommission(shopId, plan);
-          } catch(affErr) {
-            console.error('[QR Webhook] creditAffiliate error:', affErr.message);
-          }
-
-          if (shop.wpp_connected && shop.phone) {
-            try {
-              const wpp = require('../services/whatsapp');
-              const fechaVto = accessUntil.toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
-              const msg = `🎉 *¡Plan FILO activado!*\n\n✅ Tu plan *${planLabel}* está activo.\n📅 Válido 30 días hasta el ${fechaVto}.\n\n¡Gracias por usar FILO! ✂️`;
-              await wpp.sendText(shopId, shop.phone, msg);
-            } catch(wppErr) {
-              console.error('[QR Webhook] Error WPP:', wppErr.message);
-            }
-          }
-        }
+      if (shopId && plan) {
+        const paidAmount = parseFloat(transaction_amount) || 0;
+        await activateShopPlan({ shopId, plan, paymentId, paidAmount });
       }
     }
     res.sendStatus(200);

@@ -5068,6 +5068,8 @@ function openQRPaywall() {
 
 function closeQRModal() {
   stopQRPolling();
+  stopTransferPolling();
+  _tfOrder = null;
   document.getElementById('modal-qr-payment').classList.remove('show');
   // Si es cuenta nueva y el tour no se hizo, arrancarlo al cerrar el modal de pago
   if (sessionStorage.getItem('filo_just_registered') && !localStorage.getItem('filo_tour_done') && typeof window.startTour === 'function') {
@@ -5087,25 +5089,92 @@ async function generateQROrder() {
     const planLabels = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' };
     const amount = parseInt(data.amount).toLocaleString('es-AR');
     document.getElementById('qr-scan-subtitle').textContent = `Plan ${planLabels[data.plan]} · $${amount} · 30 días de acceso`;
-    // QR interoperable (Transferencias 3.0) si está disponible → lo lee cualquier app bancaria o billetera.
-    // Fallback: QR que apunta al Checkout Pro (hay que escanearlo con cámara del celular).
-    const qrWrap = document.getElementById('qr-img').parentElement;
-    const qrHint = document.getElementById('qr-hint');
-    if (data.qr_image) {
-      document.getElementById('qr-img').src = data.qr_image;
-      if (qrHint) qrHint.innerHTML = 'Escaneá con <b>cualquier app de banco o billetera</b><br><span style="color:rgba(255,255,255,.3)">MP · Modo · Ualá · Santander · Galicia · BBVA · Naranja X…</span>';
-    } else {
-      const encoded = encodeURIComponent(data.init_point);
-      document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=${encoded}`;
-      if (qrHint) qrHint.innerHTML = 'Apuntá con la cámara del celular<br><span style="color:rgba(255,255,255,.3)">(no funciona desde el escáner del banco)</span>';
-    }
+    // QR que encodea el Checkout URL — se escanea con cámara del celular y abre el checkout
+    const encoded = encodeURIComponent(data.init_point);
+    document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=${encoded}`;
     document.getElementById('qr-mp-link').href = data.init_point;
+    // Default: pestaña MP visible
+    switchPayTab('mp');
     // Iniciar polling
     startQRPolling();
   } catch(e) {
     showToast('❌', 'Error al generar QR', e.message);
     btn.disabled = false; btn.textContent = 'Generar QR de pago';
   }
+}
+
+let _tfOrder = null;
+let _tfPollTimer = null;
+
+function switchPayTab(which) {
+  const tabMp = document.getElementById('qr-tab-mp');
+  const tabTr = document.getElementById('qr-tab-tr');
+  const paneMp = document.getElementById('qr-pane-mp');
+  const paneTr = document.getElementById('qr-pane-tr');
+  if (!tabMp || !tabTr) return;
+  if (which === 'tr') {
+    tabTr.style.background = 'var(--yellow)'; tabTr.style.color = '#000';
+    tabMp.style.background = 'transparent'; tabMp.style.color = 'rgba(255,255,255,.6)';
+    paneMp.style.display = 'none'; paneTr.style.display = 'block';
+    if (!_tfOrder) ensureTransferOrder();
+  } else {
+    tabMp.style.background = 'var(--yellow)'; tabMp.style.color = '#000';
+    tabTr.style.background = 'transparent'; tabTr.style.color = 'rgba(255,255,255,.6)';
+    paneMp.style.display = 'block'; paneTr.style.display = 'none';
+  }
+}
+
+async function ensureTransferOrder() {
+  const loading = document.getElementById('tr-loading');
+  const details = document.getElementById('tr-details');
+  loading.style.display = 'block';
+  details.style.display = 'none';
+  try {
+    const data = await api('POST', '/payments/transfer-order', { plan: _qrSelectedPlan });
+    _tfOrder = data;
+    document.getElementById('tr-amount').textContent =
+      '$ ' + (data.amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('tr-alias').textContent = data.alias || '(no configurado)';
+    document.getElementById('tr-cbu').textContent   = data.cbu   || '(no configurado)';
+    document.getElementById('tr-receiver').textContent = data.receiver_name || 'FILO CRM';
+    document.getElementById('tr-alias-wrap').style.display = data.alias ? 'flex' : 'none';
+    document.getElementById('tr-cbu-wrap').style.display   = data.cbu   ? 'flex' : 'none';
+    loading.style.display = 'none';
+    details.style.display = 'block';
+    startTransferPolling(data.transfer_id);
+  } catch(e) {
+    loading.innerHTML = `<div style="color:#f87171">⚠️ ${e.message || 'Error al generar la orden'}</div>`;
+  }
+}
+
+function startTransferPolling(transferId) {
+  stopTransferPolling();
+  _tfPollTimer = setInterval(async () => {
+    try {
+      const r = await api('GET', `/payments/transfer-status/${transferId}`);
+      if (r.status === 'matched') {
+        stopTransferPolling();
+        stopQRPolling();
+        document.getElementById('qr-step-scan').style.display = 'none';
+        document.getElementById('qr-step-success').style.display = 'block';
+        setTimeout(() => { closeQRModal(); window.location.reload(); }, 2500);
+      } else if (r.status === 'expired') {
+        stopTransferPolling();
+      }
+    } catch(e) { /* ignorar errores transitorios */ }
+  }, 5000);
+}
+
+function stopTransferPolling() {
+  if (_tfPollTimer) { clearInterval(_tfPollTimer); _tfPollTimer = null; }
+}
+
+function copyText(text, toastMsg) {
+  if (!text || text.startsWith('(')) return;
+  navigator.clipboard?.writeText(text).then(
+    () => showToast('📋', toastMsg || 'Copiado', ''),
+    () => showToast('⚠️', 'No se pudo copiar', '')
+  );
 }
 
 function startQRPolling() {
@@ -12892,23 +12961,71 @@ async function bcmSave(id) {
 
   <!-- Step 2: escanear QR -->
   <div class="qr-card" id="qr-step-scan" style="display:none">
-    <div class="qr-title">Escaneá o tocá para pagar</div>
-    <div class="qr-sub" id="qr-scan-subtitle">Plan Staff · $80.000 · 30 días de acceso</div>
-    <div class="qr-img-wrap">
-      <img id="qr-img" src="" alt="QR de pago" />
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;background:rgba(255,255,255,.04);padding:4px;border-radius:10px">
+      <button type="button" id="qr-tab-mp" onclick="switchPayTab('mp')"
+        style="flex:1;background:var(--yellow);color:#000;border:none;padding:9px;border-radius:7px;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">QR / Checkout</button>
+      <button type="button" id="qr-tab-tr" onclick="switchPayTab('tr')"
+        style="flex:1;background:transparent;color:rgba(255,255,255,.6);border:none;padding:9px;border-radius:7px;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">Transferencia</button>
     </div>
-    <div id="qr-hint" style="font-size:11.5px;color:rgba(255,255,255,.45);margin:4px 0 14px;line-height:1.5">
-      Apuntá con la cámara del celular<br>
-      <span style="color:rgba(255,255,255,.3)">(no funciona desde el escáner del banco)</span>
+
+    <!-- TAB: MP (QR + Checkout) -->
+    <div id="qr-pane-mp">
+      <div class="qr-title">Escaneá o tocá para pagar</div>
+      <div class="qr-sub" id="qr-scan-subtitle">Plan Staff · $80.000 · 30 días de acceso</div>
+      <div class="qr-img-wrap">
+        <img id="qr-img" src="" alt="QR de pago" />
+      </div>
+      <div id="qr-hint" style="font-size:11.5px;color:rgba(255,255,255,.45);margin:4px 0 14px;line-height:1.5">
+        Apuntá con la cámara del celular<br>
+        <span style="color:rgba(255,255,255,.3)">se abre Checkout: pagás con cualquier medio</span>
+      </div>
+      <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer"
+         style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--yellow);color:#000;padding:12px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:12px;transition:filter .15s"
+         onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
+        💳 Pagar con otro método
+      </a>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;line-height:1.5">
+        Tarjeta · Débito · Transferencia bancaria · Rapipago · Pago Fácil
+      </div>
     </div>
-    <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer"
-       style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--yellow);color:#000;padding:12px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:12px;transition:filter .15s"
-       onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
-      💳 Pagar con otro método
-    </a>
-    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;line-height:1.5">
-      Tarjeta · Débito · Transferencia bancaria · Rapipago · Pago Fácil
+
+    <!-- TAB: Transferencia bancaria con auto-detección -->
+    <div id="qr-pane-tr" style="display:none">
+      <div class="qr-title">Transferencia bancaria</div>
+      <div class="qr-sub">Desde cualquier banco · se activa automáticamente al recibir</div>
+      <div id="tr-loading" style="padding:30px;text-align:center;color:rgba(255,255,255,.4)">Generando orden...</div>
+      <div id="tr-details" style="display:none;text-align:left">
+        <div style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);border-radius:12px;padding:14px;margin-bottom:12px">
+          <div style="font-size:11px;color:rgba(255,209,0,.7);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Monto exacto a transferir</div>
+          <div id="tr-amount" style="font-size:28px;font-weight:800;color:var(--yellow);font-family:'Barlow Condensed',sans-serif;letter-spacing:-.5px">$ 0,00</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">⚠️ Transferí el monto EXACTO con los centavos para activación automática</div>
+        </div>
+        <div id="tr-alias-wrap" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">Alias</div>
+            <div id="tr-alias" style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis">—</div>
+          </div>
+          <button type="button" onclick="copyText(document.getElementById('tr-alias').textContent,'Alias copiado')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">Copiar</button>
+        </div>
+        <div id="tr-cbu-wrap" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">CBU/CVU</div>
+            <div id="tr-cbu" style="font-size:12px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;font-family:monospace">—</div>
+          </div>
+          <button type="button" onclick="copyText(document.getElementById('tr-cbu').textContent,'CBU copiado')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">Copiar</button>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:14px">
+          <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">Titular</div>
+          <div id="tr-receiver" style="font-size:14px;font-weight:600;color:#fff">FILO CRM</div>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,.45);line-height:1.5;margin-bottom:12px;text-align:center">
+          Después de transferir, el plan se activa en menos de 1 minuto.<br>
+          Orden válida por 24 horas.
+        </div>
+      </div>
     </div>
+
     <div class="qr-pulse"><span></span><span></span><span></span></div>
     <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px">Esperando confirmación de pago...</div>
     <button class="btn-qr-secondary" onclick="closeQRModal()">Cancelar</button>
