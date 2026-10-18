@@ -752,6 +752,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       const recipients = [shopData.id];
       if (assignedBarberId) recipients.push(assignedBarberId);
       const timeStr = time_start?.slice(0,5) || '';
+      console.log(`[booking] disparando notif a recipients=${JSON.stringify(recipients)}`);
       await notif.createMany(recipients, {
         shopId: shopData.id,
         type: 'appointment.created',
@@ -760,7 +761,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         icon:  '📅',
         link:  '/app#agenda',
       });
-    } catch(_) { /* silent */ }
+    } catch(notifErr) {
+      console.error('[booking] notif error:', notifErr.message, notifErr.stack);
+    }
 
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 

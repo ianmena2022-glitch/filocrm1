@@ -15,6 +15,7 @@ async function create(opts) {
       [shopId, recipientShopId, type, title, body || null, icon || null, link || null]
     );
     const row = r.rows[0];
+    console.log(`[notif] creada id=${row.id} shop=${shopId} → recipient=${recipientShopId} type=${type}`);
     sse.emit(recipientShopId, 'notification.created', {
       id: row.id, type: row.type, title: row.title, body: row.body,
       icon: row.icon, link: row.link, created_at: row.created_at
