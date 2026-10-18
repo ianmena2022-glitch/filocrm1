@@ -573,6 +573,16 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
           const sse = require('./sse');
           sse.emit(pending.shop_id, 'membership.verified', { id: pending.id, client_name: pending.client_name || null });
         } catch(_) {}
+        try {
+          const notif = require('./notifications');
+          await notif.create({
+            shopId: pending.shop_id, recipientShopId: pending.shop_id,
+            type: 'membership.verified',
+            title: 'Membresía verificada',
+            body:  `${pending.client_name || 'Cliente'} · $${pending.amount || ''}`,
+            icon:  '✅', link: '/app#membresias',
+          });
+        } catch(_) {}
       } else {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);

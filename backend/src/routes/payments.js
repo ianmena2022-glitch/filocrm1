@@ -473,6 +473,19 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
     sse.emit(shopId, 'plan.activated', { plan, plan_label: planLabel, until: accessUntil.toISOString() });
   } catch(_) {}
 
+  // Notificación persistente
+  try {
+    const notif = require('../services/notifications');
+    const fechaVto = accessUntil.toLocaleDateString('es-AR', { day:'numeric', month:'long' });
+    await notif.create({
+      shopId, recipientShopId: shopId,
+      type:  'plan.activated',
+      title: `Plan ${planLabel} activado`,
+      body:  `30 días de acceso, válido hasta el ${fechaVto}.`,
+      icon:  '🎉',
+    });
+  } catch(_) {}
+
   try {
     const { grantFreeMonthToReferrer } = require('./referrals');
     await grantFreeMonthToReferrer(shopId);

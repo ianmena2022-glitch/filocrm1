@@ -122,6 +122,7 @@ app.use('/api/referrals',     require('./routes/referrals'));
 app.use('/api/affiliates',    require('./routes/affiliates'));
 app.use('/api/copilot',       require('./routes/copilot'));
 app.use('/api/events',        require('./routes/events'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));

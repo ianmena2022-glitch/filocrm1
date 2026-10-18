@@ -746,6 +746,22 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       });
     } catch(sseErr) { /* silent */ }
 
+    // Notificación in-app: dueño + barbero asignado (si hay)
+    try {
+      const notif = require('../services/notifications');
+      const recipients = [shopData.id];
+      if (assignedBarberId) recipients.push(assignedBarberId);
+      const timeStr = time_start?.slice(0,5) || '';
+      await notif.createMany(recipients, {
+        shopId: shopData.id,
+        type: 'appointment.created',
+        title: 'Nueva reserva online',
+        body:  `${client_name} · ${svcName} · ${date} ${timeStr}`,
+        icon:  '📅',
+        link:  '/app#agenda',
+      });
+    } catch(_) { /* silent */ }
+
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP

@@ -2199,7 +2199,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <div style="display:flex;align-items:center;gap:12px">
           <span class="last-refresh" style="font-size:11px;color:rgba(255,255,255,.45)"></span>
           <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
 
@@ -2423,7 +2423,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <div style="display:flex;align-items:center;gap:12px">
           <span class="last-refresh" style="font-size:11px;color:rgba(255,255,255,.45)"></span>
           <button class="btn-add" onclick="openModal('modal-turno')">+ Nuevo turno</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
 
@@ -2452,7 +2452,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           <button class="btn-add" onclick="openRecurringModal()">+ Programar turno fijo</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
       <div id="recurrentes-list" style="display:flex;flex-direction:column;gap:10px;max-width:860px"></div>
@@ -2469,7 +2469,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
           <button class="btn-add" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);color:#00E676" onclick="openReferidoModal()">🤝 Referido</button>
           <button class="btn-add" onclick="exportClientsCSV()" title="Exportar a Excel/CSV" style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.1)">⬇ CSV</button>
           <button class="btn-add" onclick="openModal('modal-cliente')">+ Nuevo cliente</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
       <div class="toolbar">
@@ -2547,7 +2547,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <div style="display:flex;align-items:center;gap:10px">
           <button class="btn-add" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--white)" onclick="loadPlanesConfig();openModal('modal-planes-config')">⚙️ Configurar planes</button>
           <button class="btn-add" onclick="openMembresiaModal()">+ Nueva membresía</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
       <div id="memb-list"></div>
@@ -2563,7 +2563,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <button class="btn-add" onclick="openInviteModal()">+ Invitar barbero</button>
-          <div class="topbar-user-group"><button class="btn-ajustes" onclick="showSection('configuracion')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
+          <div class="topbar-user-group"><button class="btn-ajustes notif-bell" onclick="toggleNotifDropdown(event)" title="Notificaciones" style="position:relative"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ff4343;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;box-shadow:0 0 0 2px #050d18"></span></button><button class="btn-ajustes" onclick="showSection('configuracion')"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="cfg-btn-text">Ajustes</span></button><div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div><div class="tb-logout-wrap" onclick="logout()" title="Cerrar sesión"><div class="tb-avatar">?</div><span class="tb-uname"></span></div></div>
         </div>
       </div>
 
@@ -5598,6 +5598,15 @@ function startSSE() {
     } catch(_) {}
   });
 
+  _sse.addEventListener('notification.created', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      notifPrepend(d);
+      notifIncrementBadge();
+      if (typeof showToast === 'function') showToast(d.icon || '🔔', d.title, d.body || '');
+    } catch(_) {}
+  });
+
   _sse.onerror = () => {
     try { _sse.close(); } catch(_) {}
     _sse = null;
@@ -5607,6 +5616,139 @@ function startSSE() {
     setTimeout(startSSE, delay);
   };
 }
+
+// ─── NOTIFICATIONS ───
+let _notifItems = [];
+let _notifUnread = 0;
+let _notifOpen = false;
+let _notifLoaded = false;
+
+function timeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd';
+  return new Date(iso).toLocaleDateString('es-AR', { day:'numeric', month:'short' });
+}
+
+function escapeN(s) {
+  return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function notifRender() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  if (!_notifItems.length) {
+    list.innerHTML = '<div class="notif-empty"><div class="ne-icon">🔔</div>Sin notificaciones aún</div>';
+    return;
+  }
+  list.innerHTML = _notifItems.map(n => `
+    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}" onclick="notifClick(${n.id}, '${escapeN(n.link || '')}')">
+      <div class="notif-icon">${escapeN(n.icon || '🔔')}</div>
+      <div class="notif-body">
+        <div class="notif-title">${escapeN(n.title)}</div>
+        ${n.body ? `<div class="notif-sub">${escapeN(n.body)}</div>` : ''}
+        <div class="notif-time">${timeAgo(n.created_at)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function notifRenderBadge() {
+  document.querySelectorAll('.notif-badge').forEach(el => {
+    if (_notifUnread > 0) {
+      el.textContent = _notifUnread > 99 ? '99+' : String(_notifUnread);
+      el.style.display = 'inline-block';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
+function notifIncrementBadge() {
+  _notifUnread++;
+  notifRenderBadge();
+}
+
+function notifPrepend(d) {
+  _notifItems.unshift({
+    id: d.id, type: d.type, title: d.title, body: d.body,
+    icon: d.icon, link: d.link, read: false, created_at: d.created_at || new Date().toISOString()
+  });
+  if (_notifItems.length > 50) _notifItems.length = 50;
+  if (_notifOpen) notifRender();
+}
+
+async function notifLoad(force) {
+  if (_notifLoaded && !force) return;
+  try {
+    const d = await api('GET', '/notifications');
+    _notifItems  = d.items || [];
+    _notifUnread = d.unread_count || 0;
+    _notifLoaded = true;
+    notifRender();
+    notifRenderBadge();
+  } catch(e) { console.warn('[notif] load error:', e.message); }
+}
+
+async function toggleNotifDropdown(ev) {
+  if (ev) ev.stopPropagation();
+  const dd = document.getElementById('notif-dropdown');
+  if (!dd) return;
+  _notifOpen = !_notifOpen;
+  if (_notifOpen) {
+    await notifLoad(true);
+    dd.classList.add('open');
+    // cerrar al hacer click fuera
+    setTimeout(() => {
+      document.addEventListener('click', notifOutsideClose, { once: true });
+    }, 0);
+  } else {
+    dd.classList.remove('open');
+  }
+}
+
+function notifOutsideClose(e) {
+  if (!_notifOpen) return;
+  const dd = document.getElementById('notif-dropdown');
+  if (dd && !dd.contains(e.target) && !e.target.closest('.notif-bell')) {
+    _notifOpen = false;
+    dd.classList.remove('open');
+  } else if (_notifOpen) {
+    // Reinstalar si clickearon dentro
+    setTimeout(() => document.addEventListener('click', notifOutsideClose, { once: true }), 0);
+  }
+}
+
+async function notifClick(id, link) {
+  // marcar como leída
+  const item = _notifItems.find(n => n.id === id);
+  if (item && !item.read) {
+    item.read = true;
+    _notifUnread = Math.max(0, _notifUnread - 1);
+    notifRender();
+    notifRenderBadge();
+    try { await api('POST', `/notifications/read/${id}`); } catch(_) {}
+  }
+  if (link && link.startsWith('/app#')) {
+    const target = link.substring(5);
+    if (typeof showSection === 'function') showSection(target);
+    _notifOpen = false;
+    document.getElementById('notif-dropdown')?.classList.remove('open');
+  }
+}
+
+async function notifMarkAllRead() {
+  _notifItems.forEach(n => n.read = true);
+  _notifUnread = 0;
+  notifRender();
+  notifRenderBadge();
+  try { await api('POST', '/notifications/read-all'); } catch(_) {}
+}
+
+// Cargar al arrancar la app (después de login) — se llama desde startPolling
+setTimeout(() => { if (typeof token !== 'undefined' && token) notifLoad(); }, 1200);
 
 // ─── NAVIGATION ───
 async function switchPlan(plan) {
@@ -10696,6 +10838,61 @@ async function saveEditStoreItem() {
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
+
+<!-- ── NOTIFICATIONS DROPDOWN ──────────────────────────────────────── -->
+<style>
+#notif-dropdown{
+  position:fixed;top:62px;right:14px;z-index:9500;width:360px;max-width:92vw;
+  max-height:480px;display:none;flex-direction:column;
+  background:rgba(5,13,24,.92);
+  backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
+  border:1px solid rgba(255,255,255,.08);border-radius:14px;
+  box-shadow:0 24px 80px rgba(0,0,0,.75);
+  opacity:0;transform:translateY(-8px) scale(.97);
+  transition:opacity .18s ease, transform .22s cubic-bezier(.2,.9,.3,1);
+  overflow:hidden;
+}
+#notif-dropdown.open{display:flex;opacity:1;transform:translateY(0) scale(1)}
+.notif-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
+.notif-head-title{font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px}
+.notif-mark-all{background:transparent;border:none;color:rgba(255,209,0,.75);font-size:11px;font-weight:600;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s;font-family:'Barlow',sans-serif}
+.notif-mark-all:hover{background:rgba(255,209,0,.08);color:rgba(255,209,0,1)}
+.notif-list{flex:1;overflow-y:auto;scrollbar-width:thin}
+.notif-list::-webkit-scrollbar{width:5px}
+.notif-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:5px}
+.notif-item{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s;animation:notifIn .3s cubic-bezier(.2,.9,.3,1) both}
+@keyframes notifIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.notif-item:hover{background:rgba(255,255,255,.03)}
+.notif-item.unread{background:rgba(255,209,0,.04)}
+.notif-item.unread::before{content:'';position:absolute;left:4px;top:50%;width:5px;height:5px;background:#ffd100;border-radius:50%;box-shadow:0 0 6px rgba(255,209,0,.6);transform:translateY(-50%)}
+.notif-item{position:relative}
+.notif-icon{font-size:18px;flex-shrink:0;line-height:1;margin-top:1px}
+.notif-body{flex:1;min-width:0}
+.notif-title{font-size:13px;font-weight:600;color:#fff;line-height:1.3;margin-bottom:2px}
+.notif-sub{font-size:11.5px;color:rgba(255,255,255,.55);line-height:1.4;word-wrap:break-word}
+.notif-time{font-size:10px;color:rgba(255,255,255,.35);margin-top:3px;letter-spacing:.3px;text-transform:uppercase}
+.notif-empty{padding:40px 20px;text-align:center;color:rgba(255,255,255,.4);font-size:13px}
+.notif-empty .ne-icon{font-size:32px;opacity:.5;margin-bottom:10px}
+@media(max-width:600px){
+  #notif-dropdown{right:8px;left:8px;width:auto;max-width:none;top:58px}
+}
+.notif-bell .notif-badge{animation:badgePop .35s cubic-bezier(.34,1.5,.64,1) both}
+@keyframes badgePop{from{transform:scale(0)}to{transform:scale(1)}}
+</style>
+
+<div id="notif-dropdown" onclick="event.stopPropagation()">
+  <div class="notif-head">
+    <div class="notif-head-title">🔔 Notificaciones</div>
+    <button class="notif-mark-all" onclick="notifMarkAllRead()">Marcar todas leídas</button>
+  </div>
+  <div class="notif-list" id="notif-list">
+    <div class="notif-empty">
+      <div class="ne-icon">🔔</div>
+      Sin notificaciones aún
+    </div>
+  </div>
+</div>
 
 <!-- ── FILO COPILOT ──────────────────────────────────────── -->
 <style>
