@@ -6556,7 +6556,7 @@ function printFilaQR() {
   <div class="qr-card">
     <img src="${qrUrl}" alt="QR" onload="setTimeout(()=>{ window.focus(); window.print(); }, 400)">
   </div>
-</body>
+<script src="/pwa-install.js" defer></script></body>
 </html>`);
   win.document.close();
 }
