@@ -292,8 +292,12 @@ async function ensureFiloStore() {
     name: 'FILO CRM — Suscripciones',
     external_id: 'FILO-SUBS',
     location: {
-      street_number: '0', street_name: 'Online', city_name: 'CABA', state_name: 'CABA',
-      latitude: -34.6037, longitude: -58.3816
+      street_number: '0',
+      street_name: 'Online',
+      city_name: 'Ciudad Autónoma de Buenos Aires',
+      state_name: 'Capital Federal',
+      latitude: -34.6037,
+      longitude: -58.3816
     }
   }, MP_QR_TOKEN);
   _filoStoreCache = store.id;
