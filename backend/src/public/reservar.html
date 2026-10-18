@@ -78,15 +78,38 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
 .team-back:active{background:rgba(255,255,255,.06)}
 .team-title{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:.5px}
 .team-list{padding:16px}
-.team-card{background:linear-gradient(135deg,var(--gl),rgba(0,10,25,.9));border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px;margin-bottom:14px}
-.team-card-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
-.team-avatar{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--y);overflow:hidden;flex-shrink:0}
+.team-card{background:linear-gradient(135deg,var(--gl),rgba(0,10,25,.9));border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color .2s,background .2s;-webkit-tap-highlight-color:transparent}
+.team-card:hover{border-color:rgba(255,209,0,.2)}
+.team-card.expanded{cursor:default;padding-bottom:16px}
+.team-card-head{display:flex;align-items:center;gap:14px}
+.team-avatar{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--y);overflow:hidden;flex-shrink:0}
 .team-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.team-name{font-family:'Oswald',sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px}
-.team-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.team-head-info{flex:1;min-width:0}
+.team-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:.5px;line-height:1.1}
+.team-sub{font-size:11px;color:var(--g);margin-top:3px}
+/* Stack de fotos chiquitas (estado colapsado tipo carpeta) */
+.team-stack{position:relative;width:62px;height:52px;flex-shrink:0}
+.team-stack-item{position:absolute;top:0;width:52px;height:52px;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.04);border:2px solid #0c1b35;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .2s}
+.team-stack-item img{width:100%;height:100%;object-fit:cover;display:block}
+.team-stack-item:nth-child(1){left:0;transform:rotate(-6deg);z-index:1}
+.team-stack-item:nth-child(2){left:4px;transform:rotate(2deg);z-index:2}
+.team-stack-item:nth-child(3){left:8px;transform:rotate(8deg);z-index:3}
+.team-card:hover .team-stack-item:nth-child(1){transform:rotate(-10deg) translateX(-2px)}
+.team-card:hover .team-stack-item:nth-child(3){transform:rotate(12deg) translateX(2px)}
+.team-stack-count{position:absolute;right:-6px;bottom:-4px;z-index:4;background:var(--y);color:var(--nk);font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;line-height:1;font-family:'Barlow',sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.team-stack-empty{width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.25);font-size:18px}
+.team-expand-icon{color:rgba(255,255,255,.3);font-size:14px;transition:transform .2s;margin-left:6px}
+.team-card.expanded .team-expand-icon{transform:rotate(90deg);color:var(--y)}
+
+/* Grid expandido */
+.team-work-grid{display:none;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:14px;animation:gridIn .25s ease}
+.team-card.expanded .team-work-grid{display:grid}
+@keyframes gridIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .team-work-cell{aspect-ratio:1/1;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.04);cursor:pointer}
 .team-work-cell img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
 .team-work-cell:active img{transform:scale(.96)}
+.team-empty-inline{display:none;color:var(--g);font-size:12px;text-align:center;padding:12px 0;font-style:italic;margin-top:8px}
+.team-card.expanded .team-empty-inline{display:block}
 .team-empty{color:var(--g);font-size:13px;text-align:center;padding:14px 0;font-style:italic}
 /* Lightbox para foto expandida */
 .team-lightbox{position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px}
@@ -1445,26 +1468,47 @@ async function loadTeam() {
       list.innerHTML = '<div class="team-empty">Todavía no hay barberos cargados.</div>';
       return;
     }
-    list.innerHTML = barbers.map(b => {
+    list.innerHTML = barbers.map((b, idx) => {
       const avatarInner = b.profile_photo_url
         ? `<img src="${b.profile_photo_url}" alt="${escapeHtmlT(b.name)}">`
         : escapeHtmlT((b.name||'?').charAt(0).toUpperCase());
       const photos = Array.isArray(b.work_photos) ? b.work_photos : [];
-      const grid = photos.length
-        ? `<div class="team-work-grid">${photos.map(u => `<div class="team-work-cell" onclick="openLightbox('${u.replace(/'/g,'&#39;')}')"><img src="${u}" loading="lazy" alt=""></div>`).join('')}</div>`
-        : `<div class="team-empty">Sin fotos de trabajos todavía.</div>`;
-      return `<div class="team-card">
+      // Stack chiquito con hasta 3 previews (los primeros del portfolio)
+      const previews = photos.slice(0, 3);
+      let stackHtml;
+      if (previews.length) {
+        const stackItems = previews.map(u => `<div class="team-stack-item"><img src="${u}" loading="lazy" alt=""></div>`).join('');
+        const badge = photos.length > 1 ? `<span class="team-stack-count">${photos.length}</span>` : '';
+        stackHtml = `<div class="team-stack">${stackItems}${badge}</div>`;
+      } else {
+        stackHtml = `<div class="team-stack-empty" title="Sin fotos">📷</div>`;
+      }
+      const gridHtml = photos.length
+        ? `<div class="team-work-grid">${photos.map(u => `<div class="team-work-cell" onclick="event.stopPropagation();openLightbox('${u.replace(/'/g,'&#39;')}')"><img src="${u}" loading="lazy" alt=""></div>`).join('')}</div>`
+        : `<div class="team-empty-inline">Este barbero todavía no cargó fotos de sus trabajos.</div>`;
+      const subText = photos.length
+        ? `${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'} · tocá para ver`
+        : 'Sin fotos todavía';
+      return `<div class="team-card" data-team-idx="${idx}" onclick="toggleTeamCard(this)">
         <div class="team-card-head">
           <div class="team-avatar">${avatarInner}</div>
-          <div class="team-name">${escapeHtmlT(b.name || '')}</div>
+          <div class="team-head-info">
+            <div class="team-name">${escapeHtmlT(b.name || '')}</div>
+            <div class="team-sub">${subText}</div>
+          </div>
+          ${stackHtml}
+          <span class="team-expand-icon">▶</span>
         </div>
-        ${grid}
+        ${gridHtml}
       </div>`;
     }).join('');
     _teamLoaded = true;
   } catch (e) {
     document.getElementById('team-list').innerHTML = `<div class="team-empty">Error: ${e.message}</div>`;
   }
+}
+function toggleTeamCard(card) {
+  card.classList.toggle('expanded');
 }
 function openLightbox(url) {
   document.getElementById('team-lightbox-img').src = url;
