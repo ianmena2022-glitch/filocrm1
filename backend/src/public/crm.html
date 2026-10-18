@@ -1812,6 +1812,20 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .success-pop { animation: checkPop .35s cubic-bezier(.34,1.56,.64,1) both; }
 .success-pop svg path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: checkDraw .45s ease-out .15s forwards; }
 
+/* Month picker custom (modal exportar) */
+.xp-picker { margin-top: 18px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 12px; }
+.xp-year-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.xp-year { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.xp-year-btn { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); color: #fff; width: 34px; height: 34px; border-radius: 10px; font-size: 20px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+.xp-year-btn:hover { background: rgba(255,209,0,.1); border-color: rgba(255,209,0,.3); color: var(--yellow); }
+.xp-year-btn:disabled { opacity: .3; cursor: not-allowed; }
+.xp-months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.xp-month { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); color: rgba(255,255,255,.78); padding: 10px 6px; border-radius: 9px; font-family: 'Barlow', sans-serif; font-size: 12.5px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; cursor: pointer; transition: all .15s; text-align: center; }
+.xp-month:hover:not(:disabled) { background: rgba(255,209,0,.08); border-color: rgba(255,209,0,.3); color: var(--yellow); }
+.xp-month.is-current { color: var(--yellow); border-color: rgba(255,209,0,.25); }
+.xp-month.is-selected { background: var(--yellow); border-color: var(--yellow); color: #050d18; }
+.xp-month:disabled { opacity: .25; cursor: not-allowed; }
+
 /* Command palette (Cmd/Ctrl+K) */
 #kpalette { display: none; position: fixed; inset: 0; z-index: 10000; align-items: flex-start; justify-content: center; padding-top: 12vh; }
 #kpalette .kp-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.65); backdrop-filter: blur(6px); }
@@ -12263,26 +12277,81 @@ async function loadCashOnNavigation() {
 }
 
 
+// ─── Month picker custom (modal export) ─────────────────────────
+let _xpYear = new Date().getFullYear();
+let _xpMonth = new Date().getMonth() + 1; // 1..12
+const _MONTH_ABBR_ES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+const _MONTH_FULL_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
 function openExportModal() {
-  // Poner mes actual por defecto
   const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  document.getElementById('export-month').value = month;
+  _xpYear  = now.getFullYear();
+  _xpMonth = now.getMonth() + 1;
+  renderXpPicker();
+  // Aviso de PIN si está activado y no desbloqueado
+  const warn = document.getElementById('xp-locked-warn');
+  if (warn) warn.style.display = (isRevenuePinEnabled() && !window._revenuePinSessionOk) ? 'flex' : 'none';
   openModal('modal-export');
+}
+function xpChangeYear(delta) {
+  _xpYear += delta;
+  renderXpPicker();
+}
+function xpSelectMonth(m) {
+  _xpMonth = m;
+  renderXpPicker();
+}
+function renderXpPicker() {
+  const now = new Date();
+  const curYear  = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  document.getElementById('xp-year').textContent = _xpYear;
+  const grid = document.getElementById('xp-months');
+  if (!grid) return;
+  grid.innerHTML = _MONTH_ABBR_ES.map((lbl, i) => {
+    const m = i + 1;
+    const isFuture = (_xpYear > curYear) || (_xpYear === curYear && m > curMonth);
+    const isCur    = (_xpYear === curYear && m === curMonth);
+    const isSel    = (m === _xpMonth);
+    const classes = ['xp-month'];
+    if (isCur) classes.push('is-current');
+    if (isSel) classes.push('is-selected');
+    return `<button type="button" class="${classes.join(' ')}" ${isFuture ? 'disabled title="Mes futuro"' : ''} onclick="xpSelectMonth(${m})">${lbl}</button>`;
+  }).join('');
 }
 
 async function exportMonthReport() {
-  const month = document.getElementById('export-month').value;
-  if (!month) return showToast('⚠️','Seleccioná un mes','');
-  closeModal('modal-export');
-  showToast('⏳','Generando PDF...','Puede tardar unos segundos');
+  const year = _xpYear;
+  const mon  = _xpMonth;
+  if (!year || !mon) return showToast('⚠️', 'Seleccioná un mes', '');
+
+  // Gate del PIN: si está activado y la sesión no está desbloqueada, pedir PIN primero
+  if (isRevenuePinEnabled() && !window._revenuePinSessionOk) {
+    await askRevenuePin();
+    // askRevenuePin modifica _revenuePinSessionOk solo si fue correcto
+    if (!window._revenuePinSessionOk) {
+      // Usuario canceló o PIN incorrecto → no exportar
+      return;
+    }
+    // Actualizar el aviso en el modal
+    const warn = document.getElementById('xp-locked-warn');
+    if (warn) warn.style.display = 'none';
+  }
+
+  const btn = document.getElementById('xp-download-btn');
+  const origText = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+  showToast('⏳', 'Generando PDF...', `${_MONTH_FULL_ES[mon-1]} ${year}`);
 
   try {
-    const [year, mon] = month.split('-');
     const data = await api('GET', `/dashboard/month-report?year=${year}&month=${mon}`);
-    generatePDF(data, month);
+    const monthStr = `${year}-${String(mon).padStart(2,'0')}`;
+    generatePDF(data, monthStr);
+    closeModal('modal-export');
   } catch(e) {
-    showToast('❌','Error al exportar', e.message);
+    showToast('❌', 'Error al exportar', e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText || '📥 Descargar PDF'; }
   }
 }
 
@@ -12838,17 +12907,30 @@ async function bcmSave(id) {
 
   <!-- Modal exportar mes -->
   <div class="modal-overlay" id="modal-export">
-    <div class="modal" style="max-width:380px">
-      <div class="modal-title">📥 Exportar resumen mensual</div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
-        <div>
-          <label class="input-label">MES A EXPORTAR</label>
-          <input type="month" id="export-month" class="modal-input" style="width:100%;box-sizing:border-box">
-        </div>
-        <div style="font-size:12px;color:var(--gray)">Se exporta un PDF con todos los turnos, gastos, método de pago y neto del mes.</div>
+    <div class="modal" style="max-width:400px">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">📥</span>
+        <span>Exportar resumen mensual</span>
       </div>
-      <div class="modal-actions">
-        <button class="btn-modal-primary" onclick="exportMonthReport()">📥 Descargar PDF</button>
+      <div class="modal-sub">PDF con turnos, gastos, método de pago y neto del mes elegido.</div>
+
+      <!-- Month picker custom: year nav + grid 12 meses -->
+      <div class="xp-picker">
+        <div class="xp-year-nav">
+          <button type="button" class="xp-year-btn" onclick="xpChangeYear(-1)" aria-label="Año anterior">‹</button>
+          <div class="xp-year" id="xp-year">2026</div>
+          <button type="button" class="xp-year-btn" onclick="xpChangeYear(1)" aria-label="Año siguiente">›</button>
+        </div>
+        <div class="xp-months" id="xp-months"></div>
+      </div>
+
+      <div id="xp-locked-warn" style="display:none;background:rgba(255,145,0,.08);border:1px solid rgba(255,145,0,.25);border-radius:10px;padding:10px 12px;margin-top:14px;font-size:12px;color:#FFB84D;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">🔒</span>
+        <span>Este reporte muestra montos mensuales. Vas a tener que ingresar tu PIN.</span>
+      </div>
+
+      <div class="modal-actions" style="margin-top:18px">
+        <button class="btn-modal-primary" id="xp-download-btn" onclick="exportMonthReport()">📥 Descargar PDF</button>
         <button class="btn-modal-cancel" onclick="closeModal('modal-export')">Cancelar</button>
       </div>
     </div>
