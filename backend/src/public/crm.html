@@ -5922,6 +5922,42 @@ setTimeout(async () => {
   }
 }, 2500);
 
+// Fallback: resync notificaciones al volver a la tab + poll liviano cada 45s
+// (por si SSE se cayó sin disparar onerror — pasa con proxies agresivos)
+async function notifResync() {
+  if (typeof token === 'undefined' || !token) return;
+  try {
+    const d = await api('GET', '/notifications');
+    const items = d.items || [];
+    const unread = d.unread_count || 0;
+    // Detectar notifs nuevas respecto a lo que ya teníamos
+    const knownIds = new Set((_notifItems || []).map(n => n.id));
+    const nuevas = items.filter(n => !knownIds.has(n.id));
+    _notifItems = items;
+    _notifUnread = unread;
+    _notifLoaded = true;
+    notifRender();
+    notifRenderBadge();
+    // Toast solo si hay nuevas y la tab estaba oculta (user volvió y hay cosas)
+    if (nuevas.length && typeof showToast === 'function') {
+      const n = nuevas[0];
+      if (nuevas.length === 1) showToast(n.icon || '🔔', n.title, n.body || '');
+      else showToast('🔔', `${nuevas.length} notificaciones nuevas`, '');
+    }
+    // Si SSE se desconectó silenciosamente, forzar reconexión
+    if (_sseLastHello && Date.now() - _sseLastHello > 60000) {
+      try { _sse?.close(); } catch(_) {}
+      _sse = null;
+      startSSE();
+    }
+  } catch(_) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') notifResync();
+});
+window.addEventListener('focus', notifResync);
+setInterval(() => { if (document.visibilityState === 'visible') notifResync(); }, 45000);
+
 // ─── NAVIGATION ───
 async function switchPlan(plan) {
   try {
