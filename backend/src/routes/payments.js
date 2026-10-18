@@ -415,6 +415,10 @@ async function tryMatchIncomingTransfer(paymentId, amount) {
     [String(paymentId), row.id]
   );
   console.log(`[Transfer] ✓ MATCH payment ${paymentId} ($${amount}) → shop ${row.shop_id} · plan ${row.plan}`);
+  try {
+    const sse = require('../services/sse');
+    sse.emit(row.shop_id, 'transfer.matched', { transfer_id: row.id, plan: row.plan });
+  } catch(_) {}
   return { matched: true, shopId: row.shop_id, plan: row.plan };
 }
 
@@ -462,6 +466,12 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
   const shop = updated.rows[0];
   const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
   console.log(`[Activate] Shop ${shopId} activado — ${planLabel} hasta ${accessUntil.toDateString()}`);
+
+  // SSE en vivo: el frontend del dueño cierra el modal + muestra success instantáneo
+  try {
+    const sse = require('../services/sse');
+    sse.emit(shopId, 'plan.activated', { plan, plan_label: planLabel, until: accessUntil.toISOString() });
+  } catch(_) {}
 
   try {
     const { grantFreeMonthToReferrer } = require('./referrals');

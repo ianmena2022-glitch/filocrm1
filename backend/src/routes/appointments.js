@@ -302,6 +302,19 @@ router.put('/:id/status', auth, async (req, res) => {
 
     const appt = result.rows[0];
 
+    // SSE: broadcast cambio de status para refrescar agendas abiertas en vivo
+    try {
+      const sse = require('../services/sse');
+      sse.emit(appt.shop_id, 'appointment.updated', {
+        id: appt.id, shop_id: appt.shop_id, status: appt.status,
+        date: appt.date, time_start: appt.time_start, barber_id: appt.barber_id,
+      });
+      if (req.isEnterpriseOwner && req.shopId && req.shopId !== appt.shop_id) {
+        sse.emit(req.shopId, 'appointment.updated', { id: appt.id, shop_id: appt.shop_id, status: appt.status });
+      }
+    } catch(_) {}
+
+
     // Si es fiado, registrar deuda
     if (status === 'completed' && payment_method === 'debt') {
       await pool.query(

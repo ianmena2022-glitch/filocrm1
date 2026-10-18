@@ -730,6 +730,22 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
     pgClient.release();
 
+    // Emitir evento SSE en vivo: dueño/sucursal + enterprise owner ven la reserva al toque
+    try {
+      const sse = require('../services/sse');
+      const row = appt.rows[0] || {};
+      sse.emitWithParent(shopData.id, shopData.parent_enterprise_id, 'appointment.created', {
+        id: row.id,
+        shop_id: shopData.id,
+        client_name,
+        service_name: svcName,
+        date, time_start, time_end,
+        barber_id: assignedBarberId,
+        status: apptStatus,
+        source: 'online',
+      });
+    } catch(sseErr) { /* silent */ }
+
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP

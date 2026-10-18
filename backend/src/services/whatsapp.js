@@ -569,6 +569,10 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
       if (verified) {
         await pool.query(`UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1`, [pending.id]);
         await sock.sendMessage(remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
+        try {
+          const sse = require('./sse');
+          sse.emit(pending.shop_id, 'membership.verified', { id: pending.id, client_name: pending.client_name || null });
+        } catch(_) {}
       } else {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);

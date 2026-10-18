@@ -5149,24 +5149,39 @@ async function ensureTransferOrder() {
 
 function startTransferPolling(transferId) {
   stopTransferPolling();
+  // Preferimos SSE: cuando llegue 'transfer.matched' nos activamos. Igual dejamos
+  // un polling lento (20s) como safety net si la conexión SSE cae.
+  const onMatched = (ev) => {
+    const d = ev?.detail || {};
+    if (d.transfer_id && d.transfer_id !== transferId) return;
+    stopTransferPolling();
+    stopQRPolling();
+    const stepScan = document.getElementById('qr-step-scan');
+    const stepOk   = document.getElementById('qr-step-success');
+    if (stepScan) stepScan.style.display = 'none';
+    if (stepOk)   stepOk.style.display   = 'block';
+    setTimeout(() => { closeQRModal(); window.location.reload(); }, 2500);
+  };
+  window.addEventListener('filo:transfer.matched', onMatched);
   _tfPollTimer = setInterval(async () => {
     try {
       const r = await api('GET', `/payments/transfer-status/${transferId}`);
-      if (r.status === 'matched') {
-        stopTransferPolling();
-        stopQRPolling();
-        document.getElementById('qr-step-scan').style.display = 'none';
-        document.getElementById('qr-step-success').style.display = 'block';
-        setTimeout(() => { closeQRModal(); window.location.reload(); }, 2500);
-      } else if (r.status === 'expired') {
-        stopTransferPolling();
-      }
+      if (r.status === 'matched') { onMatched(); }
+      else if (r.status === 'expired') { stopTransferPolling(); }
     } catch(e) { /* ignorar errores transitorios */ }
-  }, 5000);
+  }, 20000);
+  // Guardar el listener para poder removerlo en stop
+  _tfPollTimer._onMatched = onMatched;
 }
 
 function stopTransferPolling() {
-  if (_tfPollTimer) { clearInterval(_tfPollTimer); _tfPollTimer = null; }
+  if (_tfPollTimer) {
+    if (_tfPollTimer._onMatched) {
+      window.removeEventListener('filo:transfer.matched', _tfPollTimer._onMatched);
+    }
+    clearInterval(_tfPollTimer);
+    _tfPollTimer = null;
+  }
 }
 
 function copyText(text, toastMsg) {
@@ -5485,6 +5500,7 @@ let _pollingInterval = null;
 
 function startPolling() {
   if (_pollingInterval) clearInterval(_pollingInterval);
+  // Con SSE activo, bajamos el polling a 90s como safety net.
   _pollingInterval = setInterval(async () => {
     if (document.hidden) return;
     if (document.querySelector('.modal-overlay.open')) return;
@@ -5494,11 +5510,102 @@ function startPolling() {
       else if (activeSection === 'sec-agenda') await loadAgenda();
       else if (activeSection === 'sec-clientes') await loadClients();
       else if (activeSection === 'sec-membresias') await loadMemberships();
-      // Actualizar indicador de refresh
       const stamp = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
       document.querySelectorAll('.last-refresh').forEach(el => el.textContent = stamp);
     } catch(e) { console.warn('[polling] error:', e.message); }
-  }, 30000); // 30s — antes 15s causaba jank visible por animNum + reflow en cada tick
+  }, 90000);
+  startSSE();
+}
+
+// ─── LIVE EVENTS via SSE ───
+let _sse = null;
+let _sseRetryMs = 1500;
+let _sseLastHello = 0;
+
+function refreshActiveSection() {
+  const activeSection = document.querySelector('.section.active')?.id;
+  try {
+    if (activeSection === 'sec-dashboard') loadDashboard();
+    else if (activeSection === 'sec-agenda') loadAgenda();
+    else if (activeSection === 'sec-clientes') loadClients();
+    else if (activeSection === 'sec-membresias') loadMemberships();
+  } catch(e) { /* silent */ }
+}
+
+function startSSE() {
+  if (!window.EventSource) return;
+  if (_sse) return;
+  if (!token) return;
+  try {
+    _sse = new EventSource(`/api/events/stream?token=${encodeURIComponent(token)}`);
+  } catch(e) { console.warn('[sse] open error:', e); return; }
+
+  _sse.addEventListener('hello', () => {
+    _sseRetryMs = 1500;
+    _sseLastHello = Date.now();
+    console.log('[sse] conectado');
+    // Marcar indicador de "en vivo"
+    document.querySelectorAll('.last-refresh').forEach(el => {
+      el.textContent = '● En vivo';
+      el.style.color = 'rgba(34,197,94,.75)';
+    });
+  });
+
+  _sse.addEventListener('appointment.created', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      refreshActiveSection();
+      if (typeof showToast === 'function') {
+        showToast('📅', 'Nueva reserva', `${d.client_name || ''} · ${d.date || ''} ${d.time_start || ''}`);
+      }
+      window.dispatchEvent(new CustomEvent('filo:appointment.created', { detail: d }));
+    } catch(_) {}
+  });
+
+  _sse.addEventListener('appointment.updated', () => refreshActiveSection());
+
+  _sse.addEventListener('membership.verified', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      refreshActiveSection();
+      if (typeof showToast === 'function') showToast('✅', 'Membresía verificada', d.client_name || '');
+      window.dispatchEvent(new CustomEvent('filo:membership.verified', { detail: d }));
+    } catch(_) {}
+  });
+
+  _sse.addEventListener('transfer.matched', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      window.dispatchEvent(new CustomEvent('filo:transfer.matched', { detail: d }));
+    } catch(_) {}
+  });
+
+  _sse.addEventListener('plan.activated', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      window.dispatchEvent(new CustomEvent('filo:plan.activated', { detail: d }));
+      if (typeof showToast === 'function') showToast('🎉', 'Plan activado', d.plan_label || '');
+      // Si está abierto el modal de pago, cerrarlo y mostrar success
+      const stepSuccess = document.getElementById('qr-step-success');
+      const stepScan    = document.getElementById('qr-step-scan');
+      if (stepScan && stepSuccess && stepScan.style.display !== 'none') {
+        stepScan.style.display = 'none';
+        stepSuccess.style.display = 'block';
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        setTimeout(() => window.location.reload(), 2500);
+      }
+    } catch(_) {}
+  });
+
+  _sse.onerror = () => {
+    try { _sse.close(); } catch(_) {}
+    _sse = null;
+    const delay = Math.min(_sseRetryMs, 30000);
+    _sseRetryMs = Math.min(_sseRetryMs * 2, 30000);
+    console.log(`[sse] desconectado — reintento en ${delay}ms`);
+    setTimeout(startSSE, delay);
+  };
 }
 
 // ─── NAVIGATION ───
