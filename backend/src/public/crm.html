@@ -1773,10 +1773,54 @@ select.form-input { padding-right: 32px; }
 /* Los cfg-tab-pane dejan de ser visualmente tabs — se vuelven contenedores transparentes */
 .cfg-tab-pane { display: block !important; }
 
+/* Back button mobile: oculto por default (solo mobile lo muestra) */
+.cfg-mobile-back { display: none; }
+
 @media (max-width: 820px) {
-  .cfg-shell { grid-template-columns: 1fr; gap: 16px; }
-  .cfg-shell__nav { position: static; max-height: none; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 8px; }
-  .cfg-item-title { font-size: 20px; }
+  .cfg-shell { grid-template-columns: 1fr; gap: 0; }
+  .cfg-shell__nav { position: static; max-height: none; padding: 0; border-bottom: 0; margin: 0; }
+  .cfg-shell__main { padding: 0; }
+  .cfg-item { max-width: 100%; padding: 0 4px; }
+  .cfg-item-title { font-size: 22px; }
+
+  /* Items y heads más grandes para touch */
+  #cfg-bmenu { padding-left: 18px; font-size: 15px; }
+  #cfg-bmenu .bmenu__head { padding: 14px 0; font-size: 16px; }
+  #cfg-bmenu .bmenu__item { height: 46px; padding-left: 44px; font-size: 15px; }
+  #cfg-bmenu .bmenu__icon { font-size: 16px; }
+
+  /* Patrón drill-down: default = menú visible / contenido oculto.
+     Cuando body tiene .cfg-mobile-detail (seteado al clickear un item): invertido. */
+  body:not(.cfg-mobile-detail) .cfg-shell__main { display: none; }
+  body.cfg-mobile-detail .cfg-shell__nav { display: none; }
+
+  /* Botón "← Volver" sticky arriba del content en mobile */
+  .cfg-mobile-back {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: linear-gradient(180deg, rgba(5,13,24,.95) 0%, rgba(5,13,24,.9) 100%);
+    backdrop-filter: blur(10px);
+    padding: 12px 4px;
+    margin: 0 -4px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--yellow);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cfg-mobile-back:hover { color: #fff; }
+  .cfg-mobile-back__arrow { font-size: 18px; line-height: 1; }
+
+  /* Topbar de la sección oculta en mobile cuando estás en el detail (dejamos solo el back) */
+  body.cfg-mobile-detail #sec-configuracion > .topbar { display: none; }
+
+  /* Crumb ligeramente más chico en mobile ya que hay back arriba */
+  .cfg-crumb { font-size: 10px; }
 }
 </style>
 </head>
@@ -3178,6 +3222,12 @@ select.form-input { padding-right: 32px; }
         </aside>
 
         <div class="cfg-shell__main">
+
+        <!-- Botón mobile para volver al menú (visible solo <820px cuando estás en un item) -->
+        <div class="cfg-mobile-back" onclick="cfgMobileBack()" role="button" tabindex="0" aria-label="Volver al menú de configuración">
+          <span class="cfg-mobile-back__arrow">←</span>
+          <span>Configuración</span>
+        </div>
 
         <!-- Tabs viejos (ocultos; preservan onclick para compat con tour y shortcuts del dashboard) -->
         <nav class="cfg-tabs-nav" id="cfg-tabs-nav" aria-hidden="true">
@@ -7791,6 +7841,12 @@ function switchCfgTab(name, btn) {
 function cfgGoToItem(itemId) {
   if (!_cfgMenuBuilt) buildCfgBranchedMenu();
   _cfgActiveItem = itemId;
+  // Mobile drill-down: activar vista de detalle
+  if (window.matchMedia && window.matchMedia('(max-width: 820px)').matches) {
+    document.body.classList.add('cfg-mobile-detail');
+    // Scroll al top del content tras el swap de vista
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' in document.body.style ? 'instant' : 'auto' }));
+  }
   // Mostrar solo el cfg-item objetivo
   document.querySelectorAll('.cfg-item').forEach(el => {
     el.classList.toggle('is-active', el.getAttribute('data-cfg-item') === itemId);
@@ -7941,9 +7997,34 @@ function buildCfgBranchedMenu() {
   new ResizeObserver(() => cfgPlaceMarker()).observe(nav);
 }
 
+// Vuelve del detail al menú (mobile)
+function cfgMobileBack() {
+  document.body.classList.remove('cfg-mobile-detail');
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' in document.body.style ? 'instant' : 'auto' }));
+  requestAnimationFrame(cfgPlaceMarker);
+}
+
 // Auto-build al entrar a configuración por primera vez
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('cfg-bmenu')) buildCfgBranchedMenu();
+});
+
+// Al salir de configuración o entrar desde otra sección, resetear el modo mobile
+(function hookShowSectionForCfg() {
+  if (typeof showSection !== 'function') return;
+  const _orig = showSection;
+  window.showSection = function(name) {
+    // Reset drill-down al cambiar de sección o re-entrar a configuración
+    document.body.classList.remove('cfg-mobile-detail');
+    return _orig.apply(this, arguments);
+  };
+})();
+
+// Si el usuario rota el teléfono o resize cross-breakpoint, limpiamos la clase
+window.addEventListener('resize', () => {
+  if (!window.matchMedia('(max-width: 820px)').matches) {
+    document.body.classList.remove('cfg-mobile-detail');
+  }
 });
 
 async function renderQR(qrData) {
