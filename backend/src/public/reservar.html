@@ -685,8 +685,12 @@ function loadShopData(data) {
 }
 
 function _sanitizeUrl(u) {
-  const s = String(u || '').trim();
-  if (!/^https?:\/\//i.test(s)) return '';
+  let s = String(u || '').trim();
+  if (!s) return '';
+  // Rechazar schemes peligrosos
+  if (/^(javascript|data|vbscript):/i.test(s)) return '';
+  // Auto-prepend https:// si falta el scheme
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s.replace(/^\/\//, '');
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function renderSocialLinks(links) {
