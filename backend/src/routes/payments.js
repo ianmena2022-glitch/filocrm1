@@ -284,27 +284,58 @@ async function getMpUserId() {
   return _mpUserIdCache;
 }
 
+async function findFiloStore(userId) {
+  // Lista todos los stores del user y filtra por external_id
+  try {
+    const list = await mpFetch('GET', `/users/${userId}/stores`, null, MP_QR_TOKEN);
+    const results = Array.isArray(list) ? list : (list?.results || list?.elements || []);
+    const match = results.find(s => s.external_id === 'FILOSUBS' || s.store?.external_id === 'FILOSUBS');
+    return match ? (match.id || match.store?.id) : null;
+  } catch(e) {
+    console.warn(`[MP] findFiloStore list failed: ${e.message}`);
+    return null;
+  }
+}
+
 async function ensureFiloStore() {
   if (_filoStoreCache) return _filoStoreCache;
   const userId = await getMpUserId();
+  const existingId = await findFiloStore(userId);
+  if (existingId) { _filoStoreCache = existingId; return _filoStoreCache; }
   try {
-    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILOSUBS`, null, MP_QR_TOKEN);
-    if (list?.results?.length) { _filoStoreCache = list.results[0].id; return _filoStoreCache; }
-  } catch(e) { /* seguir y crear */ }
-  const store = await mpFetch('POST', `/users/${userId}/stores`, {
-    name: 'FILO CRM — Suscripciones',
-    external_id: 'FILOSUBS',
-    location: {
-      street_number: '0',
-      street_name: 'Online',
-      city_name: 'Palermo',
-      state_name: 'Capital Federal',
-      latitude: -34.6037,
-      longitude: -58.3816
+    const store = await mpFetch('POST', `/users/${userId}/stores`, {
+      name: 'FILO CRM — Suscripciones',
+      external_id: 'FILOSUBS',
+      location: {
+        street_number: '0',
+        street_name: 'Online',
+        city_name: 'Palermo',
+        state_name: 'Capital Federal',
+        latitude: -34.6037,
+        longitude: -58.3816
+      }
+    }, MP_QR_TOKEN);
+    _filoStoreCache = store.id;
+    return _filoStoreCache;
+  } catch(e) {
+    // Si falla por "already assigned", buscar de nuevo (puede haber race)
+    if (/already assigned/i.test(e.message)) {
+      const retryId = await findFiloStore(userId);
+      if (retryId) { _filoStoreCache = retryId; return _filoStoreCache; }
     }
-  }, MP_QR_TOKEN);
-  _filoStoreCache = store.id;
-  return _filoStoreCache;
+    throw e;
+  }
+}
+
+async function findPosByExtId(extId) {
+  try {
+    const list = await mpFetch('GET', `/pos?external_id=${extId}`, null, MP_QR_TOKEN);
+    const results = Array.isArray(list) ? list : (list?.results || []);
+    return results[0] || null;
+  } catch(e) {
+    console.warn(`[MP] findPos failed: ${e.message}`);
+    return null;
+  }
 }
 
 async function ensurePosForShop(shopId) {
@@ -312,22 +343,26 @@ async function ensurePosForShop(shopId) {
   if (cached) return cached;
   const extId   = `FILOSHOP${shopId}`;
   const storeId = await ensureFiloStore();
-  let pos;
-  try {
-    const list = await mpFetch('GET', `/pos?external_id=${extId}`, null, MP_QR_TOKEN);
-    if (list?.results?.length) pos = list.results[0];
-  } catch(e) { /* crear */ }
+  let pos = await findPosByExtId(extId);
   if (!pos) {
-    pos = await mpFetch('POST', '/pos', {
-      name: `FILO Shop ${shopId}`,
-      fixed_amount: false,
-      store_id: storeId,
-      external_id: extId,
-      external_store_id: 'FILOSUBS',
-      category: 621102,
-    }, MP_QR_TOKEN);
+    try {
+      pos = await mpFetch('POST', '/pos', {
+        name: `FILO Shop ${shopId}`,
+        fixed_amount: false,
+        store_id: storeId,
+        external_id: extId,
+        external_store_id: 'FILOSUBS',
+        category: 621102,
+      }, MP_QR_TOKEN);
+    } catch(e) {
+      if (/already (assigned|exists)/i.test(e.message)) {
+        pos = await findPosByExtId(extId);
+      } else {
+        throw e;
+      }
+    }
   }
-  const result = { external_id: extId, qr_image: pos.qr?.image || null };
+  const result = { external_id: extId, qr_image: pos?.qr?.image || null };
   _posByShopCache.set(shopId, result);
   return result;
 }
