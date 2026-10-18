@@ -285,12 +285,12 @@ async function ensureFiloStore() {
   if (_filoStoreCache) return _filoStoreCache;
   const userId = await getMpUserId();
   try {
-    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILO-SUBS`, null, MP_QR_TOKEN);
+    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILOSUBS`, null, MP_QR_TOKEN);
     if (list?.results?.length) { _filoStoreCache = list.results[0].id; return _filoStoreCache; }
   } catch(e) { /* seguir y crear */ }
   const store = await mpFetch('POST', `/users/${userId}/stores`, {
     name: 'FILO CRM — Suscripciones',
-    external_id: 'FILO-SUBS',
+    external_id: 'FILOSUBS',
     location: {
       street_number: '0',
       street_name: 'Online',
@@ -307,7 +307,7 @@ async function ensureFiloStore() {
 async function ensurePosForShop(shopId) {
   const cached = _posByShopCache.get(shopId);
   if (cached) return cached;
-  const extId   = `FILO-SHOP-${shopId}`;
+  const extId   = `FILOSHOP${shopId}`;
   const storeId = await ensureFiloStore();
   let pos;
   try {
