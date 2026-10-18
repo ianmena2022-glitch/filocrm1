@@ -1728,6 +1728,56 @@ select.form-input { padding-right: 32px; }
   background: rgba(255,255,255,0.18); transition: background 0.2s;
 }
 #tour-card .tc-dot.active { background: var(--yellow); }
+
+/* ─── Configuración · BranchedMenu + layout de 2 columnas ────── */
+.cfg-shell { display: grid; grid-template-columns: 260px 1fr; gap: 32px; align-items: start; max-width: 1100px; }
+.cfg-shell__nav { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px 0 12px; }
+.cfg-shell__main { min-width: 0; }
+.cfg-crumb { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,.4); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; margin-bottom: 6px; }
+.cfg-item-title { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -.2px; margin: 0 0 6px; color: #fff; }
+.cfg-item-desc { color: rgba(255,255,255,.58); margin: 0 0 24px; max-width: 60ch; font-size: 13.5px; line-height: 1.5; }
+.cfg-item { display: none; animation: cfgIn .3s cubic-bezier(.23,1,.32,1); max-width: 760px; }
+.cfg-item.is-active { display: block; }
+@keyframes cfgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+/* Dentro de un cfg-item: los acordeones (sena, slot, pin, horarios, etc.) quedan expandidos sin header plegable */
+.cfg-item .cfg-accordion-hidden { display: none !important; }
+.cfg-item .cfg-force-open { display: block !important; }
+
+/* BranchedMenu */
+#cfg-bmenu { position: relative; display: flex; flex-direction: column; padding-left: 14px; font-size: 14px; line-height: 1.2; }
+#cfg-bmenu::before { content: ''; position: absolute; top: 10px; bottom: 0; left: 0; width: 2px; border-radius: 1px; background: linear-gradient(to bottom, rgba(255,255,255,.1) 0%, rgba(255,255,255,.1) 55%, transparent 100%); }
+.bmenu__marker { position: absolute; top: -1px; left: 0; z-index: 1; width: 2px; height: 18px; border-radius: 1px; background: var(--yellow); opacity: 0; transition: top .24s cubic-bezier(.23,1,.32,1), opacity .16s ease; box-shadow: 0 0 10px var(--yellow); }
+.bmenu__marker[data-on] { opacity: 1; }
+.bmenu__section { display: flex; flex-direction: column; }
+.bmenu__head { display: block; margin: 0; padding: 10px 0; border: 0; background: none; color: rgba(255,255,255,.58); font: inherit; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; outline: none; transition: color .18s ease; font-family: 'Barlow', sans-serif; }
+.bmenu__head:hover, .bmenu__section[data-open] .bmenu__head { color: #fff; }
+.bmenu__head:focus-visible { color: #fff; outline: 2px solid rgba(255,209,0,.3); outline-offset: 2px; border-radius: 4px; }
+.bmenu__body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s cubic-bezier(.23,1,.32,1); }
+.bmenu__section[data-open] .bmenu__body { grid-template-rows: 1fr; }
+.bmenu__fold { min-height: 0; overflow: hidden; }
+.bmenu__tree { position: relative; padding: 4px 0 6px; }
+.bmenu__lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; opacity: 0; transition: opacity .2s ease; }
+.bmenu__section[data-open] .bmenu__lines { opacity: 1; transition: opacity .25s ease .1s; }
+.bmenu__base, .bmenu__reach { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.bmenu__base { stroke: rgba(255,255,255,.1); }
+.bmenu__reach { stroke: var(--yellow); transition: stroke-dashoffset .42s cubic-bezier(.23,1,.32,1); }
+.bmenu__item { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; margin: 0; padding: 0 0 0 40px; border: 0; background: none; color: rgba(255,255,255,.58); font: inherit; text-align: left; cursor: pointer; outline: none; transition: color .18s ease; font-family: 'Barlow', sans-serif; }
+.bmenu__item:hover { color: #fff; }
+.bmenu__item[data-active] { color: var(--yellow); font-weight: 500; }
+.bmenu__item:focus-visible { color: #fff; outline: 2px solid rgba(255,209,0,.3); outline-offset: -2px; border-radius: 6px; }
+.bmenu__icon { display: inline-flex; flex: none; width: 16px; justify-content: center; font-size: 14px; }
+.bmenu__label { white-space: nowrap; }
+
+/* Oculta las tabs viejas (quedan solo para compat del tour y shortcuts del dashboard) */
+.cfg-tabs-nav { display: none !important; }
+/* Los cfg-tab-pane dejan de ser visualmente tabs — se vuelven contenedores transparentes */
+.cfg-tab-pane { display: block !important; }
+
+@media (max-width: 820px) {
+  .cfg-shell { grid-template-columns: 1fr; gap: 16px; }
+  .cfg-shell__nav { position: static; max-height: none; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 8px; }
+  .cfg-item-title { font-size: 20px; }
+}
 </style>
 </head>
 <body>
@@ -3119,21 +3169,32 @@ select.form-input { padding-right: 32px; }
       </div>
 
 
-      <div style="max-width:760px">
+      <!-- Layout: sidebar BranchedMenu + content -->
+      <div class="cfg-shell">
+        <aside class="cfg-shell__nav">
+          <nav id="cfg-bmenu">
+            <span class="bmenu__marker" id="cfg-bmenu-marker" aria-hidden="true"></span>
+          </nav>
+        </aside>
 
-        <!-- ── Tabs nav ── -->
-        <nav class="cfg-tabs-nav" id="cfg-tabs-nav">
-          <button class="cfg-tab-btn active" onclick="switchCfgTab('general',this)">🏠 General</button>
-          <button class="cfg-tab-btn" onclick="switchCfgTab('reservas',this)">📅 Turnos</button>
-          <button class="cfg-tab-btn" onclick="switchCfgTab('whatsapp',this)">💬 WhatsApp</button>
-          <button class="cfg-tab-btn" onclick="switchCfgTab('negocio',this)">📦 Servicios</button>
-          <button class="cfg-tab-btn" onclick="switchCfgTab('cuenta',this)">⚙️ Cuenta</button>
+        <div class="cfg-shell__main">
+
+        <!-- Tabs viejos (ocultos; preservan onclick para compat con tour y shortcuts del dashboard) -->
+        <nav class="cfg-tabs-nav" id="cfg-tabs-nav" aria-hidden="true">
+          <button class="cfg-tab-btn active" onclick="switchCfgTab('general',this)">General</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('reservas',this)">Turnos</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('whatsapp',this)">WhatsApp</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('negocio',this)">Servicios</button>
+          <button class="cfg-tab-btn" onclick="switchCfgTab('cuenta',this)">Cuenta</button>
         </nav>
 
-        <!-- ══ TAB: General ══ -->
         <div class="cfg-tab-pane active" id="cfg-tab-general">
 
-        <!-- Mi barbería -->
+        <!-- CFG-ITEM: Datos del local -->
+        <div class="cfg-item is-active" data-cfg-item="local">
+          <div class="cfg-crumb">Mi barbería / Datos del local</div>
+          <h2 class="cfg-item-title">Datos de la barbería</h2>
+          <p class="cfg-item-desc">Nombre, dirección y datos básicos. Visibles en tu link público de reservas.</p>
         <div class="settings-section">
           <div class="settings-section-title">✂️ Mi barbería</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -3188,10 +3249,17 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item local -->
+
         </div><!-- /cfg-tab-general -->
 
-        <!-- ══ TAB: Reservas ══ -->
         <div class="cfg-tab-pane" id="cfg-tab-reservas">
+
+        <!-- CFG-ITEM: Sistema de señas -->
+        <div class="cfg-item" data-cfg-item="sena">
+          <div class="cfg-crumb">Pagos / Sistema de señas</div>
+          <h2 class="cfg-item-title">Sistema de señas</h2>
+          <p class="cfg-item-desc">Cobrá un porcentaje al reservar para asegurar el turno. Si no se abona en 60 min, el turno se libera.</p>
 
         <!-- Señas -->
         <div class="settings-section" style="padding:0;overflow:hidden">
@@ -3236,6 +3304,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item sena -->
+
+        <!-- CFG-ITEM: Intervalo de turnos -->
+        <div class="cfg-item" data-cfg-item="slot">
+          <div class="cfg-crumb">Mi barbería / Intervalo</div>
+          <h2 class="cfg-item-title">Intervalo entre turnos</h2>
+          <p class="cfg-item-desc">Cada cuántos minutos se ofrecen horarios en el link público. No afecta turnos manuales desde el panel.</p>
         <!-- Intervalo de turnos -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-slot-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3256,6 +3331,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item slot -->
+
+        <!-- CFG-ITEM: PIN de facturación -->
+        <div class="cfg-item" data-cfg-item="pin">
+          <div class="cfg-crumb">Seguridad / PIN de facturación</div>
+          <h2 class="cfg-item-title">PIN para facturaciones mensuales</h2>
+          <p class="cfg-item-desc">Oculta los totales mensuales (dashboard, caja, P&L). Las facturaciones diarias siguen visibles.</p>
         <!-- Privacidad / PIN de facturaciones mensuales -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-pin-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3289,6 +3371,13 @@ select.form-input { padding-right: 32px; }
           .toggle-switch input:checked + span + span { transform: translateX(20px); }
         </style>
 
+        </div><!-- /cfg-item pin -->
+
+        <!-- CFG-ITEM: Horarios -->
+        <div class="cfg-item" data-cfg-item="schedule">
+          <div class="cfg-crumb">Mi barbería / Horarios</div>
+          <h2 class="cfg-item-title">Horarios de atención</h2>
+          <p class="cfg-item-desc">Días y rangos horarios en los que tu equipo acepta turnos.</p>
         <!-- Horarios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-schedule-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3300,6 +3389,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item schedule -->
+
+        <!-- CFG-ITEM: Días no laborables -->
+        <div class="cfg-item" data-cfg-item="closed-days">
+          <div class="cfg-crumb">Mi barbería / Días no laborables</div>
+          <h2 class="cfg-item-title">Feriados y vacaciones</h2>
+          <p class="cfg-item-desc">Fechas específicas en las que no se aceptan reservas. Se bloquean en el calendario público.</p>
         <!-- Días no laborables -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-closed-days-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3322,11 +3418,17 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item closed-days -->
+
         </div><!-- /cfg-tab-reservas -->
 
-        <!-- ══ TAB: WhatsApp ══ -->
         <div class="cfg-tab-pane" id="cfg-tab-whatsapp">
 
+        <!-- CFG-ITEM: WhatsApp -->
+        <div class="cfg-item" data-cfg-item="whatsapp">
+          <div class="cfg-crumb">Comunicación / WhatsApp</div>
+          <h2 class="cfg-item-title">WhatsApp</h2>
+          <p class="cfg-item-desc">Conexión del bot que responde dudas y envía confirmaciones a tus clientes.</p>
         <!-- WhatsApp -->
         <div class="settings-section">
           <div class="settings-section-title">💬 WhatsApp</div>
@@ -3370,7 +3472,16 @@ select.form-input { padding-right: 32px; }
             <div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:12px">Puede pasar si el servidor se reinició, si hay muchos mensajes pendientes acumulados, o si WhatsApp perdió la sincronización. Usá este botón para hacer una reconexión limpia — borra la sesión guardada y genera un QR nuevo.</div>
             <button onclick="resetWhatsapp()" style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.35);color:#FF9100;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif;width:100%">🔄 Reconexión limpia</button>
           </div>
-          <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.07);padding-top:16px">
+        </div><!-- /settings-section de WhatsApp -->
+        </div><!-- /cfg-item whatsapp -->
+
+        <!-- CFG-ITEM: Plantillas de mensajes -->
+        <div class="cfg-item" data-cfg-item="templates">
+          <div class="cfg-crumb">Comunicación / Plantillas</div>
+          <h2 class="cfg-item-title">Plantillas de mensajes</h2>
+          <p class="cfg-item-desc">Mensajes de respaldo que FILO manda a los clientes si la IA no puede generar uno.</p>
+        <div class="settings-section">
+          <div style="padding-top:0">
             <div onclick="toggleTpl('cfg-tpls-body')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:4px">
               <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow)">🤖 Mensajes de respaldo (si la IA falla)</div>
               <span class="tpl-arrow" id="arrow-cfg-tpls-body" style="color:var(--yellow);font-size:12px;transition:transform .2s">▼</span>
@@ -3420,6 +3531,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item templates -->
+
+        <!-- CFG-ITEM: Link de reservas -->
+        <div class="cfg-item" data-cfg-item="booking-link">
+          <div class="cfg-crumb">Comunicación / Link de reservas</div>
+          <h2 class="cfg-item-title">Link público de reservas</h2>
+          <p class="cfg-item-desc">El link que compartís con tus clientes para que reserven ellos mismos. Único por barbería.</p>
         <!-- Link de reservas -->
         <div class="settings-section">
           <div class="settings-section-title">🔗 Link de reservas</div>
@@ -3434,11 +3552,17 @@ select.form-input { padding-right: 32px; }
           <div id="booking-link-placeholder" style="font-size:13px;color:var(--gray)">Guardá tu configuración primero para generar tu link.</div>
         </div>
 
+        </div><!-- /cfg-item booking-link -->
+
         </div><!-- /cfg-tab-whatsapp -->
 
-        <!-- ══ TAB: Negocio ══ -->
         <div class="cfg-tab-pane" id="cfg-tab-negocio">
 
+        <!-- CFG-ITEM: Servicios -->
+        <div class="cfg-item" data-cfg-item="services">
+          <div class="cfg-crumb">Catálogo / Servicios</div>
+          <h2 class="cfg-item-title">Servicios y precios</h2>
+          <p class="cfg-item-desc">Lo que tu barbería ofrece. Los clientes eligen uno al reservar.</p>
         <!-- Servicios — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-services-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3450,6 +3574,28 @@ select.form-input { padding-right: 32px; }
             <button class="btn-motor secondary" onclick="openModal('modal-servicio')">+ Agregar servicio</button>
           </div>
         </div>
+
+        </div><!-- /cfg-item services -->
+
+        <!-- CFG-ITEM: Tienda de puntos -->
+        <div class="cfg-item" data-cfg-item="store">
+          <div class="cfg-crumb">Catálogo / Tienda de Puntos</div>
+          <h2 class="cfg-item-title">Tienda de Puntos FILO</h2>
+          <p class="cfg-item-desc">Configurá los premios canjeables, los puntos por peso y el link público de la tienda.</p>
+
+          <!-- Acceso rápido a la tienda pública -->
+          <div id="store-public-link-wrap" style="display:none;background:rgba(255,209,0,.06);border:1px solid rgba(255,209,0,.22);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:180px">
+                <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:4px">🔗 Link público de la tienda</div>
+                <div id="store-public-link-text" style="font-size:12px;color:rgba(255,255,255,.6);word-break:break-all;font-family:monospace"></div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <a id="store-public-link-open" href="#" target="_blank" rel="noopener" style="background:var(--yellow);color:#000;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none">👁️ Abrir tienda</a>
+                <button type="button" onclick="copyStorePublicLink()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif">📋 Copiar</button>
+              </div>
+            </div>
+          </div>
 
         <!-- Tienda de Puntos — acordeón -->
         <div class="settings-section" style="padding:0;overflow:hidden">
@@ -3484,6 +3630,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item store -->
+
+        <!-- CFG-ITEM: Productos y stock -->
+        <div class="cfg-item" data-cfg-item="products">
+          <div class="cfg-crumb">Catálogo / Productos</div>
+          <h2 class="cfg-item-title">Productos y stock</h2>
+          <p class="cfg-item-desc">Ventas de productos físicos. El stock se descuenta automáticamente al confirmar la venta.</p>
         <!-- Productos & Stock -->
         <div class="settings-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-productos-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3515,6 +3668,13 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item products -->
+
+        <!-- CFG-ITEM: Métodos de pago -->
+        <div class="cfg-item" data-cfg-item="payment-methods">
+          <div class="cfg-crumb">Pagos / Métodos de pago</div>
+          <h2 class="cfg-item-title">Métodos de pago</h2>
+          <p class="cfg-item-desc">Formas de cobro que tu barbería acepta. Aparecen al cerrar un turno o venta.</p>
         <!-- Métodos de pago — acordeón -->
         <div class="settings-section" id="payment-methods-section" style="padding:0;overflow:hidden">
           <div onclick="toggleTpl('cfg-payment-body')" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer">
@@ -3532,11 +3692,17 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item payment-methods -->
+
         </div><!-- /cfg-tab-negocio -->
 
-        <!-- ══ TAB: Cuenta ══ -->
         <div class="cfg-tab-pane" id="cfg-tab-cuenta">
 
+        <!-- CFG-ITEM: Cuenta / Suscripción -->
+        <div class="cfg-item" data-cfg-item="account">
+          <div class="cfg-crumb">Cuenta / Suscripción y datos</div>
+          <h2 class="cfg-item-title">Cuenta y suscripción</h2>
+          <p class="cfg-item-desc">Gestioná tu plan FILO, lanzá el tour del producto o eliminá tu cuenta.</p>
         <!-- Zona de peligro -->
         <div style="padding-top:0">
           <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,67,67,0.6);margin-bottom:16px">Zona de peligro</div>
@@ -3579,9 +3745,12 @@ select.form-input { padding-right: 32px; }
           </div>
         </div>
 
+        </div><!-- /cfg-item account -->
+
         </div><!-- /cfg-tab-cuenta -->
 
-      </div><!-- /max-width wrapper -->
+        </div><!-- /cfg-shell__main -->
+      </div><!-- /cfg-shell -->
     </section>
 
   </main>
@@ -7553,20 +7722,229 @@ function toggleTpl(id) {
   if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
+// ─── Config · BranchedMenu (reemplaza las tabs viejas) ──────────────────
+// Mapeo tab legacy → primer cfg-item del grupo (compat con tour, dashboard, etc.)
+const CFG_TAB_TO_ITEM = {
+  general:  'local',
+  reservas: 'sena',      // Reservas englobaba señas / intervalo / pin / horarios / no laborables
+  whatsapp: 'whatsapp',  // whatsapp / templates / booking-link
+  negocio:  'services',  // services / products / store / payment-methods
+  cuenta:   'account',
+};
+// Items ↔ body del acordeón interno (si lo tiene) — para abrirlo automáticamente al navegar
+const CFG_ITEM_BODY = {
+  schedule: 'cfg-schedule-body',
+  'closed-days': 'cfg-closed-days-body',
+  slot: 'cfg-slot-body',
+  pin:  'cfg-pin-body',
+  sena: 'cfg-sena-body',
+  services: 'cfg-services-body',
+  store: 'cfg-tienda-body',
+  products: 'cfg-productos-body',
+  'payment-methods': 'cfg-payment-body',
+  templates: 'cfg-tpls-body',
+};
+// Grupos del BranchedMenu
+const CFG_MENU = [
+  { label: 'Mi barbería', items: [
+    { id: 'local',       label: 'Datos del local',    icon: '🏪' },
+    { id: 'schedule',    label: 'Horarios',           icon: '🕐' },
+    { id: 'closed-days', label: 'Días no laborables', icon: '🚫' },
+    { id: 'slot',        label: 'Intervalo de turnos', icon: '⏱️' },
+  ]},
+  { label: 'Catálogo', items: [
+    { id: 'services',    label: 'Servicios y precios', icon: '✂️' },
+    { id: 'products',    label: 'Productos y stock',   icon: '📦' },
+    { id: 'store',       label: 'Tienda de puntos',    icon: '⭐' },
+  ]},
+  { label: 'Pagos', items: [
+    { id: 'payment-methods', label: 'Métodos de pago', icon: '💳' },
+    { id: 'sena',            label: 'Sistema de señas', icon: '💸' },
+  ]},
+  { label: 'Comunicación', items: [
+    { id: 'whatsapp',     label: 'WhatsApp',               icon: '💬' },
+    { id: 'templates',    label: 'Plantillas de mensajes', icon: '📝' },
+    { id: 'booking-link', label: 'Link de reservas',       icon: '🔗' },
+  ]},
+  { label: 'Cuenta y seguridad', items: [
+    { id: 'pin',     label: 'PIN de facturación', icon: '🔒' },
+    { id: 'account', label: 'Cuenta y plan',      icon: '⚙️' },
+  ]},
+];
+let _cfgActiveItem = 'local';
+let _cfgMenuBuilt = false;
+
 function switchCfgTab(name, btn) {
-  // Hide all panes
-  document.querySelectorAll('.cfg-tab-pane').forEach(p => p.classList.remove('active'));
-  // Deactivate all buttons
+  // Legacy compat: cualquier tour o shortcut que llame switchCfgTab('X') ahora navega
+  // al primer item del grupo correspondiente del BranchedMenu
+  const itemId = CFG_TAB_TO_ITEM[name] || 'local';
+  cfgGoToItem(itemId);
+  // Reflejar en los botones viejos (ocultos pero algunos código los lee)
   document.querySelectorAll('.cfg-tab-btn').forEach(b => b.classList.remove('active'));
-  // Show target pane
-  const pane = document.getElementById('cfg-tab-' + name);
-  if (pane) pane.classList.add('active');
-  // Activate clicked button
   if (btn) btn.classList.add('active');
-  // Mostrar siempre el botón "Guardar cambios" (los cambios se guardan también solos)
+  else {
+    const legacyBtn = document.querySelector(`.cfg-tab-btn[onclick*="'${name}'"]`);
+    if (legacyBtn) legacyBtn.classList.add('active');
+  }
+}
+
+function cfgGoToItem(itemId) {
+  if (!_cfgMenuBuilt) buildCfgBranchedMenu();
+  _cfgActiveItem = itemId;
+  // Mostrar solo el cfg-item objetivo
+  document.querySelectorAll('.cfg-item').forEach(el => {
+    el.classList.toggle('is-active', el.getAttribute('data-cfg-item') === itemId);
+  });
+  // Si tiene acordeón interno, abrirlo
+  const bodyId = CFG_ITEM_BODY[itemId];
+  if (bodyId) {
+    const body = document.getElementById(bodyId);
+    const arrow = document.getElementById('arrow-' + bodyId);
+    if (body && body.style.display === 'none') {
+      body.style.display = 'block';
+      if (arrow) arrow.style.transform = 'rotate(180deg)';
+    }
+  }
+  // Actualizar items del menú (clase + stroke-dashoffset)
+  document.querySelectorAll('#cfg-bmenu .bmenu__item').forEach(b => {
+    if (b.dataset.id === itemId) b.setAttribute('data-active', '');
+    else b.removeAttribute('data-active');
+  });
+  document.querySelectorAll('#cfg-bmenu .bmenu__reach').forEach(p => {
+    p.style.strokeDashoffset = (p.dataset.id === itemId) ? 0 : p.dataset.len;
+  });
+  // Asegurar grupo abierto
+  for (let i = 0; i < CFG_MENU.length; i++) {
+    if (CFG_MENU[i].items.some(it => it.id === itemId)) {
+      const section = document.querySelectorAll('#cfg-bmenu .bmenu__section')[i];
+      if (section && !section.hasAttribute('data-open')) {
+        section.setAttribute('data-open', '');
+        const head = section.querySelector('.bmenu__head');
+        if (head) head.setAttribute('aria-expanded', 'true');
+      }
+      break;
+    }
+  }
+  requestAnimationFrame(cfgPlaceMarker);
+  // Botón "Guardar cambios" siempre visible
   const saveBtn = document.querySelector('#sec-configuracion .btn-add');
   if (saveBtn) saveBtn.style.display = '';
 }
+
+function cfgPlaceMarker() {
+  const marker = document.getElementById('cfg-bmenu-marker');
+  if (!marker) return;
+  const sections = document.querySelectorAll('#cfg-bmenu .bmenu__section');
+  let activeSectionIdx = -1;
+  for (let i = 0; i < CFG_MENU.length; i++) {
+    if (CFG_MENU[i].items.some(it => it.id === _cfgActiveItem)) { activeSectionIdx = i; break; }
+  }
+  const sec = sections[activeSectionIdx];
+  if (!sec || !sec.hasAttribute('data-open')) {
+    marker.removeAttribute('data-on');
+    return;
+  }
+  const head = sec.querySelector('.bmenu__head');
+  if (!head) return;
+  marker.style.top = (head.offsetTop + (head.offsetHeight - 18) / 2) + 'px';
+  marker.setAttribute('data-on', '');
+}
+
+function buildCfgBranchedMenu() {
+  const nav = document.getElementById('cfg-bmenu');
+  if (!nav || _cfgMenuBuilt) return;
+  const PAD = 6, TRUNK = 14, INDENT = 40, ROW = 36, RADIUS = 10;
+  const r = Math.min(RADIUS, ROW / 2 - 2);
+  const endX = INDENT - 8;
+  const rowY = k => PAD + k * ROW + ROW / 2;
+  const branchPath = k => `M ${TRUNK} ${rowY(k) - r} A ${r} ${r} 0 0 0 ${TRUNK + r} ${rowY(k)} H ${endX}`;
+  const reachPath  = k => `M ${TRUNK} 0 V ${rowY(k) - r} A ${r} ${r} 0 0 0 ${TRUNK + r} ${rowY(k)} H ${endX}`;
+  const reachLen   = k => rowY(k) - r + (Math.PI * r) / 2 + (endX - TRUNK - r);
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  CFG_MENU.forEach((grp, i) => {
+    const section = document.createElement('div');
+    section.className = 'bmenu__section';
+    // Default: abrir el grupo que contiene el item activo
+    if (grp.items.some(it => it.id === _cfgActiveItem)) section.setAttribute('data-open', '');
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'bmenu__head';
+    head.textContent = grp.label;
+    head.setAttribute('aria-expanded', section.hasAttribute('data-open') ? 'true' : 'false');
+    head.addEventListener('click', () => {
+      const open = section.hasAttribute('data-open');
+      if (open) section.removeAttribute('data-open'); else section.setAttribute('data-open', '');
+      head.setAttribute('aria-expanded', open ? 'false' : 'true');
+      requestAnimationFrame(cfgPlaceMarker);
+    });
+    section.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'bmenu__body';
+    const fold = document.createElement('div');
+    fold.className = 'bmenu__fold';
+    const tree = document.createElement('div');
+    tree.className = 'bmenu__tree';
+    const bodyH = PAD * 2 + grp.items.length * ROW;
+    tree.style.height = bodyH + 'px';
+
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('class', 'bmenu__lines');
+    svg.setAttribute('width', INDENT);
+    svg.setAttribute('height', bodyH);
+    svg.setAttribute('aria-hidden', 'true');
+
+    const trunk = document.createElementNS(svgNS, 'path');
+    trunk.setAttribute('class', 'bmenu__base');
+    trunk.setAttribute('d', `M ${TRUNK} 0 V ${rowY(grp.items.length - 1) - r}`);
+    svg.appendChild(trunk);
+
+    grp.items.forEach((_, k) => {
+      const p = document.createElementNS(svgNS, 'path');
+      p.setAttribute('class', 'bmenu__base');
+      p.setAttribute('d', branchPath(k));
+      svg.appendChild(p);
+    });
+    grp.items.forEach((it, k) => {
+      const p = document.createElementNS(svgNS, 'path');
+      p.setAttribute('class', 'bmenu__reach');
+      p.setAttribute('d', reachPath(k));
+      const len = reachLen(k);
+      p.style.strokeDasharray = len;
+      p.style.strokeDashoffset = (it.id === _cfgActiveItem) ? 0 : len;
+      p.dataset.len = len;
+      p.dataset.id  = it.id;
+      svg.appendChild(p);
+    });
+    tree.appendChild(svg);
+
+    grp.items.forEach(it => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bmenu__item';
+      btn.dataset.id = it.id;
+      if (it.id === _cfgActiveItem) btn.setAttribute('data-active', '');
+      btn.innerHTML = `<span class="bmenu__icon" aria-hidden="true">${it.icon}</span><span class="bmenu__label">${it.label}</span>`;
+      btn.addEventListener('click', () => cfgGoToItem(it.id));
+      tree.appendChild(btn);
+    });
+
+    fold.appendChild(tree);
+    body.appendChild(fold);
+    section.appendChild(body);
+    nav.appendChild(section);
+  });
+  _cfgMenuBuilt = true;
+  requestAnimationFrame(cfgPlaceMarker);
+  new ResizeObserver(() => cfgPlaceMarker()).observe(nav);
+}
+
+// Auto-build al entrar a configuración por primera vez
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('cfg-bmenu')) buildCfgBranchedMenu();
+});
 
 async function renderQR(qrData) {
   const container = document.getElementById('wpp-qr-container');
@@ -8032,8 +8410,24 @@ async function loadStoreConfig() {
     if (config.booking_slug) {
       const url = window.location.origin + '/tienda/' + config.booking_slug;
       document.getElementById('store-link-text').textContent = url;
+      // Nuevo acceso rápido en el cfg-item store
+      const pubWrap = document.getElementById('store-public-link-wrap');
+      const pubText = document.getElementById('store-public-link-text');
+      const pubOpen = document.getElementById('store-public-link-open');
+      if (pubWrap) pubWrap.style.display = '';
+      if (pubText) pubText.textContent = url;
+      if (pubOpen) pubOpen.href = url;
     }
   } catch(e) { console.error(e); }
+}
+
+function copyStorePublicLink() {
+  const el = document.getElementById('store-public-link-text');
+  if (!el || !el.textContent) return;
+  const text = el.textContent.trim();
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast('✅','Link copiado','Compartilo con tus clientes')).catch(()=>{});
+  }
 }
 
 async function loadStoreItems() {
