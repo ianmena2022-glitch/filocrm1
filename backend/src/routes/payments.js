@@ -259,6 +259,64 @@ module.exports = router;
 
 // ── SISTEMA QR DINÁMICO ────────────────────────────────────────────────────
 
+// Bootstrap de la In-Store API de MP para QR interoperable (Transferencias 3.0).
+// El QR generado por este sistema es leído por cualquier billetera / app de banco
+// (MP, Modo, Ualá, Naranja X, Santander, Galicia, BBVA, etc.) — no sólo MP.
+let _mpUserIdCache  = null;
+let _filoStoreCache = null;              // numeric id del store "FILO-SUBS"
+const _posByShopCache = new Map();       // shopId → { external_id, qr_image }
+
+async function getMpUserId() {
+  if (_mpUserIdCache) return _mpUserIdCache;
+  if (process.env.MP_USER_ID) { _mpUserIdCache = String(process.env.MP_USER_ID); return _mpUserIdCache; }
+  const me = await mpFetch('GET', '/users/me');
+  _mpUserIdCache = String(me.id);
+  return _mpUserIdCache;
+}
+
+async function ensureFiloStore() {
+  if (_filoStoreCache) return _filoStoreCache;
+  const userId = await getMpUserId();
+  try {
+    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILO-SUBS`);
+    if (list?.results?.length) { _filoStoreCache = list.results[0].id; return _filoStoreCache; }
+  } catch(e) { /* seguir y crear */ }
+  const store = await mpFetch('POST', `/users/${userId}/stores`, {
+    name: 'FILO CRM — Suscripciones',
+    external_id: 'FILO-SUBS',
+    location: {
+      street_number: '0', street_name: 'Online', city_name: 'CABA', state_name: 'CABA',
+      latitude: -34.6037, longitude: -58.3816
+    }
+  });
+  _filoStoreCache = store.id;
+  return _filoStoreCache;
+}
+
+async function ensurePosForShop(shopId) {
+  const cached = _posByShopCache.get(shopId);
+  if (cached) return cached;
+  const extId   = `FILO-SHOP-${shopId}`;
+  const storeId = await ensureFiloStore();
+  let pos;
+  try {
+    const list = await mpFetch('GET', `/pos?external_id=${extId}`);
+    if (list?.results?.length) pos = list.results[0];
+  } catch(e) { /* crear */ }
+  if (!pos) {
+    pos = await mpFetch('POST', '/pos', {
+      name: `FILO Shop ${shopId}`,
+      fixed_amount: false,
+      store_id: storeId,
+      external_id: extId,
+      category: 621102,
+    });
+  }
+  const result = { external_id: extId, qr_image: pos.qr?.image || null };
+  _posByShopCache.set(shopId, result);
+  return result;
+}
+
 // POST /api/payments/qr-order — crear orden de pago único (30 días de acceso)
 router.post('/qr-order', auth, async (req, res) => {
   const { plan } = req.body;
@@ -275,6 +333,7 @@ router.post('/qr-order', auth, async (req, res) => {
   const extRef  = `filo:${req.shopId}:${plan}:${Date.now()}`;
 
   try {
+    // 1. Checkout Pro: fallback universal (tarjeta, débito, Rapipago, transferencia manual)
     const pref = await mpFetch('POST', '/checkout/preferences', {
       items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: planCfg.price, currency_id: 'ARS' }],
       external_reference: extRef,
@@ -283,10 +342,55 @@ router.post('/qr-order', auth, async (req, res) => {
       auto_return: 'approved',
     });
 
+    // 2. QR interoperable (Transferencias 3.0) — lo lee cualquier app de banco o billetera
+    let qrImage = null;
+    try {
+      const userId = await getMpUserId();
+      const pos    = await ensurePosForShop(req.shopId);
+      await mpFetch('PUT', `/instore/orders/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`, {
+        external_reference: extRef,
+        title: `${planCfg.label} — 30 días`,
+        description: '30 días de acceso a FILO',
+        notification_url: `${appUrl}/api/payments/webhook-qr`,
+        total_amount: planCfg.price,
+        items: [{
+          sku_number: `FILO-${plan.toUpperCase()}`,
+          category: 'subscriptions',
+          title: `${planCfg.label} — 30 días`,
+          description: '30 días de acceso a FILO',
+          unit_price: planCfg.price,
+          quantity: 1,
+          unit_measure: 'unit',
+          total_amount: planCfg.price,
+        }]
+      });
+      // El QR del POS no cambia; si ya lo cacheamos lo usamos, sino lo buscamos ahora.
+      if (!pos.qr_image) {
+        try {
+          const search = await mpFetch('GET', `/pos?external_id=${pos.external_id}`);
+          const posRow = search?.results?.[0];
+          if (posRow?.qr?.image) {
+            pos.qr_image = posRow.qr.image;
+            _posByShopCache.set(req.shopId, pos);
+          }
+        } catch(e) { /* seguir con checkout url */ }
+      }
+      qrImage = pos.qr_image;
+    } catch(interopErr) {
+      console.warn(`[QR Order] interop QR failed (fallback a checkout URL): ${interopErr.message}`);
+    }
+
     await pool.query("UPDATE shops SET mp_shop_status='pending_qr' WHERE id=$1", [req.shopId]);
 
-    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id}`);
-    res.json({ ok: true, preference_id: pref.id, init_point: pref.init_point, amount: planCfg.price, plan });
+    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id} · interop=${qrImage ? 'ok' : 'no'}`);
+    res.json({
+      ok: true,
+      preference_id: pref.id,
+      init_point: pref.init_point,
+      qr_image: qrImage,       // null si el bootstrap falla → el frontend muestra solo CTA
+      amount: planCfg.price,
+      plan
+    });
   } catch(e) {
     console.error('[QR Order] Error:', e.message);
     res.status(500).json({ error: e.message });
