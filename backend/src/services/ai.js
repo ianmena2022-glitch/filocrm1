@@ -2,7 +2,9 @@ const pool = require('../db/pool');
 
 // Modelos de Groq (overrideables por env). Groq va decomisionando modelos cada tanto;
 // cuando aparezca "model_not_found" cambiar acá o setear GROQ_MODEL en Railway.
-const GROQ_MODEL        = process.env.GROQ_MODEL        || 'llama-3.3-70b-versatile';
+// Default: openai/gpt-oss-20b — rápido/barato, suficiente para clasificar intenciones
+// y responder conversacionalmente en español sobre contexto de barbería.
+const GROQ_MODEL        = process.env.GROQ_MODEL        || 'openai/gpt-oss-20b';
 const GROQ_MODEL_CHAT   = process.env.GROQ_MODEL_CHAT   || GROQ_MODEL;
 
 // Historial de conversaciones en memoria
