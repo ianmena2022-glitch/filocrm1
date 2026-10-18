@@ -387,14 +387,14 @@ router.post('/qr-order', auth, async (req, res) => {
     try {
       const userId = await getMpUserId();
       const pos    = await ensurePosForShop(req.shopId);
-      await mpFetch('PUT', `/instore/orders/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`, {
+      const orderBody = {
         external_reference: extRef,
         title: `${planCfg.label} — 30 días`,
         description: '30 días de acceso a FILO',
         notification_url: `${appUrl}/api/payments/webhook-qr`,
         total_amount: planCfg.price,
         items: [{
-          sku_number: `FILO-${plan.toUpperCase()}`,
+          sku_number: `FILO${plan.toUpperCase()}`,
           category: 'subscriptions',
           title: `${planCfg.label} — 30 días`,
           description: '30 días de acceso a FILO',
@@ -403,7 +403,24 @@ router.post('/qr-order', auth, async (req, res) => {
           unit_measure: 'unit',
           total_amount: planCfg.price,
         }]
-      }, MP_QR_TOKEN);
+      };
+      // Probar varios paths porque MP devuelve 404 según cómo esté configurada la app
+      const orderPaths = [
+        `/instore/orders/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`,
+        `/instore/qr/seller/collectors/${userId}/pos/${pos.external_id}/orders`,
+        `/mp/collectors/${userId}/pos/${pos.external_id}/orders`,
+      ];
+      let orderOk = false;
+      let lastErr = null;
+      for (const p of orderPaths) {
+        try {
+          await mpFetch('PUT', p, orderBody, MP_QR_TOKEN);
+          console.log(`[MP] ✓ orden armada en POS vía ${p}`);
+          orderOk = true;
+          break;
+        } catch(err) { lastErr = err; }
+      }
+      if (!orderOk) throw lastErr || new Error('No pude armar la orden en el POS');
       // El QR del POS no cambia; si ya lo cacheamos lo usamos, sino lo buscamos ahora.
       if (!pos.qr_image) {
         try {
