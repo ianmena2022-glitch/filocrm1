@@ -5,6 +5,7 @@ const auth   = require('../middleware/auth');
 
 const MP_BASE = 'https://api.mercadopago.com';
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
+const MP_QR_TOKEN = process.env.MP_QR_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
 
 if (process.env.NODE_ENV === 'production') {
@@ -50,12 +51,13 @@ function verifyMpSignature(req) {
   }
 }
 
-async function mpFetch(method, path, body) {
-  if (!MP_TOKEN) throw new Error('MP_ACCESS_TOKEN no configurado');
+async function mpFetch(method, path, body, tokenOverride) {
+  const token = tokenOverride || MP_TOKEN;
+  if (!token) throw new Error('MP_ACCESS_TOKEN no configurado');
   const res = await fetch(`${MP_BASE}${path}`, {
     method,
     headers: {
-      'Authorization': `Bearer ${MP_TOKEN}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Idempotency-Key': crypto.randomUUID()
     },
@@ -269,7 +271,7 @@ const _posByShopCache = new Map();       // shopId → { external_id, qr_image }
 async function getMpUserId() {
   if (_mpUserIdCache) return _mpUserIdCache;
   if (process.env.MP_USER_ID) { _mpUserIdCache = String(process.env.MP_USER_ID); return _mpUserIdCache; }
-  const me = await mpFetch('GET', '/users/me');
+  const me = await mpFetch('GET', '/users/me', null, MP_QR_TOKEN);
   _mpUserIdCache = String(me.id);
   return _mpUserIdCache;
 }
@@ -278,7 +280,7 @@ async function ensureFiloStore() {
   if (_filoStoreCache) return _filoStoreCache;
   const userId = await getMpUserId();
   try {
-    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILO-SUBS`);
+    const list = await mpFetch('GET', `/stores/search?user_id=${userId}&external_id=FILO-SUBS`, null, MP_QR_TOKEN);
     if (list?.results?.length) { _filoStoreCache = list.results[0].id; return _filoStoreCache; }
   } catch(e) { /* seguir y crear */ }
   const store = await mpFetch('POST', `/users/${userId}/stores`, {
@@ -288,7 +290,7 @@ async function ensureFiloStore() {
       street_number: '0', street_name: 'Online', city_name: 'CABA', state_name: 'CABA',
       latitude: -34.6037, longitude: -58.3816
     }
-  });
+  }, MP_QR_TOKEN);
   _filoStoreCache = store.id;
   return _filoStoreCache;
 }
@@ -300,7 +302,7 @@ async function ensurePosForShop(shopId) {
   const storeId = await ensureFiloStore();
   let pos;
   try {
-    const list = await mpFetch('GET', `/pos?external_id=${extId}`);
+    const list = await mpFetch('GET', `/pos?external_id=${extId}`, null, MP_QR_TOKEN);
     if (list?.results?.length) pos = list.results[0];
   } catch(e) { /* crear */ }
   if (!pos) {
@@ -310,7 +312,7 @@ async function ensurePosForShop(shopId) {
       store_id: storeId,
       external_id: extId,
       category: 621102,
-    });
+    }, MP_QR_TOKEN);
   }
   const result = { external_id: extId, qr_image: pos.qr?.image || null };
   _posByShopCache.set(shopId, result);
@@ -363,11 +365,11 @@ router.post('/qr-order', auth, async (req, res) => {
           unit_measure: 'unit',
           total_amount: planCfg.price,
         }]
-      });
+      }, MP_QR_TOKEN);
       // El QR del POS no cambia; si ya lo cacheamos lo usamos, sino lo buscamos ahora.
       if (!pos.qr_image) {
         try {
-          const search = await mpFetch('GET', `/pos?external_id=${pos.external_id}`);
+          const search = await mpFetch('GET', `/pos?external_id=${pos.external_id}`, null, MP_QR_TOKEN);
           const posRow = search?.results?.[0];
           if (posRow?.qr?.image) {
             pos.qr_image = posRow.qr.image;
