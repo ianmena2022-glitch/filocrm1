@@ -294,7 +294,7 @@ async function ensureFiloStore() {
     location: {
       street_number: '0',
       street_name: 'Online',
-      city_name: 'Ciudad Autónoma de Buenos Aires',
+      city_name: 'Capital Federal',
       state_name: 'Capital Federal',
       latitude: -34.6037,
       longitude: -58.3816
