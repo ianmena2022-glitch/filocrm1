@@ -40,6 +40,16 @@ button, .btn, [role="button"], [onclick] { touch-action: manipulation; }
 * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent; }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid rgba(255,209,0,.55); outline-offset: 2px; border-radius: 6px; }
+
+/* Speeding text — números del dashboard entran a toda velocidad */
+@keyframes speedIn {
+  0%   { transform: translate3d(-80px, 0, 0) skewX(-24deg) scaleX(1.35); filter: blur(14px); opacity: 0; }
+  55%  { opacity: 1; }
+  70%  { transform: translate3d(6px, 0, 0) skewX(2deg) scaleX(.98); filter: blur(2px); }
+  100% { transform: translate3d(0, 0, 0) skewX(0) scaleX(1); filter: blur(0); opacity: 1; }
+}
+.speed-in { display: inline-block; transform-origin: left center; will-change: transform, filter; animation: speedIn .95s cubic-bezier(.22, .9, .3, 1) both; }
+@media (prefers-reduced-motion: reduce) { .speed-in { animation: none !important; } }
 @media (max-width: 820px) {
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
 }
@@ -892,7 +902,7 @@ async function loadDashboard() {
     const pendSub  = document.getElementById('stat-pending-sub');
     if (pendCard && pendVal) {
       pendCard.style.display = 'block';
-      pendVal.textContent = '$' + Math.round(Number(pend.total_pending) || 0).toLocaleString('es-AR');
+      animateStat(pendVal, Number(pend.total_pending) || 0, { prefix: '$' });
       const parts = [];
       if (pend.appt_count > 0)        parts.push(pend.appt_count + ' turno' + (pend.appt_count !== 1 ? 's' : ''));
       if (pend.product_sales_count>0) parts.push(pend.product_sales_count + ' venta' + (pend.product_sales_count !== 1 ? 's' : '') + ' de productos');
@@ -918,11 +928,11 @@ async function loadDashboard() {
     const propinas = completadosAppts.reduce((s, a) => s + parseFloat(a.tip||0), 0);
     const comision = comisionBase + propinas;
 
-    document.getElementById('stat-turnos').textContent = allAppts.length;
-    document.getElementById('stat-completados').textContent = completados;
-    document.getElementById('stat-pendientes').textContent = pendientes;
+    animateStat(document.getElementById('stat-turnos'),      allAppts.length);
+    animateStat(document.getElementById('stat-completados'), completados);
+    animateStat(document.getElementById('stat-pendientes'),  pendientes);
     window._dashApptComision = comision;
-    document.getElementById('stat-comision').textContent = '$' + comision.toLocaleString('es-AR');
+    animateStat(document.getElementById('stat-comision'), comision, { prefix: '$' });
     const subEl = document.getElementById('stat-comision-sub'); if (subEl && propinas > 0) subEl.textContent = `Comisión + $${propinas.toLocaleString('es-AR')} propinas`;
 
     renderCalendar();
@@ -1727,6 +1737,28 @@ async function confirmarBarberVenta() {
   } catch(e) {
     showToast('❌ ' + (e.message || 'Error'));
   }
+}
+
+// ─── SPEEDING TEXT + COUNT-UP (stats que entran a toda velocidad) ───
+function animateStat(el, finalValue, opts) {
+  if (!el) return;
+  const o = Object.assign({ duration: 900, prefix: '', suffix: '', decimals: 0 }, opts || {});
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const num = typeof finalValue === 'number' ? finalValue : (parseFloat(String(finalValue||'').replace(/[^\d.-]/g,'')) || 0);
+  el.classList.remove('speed-in');
+  void el.offsetWidth;
+  el.classList.add('speed-in');
+  if (reduce) { el.textContent = o.prefix + num.toLocaleString('es-AR') + o.suffix; return; }
+  const start = performance.now();
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+  function tick(now) {
+    const t = Math.max(0, Math.min(1, (now - start) / o.duration));
+    const v = num * easeOut(t);
+    const txt = (o.decimals > 0 ? v.toFixed(o.decimals) : String(Math.round(v)));
+    el.textContent = o.prefix + Number(txt).toLocaleString('es-AR', { minimumFractionDigits: o.decimals, maximumFractionDigits: o.decimals }) + o.suffix;
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 // ─── FOTOS DEL BARBERO (self-upload) ─────────────────────

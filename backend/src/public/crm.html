@@ -1829,6 +1829,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 #kpalette .kp-empty { padding: 20px; text-align: center; color: var(--gray); font-size: 13px; }
 #kpalette .kp-hint { padding: 10px 20px; font-size: 10px; color: rgba(255,255,255,.3); border-top: 1px solid rgba(255,255,255,.04); letter-spacing: .5px; text-align: center; }
 
+/* ─── SPEEDING TEXT (números que "entran a toda velocidad") ─── */
+@keyframes speedIn {
+  0%   { transform: translate3d(-80px, 0, 0) skewX(-24deg) scaleX(1.35); filter: blur(14px); opacity: 0; }
+  55%  { opacity: 1; }
+  70%  { transform: translate3d(6px, 0, 0) skewX(2deg) scaleX(.98); filter: blur(2px); }
+  100% { transform: translate3d(0, 0, 0) skewX(0) scaleX(1); filter: blur(0); opacity: 1; }
+}
+.speed-in { display: inline-block; transform-origin: left center; will-change: transform, filter; animation: speedIn .95s cubic-bezier(.22, .9, .3, 1) both; }
+.speed-in.delay-1 { animation-delay: .08s; }
+.speed-in.delay-2 { animation-delay: .16s; }
+.speed-in.delay-3 { animation-delay: .24s; }
+.speed-in.delay-4 { animation-delay: .32s; }
+@media (prefers-reduced-motion: reduce) {
+  .speed-in { animation: none !important; }
+}
+
 /* Skeleton loader (shimmer) para listas que todavía no cargaron */
 @keyframes skeleton-shimmer { 0% { background-position: -200px 0 } 100% { background-position: calc(200px + 100%) 0 } }
 .skeleton { background: linear-gradient(90deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.06) 100px, rgba(255,255,255,.03) 200px); background-size: calc(200px + 100%) 100%; animation: skeleton-shimmer 1.3s linear infinite; border-radius: 8px; display: block; }
@@ -5999,9 +6015,10 @@ async function loadDashboard() {
     // Hoy
     animNum('dash-profit', m.net_profit);
     document.getElementById('dash-revenue').textContent = 'Facturación: $' + m.revenue.toLocaleString('es-AR');
-    document.getElementById('dash-completed').textContent = m.completed;
-    document.getElementById('dash-pending').textContent = m.pending;
-    document.getElementById('dash-noshows').textContent = m.noshows;
+    // Stats numéricos de "hoy": count-up + speedIn
+    animNum('dash-completed', m.completed, '', '');
+    animNum('dash-pending',   m.pending,   '', '');
+    animNum('dash-noshows',   m.noshows,   '', '');
 
     // KPI Turnos (nuevo layout)
     const totalTurnos = (m.completed || 0) + (m.pending || 0) + (m.noshows || 0);
@@ -6024,9 +6041,9 @@ async function loadDashboard() {
       const monthRevStr = '$' + Math.round(month.revenue || 0).toLocaleString('es-AR');
       applyRevenueMask('dash-month-revenue', monthRevStr);
     }
-    document.getElementById('dash-avg-ticket').textContent = '$' + Math.round(month.avg_ticket).toLocaleString('es-AR');
-    document.getElementById('dash-new-clients').textContent = month.new_clients;
-    document.getElementById('dash-noshow-rate').textContent = month.noshow_rate + '%';
+    animNum('dash-avg-ticket',  month.avg_ticket, '$', '');
+    animNum('dash-new-clients', month.new_clients, '', '');
+    animNum('dash-noshow-rate', month.noshow_rate, '', '%');
 
     // Tendencia vs mes anterior
     const trendEl = document.getElementById('dash-month-trend');
@@ -8507,6 +8524,10 @@ function initRipple() {
 // ── Count-up animado ──
 function animateCount(el, endVal, duration = 650, prefix = '$', suffix = '') {
   if (!el) return;
+  // Speeding-text entrance: aplicar clase speed-in reactivando animación
+  el.classList.remove('speed-in');
+  void el.offsetWidth;
+  el.classList.add('speed-in');
   const startVal = 0;
   const start = performance.now();
   const update = now => {
@@ -9052,6 +9073,56 @@ document.addEventListener('DOMContentLoaded', () => {
   const mo = new MutationObserver(() => syncAriaLabelsFromTitle());
   mo.observe(document.body, { childList: true, subtree: true });
 });
+
+// ─── SPEEDING TEXT + COUNT-UP (stats que entran a toda velocidad) ───
+// animateStat(el, finalValue, opts)
+//   el: elemento target
+//   finalValue: número final (puede venir de string "$1.234", "12 turnos", etc.)
+//   opts: { duration: 900, prefix: '$', suffix: '', decimals: 0, delay: 0 }
+// Si finalValue no es parseable como número, hace solo la animación speedIn.
+function animateStat(el, finalValue, opts) {
+  if (!el) return;
+  const o = Object.assign({ duration: 900, prefix: '', suffix: '', decimals: 0, delay: 0 }, opts || {});
+  // Respetar prefers-reduced-motion
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Parsear valor numérico
+  let num = null;
+  if (typeof finalValue === 'number') num = finalValue;
+  else if (typeof finalValue === 'string') {
+    const match = finalValue.match(/-?[\d.,]+/);
+    if (match) num = parseFloat(match[0].replace(/\./g, '').replace(',', '.'));
+  }
+  // Reset: aplicar clase speed-in para reactivar animación aunque ya haya corrido
+  el.classList.remove('speed-in');
+  // force reflow
+  void el.offsetWidth;
+  el.classList.add('speed-in');
+  // Count-up si tenemos número parseable y no estamos en reduced-motion
+  if (num != null && Number.isFinite(num) && !reduce) {
+    const start = performance.now() + o.delay;
+    const from  = 0;
+    const to    = num;
+    const easeOut = t => 1 - Math.pow(1 - t, 3);
+    function tick(now) {
+      const t = Math.max(0, Math.min(1, (now - start) / o.duration));
+      const v = from + (to - from) * easeOut(t);
+      el.textContent = o.prefix + fmtNum(v, o.decimals) + o.suffix;
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  } else {
+    el.textContent = String(finalValue);
+  }
+}
+function fmtNum(v, decimals) {
+  const n = decimals > 0 ? Number(v.toFixed(decimals)) : Math.round(v);
+  return n.toLocaleString('es-AR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+// Shortcut: pasar un string tipo "$123.456" y detectar prefix automáticamente
+function animateStatMoney(el, val, opts) {
+  const n = (typeof val === 'number') ? val : parseFloat(String(val||'').replace(/[^\d.-]/g, '').replace(/(?<=\d)\.(?=\d{3}(\D|$))/g, '')) || 0;
+  return animateStat(el, n, Object.assign({ prefix: '$' }, opts || {}));
+}
 
 // ─── EXPORT CSV GENÉRICO ───
 function downloadCSV(filename, rows) {
