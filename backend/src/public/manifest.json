@@ -1,0 +1,31 @@
+{
+  "name": "FILO CRM",
+  "short_name": "FILO",
+  "description": "CRM para barberías y peluquerías",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050d18",
+  "theme_color": "#050d18",
+  "icons": [
+    {
+      "src": "/logo_f.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_f.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_f.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
