@@ -12883,16 +12883,25 @@ async function bcmSave(id) {
 
   <!-- Step 2: escanear QR -->
   <div class="qr-card" id="qr-step-scan" style="display:none">
-    <div class="qr-title">Escaneá para pagar</div>
+    <div class="qr-title">Escaneá o tocá para pagar</div>
     <div class="qr-sub" id="qr-scan-subtitle">Plan Staff · $80.000 · 30 días de acceso</div>
     <div class="qr-img-wrap">
       <img id="qr-img" src="" alt="QR de pago" />
     </div>
-    <div class="qr-pulse">
-      <span></span><span></span><span></span>
+    <div style="font-size:11.5px;color:rgba(255,255,255,.45);margin:4px 0 14px;line-height:1.5">
+      Apuntá con la cámara del celular<br>
+      <span style="color:rgba(255,255,255,.3)">(no funciona desde el escáner del banco)</span>
     </div>
-    <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:16px">Esperando confirmación de pago...</div>
-    <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer" style="display:block;font-size:12px;color:rgba(255,209,0,.6);margin-bottom:14px;text-decoration:none">Pagar desde el navegador →</a>
+    <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer"
+       style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--yellow);color:#000;padding:12px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:12px;transition:filter .15s"
+       onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
+      💳 Pagar con otro método
+    </a>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;line-height:1.5">
+      Tarjeta · Débito · Transferencia bancaria · Rapipago · Pago Fácil
+    </div>
+    <div class="qr-pulse"><span></span><span></span><span></span></div>
+    <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px">Esperando confirmación de pago...</div>
     <button class="btn-qr-secondary" onclick="closeQRModal()">Cancelar</button>
   </div>
 
