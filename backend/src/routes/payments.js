@@ -344,7 +344,6 @@ async function ensurePosForShop(shopId) {
         external_id: extId,
         external_store_id: FILO_STORE_EXT_ID,
         category: 621102,
-        qr: { type: 'dynamic' },
       }, MP_QR_TOKEN);
       console.log(`[MP] ✓ POS creado · id=${pos.id} · external_id=${extId} · qr_image=${pos.qr?.image || '(none)'}`);
     } catch(e) {
