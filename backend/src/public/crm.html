@@ -5872,17 +5872,29 @@ function pushDismissPrompt() {
 
 async function pushRequestPermission() {
   try {
+    if (!('Notification' in window)) { showToast('⚠️','Sin soporte','Este navegador no soporta notificaciones'); return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { showToast('⚠️','Sin soporte','Agregá la app al inicio para activar push en iOS'); return; }
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') {
-      if (typeof showToast === 'function') showToast('ℹ️', 'Permiso denegado', 'Podés habilitarlo en los ajustes del navegador');
+      showToast('ℹ️', 'Permiso no concedido', 'Habilitalo en Ajustes del celular → Notificaciones → FILO');
       pushDismissPrompt();
       return;
     }
-    await pushSubscribe();
+    const sub = await pushSubscribe();
     pushDismissPrompt();
-    if (typeof showToast === 'function') showToast('✅', 'Notificaciones activadas', '');
+    if (!sub) { showToast('⚠️','Error al suscribir','No se pudo registrar en el server'); return; }
+    showToast('✅', 'Notificaciones activadas', 'Enviando test...');
+    // Dispara un push de prueba al toque para confirmar que llega al dispositivo
+    try {
+      const r = await api('POST', '/push/test', {});
+      if (r?.sent > 0) showToast('🔔','Test enviado',`Debería llegar en segundos (${r.sent} dispositivo${r.sent!==1?'s':''})`);
+      else showToast('⚠️','Suscrito pero no llegó','Backend reporta sent=0 — revisá VAPID en Railway');
+    } catch(e) {
+      showToast('⚠️','Error enviando test', e.message || '');
+    }
   } catch(e) {
     console.warn('[push] permission error:', e);
+    showToast('❌','Error', e.message || 'Fallo al activar');
   }
 }
 

@@ -35,12 +35,19 @@ function getPublicKey() {
 }
 
 async function sendToRecipient(shopId, payload) {
-  if (!isReady()) return { sent: 0, failed: 0 };
+  if (!isReady()) {
+    console.warn(`[push] send skip shop=${shopId}: VAPID no configurado`);
+    return { sent: 0, failed: 0, reason: 'vapid_missing' };
+  }
   const subs = await pool.query(
     `SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE shop_id=$1`,
     [shopId]
   );
-  if (!subs.rows.length) return { sent: 0, failed: 0 };
+  if (!subs.rows.length) {
+    console.log(`[push] send skip shop=${shopId}: sin suscripciones`);
+    return { sent: 0, failed: 0, reason: 'no_subs' };
+  }
+  console.log(`[push] enviando a shop=${shopId} subs=${subs.rows.length} title="${(payload?.title||'').slice(0,40)}"`);
 
   let sent = 0, failed = 0;
   const data = JSON.stringify(payload || {});

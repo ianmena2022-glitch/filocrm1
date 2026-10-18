@@ -29,6 +29,7 @@ router.post('/subscribe', auth, async (req, res) => {
              last_used_at = NOW()`,
       [req.shopId, endpoint, keys.p256dh, keys.auth, ua]
     );
+    console.log(`[push subscribe] shop=${req.shopId} ua="${ua.slice(0,80)}" endpoint=${endpoint.slice(0,60)}...`);
     res.json({ ok: true });
   } catch(e) {
     console.error('[push subscribe]', e.message);
