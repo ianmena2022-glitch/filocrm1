@@ -433,7 +433,7 @@ router.post('/serve/:id', auth, async (req, res) => {
 router.post('/complete/:id', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
-    const { price, cost, service_name, payment_method, tip, barber_id, commission_pct, client_name } = req.body;
+    const { price, cost, service_name, service_id, payment_method, tip, barber_id, commission_pct, client_name } = req.body;
 
     const entryRes = await pool.query(
       'SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2',
@@ -444,8 +444,19 @@ router.post('/complete/:id', auth, async (req, res) => {
 
     const p = parseFloat(price) || 0;
     const t = parseFloat(tip) || 0;
-    const pct = parseInt(commission_pct) || 50;
+    let pct = parseInt(commission_pct) || 50;
     const c = parseFloat(cost) || 0;
+
+    // Override comisión con la custom del servicio si existe (prioridad: servicio > barbero)
+    if (service_id) {
+      const svcRes = await pool.query(
+        'SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2',
+        [parseInt(service_id), shopId]
+      );
+      if (svcRes.rows.length && svcRes.rows[0].commission_pct !== null && svcRes.rows[0].commission_pct !== undefined) {
+        pct = parseInt(svcRes.rows[0].commission_pct);
+      }
+    }
 
     // Get barber name if assigned
     let barberName = null;

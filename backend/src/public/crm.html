@@ -5576,10 +5576,12 @@ async function confirmWalkInPayment() {
 
   let serviceName = '';
   let cost = 0;
+  let serviceId = null;
   if (selEl && selEl.value && selEl.value !== 'custom') {
     const opt = selEl.options[selEl.selectedIndex];
     serviceName = opt.text.split(' — ')[0];
     cost = parseFloat(opt.dataset?.cost || 0);
+    serviceId = parseInt(selEl.value) || null;
   } else {
     serviceName = nameEl?.value?.trim() || 'Walk-in';
   }
@@ -5600,6 +5602,7 @@ async function confirmWalkInPayment() {
   try {
     await api('POST', `/queue/complete/${_walkInPayEntryId}`, {
       price, cost, service_name: serviceName,
+      service_id: serviceId || undefined,
       payment_method: _walkInPayMethod,
       tip, barber_id: barberId || undefined,
       commission_pct: commissionPct

@@ -479,6 +479,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
 
     // Resolver servicio
     let svcName = null, svcPrice = 0, svcCost = 0, duration = 30;
+    let svcCommissionPct = null; // comisión custom del servicio (null = usar la del barbero)
     if (service_id) {
       const svc = await pool.query(
         'SELECT * FROM services WHERE id=$1 AND shop_id=$2',
@@ -489,6 +490,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         svcPrice    = is_member_booking ? 0 : svc.rows[0].price; // membresía = sin cargo
         svcCost     = svc.rows[0].cost;
         duration    = svc.rows[0].duration_minutes || 30;
+        if (svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+          svcCommissionPct = parseInt(svc.rows[0].commission_pct);
+        }
       }
     }
 
@@ -660,6 +664,11 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
           }
         }
       } catch(e) { console.error('autoAssign booking error:', e.message); }
+
+      // Prioridad comisión: servicio custom > barbero > 0 (sin barbero asignado)
+      if (assignedBarberId && svcCommissionPct !== null) {
+        assignedBarberCommission = svcCommissionPct;
+      }
 
       // Crear turno (con redeemInfo ya calculado)
       const apptResult = await pgClient.query(

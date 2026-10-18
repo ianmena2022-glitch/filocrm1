@@ -35,6 +35,32 @@ function calcTimeEnd(timeStart, durationMins) {
 /** Genera turnos en BD para una regla. Omite fechas ya existentes. */
 async function generateAppointments(client, rule, dates) {
   const timeEnd = calcTimeEnd(rule.time_start, rule.duration_mins || 30);
+
+  // Resolver commission_pct: prioridad servicio custom > barbero > 50 default
+  let commissionPct = 50;
+  let svcCommissionPct = null;
+  if (rule.service_id) {
+    const svc = await client.query(
+      'SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2',
+      [rule.service_id, rule.shop_id]
+    );
+    if (svc.rows.length && svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+      svcCommissionPct = parseInt(svc.rows[0].commission_pct);
+    }
+  }
+  if (rule.barber_id) {
+    if (svcCommissionPct !== null) {
+      commissionPct = svcCommissionPct;
+    } else {
+      const b = await client.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [rule.barber_id]);
+      if (b.rows.length && b.rows[0].barber_commission_pct) {
+        commissionPct = parseInt(b.rows[0].barber_commission_pct);
+      }
+    }
+  } else {
+    commissionPct = 0; // sin barbero asignado → sin comisión
+  }
+
   let created = 0;
   for (const date of dates) {
     // Verificar si ya existe turno de esta regla en esa fecha
@@ -59,11 +85,11 @@ async function generateAppointments(client, rule, dates) {
     await client.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name,
-          price, barber_id, date, time_start, time_end, status, recurring_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11)`,
+          price, barber_id, date, time_start, time_end, status, recurring_id, commission_pct)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12)`,
       [rule.shop_id, rule.client_id, rule.client_name,
        rule.service_id, rule.service_name, rule.service_price,
-       rule.barber_id, date, rule.time_start, timeEnd, rule.id]
+       rule.barber_id, date, rule.time_start, timeEnd, rule.id, commissionPct]
     );
     created++;
   }
