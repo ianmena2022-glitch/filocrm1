@@ -6556,7 +6556,7 @@ function printFilaQR() {
   <div class="qr-card">
     <img src="${qrUrl}" alt="QR" onload="setTimeout(()=>{ window.focus(); window.print(); }, 400)">
   </div>
-<script src="/pwa-install.js" defer></script></body>
+</body>
 </html>`);
   win.document.close();
 }
@@ -14524,5 +14524,6 @@ function openSecurePrompt({ title, label, type='text', pattern, placeholder }) {
 }
 </script>
 
+<script src="/pwa-install.js" defer></script>
 </body>
 </html>
