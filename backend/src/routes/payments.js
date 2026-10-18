@@ -285,28 +285,19 @@ async function getMpUserId() {
   return _mpUserIdCache;
 }
 
-async function findFiloStore(userId) {
-  // El path correcto es /users/{userId}/stores (POST crea, GET lista — ahora con Accept: application/json)
-  try {
-    const list = await mpFetch('GET', `/users/${userId}/stores`, null, MP_QR_TOKEN);
-    const results = list?.results || list?.elements || (Array.isArray(list) ? list : []);
-    const match = results.find(s => (s.external_id === 'FILOSUBS') || (s.store?.external_id === 'FILOSUBS'));
-    if (match) return match.id || match.store?.id;
-  } catch(e) {
-    console.warn(`[MP] findFiloStore failed: ${e.message}`);
-  }
-  return null;
-}
+// Si tenés el store_id en env var, lo usamos directo (ideal). Si no, intentamos crear
+// uno nuevo con external_id único por deploy y logueamos el id devuelto para que lo
+// guardes como MP_STORE_ID (one-time setup).
+const FILO_STORE_EXT_ID = 'FILOSUBS' + (process.env.MP_STORE_SUFFIX || '');
 
 async function ensureFiloStore() {
   if (_filoStoreCache) return _filoStoreCache;
+  if (process.env.MP_STORE_ID) { _filoStoreCache = String(process.env.MP_STORE_ID); return _filoStoreCache; }
   const userId = await getMpUserId();
-  const existingId = await findFiloStore(userId);
-  if (existingId) { _filoStoreCache = existingId; return _filoStoreCache; }
   try {
     const store = await mpFetch('POST', `/users/${userId}/stores`, {
       name: 'FILO CRM — Suscripciones',
-      external_id: 'FILOSUBS',
+      external_id: FILO_STORE_EXT_ID,
       location: {
         street_number: '0',
         street_name: 'Online',
@@ -317,13 +308,10 @@ async function ensureFiloStore() {
       }
     }, MP_QR_TOKEN);
     _filoStoreCache = store.id;
+    console.log(`[MP] ⭐ STORE CREADO · id=${store.id} · external_id=${FILO_STORE_EXT_ID} · guardá MP_STORE_ID=${store.id} como env var`);
     return _filoStoreCache;
   } catch(e) {
-    // Si falla por "already assigned", buscar de nuevo (puede haber race)
-    if (/already assigned/i.test(e.message)) {
-      const retryId = await findFiloStore(userId);
-      if (retryId) { _filoStoreCache = retryId; return _filoStoreCache; }
-    }
+    console.error('[MP] ensureFiloStore failed:', e.message);
     throw e;
   }
 }
