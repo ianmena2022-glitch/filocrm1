@@ -10592,44 +10592,133 @@ async function saveEditStoreItem() {
 
 <!-- ── FILO COPILOT ──────────────────────────────────────── -->
 <style>
-#copilot-widget{position:fixed;bottom:24px;right:24px;z-index:9999;font-family:'Barlow',sans-serif;display:none}
+#copilot-widget{position:fixed;bottom:22px;right:22px;z-index:9999;font-family:'Barlow',sans-serif;display:none}
 
-#copilot-pill{display:flex;align-items:center;gap:10px;background:#0a1828;border:1px solid rgba(255,209,0,.3);border-radius:40px;padding:10px 18px 10px 12px;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5);transition:all .2s;user-select:none}
-#copilot-pill:hover{border-color:rgba(255,209,0,.6);transform:translateY(-1px)}
-.cp-avatar{width:32px;height:32px;background:#FFD100;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* ── Pill: compacta por default (solo avatar), expande en hover ── */
+#copilot-pill{
+  display:inline-flex;align-items:center;gap:0;
+  background:linear-gradient(135deg,#0f2440,#0a1828);
+  border:1px solid rgba(255,209,0,.28);
+  border-radius:999px;padding:8px;
+  cursor:pointer;user-select:none;
+  box-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.03) inset;
+  transition:gap .28s cubic-bezier(.2,.9,.3,1),
+             padding .28s cubic-bezier(.2,.9,.3,1),
+             border-color .2s, transform .2s, box-shadow .25s;
+}
+#copilot-pill:hover{
+  gap:10px;padding:8px 16px 8px 8px;
+  border-color:rgba(255,209,0,.55);
+  transform:translateY(-2px);
+  box-shadow:0 14px 36px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset, 0 0 24px rgba(255,209,0,.12);
+}
+#copilot-pill .cp-pill-label,
+#copilot-pill .cp-pill-sub,
+#copilot-pill .cp-dot{
+  max-width:0;opacity:0;overflow:hidden;white-space:nowrap;
+  transition:max-width .28s cubic-bezier(.2,.9,.3,1), opacity .18s ease .05s;
+}
+#copilot-pill:hover .cp-pill-label,
+#copilot-pill:hover .cp-pill-sub{max-width:160px;opacity:1}
+#copilot-pill:hover .cp-dot{max-width:12px;opacity:1;margin-left:4px}
+
+.cp-avatar{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  background:radial-gradient(circle at 30% 30%, #ffe266, #FFD100 55%, #c69500);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(255,209,0,.35), 0 0 0 1px rgba(255,255,255,.12) inset;
+}
 .cp-avatar svg{width:16px;height:16px}
-.cp-pill-label{font-size:13px;font-weight:700;color:#fff}
-.cp-pill-sub{font-size:10px;color:rgba(255,209,0,.7);letter-spacing:.5px;text-transform:uppercase}
-.cp-dot{width:7px;height:7px;background:#00E676;border-radius:50%;margin-left:2px;box-shadow:0 0 6px #00E676;flex-shrink:0}
-#copilot-panel{display:none;flex-direction:column;width:360px;height:500px;background:#050d18;border:1px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;box-shadow:0 16px 64px rgba(0,0,0,.7);margin-bottom:12px}
-#copilot-panel.open{display:flex}
-.cp-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0a1828;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
-.cp-head-l{display:flex;align-items:center;gap:10px}
-.cp-head-title{font-size:14px;font-weight:700;color:#fff}
-.cp-head-sub{font-size:11px;color:rgba(255,209,0,.7);margin-top:1px;letter-spacing:.5px;text-transform:uppercase}
-.cp-x{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;font-size:18px;padding:4px;line-height:1;transition:color .15s}
-.cp-x:hover{color:#fff}
-.cp-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
-.cp-msg{display:flex;gap:8px;max-width:100%}
-.cp-msg.user{flex-direction:row-reverse}
-.cp-bub{padding:10px 13px;border-radius:14px;font-size:13px;line-height:1.5;max-width:82%}
-.cp-msg.bot .cp-bub{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);color:#fff;border-bottom-left-radius:4px}
-.cp-msg.user .cp-bub{background:rgba(255,209,0,.15);border:1px solid rgba(255,209,0,.25);color:#fff;border-bottom-right-radius:4px}
-.cp-ma{width:26px;height:26px;border-radius:50%;background:#FFD100;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.cp-pill-label{font-size:13px;font-weight:700;color:#fff;line-height:1.2}
+.cp-pill-sub{font-size:9.5px;color:rgba(255,209,0,.75);letter-spacing:.6px;text-transform:uppercase;line-height:1.3}
+.cp-dot{width:7px;height:7px;background:#22c55e;border-radius:50%;flex-shrink:0;box-shadow:0 0 10px rgba(34,197,94,.6);animation:cpDot 2.4s ease-in-out infinite}
+@keyframes cpDot{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}
+
+/* ── Panel: glassy + fade+slide ── */
+#copilot-panel{
+  display:none;flex-direction:column;width:380px;height:540px;
+  background:rgba(5,13,24,.86);
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;overflow:hidden;
+  box-shadow:0 24px 80px rgba(0,0,0,.75), 0 0 0 1px rgba(255,209,0,.05) inset;
+  margin-bottom:12px;
+  opacity:0;transform:translateY(14px) scale(.97);
+  transition:opacity .22s ease, transform .28s cubic-bezier(.2,.9,.3,1);
+  transform-origin:bottom right;
+}
+#copilot-panel.open{display:flex;opacity:1;transform:translateY(0) scale(1)}
+
+.cp-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:linear-gradient(180deg,rgba(255,209,0,.04),transparent);border-bottom:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.cp-head-l{display:flex;align-items:center;gap:11px}
+.cp-head-title{font-size:14px;font-weight:700;color:#fff;letter-spacing:.1px}
+.cp-head-sub{font-size:10px;color:rgba(34,197,94,.9);margin-top:2px;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.cp-head-sub::before{content:'';width:5px;height:5px;background:#22c55e;border-radius:50%;box-shadow:0 0 6px rgba(34,197,94,.7);animation:cpDot 2.4s ease-in-out infinite}
+.cp-x{background:transparent;border:none;color:rgba(255,255,255,.4);cursor:pointer;font-size:20px;padding:4px 8px;line-height:1;border-radius:8px;transition:color .15s, background .15s}
+.cp-x:hover{color:#fff;background:rgba(255,255,255,.06)}
+
+/* ── Mensajes ── */
+.cp-msgs{flex:1;overflow-y:auto;padding:18px 16px 10px;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}
+.cp-msgs::-webkit-scrollbar{width:5px}
+.cp-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:5px}
+.cp-msg{display:flex;gap:9px;max-width:100%;animation:cpMsgIn .32s cubic-bezier(.2,.9,.3,1) both}
+@keyframes cpMsgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.cp-msg.user{flex-direction:row-reverse;animation-name:cpMsgInUser}
+@keyframes cpMsgInUser{from{opacity:0;transform:translateY(6px) translateX(4px)}to{opacity:1;transform:translateY(0) translateX(0)}}
+.cp-bub{padding:11px 14px;border-radius:16px;font-size:13.5px;line-height:1.55;max-width:82%;word-wrap:break-word}
+.cp-msg.bot .cp-bub{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.92);border-bottom-left-radius:5px;backdrop-filter:blur(6px)}
+.cp-msg.user .cp-bub{background:linear-gradient(135deg,rgba(255,209,0,.22),rgba(255,209,0,.12));border:1px solid rgba(255,209,0,.28);color:#fff;border-bottom-right-radius:5px}
+.cp-ma{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #ffe266, #FFD100 55%, #c69500);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;box-shadow:0 2px 8px rgba(255,209,0,.3)}
 .cp-ma svg{width:12px;height:12px}
+
+/* ── Chips ── */
 .cp-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;flex-shrink:0}
-.cp-chip{background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.2);color:rgba(255,209,0,.9);border-radius:20px;padding:5px 11px;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
-.cp-chip:hover{background:rgba(255,209,0,.15);border-color:rgba(255,209,0,.4)}
-.cp-in-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;background:rgba(0,0,0,.2)}
-#cp-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 13px;color:#fff;font-size:13px;outline:none;font-family:'Barlow',sans-serif;transition:border-color .2s}
-#cp-input:focus{border-color:rgba(255,209,0,.4)}
-#cp-input::placeholder{color:rgba(255,255,255,.3)}
-#cp-send{background:#FFD100;border:none;border-radius:10px;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s}
-#cp-send:hover{opacity:.85}
+.cp-chip{
+  background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);
+  color:rgba(255,209,0,.92);border-radius:999px;
+  padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;
+  transition:background .18s, border-color .18s, transform .18s;
+  opacity:0;transform:translateY(6px);
+  animation:cpChipIn .35s cubic-bezier(.2,.9,.3,1) both;
+}
+.cp-chip:nth-child(1){animation-delay:.08s}
+.cp-chip:nth-child(2){animation-delay:.14s}
+.cp-chip:nth-child(3){animation-delay:.20s}
+.cp-chip:nth-child(4){animation-delay:.26s}
+.cp-chip:nth-child(5){animation-delay:.32s}
+.cp-chip:nth-child(6){animation-delay:.38s}
+@keyframes cpChipIn{to{opacity:1;transform:translateY(0)}}
+.cp-chip:hover{background:rgba(255,209,0,.14);border-color:rgba(255,209,0,.4);transform:translateY(-1px)}
+
+/* ── Input ── */
+.cp-in-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0;background:linear-gradient(180deg,transparent,rgba(0,0,0,.18))}
+#cp-input{
+  flex:1;background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:11px;padding:10px 14px;color:#fff;font-size:13.5px;
+  outline:none;font-family:'Barlow',sans-serif;
+  transition:border-color .18s, background .18s, box-shadow .18s;
+}
+#cp-input:focus{
+  border-color:rgba(255,209,0,.5);
+  background:rgba(255,255,255,.08);
+  box-shadow:0 0 0 3px rgba(255,209,0,.08);
+}
+#cp-input::placeholder{color:rgba(255,255,255,.28)}
+#cp-send{
+  background:linear-gradient(135deg,#ffd733,#FFD100);
+  border:none;border-radius:11px;width:38px;height:38px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:transform .15s, box-shadow .18s, filter .15s;
+  box-shadow:0 3px 10px rgba(255,209,0,.25);
+}
+#cp-send:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 6px 16px rgba(255,209,0,.4)}
+#cp-send:active{transform:translateY(0) scale(.96)}
 #cp-send svg{width:15px;height:15px}
 .cp-collapse-arrow{display:none;font-size:16px;color:var(--y);line-height:1;margin-right:2px;flex-shrink:0}
 
-/* ── MOBILE: tab lateral derecha ── */
+/* ── MOBILE: tab lateral derecha + bottom sheet ── */
 @media(max-width:768px){
   #copilot-widget{bottom:auto;top:12px;right:0;transform:none}
   .last-refresh{display:none !important}
@@ -10638,40 +10727,54 @@ async function saveEditStoreItem() {
   #copilot-pill .cp-dot,
   #copilot-pill .cp-collapse-arrow{display:none}
   #copilot-pill{
-    padding:6px 4px;width:24px;height:56px;
-    border-radius:8px 0 0 8px;border-right:none;
+    padding:6px 4px;width:24px;height:56px;gap:0;
+    border-radius:10px 0 0 10px;border-right:none;
     justify-content:center;align-items:center;
-    background:#FFD100 !important;border:none !important;
-    box-shadow:-2px 2px 10px rgba(0,0,0,.4);gap:0;
+    background:linear-gradient(135deg,#ffd733,#FFD100) !important;
+    border:none !important;
+    box-shadow:-3px 3px 12px rgba(0,0,0,.4);
   }
-  #copilot-pill .cp-avatar{width:22px;height:22px;background:transparent !important;margin:0 auto}
+  #copilot-pill:hover{
+    padding:6px 4px;gap:0;transform:translateX(-1px);
+    border:none !important;box-shadow:-4px 3px 14px rgba(0,0,0,.5);
+  }
+  #copilot-pill .cp-avatar{width:22px;height:22px;background:transparent !important;margin:0 auto;box-shadow:none}
   #copilot-pill .cp-avatar svg{width:15px;height:15px;stroke:#000d1f}
   #copilot-pill.expanded{
-    width:auto;height:auto;border-radius:40px !important;
+    width:auto;height:auto;border-radius:999px !important;
     border:1px solid rgba(255,209,0,.4) !important;
-    background:#0a1828 !important;
-    padding:8px 16px 8px 8px;gap:8px;
+    background:linear-gradient(135deg,#0f2440,#0a1828) !important;
+    padding:8px 16px 8px 8px;gap:10px;
   }
-  #copilot-pill.expanded .cp-collapse-arrow{display:inline}
+  #copilot-pill.expanded .cp-collapse-arrow,
   #copilot-pill.expanded .cp-pill-label,
   #copilot-pill.expanded .cp-pill-sub,
-  #copilot-pill.expanded .cp-dot{display:block}
-  #copilot-pill.expanded .cp-avatar{background:#FFD100 !important;width:32px;height:32px}
+  #copilot-pill.expanded .cp-dot{display:block;max-width:none;opacity:1}
+  #copilot-pill.expanded .cp-avatar{background:radial-gradient(circle at 30% 30%, #ffe266, #FFD100 55%, #c69500) !important;width:32px;height:32px}
   #copilot-panel{
     position:fixed;bottom:0;left:0;right:0;top:auto;
-    width:100%;height:72vh;max-height:520px;
-    border-radius:18px 18px 0 0;border-bottom:none;
+    width:100%;height:76vh;max-height:560px;
+    border-radius:20px 20px 0 0;border-bottom:none;
     margin-bottom:0;transform:translateY(100%);
-    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    transition:transform .32s cubic-bezier(.2,.9,.3,1);
+    opacity:1;
   }
   #copilot-panel.open{display:flex;transform:translateY(0)}
   #cp-handle-row{display:flex !important}
 }
-.cp-typing{display:flex;gap:4px;align-items:center;padding:8px 4px}
-.cp-typing span{width:6px;height:6px;background:rgba(255,255,255,.3);border-radius:50%;animation:cpb 1.2s infinite}
-.cp-typing span:nth-child(2){animation-delay:.2s}
-.cp-typing span:nth-child(3){animation-delay:.4s}
-@keyframes cpb{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
+
+/* ── Typing dots suaves ── */
+.cp-typing{display:flex;gap:5px;align-items:center;padding:6px 2px}
+.cp-typing span{width:7px;height:7px;background:rgba(255,209,0,.5);border-radius:50%;animation:cpb 1.4s ease-in-out infinite}
+.cp-typing span:nth-child(2){animation-delay:.18s}
+.cp-typing span:nth-child(3){animation-delay:.36s}
+@keyframes cpb{0%,80%,100%{transform:scale(.65);opacity:.35}40%{transform:scale(1);opacity:1}}
+
+@media (prefers-reduced-motion: reduce){
+  #copilot-pill, #copilot-panel, .cp-msg, .cp-chip, .cp-dot, .cp-head-sub::before, .cp-typing span{
+    animation:none !important;transition:none !important;
+  }
+}
 </style>
 
 <div id="cp-overlay" onclick="toggleCopilot()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998"></div>
@@ -10684,7 +10787,7 @@ async function saveEditStoreItem() {
     <div class="cp-head">
       <div class="cp-head-l">
         <div class="cp-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#000d1f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-        <div><div class="cp-head-title">FILO Copilot</div><div class="cp-head-sub">Asistente de ayuda</div></div>
+        <div><div class="cp-head-title">FILO Copilot</div><div class="cp-head-sub">En línea</div></div>
       </div>
       <button class="cp-x" onclick="toggleCopilot()">x</button>
     </div>
