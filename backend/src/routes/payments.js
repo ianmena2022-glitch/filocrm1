@@ -69,7 +69,10 @@ async function mpFetch(method, path, body, tokenOverride) {
     body: body ? JSON.stringify(body) : undefined
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.error || 'Error Mercado Pago');
+  if (!res.ok) {
+    console.error(`[MP ${method} ${path}] ${res.status} →`, JSON.stringify(data));
+    throw new Error(data.message || data.error || `MP ${res.status}`);
+  }
   return data;
 }
 
@@ -320,6 +323,7 @@ async function ensurePosForShop(shopId) {
       fixed_amount: false,
       store_id: storeId,
       external_id: extId,
+      external_store_id: 'FILOSUBS',
       category: 621102,
     }, MP_QR_TOKEN);
   }
