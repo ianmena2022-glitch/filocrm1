@@ -331,7 +331,8 @@ async function findPosByExtId(extId) {
 async function ensurePosForShop(shopId) {
   const cached = _posByShopCache.get(shopId);
   if (cached) return cached;
-  const extId   = `FILOSHOP${shopId}`;
+  // Nota: usamos sufijo D (dynamic) para forzar recreación del POS con qr dinámico
+  const extId   = `FILOSHOPD${shopId}`;
   const storeId = await ensureFiloStore();
   let pos = await findPosByExtId(extId);
   if (!pos) {
@@ -341,9 +342,11 @@ async function ensurePosForShop(shopId) {
         fixed_amount: false,
         store_id: storeId,
         external_id: extId,
-        external_store_id: 'FILOSUBS',
+        external_store_id: FILO_STORE_EXT_ID,
         category: 621102,
+        qr: { type: 'dynamic' },
       }, MP_QR_TOKEN);
+      console.log(`[MP] ✓ POS creado · id=${pos.id} · external_id=${extId} · qr_image=${pos.qr?.image || '(none)'}`);
     } catch(e) {
       if (/already (assigned|exists)/i.test(e.message)) {
         pos = await findPosByExtId(extId);
