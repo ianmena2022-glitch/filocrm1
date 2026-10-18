@@ -5289,9 +5289,17 @@ function showSection(name) {
   if (name === 'configuracion') loadSubscriptionStatus();
   if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
   if (name === 'configuracion') {
-    // Reset to first tab when opening config
-    const firstBtn = document.querySelector('.cfg-tab-btn');
-    switchCfgTab('general', firstBtn);
+    // En desktop: reset a primer tab. En mobile: mostrar menú (drill-down), no navegar a ningún item.
+    const _isMobileCfg = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+    if (_isMobileCfg) {
+      document.body.classList.remove('cfg-mobile-detail');
+      if (typeof buildCfgBranchedMenu === 'function') buildCfgBranchedMenu();
+      // Ocultar todos los cfg-item: mobile arranca en el menú puro
+      document.querySelectorAll('.cfg-item').forEach(el => el.classList.remove('is-active'));
+    } else {
+      const firstBtn = document.querySelector('.cfg-tab-btn');
+      switchCfgTab('general', firstBtn);
+    }
   }
   if (name === 'equipo') loadEquipo();
   if (name === 'fila') loadQueue();
@@ -7909,7 +7917,9 @@ function cfgPlaceMarker() {
 function buildCfgBranchedMenu() {
   const nav = document.getElementById('cfg-bmenu');
   if (!nav || _cfgMenuBuilt) return;
-  const PAD = 6, TRUNK = 14, INDENT = 40, ROW = 36, RADIUS = 10;
+  // ROW responsive: en mobile los items son más altos (46px) para touch; mantenemos geometría coherente
+  const _isMobile = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+  const PAD = 6, TRUNK = 14, INDENT = 40, ROW = _isMobile ? 46 : 36, RADIUS = 10;
   const r = Math.min(RADIUS, ROW / 2 - 2);
   const endX = INDENT - 8;
   const rowY = k => PAD + k * ROW + ROW / 2;
@@ -8020,10 +8030,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 })();
 
-// Si el usuario rota el teléfono o resize cross-breakpoint, limpiamos la clase
+// Si el usuario rota el teléfono o resize cross-breakpoint, limpiamos la clase + rebuild menu con geometría nueva
+let _cfgLastIsMobile = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
 window.addEventListener('resize', () => {
-  if (!window.matchMedia('(max-width: 820px)').matches) {
-    document.body.classList.remove('cfg-mobile-detail');
+  const nowMobile = window.matchMedia('(max-width: 820px)').matches;
+  if (!nowMobile) document.body.classList.remove('cfg-mobile-detail');
+  if (nowMobile !== _cfgLastIsMobile) {
+    _cfgLastIsMobile = nowMobile;
+    // Rebuild del BranchedMenu con ROW correcto para evitar overlap entre items y next head
+    const nav = document.getElementById('cfg-bmenu');
+    if (nav && _cfgMenuBuilt) {
+      // Preservar marker, limpiar secciones
+      const marker = document.getElementById('cfg-bmenu-marker');
+      nav.innerHTML = '';
+      if (marker) nav.appendChild(marker);
+      _cfgMenuBuilt = false;
+      buildCfgBranchedMenu();
+    }
   }
 });
 
