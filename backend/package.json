@@ -24,7 +24,8 @@
     "pdf-parse": "^1.1.1",
     "pg": "^8.13.0",
     "qrcode": "^1.5.3",
-    "resend": "^6.12.2"
+    "resend": "^6.12.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

@@ -5750,6 +5750,95 @@ async function notifMarkAllRead() {
 // Cargar al arrancar la app (después de login) — se llama desde startPolling
 setTimeout(() => { if (typeof token !== 'undefined' && token) notifLoad(); }, 1200);
 
+// ─── WEB PUSH ───
+let _pushRegistration = null;
+
+function urlBase64ToUint8(base64) {
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const base = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function pushRegisterSW() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (_pushRegistration) return _pushRegistration;
+  try {
+    _pushRegistration = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    return _pushRegistration;
+  } catch(e) { console.warn('[push] SW register error:', e); return null; }
+}
+
+async function pushMaybeShowPrompt() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (localStorage.getItem('filo_push_dismissed')) return;
+  if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+  // Mostrar invitación suave en el dropdown
+  const el = document.getElementById('notif-push-prompt');
+  if (el) el.style.display = 'block';
+}
+
+function pushDismissPrompt() {
+  localStorage.setItem('filo_push_dismissed', '1');
+  const el = document.getElementById('notif-push-prompt');
+  if (el) el.style.display = 'none';
+}
+
+async function pushRequestPermission() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      if (typeof showToast === 'function') showToast('ℹ️', 'Permiso denegado', 'Podés habilitarlo en los ajustes del navegador');
+      pushDismissPrompt();
+      return;
+    }
+    await pushSubscribe();
+    pushDismissPrompt();
+    if (typeof showToast === 'function') showToast('✅', 'Notificaciones activadas', '');
+  } catch(e) {
+    console.warn('[push] permission error:', e);
+  }
+}
+
+async function pushSubscribe() {
+  const reg = await pushRegisterSW();
+  if (!reg) return null;
+  try {
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      // Reconfirmar en backend (idempotente por endpoint)
+      await api('POST', '/push/subscribe', existing.toJSON());
+      return existing;
+    }
+    const keyRes = await api('GET', '/push/public-key');
+    if (!keyRes?.key) return null;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8(keyRes.key),
+    });
+    await api('POST', '/push/subscribe', sub.toJSON());
+    return sub;
+  } catch(e) {
+    console.warn('[push] subscribe error:', e);
+    return null;
+  }
+}
+
+// Registrar SW y, si ya hay permiso, auto-suscribir. Si no, mostrar prompt sutil al rato.
+setTimeout(async () => {
+  if (typeof token === 'undefined' || !token) return;
+  if (!('serviceWorker' in navigator)) return;
+  await pushRegisterSW();
+  if (Notification.permission === 'granted') {
+    pushSubscribe();
+  } else {
+    pushMaybeShowPrompt();
+  }
+}, 2500);
+
 // ─── NAVIGATION ───
 async function switchPlan(plan) {
   try {
@@ -10885,6 +10974,13 @@ async function saveEditStoreItem() {
   <div class="notif-head">
     <div class="notif-head-title">🔔 Notificaciones</div>
     <button class="notif-mark-all" onclick="notifMarkAllRead()">Marcar todas leídas</button>
+  </div>
+  <div id="notif-push-prompt" style="display:none;padding:11px 14px;background:linear-gradient(90deg,rgba(255,209,0,.08),transparent);border-bottom:1px solid rgba(255,209,0,.15);font-size:12px;color:rgba(255,255,255,.75);line-height:1.5">
+    <div style="margin-bottom:8px">Recibí notificaciones aunque la app esté cerrada.</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="pushRequestPermission()" style="background:var(--yellow);color:#000;border:none;padding:6px 12px;border-radius:7px;font-weight:700;font-size:11.5px;cursor:pointer;font-family:'Barlow',sans-serif">Activar</button>
+      <button onclick="pushDismissPrompt()" style="background:transparent;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);padding:6px 12px;border-radius:7px;font-weight:600;font-size:11.5px;cursor:pointer;font-family:'Barlow',sans-serif">Ahora no</button>
+    </div>
   </div>
   <div class="notif-list" id="notif-list">
     <div class="notif-empty">
