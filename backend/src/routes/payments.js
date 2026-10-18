@@ -7,6 +7,7 @@ const MP_BASE = 'https://api.mercadopago.com';
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
 const MP_QR_TOKEN = process.env.MP_QR_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
+const MP_QR_WEBHOOK_SECRET = process.env.MP_QR_WEBHOOK_SECRET;
 
 if (process.env.NODE_ENV === 'production') {
   if (!MP_TOKEN)          console.error('[MP] FATAL: MP_ACCESS_TOKEN no configurado');
@@ -16,13 +17,13 @@ if (process.env.NODE_ENV === 'production') {
 // Verifica la firma x-signature de Mercado Pago (HMAC-SHA256).
 // Formato: "ts=<ts>,v1=<hash>" · manifest = `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
 function verifyMpSignature(req) {
-  if (!MP_WEBHOOK_SECRET) {
-    // Sin secret configurada, no podemos validar: en producción esto debe fallar.
+  const secrets = [MP_WEBHOOK_SECRET, MP_QR_WEBHOOK_SECRET].filter(Boolean);
+  if (!secrets.length) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[MP] FATAL: MP_WEBHOOK_SECRET no configurada — rechazando webhook');
+      console.error('[MP] FATAL: ningún webhook secret configurado — rechazando webhook');
       return false;
     }
-    console.warn('[MP] MP_WEBHOOK_SECRET no configurada (dev) — aceptando sin verificar');
+    console.warn('[MP] webhook secrets no configurados (dev) — aceptando sin verificar');
     return true;
   }
   try {
@@ -41,10 +42,14 @@ function verifyMpSignature(req) {
     if (!ts || !v1) return false;
 
     const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
-    const expected = crypto.createHmac('sha256', MP_WEBHOOK_SECRET).update(manifest).digest('hex');
-    const a = Buffer.from(v1, 'hex');
-    const b = Buffer.from(expected, 'hex');
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
+    const received = Buffer.from(v1, 'hex');
+    // Probar con cada secret (app vieja y app QR). Si matchea con cualquiera, válido.
+    for (const secret of secrets) {
+      const expected = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+      const b = Buffer.from(expected, 'hex');
+      if (received.length === b.length && crypto.timingSafeEqual(received, b)) return true;
+    }
+    return false;
   } catch (e) {
     console.error('[MP] Error verificando firma:', e.message);
     return false;
