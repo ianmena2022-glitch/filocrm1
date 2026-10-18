@@ -14,6 +14,7 @@ router.get('/', auth, ownerOnly, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, barber_commission_pct, product_sale_commission_pct, barber_color, barber_schedule, created_at,
+         profile_photo_url, work_photos,
          (SELECT COUNT(*) FROM appointments WHERE barber_id=s.id AND date=CURRENT_DATE AND status NOT IN ('cancelled','noshow')) AS turnos_hoy
        FROM shops s WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY name`,
       [req.shopId]
@@ -186,7 +187,7 @@ router.get('/parent-config', auth, async (req, res) => {
   try {
     const parentId = req.parentShopId || req.shopId;
     const result = await pool.query(
-      'SELECT commission_enabled, name FROM shops WHERE id=$1',
+      'SELECT commission_enabled, name, barber_self_upload_enabled FROM shops WHERE id=$1',
       [parentId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });

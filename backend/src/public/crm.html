@@ -2615,6 +2615,41 @@ select.form-input { padding-right: 32px; }
       </div>
     </div>
 
+    <!-- Modal fotos barbero (portfolio) -->
+    <div class="modal-overlay" id="modal-barber-photos" onclick="if(event.target===this)closeModal('modal-barber-photos')">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <h2>📸 Fotos de <span id="bp-barber-name">Barbero</span></h2>
+          <button class="modal-close" onclick="closeModal('modal-barber-photos')">×</button>
+        </div>
+
+        <!-- Foto de perfil -->
+        <div style="margin-bottom:22px">
+          <label style="font-size:12px;color:rgba(255,255,255,.6);display:block;margin-bottom:8px;font-weight:600">Foto de perfil</label>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div id="bp-profile-preview" style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;color:rgba(255,255,255,.4);font-size:22px">?</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+              <input type="file" id="bp-profile-file" accept="image/*" style="display:none" onchange="uploadBarberProfilePhoto(this.files[0])">
+              <button type="button" class="btn-add" onclick="document.getElementById('bp-profile-file').click()" style="width:fit-content">📷 Subir foto</button>
+              <button type="button" id="bp-profile-remove" onclick="removeBarberProfilePhoto()" style="display:none;background:transparent;border:0;color:#ff6b6b;font-size:12px;cursor:pointer;padding:0;text-align:left;text-decoration:underline">Quitar foto</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid de fotos de trabajos -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label style="font-size:12px;color:rgba(255,255,255,.6);font-weight:600">Portfolio de trabajos</label>
+            <span id="bp-work-count" style="font-size:11px;color:rgba(255,255,255,.4)">0 / 10</span>
+          </div>
+          <div id="bp-work-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px"></div>
+          <input type="file" id="bp-work-file" accept="image/*" style="display:none" onchange="uploadBarberWorkPhoto(this.files[0])">
+          <button type="button" id="bp-work-add-btn" class="btn-add" style="margin-top:12px;width:100%" onclick="document.getElementById('bp-work-file').click()">➕ Agregar foto de trabajo</button>
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:8px;text-align:center">Máx 10 fotos · se muestran en el link público de reservas</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal liquidación barbero -->
     <div class="modal-overlay" id="modal-settlement" style="display:none" onclick="if(event.target===this)closeSettlementModal()">
       <div class="modal" style="max-width:500px">
@@ -3319,6 +3354,51 @@ select.form-input { padding-right: 32px; }
         </div>
 
         </div><!-- /cfg-item local -->
+
+        <!-- CFG-ITEM: Imagen y branding -->
+        <div class="cfg-item" data-cfg-item="branding">
+          <div class="cfg-crumb">Mi barbería / Imagen y branding</div>
+          <h2 class="cfg-item-title">Imagen y branding</h2>
+          <p class="cfg-item-desc">Subí tu logo y una foto de portada. Se ven en tu link público de reservas y en la vista del equipo.</p>
+          <div class="settings-section">
+            <div class="settings-section-title">🎨 Branding</div>
+
+            <!-- Foto de perfil -->
+            <div style="margin-bottom:22px">
+              <label style="font-size:12px;color:rgba(255,255,255,.6);display:block;margin-bottom:8px;font-weight:600">Foto de perfil (logo)</label>
+              <div id="brand-profile-wrap" style="display:flex;align-items:center;gap:14px">
+                <div id="brand-profile-preview" style="width:80px;height:80px;border-radius:18px;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;color:rgba(255,255,255,.3);font-size:26px">✂</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <input type="file" id="brand-profile-file" accept="image/*" style="display:none" onchange="uploadBranding('profile', this.files[0])">
+                  <button type="button" class="btn-add" onclick="document.getElementById('brand-profile-file').click()" style="width:fit-content">📷 Subir foto</button>
+                  <button type="button" id="brand-profile-remove" onclick="removeBranding('profile')" style="display:none;background:transparent;border:0;color:#ff6b6b;font-size:12px;cursor:pointer;padding:0;text-align:left;text-decoration:underline">Quitar foto</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Banner -->
+            <div style="margin-bottom:22px">
+              <label style="font-size:12px;color:rgba(255,255,255,.6);display:block;margin-bottom:8px;font-weight:600">Banner / foto de portada</label>
+              <div id="brand-banner-preview" style="width:100%;aspect-ratio:16/7;border-radius:14px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);font-size:13px;margin-bottom:10px">Sin banner</div>
+              <input type="file" id="brand-banner-file" accept="image/*" style="display:none" onchange="uploadBranding('banner', this.files[0])">
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button type="button" class="btn-add" onclick="document.getElementById('brand-banner-file').click()">🖼️ Subir banner</button>
+                <button type="button" id="brand-banner-remove" onclick="removeBranding('banner')" style="display:none;background:transparent;border:1px solid rgba(255,107,107,.3);color:#ff6b6b;padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer">Quitar</button>
+              </div>
+            </div>
+
+            <!-- Toggle self-upload para barberos -->
+            <div style="padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px">
+              <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+                <input type="checkbox" id="brand-self-upload" onchange="toggleSelfUpload(this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0">
+                <div style="flex:1">
+                  <div style="font-size:14px;font-weight:600;color:#fff">Permitir que los barberos suban sus propias fotos</div>
+                  <div style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:3px">Cada barbero podrá subir su foto de perfil y hasta 10 fotos de trabajos desde su propio dashboard.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div><!-- /cfg-item branding -->
 
         </div><!-- /cfg-tab-general -->
 
@@ -5306,7 +5386,7 @@ function showSection(name) {
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') loadSubscriptionStatus();
-  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); }
+  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); initBrandingUI(); }
   if (name === 'configuracion') {
     // En desktop: reset a primer tab. En mobile: mostrar menú (drill-down), no navegar a ningún item.
     const _isMobileCfg = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
@@ -7828,6 +7908,7 @@ const CFG_ITEM_BODY = {
 const CFG_MENU = [
   { label: 'Mi barbería', items: [
     { id: 'local',       label: 'Datos del local',    icon: '🏪' },
+    { id: 'branding',    label: 'Imagen y branding',  icon: '🎨' },
     { id: 'schedule',    label: 'Horarios',           icon: '🕐' },
     { id: 'closed-days', label: 'Días no laborables', icon: '🚫' },
     { id: 'slot',        label: 'Intervalo de turnos', icon: '⏱️' },
@@ -8429,6 +8510,205 @@ let toastTimer;
 //   showToast('✅', 'título')           → sin msg
 //   showToast('❌', 'título', 'detalle')
 //   showToast('❌', 'título', 'detalle', { duration: 7000 })  → errores críticos más tiempo
+// ─── Cloudinary uploader helper (reutilizable) ──────────────────
+// Firma con el backend, sube directo a Cloudinary (no pasa por nuestro server), devuelve secure_url.
+async function uploadToCloudinary(file, scope, barberId) {
+  if (!file) throw new Error('Sin archivo');
+  const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+  if (file.size > MAX_BYTES) throw new Error('Imagen muy grande (máx 8MB)');
+  if (!/^image\//.test(file.type)) throw new Error('Solo imágenes');
+  const sign = await api('POST', '/media/sign-upload', { scope, barberId });
+  if (!sign || !sign.signature) throw new Error('No se pudo firmar el upload');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('api_key',   sign.apiKey);
+  fd.append('timestamp', sign.timestamp);
+  fd.append('signature', sign.signature);
+  if (sign.folder) fd.append('folder', sign.folder);
+  const r = await fetch(sign.uploadUrl, { method: 'POST', body: fd });
+  const data = await r.json();
+  if (!r.ok || !data.secure_url) throw new Error(data.error?.message || 'Falló el upload');
+  return data.secure_url;
+}
+
+// ─── Branding del shop (foto perfil + banner + toggle self-upload) ──────
+async function uploadBranding(kind, file) {
+  if (!file) return;
+  try {
+    showToast('⏳', 'Subiendo...', `Subiendo ${kind === 'profile' ? 'logo' : 'banner'}`);
+    const url = await uploadToCloudinary(file, 'branding');
+    const path = kind === 'profile' ? '/media/shop/profile' : '/media/shop/banner';
+    await api('PUT', path, { url });
+    applyBrandingUI(kind, url);
+    if (currentShop) {
+      if (kind === 'profile') currentShop.profile_photo_url = url;
+      else                    currentShop.banner_photo_url  = url;
+      try { localStorage.setItem('currentShop', JSON.stringify(currentShop)); } catch(_) {}
+    }
+    showToast('✅', 'Listo', 'Imagen guardada');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+async function removeBranding(kind) {
+  if (!confirm('¿Quitar esta imagen?')) return;
+  try {
+    const path = kind === 'profile' ? '/media/shop/profile' : '/media/shop/banner';
+    await api('PUT', path, { url: null });
+    applyBrandingUI(kind, null);
+    if (currentShop) {
+      if (kind === 'profile') currentShop.profile_photo_url = null;
+      else                    currentShop.banner_photo_url  = null;
+      try { localStorage.setItem('currentShop', JSON.stringify(currentShop)); } catch(_) {}
+    }
+    showToast('✅', 'Listo', 'Imagen eliminada');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  }
+}
+function applyBrandingUI(kind, url) {
+  if (kind === 'profile') {
+    const pv = document.getElementById('brand-profile-preview');
+    const rm = document.getElementById('brand-profile-remove');
+    if (!pv) return;
+    if (url) {
+      pv.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+      if (rm) rm.style.display = 'inline-block';
+    } else {
+      pv.innerHTML = '✂';
+      if (rm) rm.style.display = 'none';
+    }
+  } else {
+    const pv = document.getElementById('brand-banner-preview');
+    const rm = document.getElementById('brand-banner-remove');
+    if (!pv) return;
+    if (url) {
+      pv.style.backgroundImage = `url('${url}')`;
+      pv.textContent = '';
+      if (rm) rm.style.display = 'inline-block';
+    } else {
+      pv.style.backgroundImage = '';
+      pv.textContent = 'Sin banner';
+      if (rm) rm.style.display = 'none';
+    }
+  }
+}
+async function toggleSelfUpload(enabled) {
+  try {
+    await api('PUT', '/media/shop/self-upload-toggle', { enabled });
+    if (currentShop) {
+      currentShop.barber_self_upload_enabled = enabled;
+      try { localStorage.setItem('currentShop', JSON.stringify(currentShop)); } catch(_) {}
+    }
+    showToast('✅', 'Guardado', enabled ? 'Los barberos ahora pueden subir fotos' : 'Carga por barbero deshabilitada');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+    document.getElementById('brand-self-upload').checked = !enabled;
+  }
+}
+// ─── Modal fotos de barbero (portfolio) ─────────────────────────
+let _bpState = { id: null, name: '', profile: null, works: [] };
+function openBarberPhotosModal(id, name) {
+  const b = (window._barbersList || []).find(x => x.id === id);
+  _bpState = {
+    id, name,
+    profile: b?.profile_photo_url || null,
+    works:   Array.isArray(b?.work_photos) ? b.work_photos.slice() : [],
+  };
+  document.getElementById('bp-barber-name').textContent = name;
+  renderBarberPhotosModal();
+  openModal('modal-barber-photos');
+}
+function renderBarberPhotosModal() {
+  // Perfil
+  const pv = document.getElementById('bp-profile-preview');
+  const rm = document.getElementById('bp-profile-remove');
+  if (_bpState.profile) {
+    pv.innerHTML = `<img src="${_bpState.profile}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+    rm.style.display = 'inline-block';
+  } else {
+    pv.innerHTML = (_bpState.name || '?').charAt(0).toUpperCase();
+    rm.style.display = 'none';
+  }
+  // Grid de trabajos
+  const grid = document.getElementById('bp-work-grid');
+  const count = _bpState.works.length;
+  document.getElementById('bp-work-count').textContent = `${count} / 10`;
+  document.getElementById('bp-work-add-btn').disabled = count >= 10;
+  document.getElementById('bp-work-add-btn').style.opacity = count >= 10 ? '0.4' : '1';
+  if (!count) {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:20px;text-align:center;color:rgba(255,255,255,.3);font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:10px">Sin fotos todavía</div>`;
+    return;
+  }
+  grid.innerHTML = _bpState.works.map((url, i) => `
+    <div style="position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.04)">
+      <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block">
+      <button onclick="removeBarberWorkPhoto(${i})" title="Quitar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:0;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+  `).join('');
+}
+async function uploadBarberProfilePhoto(file) {
+  if (!file || !_bpState.id) return;
+  try {
+    showToast('⏳', 'Subiendo...', 'Foto de perfil');
+    const url = await uploadToCloudinary(file, 'barber', _bpState.id);
+    await api('PUT', `/media/barber/${_bpState.id}/profile`, { url });
+    _bpState.profile = url;
+    syncBarberCache(_bpState.id, { profile_photo_url: url });
+    renderBarberPhotosModal();
+    showToast('✅', 'Listo', 'Foto actualizada');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+async function removeBarberProfilePhoto() {
+  if (!_bpState.id) return;
+  if (!confirm('¿Quitar foto de perfil?')) return;
+  try {
+    await api('PUT', `/media/barber/${_bpState.id}/profile`, { url: null });
+    _bpState.profile = null;
+    syncBarberCache(_bpState.id, { profile_photo_url: null });
+    renderBarberPhotosModal();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+async function uploadBarberWorkPhoto(file) {
+  if (!file || !_bpState.id) return;
+  if (_bpState.works.length >= 10) return showToast('⚠️', 'Límite', 'Máximo 10 fotos');
+  try {
+    showToast('⏳', 'Subiendo...', 'Foto de trabajo');
+    const url = await uploadToCloudinary(file, 'barber', _bpState.id);
+    const newWorks = _bpState.works.concat([url]);
+    await api('PUT', `/media/barber/${_bpState.id}/photos`, { urls: newWorks });
+    _bpState.works = newWorks;
+    syncBarberCache(_bpState.id, { work_photos: newWorks });
+    renderBarberPhotosModal();
+    showToast('✅', 'Listo', 'Foto agregada');
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+async function removeBarberWorkPhoto(idx) {
+  if (!_bpState.id || idx < 0 || idx >= _bpState.works.length) return;
+  if (!confirm('¿Quitar esta foto?')) return;
+  try {
+    const newWorks = _bpState.works.slice(0, idx).concat(_bpState.works.slice(idx + 1));
+    await api('PUT', `/media/barber/${_bpState.id}/photos`, { urls: newWorks });
+    _bpState.works = newWorks;
+    syncBarberCache(_bpState.id, { work_photos: newWorks });
+    renderBarberPhotosModal();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+function syncBarberCache(id, patch) {
+  if (!window._barbersList) return;
+  const b = window._barbersList.find(x => x.id === id);
+  if (b) Object.assign(b, patch);
+}
+
+// Hook: inicializar los campos del branding cuando se abra Configuración
+function initBrandingUI() {
+  if (!currentShop) return;
+  applyBrandingUI('profile', currentShop.profile_photo_url || null);
+  applyBrandingUI('banner',  currentShop.banner_photo_url  || null);
+  const t = document.getElementById('brand-self-upload');
+  if (t) t.checked = !!currentShop.barber_self_upload_enabled;
+}
+
 function showToast(icon, title, msg, opts) {
   // Fix: si llega solo 1 string, interpretarlo como mensaje de advertencia
   if (title === undefined && msg === undefined) {
@@ -9196,8 +9476,11 @@ async function loadEquipo() {
       const pendingAppts = parseInt(stat.pending_appointments || 0);
       const pendingProdSales = parseInt(stat.pending_product_sales || 0);
       const hasPending = pendingAppts > 0 || pendingProdSales > 0;
+      const avatarInner = b.profile_photo_url
+        ? `<img src="${b.profile_photo_url}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit">`
+        : b.name.charAt(0).toUpperCase();
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
-        <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f">${b.name.charAt(0).toUpperCase()}</div>
+        <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f;overflow:hidden">${avatarInner}</div>
         <div class="client-info">
           <div class="client-name">${b.name}</div>
           <div class="client-meta">
@@ -9214,6 +9497,7 @@ async function loadEquipo() {
         </div>
         <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end">
           <div style="display:flex;gap:8px">
+            <button class="appt-btn" onclick="openBarberPhotosModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Fotos y portfolio">📸</button>
             <button class="appt-btn" onclick="editBarber(${b.id})" title="Editar">✏️</button>
             <button class="appt-btn" onclick="openBonusModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Dar bonus" style="background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80">🎁 Bonus</button>
             <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>

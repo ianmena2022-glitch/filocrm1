@@ -20,7 +20,7 @@ function isBarberAvailable(barberSchedule, date, timeStart) {
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );
@@ -84,6 +84,32 @@ router.get('/:slug', async (req, res) => {
     }
 
     res.json({ shop: shopData, services: services.rows, barbers });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/booking/:slug/team — lista pública de barberos con sus fotos
+router.get('/:slug/team', async (req, res) => {
+  try {
+    const shop = await pool.query(
+      `SELECT id, is_branch, parent_enterprise_id
+         FROM shops WHERE booking_slug=$1`,
+      [req.params.slug]
+    );
+    if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    const shopData = shop.rows[0];
+    const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
+      ? shopData.parent_enterprise_id
+      : shopData.id;
+    const q = await pool.query(
+      `SELECT id, name, barber_color, profile_photo_url, work_photos
+         FROM shops
+        WHERE parent_shop_id=$1 AND is_barber=TRUE
+        ORDER BY name`,
+      [barberShopId]
+    );
+    res.json({ barbers: q.rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

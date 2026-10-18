@@ -531,6 +531,36 @@ button, .btn, [role="button"], [onclick] { touch-action: manipulation; }
         </div>
         <div id="week-calendar"></div>
 
+        <!-- Mis fotos (solo si el dueño habilitó el self-upload) -->
+        <div id="barber-photos-section" style="display:none;margin-top:20px">
+          <div class="section-header">
+            <div class="section-title">📸 Mis fotos</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+            <!-- Perfil -->
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+              <div id="bp-profile-preview" style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;color:rgba(255,255,255,.4);font-size:22px">?</div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:13px;font-weight:600">Foto de perfil</div>
+                <input type="file" id="bp-profile-file" accept="image/*" style="display:none" onchange="selfUploadProfile(this.files[0])">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" onclick="document.getElementById('bp-profile-file').click()" style="background:var(--yellow);color:#050d18;border:0;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📷 Subir</button>
+                  <button type="button" id="bp-profile-remove" onclick="selfRemoveProfile()" style="display:none;background:transparent;border:1px solid rgba(255,107,107,.3);color:#ff6b6b;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer">Quitar</button>
+                </div>
+              </div>
+            </div>
+            <!-- Grid trabajos -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:13px;font-weight:600">Portfolio de trabajos</div>
+              <span id="bp-work-count" style="font-size:11px;color:var(--gray)">0 / 10</span>
+            </div>
+            <div id="bp-work-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px"></div>
+            <input type="file" id="bp-work-file" accept="image/*" style="display:none" onchange="selfUploadWork(this.files[0])">
+            <button type="button" id="bp-work-add-btn" onclick="document.getElementById('bp-work-file').click()" style="margin-top:10px;width:100%;background:transparent;border:1px dashed rgba(255,255,255,.2);color:var(--white);padding:10px;border-radius:8px;font-size:13px;cursor:pointer">➕ Agregar foto</button>
+            <div style="font-size:11px;color:var(--gray);margin-top:8px;text-align:center">Se muestran en el link público de reservas</div>
+          </div>
+        </div>
+
         <!-- Ventas de productos -->
         <div id="barber-productos-section" style="display:none;margin-top:20px">
           <div class="section-header">
@@ -828,8 +858,20 @@ async function loadDashboard() {
       const parentData = await api('GET', '/barbers/parent-config');
       me.commission_enabled = parentData.commission_enabled;
       me.barber_commission_pct = parentData.barber_commission_pct || me.barber_commission_pct;
+      me.barber_self_upload_enabled = !!parentData.barber_self_upload_enabled;
       localStorage.setItem('barber_me', JSON.stringify(me));
     } catch(e) {}
+  }
+
+  // Mostrar sección de fotos solo si el dueño lo habilitó
+  const photosSec = document.getElementById('barber-photos-section');
+  if (photosSec) {
+    if (me.barber_self_upload_enabled) {
+      photosSec.style.display = 'block';
+      renderMyPhotos();
+    } else {
+      photosSec.style.display = 'none';
+    }
   }
 
   const commCard = document.getElementById('commission-card');
@@ -1678,6 +1720,97 @@ async function confirmarBarberVenta() {
   } catch(e) {
     showToast('❌ ' + (e.message || 'Error'));
   }
+}
+
+// ─── FOTOS DEL BARBERO (self-upload) ─────────────────────
+async function uploadToCloudinary(file, scope, barberId) {
+  if (!file) throw new Error('Sin archivo');
+  const MAX_BYTES = 8 * 1024 * 1024;
+  if (file.size > MAX_BYTES) throw new Error('Imagen muy grande (máx 8MB)');
+  if (!/^image\//.test(file.type)) throw new Error('Solo imágenes');
+  const sign = await api('POST', '/media/sign-upload', { scope, barberId });
+  if (!sign || !sign.signature) throw new Error('No se pudo firmar el upload');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('api_key',   sign.apiKey);
+  fd.append('timestamp', sign.timestamp);
+  fd.append('signature', sign.signature);
+  if (sign.folder) fd.append('folder', sign.folder);
+  const r = await fetch(sign.uploadUrl, { method: 'POST', body: fd });
+  const data = await r.json();
+  if (!r.ok || !data.secure_url) throw new Error(data.error?.message || 'Falló el upload');
+  return data.secure_url;
+}
+function renderMyPhotos() {
+  const pv = document.getElementById('bp-profile-preview');
+  const rm = document.getElementById('bp-profile-remove');
+  if (me.profile_photo_url) {
+    pv.innerHTML = `<img src="${me.profile_photo_url}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+    rm.style.display = 'inline-block';
+  } else {
+    pv.innerHTML = (me.name || '?').charAt(0).toUpperCase();
+    rm.style.display = 'none';
+  }
+  const works = Array.isArray(me.work_photos) ? me.work_photos : [];
+  document.getElementById('bp-work-count').textContent = `${works.length} / 10`;
+  const addBtn = document.getElementById('bp-work-add-btn');
+  addBtn.disabled = works.length >= 10;
+  addBtn.style.opacity = works.length >= 10 ? '0.4' : '1';
+  const grid = document.getElementById('bp-work-grid');
+  if (!works.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:16px;text-align:center;color:rgba(255,255,255,.3);font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:10px">Sin fotos todavía</div>`;
+    return;
+  }
+  grid.innerHTML = works.map((url, i) => `
+    <div style="position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.04)">
+      <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block">
+      <button onclick="selfRemoveWork(${i})" title="Quitar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:0;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+  `).join('');
+}
+async function selfUploadProfile(file) {
+  if (!file) return;
+  try {
+    const url = await uploadToCloudinary(file, 'barber', me.id);
+    await api('PUT', `/media/barber/${me.id}/profile`, { url });
+    me.profile_photo_url = url;
+    localStorage.setItem('barber_me', JSON.stringify(me));
+    renderMyPhotos();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+async function selfRemoveProfile() {
+  if (!confirm('¿Quitar foto de perfil?')) return;
+  try {
+    await api('PUT', `/media/barber/${me.id}/profile`, { url: null });
+    me.profile_photo_url = null;
+    localStorage.setItem('barber_me', JSON.stringify(me));
+    renderMyPhotos();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+async function selfUploadWork(file) {
+  if (!file) return;
+  const current = Array.isArray(me.work_photos) ? me.work_photos : [];
+  if (current.length >= 10) { alert('Máximo 10 fotos'); return; }
+  try {
+    const url = await uploadToCloudinary(file, 'barber', me.id);
+    const next = current.concat([url]);
+    await api('PUT', `/media/barber/${me.id}/photos`, { urls: next });
+    me.work_photos = next;
+    localStorage.setItem('barber_me', JSON.stringify(me));
+    renderMyPhotos();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+async function selfRemoveWork(idx) {
+  const current = Array.isArray(me.work_photos) ? me.work_photos : [];
+  if (idx < 0 || idx >= current.length) return;
+  if (!confirm('¿Quitar esta foto?')) return;
+  try {
+    const next = current.slice(0, idx).concat(current.slice(idx + 1));
+    await api('PUT', `/media/barber/${me.id}/photos`, { urls: next });
+    me.work_photos = next;
+    localStorage.setItem('barber_me', JSON.stringify(me));
+    renderMyPhotos();
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 // ── INIT ──────────────────────────────────────────────────

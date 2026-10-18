@@ -63,6 +63,10 @@ function shopPayload(shop) {
     parent_enterprise_id: shop.parent_enterprise_id || null,
     branch_label:         shop.branch_label         || null,
     revenue_pin_enabled:  shop.revenue_pin_enabled  || false,
+    profile_photo_url:    shop.profile_photo_url    || null,
+    banner_photo_url:     shop.banner_photo_url     || null,
+    work_photos:          shop.work_photos          || [],
+    barber_self_upload_enabled: shop.barber_self_upload_enabled || false,
   };
 }
 
