@@ -10785,17 +10785,38 @@ async function saveEditStoreItem() {
     }
   }
 
-  function cpRespond(query) {
+  var cpHistory = []; // {role: 'user'|'bot', content: '...'}
+
+  async function cpRespond(query) {
+    cpHistory.push({ role: 'user', content: query });
     cpTyping(true);
-    setTimeout(function() {
+    try {
+      var tok = (typeof token !== 'undefined' && token) || localStorage.getItem('filo_token') || '';
+      var r = await fetch('/api/copilot/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + tok
+        },
+        body: JSON.stringify({ messages: cpHistory })
+      });
       cpTyping(false);
+      if (!r.ok) throw new Error('status ' + r.status);
+      var data = await r.json();
+      var answer = (data && data.answer) ? data.answer : '';
+      if (!answer) throw new Error('empty');
+      cpHistory.push({ role: 'bot', content: answer });
+      cpAddMsg('bot', answer);
+    } catch(e) {
+      cpTyping(false);
+      // Fallback al KB viejo si el backend no responde
       var match = cpMatch(query);
       if (match) {
         cpAddMsg('bot', match.ans);
       } else {
-        cpAddMsg('bot', 'No encontre respuesta para eso.\n\nPodes preguntarme sobre:\n- Turnos y agenda\n- Sistema de puntos y premios\n- WhatsApp\n- Barberos y comisiones\n- Configuracion y reservas');
+        cpAddMsg('bot', 'No pude conectarme con la IA ahora. Podés probar de nuevo o preguntarme sobre:\n- Turnos y agenda\n- Puntos y premios\n- WhatsApp\n- Barberos y comisiones\n- Configuración y reservas');
       }
-    }, 700);
+    }
   }
 
   window.cpSend = function() {
