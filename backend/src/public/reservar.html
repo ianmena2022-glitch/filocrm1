@@ -601,7 +601,9 @@ function loadShopData(data) {
   // Logo: foto de perfil si existe, sino letra
   const logoEl = document.getElementById('shop-logo');
   if (shopData.profile_photo_url) {
-    logoEl.innerHTML = `<img src="${shopData.profile_photo_url}" alt="${shopData.name}">`;
+    logoEl.innerHTML = `<img src="${shopData.profile_photo_url}" alt="">`;
+    const altImg = logoEl.querySelector('img');
+    if (altImg) altImg.alt = shopData.name;
   } else {
     logoEl.textContent = shopData.name.charAt(0).toUpperCase();
   }

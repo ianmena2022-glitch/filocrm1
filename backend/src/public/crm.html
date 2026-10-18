@@ -1907,7 +1907,7 @@ select.form-input { padding-right: 32px; }
       </div>
       <div class="form-group">
         <label>Contraseña</label>
-        <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres">
+        <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
       </div>
       <div class="form-group">
         <label>Tu número de WhatsApp (celular argentino)</label>
@@ -3696,7 +3696,7 @@ select.form-input { padding-right: 32px; }
               <span id="booking-link-text" style="font-size:13px;color:var(--yellow);word-break:break-all"></span>
               <button onclick="copyBookingLink()" style="background:var(--yellow);color:var(--navy);border:none;padding:8px 14px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Copiar</button>
             </div>
-            <a id="booking-link-open" href="#" target="_blank" class="btn-motor secondary" style="display:block;text-align:center;text-decoration:none;padding:11px">👁️ Ver página de reservas</a>
+            <a id="booking-link-open" href="#" target="_blank" rel="noopener noreferrer" class="btn-motor secondary" style="display:block;text-align:center;text-decoration:none;padding:11px">👁️ Ver página de reservas</a>
           </div>
           <div id="booking-link-placeholder" style="font-size:13px;color:var(--gray)">Guardá tu configuración primero para generar tu link.</div>
         </div>
@@ -12454,7 +12454,7 @@ async function bcmSave(id) {
       <span></span><span></span><span></span>
     </div>
     <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:16px">Esperando confirmación de pago...</div>
-    <a id="qr-mp-link" href="#" target="_blank" style="display:block;font-size:12px;color:rgba(255,209,0,.6);margin-bottom:14px;text-decoration:none">Pagar desde el navegador →</a>
+    <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer" style="display:block;font-size:12px;color:rgba(255,209,0,.6);margin-bottom:14px;text-decoration:none">Pagar desde el navegador →</a>
     <button class="btn-qr-secondary" onclick="closeQRModal()">Cancelar</button>
   </div>
 

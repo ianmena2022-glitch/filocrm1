@@ -16,6 +16,25 @@ process.on('uncaughtException', (err) => {
   console.error('⚠️  uncaughtException (no crash):', err.message);
 });
 
+// ── Startup: env vars críticas ──
+// Fail-loud en producción si faltan. En dev, warning no bloqueante.
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length) {
+  const msg = `❌ Faltan env vars críticas: ${missing.join(', ')}`;
+  console.error(msg);
+  if (process.env.NODE_ENV === 'production') { process.exit(1); }
+}
+// Env vars opcionales que silenciosamente apagan features — las logueamos para no sorprenderse después
+const OPTIONAL_FEATURES = {
+  CLOUDINARY_API_SECRET: 'uploads de fotos (branding + portfolio)',
+  GROQ_API_KEY:          'bot de WhatsApp con IA',
+  MP_WEBHOOK_SECRET:     'firma de webhooks de Mercado Pago',
+};
+for (const [k, feat] of Object.entries(OPTIONAL_FEATURES)) {
+  if (!process.env[k]) console.warn(`⚠️  ${k} no seteada — feature deshabilitada: ${feat}`);
+}
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
@@ -56,6 +75,26 @@ app.use(rateLimit({
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// ── Sanea errores 500 que leakean internals de DB/sistema ──
+// Patches res.json/res.send para que si status=5xx y el body expone info sensible
+// (nombres de columnas, SQL state, stack traces), se loguee server-side y se devuelva
+// un mensaje genérico al cliente. En desarrollo (NODE_ENV!=production) se preserva.
+const IS_PROD = process.env.NODE_ENV === 'production';
+const DB_LEAK_PATTERNS = /(does not exist|relation ".*" does not exist|column ".*"|invalid input syntax|violates (not-null|foreign key|unique|check) constraint|duplicate key value|ECONN|getaddrinfo|at Object\.|at async |\n\s*at )/i;
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res);
+  res.json = function (body) {
+    try {
+      if (IS_PROD && res.statusCode >= 500 && body && typeof body.error === 'string' && DB_LEAK_PATTERNS.test(body.error)) {
+        console.error(`[500-SANITIZED] ${req.method} ${req.path} →`, body.error);
+        body = { error: 'Error interno del servidor. Intentá de nuevo en un momento.' };
+      }
+    } catch (_) {}
+    return origJson(body);
+  };
+  next();
+});
 
 // ── Middleware Paywall ────────────────────────────────
 app.use(require('./middleware/paywall'));
@@ -401,6 +440,11 @@ app.get('/funciones', (req, res) => {
   res.sendFile(path.join(publicDir, 'funciones.html'));
 });
 
+// API 404 explícito: evita que /api/foo inexistente caiga en el catch-all y devuelva HTML
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Endpoint no encontrado' });
+});
+
 // Cualquier otra ruta → CRM
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicDir, 'crm.html'));
@@ -408,10 +452,12 @@ app.get('*', (req, res) => {
 
 // ── Error handler global (SIEMPRE después de las rutas) ────────────────────
 // Evita que Express devuelva HTML <!DOCTYPE> en errores — siempre JSON
+// En producción, nunca expone err.message al cliente para no leakear internals.
 app.use((err, req, res, next) => {
-  console.error('❌ Express error:', err.status || 500, err.message);
+  console.error('❌ Express error:', err.status || 500, err.message, err.stack);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ error: err.message || 'Error interno del servidor' });
+  const safe = status < 500 ? (err.message || 'Error') : 'Error interno del servidor';
+  res.status(status).json({ error: IS_PROD ? safe : (err.message || safe) });
 });
 
 // ── Init DB ────────────────────────────────────────────
