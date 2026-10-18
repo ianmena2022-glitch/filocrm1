@@ -64,6 +64,7 @@ async function mpFetch(method, path, body, tokenOverride) {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'X-Idempotency-Key': crypto.randomUUID()
     },
     body: body ? JSON.stringify(body) : undefined
@@ -285,16 +286,9 @@ async function getMpUserId() {
 }
 
 async function findFiloStore(userId) {
-  // 1) Intentar search por external_id (sin user_id, es global al token)
+  // El path correcto es /users/{userId}/stores (POST crea, GET lista — ahora con Accept: application/json)
   try {
-    const list = await mpFetch('GET', `/stores/search?external_id=FILOSUBS`, null, MP_QR_TOKEN);
-    const results = list?.results || list?.elements || (Array.isArray(list) ? list : []);
-    const match = results.find(s => (s.external_id === 'FILOSUBS') || (s.store?.external_id === 'FILOSUBS'));
-    if (match) return match.id || match.store?.id;
-  } catch(e) { /* seguir con fallback */ }
-  // 2) Fallback: listar todos los stores con /stores/search y filtrar
-  try {
-    const list = await mpFetch('GET', `/stores/search`, null, MP_QR_TOKEN);
+    const list = await mpFetch('GET', `/users/${userId}/stores`, null, MP_QR_TOKEN);
     const results = list?.results || list?.elements || (Array.isArray(list) ? list : []);
     const match = results.find(s => (s.external_id === 'FILOSUBS') || (s.store?.external_id === 'FILOSUBS'));
     if (match) return match.id || match.store?.id;
@@ -337,8 +331,9 @@ async function ensureFiloStore() {
 async function findPosByExtId(extId) {
   try {
     const list = await mpFetch('GET', `/pos?external_id=${extId}`, null, MP_QR_TOKEN);
-    const results = Array.isArray(list) ? list : (list?.results || []);
-    return results[0] || null;
+    let results = Array.isArray(list) ? list : (list?.results || []);
+    const match = results.find(p => (p.external_id === extId));
+    return match || results[0] || null;
   } catch(e) {
     console.warn(`[MP] findPos failed: ${e.message}`);
     return null;
