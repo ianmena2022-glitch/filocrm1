@@ -5826,15 +5826,46 @@ async function pushRegisterSW() {
 
 async function pushMaybeShowPrompt() {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (localStorage.getItem('filo_push_dismissed')) return;
   if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
-  // Mostrar invitación suave en el dropdown
+  // Dismissed solo por sesión (así re-pregunta al reabrir / reinstalar PWA)
+  if (sessionStorage.getItem('filo_push_dismissed')) return;
   const el = document.getElementById('notif-push-prompt');
   if (el) el.style.display = 'block';
+  // Además mostrar un banner flotante visible sin abrir el bell
+  showFloatingPushBanner();
+}
+
+function showFloatingPushBanner() {
+  if (document.getElementById('push-float-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'push-float-banner';
+  b.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">🔔 Activar notificaciones</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.65);margin-bottom:10px;line-height:1.4">Recibí avisos de turnos y pagos aunque la app esté cerrada.</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="pushRequestPermission();document.getElementById('push-float-banner')?.remove()" style="flex:1;background:var(--yellow);color:#000;border:none;padding:9px 14px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif">Activar</button>
+      <button onclick="pushDismissPrompt();document.getElementById('push-float-banner')?.remove()" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.6);padding:9px 14px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif">Ahora no</button>
+    </div>`;
+  Object.assign(b.style, {
+    position:'fixed', bottom:'calc(16px + env(safe-area-inset-bottom))', right:'16px', left:'16px', maxWidth:'360px',
+    marginLeft:'auto', zIndex:'9800',
+    background:'rgba(5,13,24,.95)', border:'1px solid rgba(255,209,0,.3)',
+    borderRadius:'14px', padding:'14px', boxShadow:'0 20px 60px rgba(0,0,0,.6)',
+    backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)',
+    animation:'pushBannerIn .35s cubic-bezier(.2,.9,.3,1) both'
+  });
+  document.body.appendChild(b);
+  if (!document.getElementById('push-banner-anim')) {
+    const st = document.createElement('style'); st.id='push-banner-anim';
+    st.textContent = '@keyframes pushBannerIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}';
+    document.head.appendChild(st);
+  }
 }
 
 function pushDismissPrompt() {
-  localStorage.setItem('filo_push_dismissed', '1');
+  sessionStorage.setItem('filo_push_dismissed', '1');
+  // limpiar restos viejos del flag persistente
+  try { localStorage.removeItem('filo_push_dismissed'); } catch(_) {}
   const el = document.getElementById('notif-push-prompt');
   if (el) el.style.display = 'none';
 }
