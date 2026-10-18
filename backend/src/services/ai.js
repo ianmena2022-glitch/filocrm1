@@ -1,5 +1,10 @@
 const pool = require('../db/pool');
 
+// Modelos de Groq (overrideables por env). llama-3.3-70b-versatile fue decommissioned.
+// Default: llama-3.1-8b-instant (clasificador rápido/barato) y para el chat principal.
+const GROQ_MODEL        = process.env.GROQ_MODEL        || 'llama-3.1-8b-instant';
+const GROQ_MODEL_CHAT   = process.env.GROQ_MODEL_CHAT   || GROQ_MODEL;
+
 // Historial de conversaciones en memoria
 const conversations  = {};
 const lastActivity   = {};
@@ -105,7 +110,7 @@ Respondé ÚNICAMENTE "true" o "false".`;
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: GROQ_MODEL_CHAT,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Mensaje: "${text}"` }
@@ -244,7 +249,7 @@ Profesional y cercano. Usá "vos". Máximo 3 líneas por mensaje. Sin markdown, 
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 200, temperature: 0.7 })
+        body: JSON.stringify({ model: GROQ_MODEL_CHAT, messages, max_tokens: 200, temperature: 0.7 })
       },
       12000
     );
@@ -364,7 +369,7 @@ async function _getAIResponseImpl(shopId, phone, userMessage) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: GROQ_MODEL_CHAT,
           messages: [{ role: 'system', content: context }, ...conversations[key]],
           max_tokens: 200,
           temperature: 0.7,
@@ -417,7 +422,7 @@ async function generateMessage(shopId, type, context) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: GROQ_MODEL_CHAT,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 200,
           temperature: 0.8,
@@ -518,7 +523,7 @@ Solo el JSON, sin texto extra.`;
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL_CHAT,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 200,
         temperature: 0,
