@@ -103,7 +103,8 @@
     document.getElementById('pwa-install-banner')?.remove();
     const m = document.createElement('div');
     m.id = 'pwa-install-modal';
-    const shareIcon = `<svg width="18" height="22" viewBox="0 0 50 60" style="vertical-align:middle"><path fill="#0a84ff" d="M25 40c-1.1 0-2-.9-2-2V11.4l-4.6 4.6c-.8.8-2 .8-2.8 0s-.8-2 0-2.8l8-8c.8-.8 2-.8 2.8 0l8 8c.8.8.8 2 0 2.8s-2 .8-2.8 0L27 11.4V38c0 1.1-.9 2-2 2z"/><path fill="#0a84ff" d="M42 56H8c-3.3 0-6-2.7-6-6V26c0-3.3 2.7-6 6-6h7c1.1 0 2 .9 2 2s-.9 2-2 2H8c-1.1 0-2 .9-2 2v24c0 1.1.9 2 2 2h34c1.1 0 2-.9 2-2V26c0-1.1-.9-2-2-2h-7c-1.1 0-2-.9-2-2s.9-2 2-2h7c3.3 0 6 2.7 6 6v24c0 3.3-2.7 6-6 6z"/></svg>`;
+    const menuIcon  = `<span style="display:inline-flex;flex-direction:column;gap:2.5px;vertical-align:middle;padding:3px 4px;border:1px solid rgba(255,255,255,.3);border-radius:5px;margin:0 2px"><span style="width:11px;height:1.5px;background:#fff;border-radius:1px"></span><span style="width:11px;height:1.5px;background:#fff;border-radius:1px"></span><span style="width:11px;height:1.5px;background:#fff;border-radius:1px"></span></span>`;
+    const shareIcon = `<svg width="14" height="17" viewBox="0 0 50 60" style="vertical-align:middle;margin:0 2px"><path fill="#0a84ff" d="M25 40c-1.1 0-2-.9-2-2V11.4l-4.6 4.6c-.8.8-2 .8-2.8 0s-.8-2 0-2.8l8-8c.8-.8 2-.8 2.8 0l8 8c.8.8.8 2 0 2.8s-2 .8-2.8 0L27 11.4V38c0 1.1-.9 2-2 2z"/><path fill="#0a84ff" d="M42 56H8c-3.3 0-6-2.7-6-6V26c0-3.3 2.7-6 6-6h7c1.1 0 2 .9 2 2s-.9 2-2 2H8c-1.1 0-2 .9-2 2v24c0 1.1.9 2 2 2h34c1.1 0 2-.9 2-2V26c0-1.1-.9-2-2-2h-7c-1.1 0-2-.9-2-2s.9-2 2-2h7c3.3 0 6 2.7 6 6v24c0 3.3-2.7 6-6 6z"/></svg>`;
     m.innerHTML = `
       <div style="background:rgba(10,20,36,.98);max-width:380px;width:100%;border-radius:18px;padding:22px 20px;border:1px solid rgba(255,255,255,.08);box-shadow:0 30px 80px rgba(0,0,0,.7);animation:pwaIn .35s cubic-bezier(.2,.9,.3,1) both">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
@@ -114,10 +115,11 @@
           </div>
           <button id="pwa-ios-x" style="background:transparent;border:none;color:rgba(255,255,255,.45);font-size:26px;cursor:pointer;line-height:1;padding:0 4px">×</button>
         </div>
-        <ol style="color:rgba(255,255,255,.85);font-size:14px;line-height:1.6;padding-left:20px;margin:0 0 10px">
-          <li>Tocá el ícono ${shareIcon} <strong style="color:#0a84ff">Compartir</strong> abajo (o arriba en iPad).</li>
-          <li>Deslizá y tocá <strong>“Agregar a inicio”</strong>.</li>
-          <li>Tocá <strong>“Agregar”</strong> arriba a la derecha.</li>
+        <ol style="color:rgba(255,255,255,.85);font-size:14px;line-height:1.65;padding-left:22px;margin:0 0 10px">
+          <li>Tocá el ícono ${menuIcon} del <strong>menú</strong> abajo en Safari.</li>
+          <li>Tocá ${shareIcon}<strong style="color:#0a84ff">Compartir</strong>.</li>
+          <li>Tocá <strong>“Ver más”</strong>.</li>
+          <li>Tocá <strong>“Agregar a inicio”</strong>.</li>
         </ol>
         <div style="font-size:11.5px;color:rgba(255,255,255,.4);margin-top:12px;line-height:1.4">Tiene que estar abierto en <strong style="color:rgba(255,255,255,.6)">Safari</strong>. Si estás en otro navegador, abrilo en Safari primero.</div>
       </div>`;
