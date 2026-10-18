@@ -252,6 +252,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     <div class="topbar-right">
       <span style="font-size:12px;color:var(--g)" id="last-update"></span>
       <button class="btn-ghost" id="topbar-refresh-btn" onclick="loadAll()">↺ Actualizar</button>
+      <button class="btn-ghost" onclick="adminPushTest()" title="Enviar push de prueba">🔔 Push test</button>
       <button class="btn-ghost" onclick="logout()">Salir</button>
     </div>
   </div>
@@ -1001,6 +1002,25 @@ async function adminPushSubscribe() {
     });
     return sub;
   } catch(e) { console.warn('[admin push] subscribe:', e); return null; }
+}
+
+async function adminPushTest() {
+  try {
+    if (Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { alert('Permiso no concedido. Habilitalo en Ajustes.'); return; }
+    }
+    const sub = await adminPushSubscribe();
+    if (!sub) { alert('No se pudo suscribir'); return; }
+    const r = await fetch('/api/admin/push/test', {
+      method:'POST', headers:{'Authorization':`Bearer ${adminToken}`}
+    }).then(r=>r.json());
+    if (r?.sent > 0) alert(`✅ Test enviado a ${r.sent} dispositivo${r.sent!==1?'s':''}`);
+    else if (r?.reason === 'vapid_missing') alert('⚠️ Falta configurar VAPID en Railway');
+    else if (r?.reason === 'no_subs') alert('⚠️ Sin suscripciones guardadas');
+    else if (r?.reason === 'table_missing') alert('⚠️ Correr migration 038 en la DB');
+    else alert('⚠️ sent=0 — ' + JSON.stringify(r||{}));
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function adminPushInit() {
