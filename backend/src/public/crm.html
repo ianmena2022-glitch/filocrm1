@@ -1317,23 +1317,25 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   /* Equipo: acciones del barbero stackeadas prolijas en mobile */
   .equipo-barber-actions {
     flex-basis: 100%;
-    flex-direction: row !important;
+    flex-direction: column !important;
     align-items: stretch !important;
-    gap: 6px !important;
+    gap: 8px !important;
     margin-top: 8px;
     padding-top: 10px;
     border-top: 1px solid rgba(255,255,255,.06);
   }
   .equipo-barber-actions-row {
-    display: flex; gap: 6px; flex: 1; min-width: 0;
+    display: flex; gap: 6px; width: 100%;
   }
   .equipo-barber-actions-row .appt-btn {
-    flex: 1; min-width: 0; padding: 8px 4px; font-size: 12px;
+    flex: 1; min-width: 0; padding: 9px 4px; font-size: 13px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; justify-content: center;
   }
   .equipo-barber-cta {
-    flex-shrink: 0; font-size: 12px !important; padding: 8px 14px !important;
-    white-space: nowrap;
+    width: 100%;
+    font-size: 13px !important; padding: 10px 14px !important;
+    white-space: nowrap; text-align: center;
   }
 
   .toolbar { gap: 7px; }
