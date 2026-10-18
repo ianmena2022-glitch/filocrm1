@@ -16,11 +16,23 @@
   const isAndroid = /Android/.test(ua);
   const isDesktop = !isIOS && !isAndroid;
 
-  // Respetar dismiss previo
-  try {
-    const d = localStorage.getItem(DISMISS_KEY);
-    if (d && (Date.now() - Number(d)) < DISMISS_DAYS * 86400000) return;
-  } catch(_) {}
+  // Forzar reaparición: URL ?install=1 o window.showFiloInstall()
+  const forced = new URLSearchParams(location.search).has('install');
+  if (forced) {
+    try { localStorage.removeItem(DISMISS_KEY); } catch(_) {}
+  }
+
+  // Respetar dismiss previo (salvo que esté forzado)
+  if (!forced) {
+    try {
+      const d = localStorage.getItem(DISMISS_KEY);
+      if (d && (Date.now() - Number(d)) < DISMISS_DAYS * 86400000) {
+        // Igual exponer el disparador manual
+        window.showFiloInstall = () => { try{localStorage.removeItem(DISMISS_KEY);}catch(_){} shown=false; maybeShow(); };
+        return;
+      }
+    } catch(_) {}
+  }
 
   let deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -31,7 +43,10 @@
 
   // iOS Safari no dispara beforeinstallprompt. Lo mostramos de todas formas.
   // Desktop sin prompt capturado: no mostramos (no suma).
-  setTimeout(() => maybeShow(), SHOW_AFTER_MS);
+  setTimeout(() => maybeShow(), forced ? 0 : SHOW_AFTER_MS);
+
+  // Disparador manual desde consola: window.showFiloInstall()
+  window.showFiloInstall = () => { try{localStorage.removeItem(DISMISS_KEY);}catch(_){} shown=false; maybeShow(); };
 
   let shown = false;
   function maybeShow() {
