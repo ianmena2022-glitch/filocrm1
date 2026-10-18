@@ -730,28 +730,30 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
     pgClient.release();
 
+    const _apptRow = appt.rows[0] || {};
+    const _barberId = _apptRow.barber_id || null;
+
     // Emitir evento SSE en vivo: dueño/sucursal + enterprise owner ven la reserva al toque
     try {
       const sse = require('../services/sse');
-      const row = appt.rows[0] || {};
       sse.emitWithParent(shopData.id, shopData.parent_enterprise_id, 'appointment.created', {
-        id: row.id,
+        id: _apptRow.id,
         shop_id: shopData.id,
         client_name,
         service_name: svcName,
         date, time_start, time_end,
-        barber_id: assignedBarberId,
+        barber_id: _barberId,
         status: apptStatus,
         source: 'online',
       });
-    } catch(sseErr) { /* silent */ }
+    } catch(sseErr) { console.warn('[booking] sse err:', sseErr.message); }
 
     // Notificación in-app: dueño + barbero asignado (si hay)
     try {
       const notif = require('../services/notifications');
       const recipients = [shopData.id];
-      if (assignedBarberId) recipients.push(assignedBarberId);
-      const timeStr = time_start?.slice(0,5) || '';
+      if (_barberId) recipients.push(_barberId);
+      const timeStr = (time_start || '').slice(0,5);
       console.log(`[booking] disparando notif a recipients=${JSON.stringify(recipients)}`);
       await notif.createMany(recipients, {
         shopId: shopData.id,
