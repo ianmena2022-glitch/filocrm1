@@ -1283,7 +1283,10 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 
   .topbar { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
   .topbar-left h1 { font-size: 20px; }
-  .btn-add { width: 100%; justify-content: center; }
+  /* Fila derecha: wrap + user-group siempre visible */
+  .topbar > div:last-child { flex-wrap: wrap; width: 100%; gap: 8px !important; }
+  .btn-add { flex: 1 1 auto; min-width: 0; justify-content: center; }
+  .topbar-user-group { flex-shrink: 0; margin-left: 0 !important; }
 
   .ganancia-hero { flex-direction: column; gap: 14px; padding: 18px; }
   .ganancia-value { font-size: 34px; }
