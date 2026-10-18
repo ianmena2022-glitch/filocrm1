@@ -1848,6 +1848,21 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 /* Skeleton loader (shimmer) para listas que todavía no cargaron */
 @keyframes skeleton-shimmer { 0% { background-position: -200px 0 } 100% { background-position: calc(200px + 100%) 0 } }
 .skeleton { background: linear-gradient(90deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.06) 100px, rgba(255,255,255,.03) 200px); background-size: calc(200px + 100%) 100%; animation: skeleton-shimmer 1.3s linear infinite; border-radius: 8px; display: block; }
+.skel-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--navy-mid); border: 1px solid var(--navy-border); border-radius: var(--radius-lg); margin-bottom: 10px; }
+.skel-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+.skel-lines { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.skel-line { height: 11px; border-radius: 6px; }
+.skel-line.w-70 { width: 70%; } .skel-line.w-50 { width: 50%; } .skel-line.w-40 { width: 40%; } .skel-line.w-30 { width: 30%; }
+.skel-chip { width: 68px; height: 24px; border-radius: 20px; flex-shrink: 0; }
+
+/* Success checkmark overlay (post-cobro, post-pago) */
+.success-overlay { position: fixed; inset: 0; z-index: 20000; background: rgba(0,0,0,.65); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; animation: backdropIn .18s ease forwards; }
+.success-card { background: var(--navy-mid); border: 1px solid rgba(0,230,118,.3); border-radius: 20px; padding: 32px 40px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 260px; max-width: 340px; animation: modalIn .22s cubic-bezier(.34,1.2,.64,1); }
+.success-circle { width: 72px; height: 72px; border-radius: 50%; background: rgba(0,230,118,.12); border: 2px solid rgba(0,230,118,.4); display: flex; align-items: center; justify-content: center; }
+.success-circle svg { width: 40px; height: 40px; }
+.success-circle svg path { stroke: #00E676; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 40; stroke-dashoffset: 40; animation: checkDraw .5s ease-out .15s forwards; }
+.success-title { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: .5px; color: #fff; }
+.success-sub { font-size: 13px; color: var(--gray); text-align: center; line-height: 1.5; }
 
 /* Oculta las tabs viejas (quedan solo para compat del tour y shortcuts del dashboard) */
 .cfg-tabs-nav { display: none !important; }
@@ -5769,7 +5784,9 @@ async function confirmWalkInPayment() {
       tip, barber_id: barberId || undefined,
       commission_pct: commissionPct
     });
-    showToast('✅ Walk-in cobrado y registrado');
+    const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[_walkInPayMethod] || _walkInPayMethod;
+    const amt = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
+    showSuccessPop({ title: 'Walk-in cobrado', sub: amt });
     loadQueue();
   } catch(e) {
     showToast('❌ ' + (e.message || 'Error al cobrar'));
@@ -6388,6 +6405,7 @@ async function loadAgenda() {
   document.getElementById('agenda-date-display').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-label').textContent = formatDateLabel(agendaDate);
   document.getElementById('agenda-date-picker').value = agendaDate;
+  skeletonList('agenda-list', { rows: 4, variant: 'card' });
 
   // Cargar barberos (si todavía no están) para poder agrupar / filtrar
   if (!window._barbersList) {
@@ -6662,10 +6680,18 @@ async function confirmPayment(apptId) {
   const method = window._selectedPayMethod;
   if (!method) { showToast('⚠️', 'Seleccioná un método de pago', ''); return; }
   const tip = parseFloat(document.getElementById('tip-input')?.value) || 0;
+  // Obtener price para el mensaje de éxito (antes de cerrar el popup)
+  const price = parseFloat(document.getElementById('payment-price')?.textContent?.replace(/[^0-9.-]/g,'') || '0');
   document.getElementById('payment-popup')?.remove();
   try {
     await api('PUT', `/appointments/${apptId}/status`, { status: 'completed', payment_method: method, tip });
-    showToast('✅', 'Turno completado', method === 'debt' ? '💰 Deuda registrada' : '¡Cobro registrado en caja!');
+    const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[method] || method;
+    if (method === 'debt') {
+      showSuccessPop({ title: 'Fiado registrado', sub: '💰 Deuda cargada en el cliente' });
+    } else {
+      const amount = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
+      showSuccessPop({ title: '¡Cobrado!', sub: amount });
+    }
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();
@@ -6695,6 +6721,8 @@ async function deleteAppt(id) {
 
 // ─── CLIENTES ───
 async function loadClients() {
+  // Skeleton inmediato mientras llega la respuesta
+  skeletonList('clients-list', { rows: 6, variant: 'card' });
   try {
     clients = await api('GET', '/clients');
     renderClients();
@@ -7223,6 +7251,7 @@ async function savePlanesConfig() {
   }
 }
 async function loadMemberships() {
+  skeletonList('memb-list', { rows: 4, variant: 'card' });
   try {
     const [membs, stats] = await Promise.all([
       api('GET', '/memberships'),
@@ -9074,6 +9103,64 @@ document.addEventListener('DOMContentLoaded', () => {
   mo.observe(document.body, { childList: true, subtree: true });
 });
 
+// ─── SKELETON LOADER (listas en estado de carga) ───
+// skeletonList(container, {rows: 5, variant: 'card'|'row'})
+//   container: elemento DOM o id
+//   rows: cuántos placeholders mostrar
+//   variant: 'card' (avatar + 2 líneas + chip) o 'row' (3 líneas apiladas)
+function skeletonList(container, opts) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el) return;
+  const { rows = 4, variant = 'card' } = opts || {};
+  let html = '';
+  if (variant === 'card') {
+    for (let i = 0; i < rows; i++) {
+      html += `<div class="skel-card">
+        <div class="skeleton skel-avatar"></div>
+        <div class="skel-lines">
+          <div class="skeleton skel-line w-50"></div>
+          <div class="skeleton skel-line w-70"></div>
+        </div>
+        <div class="skeleton skel-chip"></div>
+      </div>`;
+    }
+  } else {
+    for (let i = 0; i < rows; i++) {
+      html += `<div class="skel-card" style="flex-direction:column;align-items:stretch;gap:9px">
+        <div class="skeleton skel-line w-40"></div>
+        <div class="skeleton skel-line w-70"></div>
+        <div class="skeleton skel-line w-30"></div>
+      </div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+// ─── SUCCESS POP (checkmark animado post-acción) ───
+// showSuccessPop({title: 'Cobrado!', sub: '$1.234 · Efectivo', duration: 1600, onDone: fn})
+function showSuccessPop(opts) {
+  const { title = '¡Listo!', sub = '', duration = 1500, onDone = null } = opts || {};
+  const el = document.createElement('div');
+  el.className = 'success-overlay';
+  el.innerHTML = `
+    <div class="success-card">
+      <div class="success-circle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 l5 5 L20 6.5"/></svg>
+      </div>
+      <div class="success-title">${String(title).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}</div>
+      ${sub ? `<div class="success-sub">${String(sub).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}</div>` : ''}
+    </div>`;
+  // Click en el backdrop cierra inmediatamente
+  el.addEventListener('click', (e) => {
+    if (e.target === el) { try { el.remove(); } catch(_){} }
+  });
+  document.body.appendChild(el);
+  setTimeout(() => {
+    try { el.remove(); } catch(_){}
+    if (typeof onDone === 'function') onDone();
+  }, duration);
+}
+
 // ─── SPEEDING TEXT + COUNT-UP (stats que entran a toda velocidad) ───
 // animateStat(el, finalValue, opts)
 //   el: elemento target
@@ -9705,6 +9792,7 @@ async function deleteRecurrente(id) {
 
 // ─── EQUIPO (STAFF) ───
 async function loadEquipo() {
+  skeletonList('equipo-list', { rows: 3, variant: 'card' });
   try {
     const [barbers, stats] = await Promise.all([
       api('GET', '/barbers'),
@@ -10125,7 +10213,8 @@ async function confirmSettlement() {
   try {
     const res = await api('POST', `/barbers/${_settlementBarberId}/settle`, { notes });
     closeSettlementModal();
-    showToast('✅', 'Liquidación registrada', `$${parseFloat(res.settlement.commission_amount).toLocaleString('es-AR', {maximumFractionDigits:0})} liquidados para ${res.settlement.barber_name}`);
+    const amt = parseFloat(res.settlement.commission_amount).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    showSuccessPop({ title: 'Liquidación OK', sub: `$${amt} liquidados a ${res.settlement.barber_name}` });
     loadEquipo();
   } catch(e) {
     showToast('❌', 'Error', e.message);
