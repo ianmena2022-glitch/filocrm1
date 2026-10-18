@@ -2,7 +2,7 @@
 <html lang="es-AR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Tienda de Puntos FILO</title>
 <meta name="description" content="Canjeá tus puntos FILO por premios en la tienda de tu barbería. Acumulá puntos con cada turno y elegí tu recompensa.">
 <meta name="robots" content="index, follow">
@@ -25,7 +25,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,.btn,[role="button"],[onclick]{touch-action:manipulation}
+@media (max-width:820px){input:not([type="checkbox"]):not([type="radio"]),select,textarea{font-size:16px!important}}
 :root{--y:#FFD100;--n:#000d1f;--nm:#001428;--nk:#002043;--w:#fff;--g:#8a9ab5;--gl:#1a2540;--gr:#00E676;--r:#FF4343;--or:#FF9100}
 body{background:var(--n);color:var(--w);font-family:'Barlow',sans-serif;min-height:100vh;min-height:100dvh}
 
