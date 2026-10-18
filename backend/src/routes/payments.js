@@ -285,16 +285,23 @@ async function getMpUserId() {
 }
 
 async function findFiloStore(userId) {
-  // Lista todos los stores del user y filtra por external_id
+  // 1) Intentar search por external_id (sin user_id, es global al token)
   try {
-    const list = await mpFetch('GET', `/users/${userId}/stores`, null, MP_QR_TOKEN);
-    const results = Array.isArray(list) ? list : (list?.results || list?.elements || []);
-    const match = results.find(s => s.external_id === 'FILOSUBS' || s.store?.external_id === 'FILOSUBS');
-    return match ? (match.id || match.store?.id) : null;
+    const list = await mpFetch('GET', `/stores/search?external_id=FILOSUBS`, null, MP_QR_TOKEN);
+    const results = list?.results || list?.elements || (Array.isArray(list) ? list : []);
+    const match = results.find(s => (s.external_id === 'FILOSUBS') || (s.store?.external_id === 'FILOSUBS'));
+    if (match) return match.id || match.store?.id;
+  } catch(e) { /* seguir con fallback */ }
+  // 2) Fallback: listar todos los stores con /stores/search y filtrar
+  try {
+    const list = await mpFetch('GET', `/stores/search`, null, MP_QR_TOKEN);
+    const results = list?.results || list?.elements || (Array.isArray(list) ? list : []);
+    const match = results.find(s => (s.external_id === 'FILOSUBS') || (s.store?.external_id === 'FILOSUBS'));
+    if (match) return match.id || match.store?.id;
   } catch(e) {
-    console.warn(`[MP] findFiloStore list failed: ${e.message}`);
-    return null;
+    console.warn(`[MP] findFiloStore failed: ${e.message}`);
   }
+  return null;
 }
 
 async function ensureFiloStore() {
