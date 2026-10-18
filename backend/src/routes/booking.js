@@ -20,7 +20,7 @@ function isBarberAvailable(barberSchedule, date, timeStart) {
 router.get('/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url, social_links
        FROM shops WHERE booking_slug = $1`,
       [req.params.slug]
     );

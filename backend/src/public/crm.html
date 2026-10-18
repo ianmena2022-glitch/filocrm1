@@ -3465,6 +3465,19 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <input type="text" id="cfg-address" placeholder="Av. Corrientes 1234">
             </div>
             <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
+              <label style="display:flex;align-items:center;gap:8px;font-weight:700">🔗 Links sociales <span style="font-size:11px;color:var(--gray);font-weight:500">(se muestran en tu página de reserva)</span></label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">📷 Instagram</div><input type="url" id="cfg-social-instagram" placeholder="https://instagram.com/..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">👍 Facebook</div><input type="url" id="cfg-social-facebook" placeholder="https://facebook.com/..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">🎵 TikTok</div><input type="url" id="cfg-social-tiktok" placeholder="https://tiktok.com/@..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">▶️ YouTube</div><input type="url" id="cfg-social-youtube" placeholder="https://youtube.com/..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">💬 WhatsApp</div><input type="url" id="cfg-social-whatsapp" placeholder="https://wa.me/549..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">🌐 Sitio web</div><input type="url" id="cfg-social-website" placeholder="https://..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">📍 Google Maps</div><input type="url" id="cfg-social-maps" placeholder="https://maps.app.goo.gl/..." autocomplete="off"></div>
+                <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">𝕏 Twitter / X</div><input type="url" id="cfg-social-x" placeholder="https://x.com/..." autocomplete="off"></div>
+              </div>
+            </div>
+            <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
               <label>Días sin visita = cliente en fuga</label>
               <input type="number" id="cfg-churn" placeholder="20" min="7" max="90">
             </div>
@@ -8267,6 +8280,11 @@ async function loadSettings() {
     document.getElementById('cfg-address').value = settings.address || '';
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
     document.getElementById('cfg-timezone').value = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Argentina/Buenos_Aires';
+    const sl = settings.social_links || {};
+    ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x'].forEach(k => {
+      const el = document.getElementById('cfg-social-' + k);
+      if (el) el.value = sl[k] || '';
+    });
     const slotEl = document.getElementById('cfg-slot-interval');
     if (slotEl) slotEl.value = String(settings.slot_interval_minutes || 30);
 
@@ -8491,7 +8509,12 @@ async function saveSettings(silent = false) {
     sena_pct:              parseInt(document.getElementById('cfg-sena-pct')?.value) || 30,
     sena_alias:            document.getElementById('cfg-sena-alias')?.value.trim() || null,
     sena_payment_method:   document.getElementById('cfg-sena-payment-method')?.value || 'transfer',
-    slot_interval_minutes: Math.min(200, Math.max(5, parseInt(document.getElementById('cfg-slot-interval')?.value) || 30))
+    slot_interval_minutes: Math.min(200, Math.max(5, parseInt(document.getElementById('cfg-slot-interval')?.value) || 30)),
+    social_links: ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x'].reduce((acc,k) => {
+      const v = (document.getElementById('cfg-social-' + k)?.value || '').trim();
+      if (v) acc[k] = v;
+      return acc;
+    }, {})
   };
   try {
     const res = await api('PUT', '/settings', body);

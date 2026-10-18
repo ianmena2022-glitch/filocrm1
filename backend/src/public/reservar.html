@@ -88,6 +88,10 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
 .header-meta{font-size:13px;color:var(--g)}
 
 /* TEAM BUTTON (debajo de member teaser) */
+.social-links{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:10px;position:relative;z-index:2}
+.social-links a{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.85);transition:transform .15s ease,background .15s ease,color .15s ease;text-decoration:none}
+.social-links a:hover{background:rgba(255,255,255,.14);transform:translateY(-1px);color:#fff}
+.social-links svg{width:17px;height:17px;display:block}
 .team-teaser{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;margin-bottom:14px;cursor:pointer;background:transparent;border:1px dashed rgba(255,209,0,.2);border-radius:10px;width:100%;transition:all .2s;font-size:13px;color:rgba(255,255,255,.45)}
 .team-teaser:hover{background:rgba(255,209,0,.04);border-color:rgba(255,209,0,.4);color:rgba(255,255,255,.7)}
 .team-teaser b{color:var(--y)}
@@ -286,6 +290,7 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
     <div class="header-logo" id="shop-logo">✂</div>
     <div class="header-name" id="shop-name">Barbería</div>
     <div class="header-meta" id="shop-meta"></div>
+    <div class="social-links" id="shop-social"></div>
     <a href="https://filocrm.com.ar" target="_blank" rel="noopener" class="powered-badge">
       <div class="powered-badge-dot"><img src="/logo_f.png" style="width:16px;height:16px;object-fit:cover;display:block"></div>
       <span class="powered-badge-txt">Powered by FILO</span>
@@ -644,6 +649,9 @@ function loadShopData(data) {
   const teamBtn = document.getElementById('team-teaser');
   if (teamBtn) teamBtn.style.display = 'flex';
 
+  // Links sociales: íconos clickeables bajo el meta
+  renderSocialLinks(shopData.social_links || {});
+
   // SEO dinámico: actualizar og:title + JSON-LD con datos reales del local
   const ogTitle = document.querySelector('meta[property="og:title"]');
   const ogDesc  = document.querySelector('meta[property="og:description"]');
@@ -674,6 +682,34 @@ function loadShopData(data) {
   let ldEl = document.getElementById('ld-shop');
   if (!ldEl) { ldEl = document.createElement('script'); ldEl.id = 'ld-shop'; ldEl.type = 'application/ld+json'; document.head.appendChild(ldEl); }
   ldEl.textContent = JSON.stringify(ld);
+}
+
+function _sanitizeUrl(u) {
+  const s = String(u || '').trim();
+  if (!/^https?:\/\//i.test(s)) return '';
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderSocialLinks(links) {
+  const el = document.getElementById('shop-social');
+  if (!el) return;
+  const ICONS = {
+    instagram: 'Instagram|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c2.72 0 3.06.01 4.12.06 1.06.05 1.79.22 2.42.47.65.25 1.2.59 1.75 1.14.55.55.89 1.1 1.14 1.75.25.63.42 1.36.47 2.42.05 1.06.06 1.4.06 4.12s-.01 3.06-.06 4.12c-.05 1.06-.22 1.79-.47 2.42a4.9 4.9 0 0 1-1.14 1.75c-.55.55-1.1.89-1.75 1.14-.63.25-1.36.42-2.42.47-1.06.05-1.4.06-4.12.06s-3.06-.01-4.12-.06c-1.06-.05-1.79-.22-2.42-.47a4.9 4.9 0 0 1-1.75-1.14 4.9 4.9 0 0 1-1.14-1.75c-.25-.63-.42-1.36-.47-2.42C2.01 15.06 2 14.72 2 12s.01-3.06.06-4.12c.05-1.06.22-1.79.47-2.42.25-.65.59-1.2 1.14-1.75.55-.55 1.1-.89 1.75-1.14.63-.25 1.36-.42 2.42-.47C8.94 2.01 9.28 2 12 2zm0 1.8c-2.67 0-3 .01-4.04.06-.98.04-1.5.21-1.85.35-.47.18-.8.4-1.15.75-.35.35-.57.68-.75 1.15-.14.35-.31.87-.35 1.85-.05 1.04-.06 1.37-.06 4.04s.01 3 .06 4.04c.04.98.21 1.5.35 1.85.18.47.4.8.75 1.15.35.35.68.57 1.15.75.35.14.87.31 1.85.35 1.04.05 1.37.06 4.04.06s3-.01 4.04-.06c.98-.04 1.5-.21 1.85-.35.47-.18.8-.4 1.15-.75.35-.35.57-.68.75-1.15.14-.35.31-.87.35-1.85.05-1.04.06-1.37.06-4.04s-.01-3-.06-4.04c-.04-.98-.21-1.5-.35-1.85a3.1 3.1 0 0 0-.75-1.15 3.1 3.1 0 0 0-1.15-.75c-.35-.14-.87-.31-1.85-.35C15 3.81 14.67 3.8 12 3.8zm0 3.06a5.14 5.14 0 1 1 0 10.28 5.14 5.14 0 0 1 0-10.28zm0 1.8a3.34 3.34 0 1 0 0 6.68 3.34 3.34 0 0 0 0-6.68zm5.34-3.17a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z"/></svg>',
+    facebook:  'Facebook|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21.5v-8h2.7l.4-3.1h-3.1V8.4c0-.9.3-1.5 1.6-1.5h1.7V4.1c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4v2.4H7.7v3.1h2.7v8h3.1z"/></svg>',
+    tiktok:    'TikTok|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 7.3a5.3 5.3 0 0 1-3.1-1V15a5.5 5.5 0 1 1-5.5-5.5c.3 0 .6 0 .9.08v2.6a2.9 2.9 0 1 0 2 2.8V2h2.5a5.3 5.3 0 0 0 3.2 4.8v2.5z"/></svg>',
+    youtube:   'YouTube|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.3a3 3 0 0 0-2.1-2.1C19 4.7 12 4.7 12 4.7s-7 0-8.9.5A3 3 0 0 0 1 7.3C.5 9.2.5 12 .5 12s0 2.8.5 4.7a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-4.7.5-4.7s0-2.8-.5-4.7zM9.8 15.5V8.5l5.9 3.5-5.9 3.5z"/></svg>',
+    whatsapp:  'WhatsApp|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3.5A10.4 10.4 0 0 0 3.9 16.1L2.5 21.5l5.5-1.4a10.4 10.4 0 0 0 5 1.3h0a10.4 10.4 0 0 0 7.5-17.9zm-7.4 16h-.1a8.6 8.6 0 0 1-4.4-1.2l-.3-.2-3.3.9.9-3.2-.2-.3a8.6 8.6 0 1 1 7.4 4zm4.7-6.5c-.3-.1-1.5-.8-1.8-.8-.2-.1-.4-.1-.6.1l-.8 1.1c-.2.2-.3.2-.5.1a7 7 0 0 1-2.1-1.3 7.9 7.9 0 0 1-1.4-1.8c-.2-.2 0-.4.1-.5l.4-.4.3-.4c.1-.1.1-.3 0-.4-.1-.1-.6-1.4-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.9.9-.9 2.1s.9 2.5 1 2.6c.1.2 1.8 2.8 4.5 3.9.6.3 1.1.4 1.5.5a3.6 3.6 0 0 0 1.7.1c.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.4-.3z"/></svg>',
+    website:   'Sitio web|<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    maps:      'Mapa|<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    x:         'X|<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 2H21l-7.4 8.5L22.5 22H15l-5-6.6L4.3 22H1l8-9.1L.8 2H8.5l4.5 6 4.5-6zm-1.3 18h1.9L7.9 4H5.8l10.4 16z"/></svg>'
+  };
+  const order = ['instagram','tiktok','youtube','facebook','x','whatsapp','maps','website'];
+  el.innerHTML = order
+    .map(k => ({ k, url: _sanitizeUrl(links[k]) }))
+    .filter(x => x.url)
+    .map(({k,url}) => {
+      const [label, svg] = ICONS[k].split('|');
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${label}">${svg}</a>`;
+    }).join('');
 }
 
 // ── BRANCH SELECTION (solo enterprise) ──
