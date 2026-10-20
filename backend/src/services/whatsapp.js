@@ -129,15 +129,66 @@ function renderTemplate(tpl, vars) {
   return out;
 }
 
-// Throttle de envío por shop: mínimo 500ms entre sendText para evitar flags de WhatsApp
+// Throttle de envío por shop: mínimo 1200ms entre sendText para evitar flags de WhatsApp.
+// WhatsApp detecta bots por ritmo robótico — gap más humano reduce riesgo de ban.
 const lastSendAt = {};
 async function throttleSend(shopId) {
-  const MIN_GAP = 500;
+  const MIN_GAP = parseInt(process.env.WPP_MIN_GAP_MS) || 1200;
   const now = Date.now();
   const last = lastSendAt[shopId] || 0;
   const wait = Math.max(0, (last + MIN_GAP) - now);
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastSendAt[shopId] = Date.now();
+}
+
+// Simula escritura humana antes de mandar: presence 'composing' + delay según largo del msg.
+// Reduce señales que WhatsApp usa para detectar bots.
+async function simulateTyping(sock, jid, messageLength = 100) {
+  if (!sock || !jid) return;
+  try {
+    // Delay base: ~1.2s por 100 chars + jitter aleatorio (±500ms), capeado en 4s
+    const base = Math.min(1200 + Math.round(messageLength * 12), 4000);
+    const jitter = Math.round(Math.random() * 1000) - 500;
+    const delayMs = Math.max(800, base + jitter);
+    try { await sock.presenceSubscribe(jid); } catch(_) {}
+    try { await sock.sendPresenceUpdate('composing', jid); } catch(_) {}
+    await new Promise(r => setTimeout(r, delayMs));
+    try { await sock.sendPresenceUpdate('paused', jid); } catch(_) {}
+  } catch(e) {
+    // No bloquear el envío si falla el presence update
+    console.warn('[WPP] simulateTyping error (no-fatal):', e.message);
+  }
+}
+
+// Cap diario de envíos salientes por shop para evitar runaway de bot.
+// Reset cada medianoche local del server. Si supera el cap, bloquea envíos
+// hasta el día siguiente (devuelve error controlado).
+const DAILY_CAP      = parseInt(process.env.WPP_DAILY_CAP) || 400;
+const DAILY_WARN     = Math.floor(DAILY_CAP * 0.8);
+const _dailySendCount = {}; // { 'shopId:YYYY-MM-DD': count }
+function _dayKey(shopId) {
+  return `${shopId}:${new Date().toISOString().slice(0,10)}`;
+}
+function _checkDailyCap(shopId) {
+  const key = _dayKey(shopId);
+  const n = (_dailySendCount[key] || 0);
+  if (n >= DAILY_CAP) {
+    throw new Error(`WhatsApp: alcanzado cap diario de ${DAILY_CAP} msgs para este shop — reset a las 00:00 UTC`);
+  }
+  if (n === DAILY_WARN) {
+    console.warn(`[WPP] shop ${shopId} alcanzó ${DAILY_WARN}/${DAILY_CAP} msgs hoy — cerca del cap`);
+  }
+}
+function _incrementDailyCount(shopId) {
+  const key = _dayKey(shopId);
+  _dailySendCount[key] = (_dailySendCount[key] || 0) + 1;
+  // Housekeeping: borrar keys de días anteriores
+  if (Math.random() < 0.01) {
+    const today = new Date().toISOString().slice(0,10);
+    for (const k of Object.keys(_dailySendCount)) {
+      if (!k.endsWith(today)) delete _dailySendCount[k];
+    }
+  }
 }
 
 // Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
@@ -1049,13 +1100,18 @@ async function sendText(shopId, phone, message) {
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
   _touch(wppShopId);
 
+  // Cap diario anti-abuso
+  _checkDailyCap(wppShopId);
+
   await throttleSend(wppShopId);
+  // Simular escritura humana (presence 'composing' + delay según largo del msg)
+  await simulateTyping(sock, jid, (message || '').length);
 
   // Timeout corto: si el socket es zombie, no colgamos el request HTTP del CRM 30s.
   // Marcamos el socket como caído y disparamos reconexión en background.
   const result = await Promise.race([
     sock.sendMessage(jid, { text: message }),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('sendText_timeout_8s')), 8000))
+    new Promise((_, rej) => setTimeout(() => rej(new Error('sendText_timeout_8s')), 12000))
   ]).catch(err => {
     if (err.message === 'sendText_timeout_8s') {
       console.warn(`[WPP] sendText timeout en shop ${wppShopId} — marcando zombie`);
@@ -1066,6 +1122,7 @@ async function sendText(shopId, phone, message) {
     }
     throw err;
   });
+  _incrementDailyCount(wppShopId);
   console.log(`Baileys sendText OK → ${result?.key?.id}`);
   return result;
 }
@@ -1190,15 +1247,19 @@ if (!global.__wppSweeperStarted) {
 // Stats para admin / debugging
 function wppStats() {
   const now = Date.now();
+  const today = new Date().toISOString().slice(0,10);
   const active = Object.keys(sockets).map(id => ({
     shopId: parseInt(id),
     status: statuses[id] || 'unknown',
-    last_activity_min: _lastActivity[id] ? Math.round((now - _lastActivity[id]) / 60000) : null
+    last_activity_min: _lastActivity[id] ? Math.round((now - _lastActivity[id]) / 60000) : null,
+    sent_today: _dailySendCount[`${id}:${today}`] || 0
   })).sort((a,b) => (a.last_activity_min||0) - (b.last_activity_min||0));
   return {
     active_sessions: active.length,
     max_sessions: WPP_MAX_SESSIONS,
     idle_ttl_min: Math.round(WPP_IDLE_TTL_MS/60000),
+    min_gap_ms: parseInt(process.env.WPP_MIN_GAP_MS) || 1200,
+    daily_cap: DAILY_CAP,
     sessions: active
   };
 }
