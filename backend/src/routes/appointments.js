@@ -291,9 +291,13 @@ router.put('/:id/status', auth, async (req, res) => {
     // Barberos solo pueden modificar sus propios turnos
     const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
-    // Capturar status PREVIO para detectar transiciones y evitar doble award de puntos
+    // Capturar status PREVIO para detectar transiciones y evitar doble award de puntos.
+    // Nota: shopConditionStatus usa $5 (reusado del UPDATE), acá reescribimos a $2.
+    const shopCondPrev = req.isEnterpriseOwner
+      ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
+      : `shop_id = $2`;
     const prevQ = await pool.query(
-      `SELECT status FROM appointments WHERE id=$1 AND ${shopConditionStatus}${barberCondition}`,
+      `SELECT status FROM appointments WHERE id=$1 AND ${shopCondPrev}${barberCondition}`,
       [req.params.id, shopId]
     );
     const prevStatus = prevQ.rows[0]?.status || null;
@@ -645,10 +649,14 @@ router.delete('/:id', auth, async (req, res) => {
     // Barberos solo pueden borrar sus propios turnos
     const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
-    // Capturar datos del turno ANTES del delete para hacer rollback de puntos/stats y redemption
+    // Capturar datos del turno ANTES del delete para hacer rollback de puntos/stats y redemption.
+    // Reescribimos la condición a $2 (shopConditionDel usa $2 también, verificar).
+    const shopCondDelSelect = req.isEnterpriseOwner
+      ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
+      : `shop_id = $2`;
     const apptQ = await pool.query(
       `SELECT id, client_id, shop_id, price, status FROM appointments
-       WHERE id=$1 AND ${shopConditionDel}${barberCondition}`,
+       WHERE id=$1 AND ${shopCondDelSelect}${barberCondition}`,
       [req.params.id, shopId]
     );
     if (!apptQ.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
