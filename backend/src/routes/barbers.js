@@ -372,8 +372,10 @@ router.put('/:id/bonus/:bonusId', auth, ownerOnly, async (req, res) => {
 });
 
 // POST /api/barbers/:id/settle — crear liquidación
+// payout_splits: [{method, amount}, ...] opcional. Si viene, se registran
+// expense rows separados por método (así la caja aggrega bien por método).
 router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
-  const { notes } = req.body;
+  const { notes, payout_splits } = req.body;
   try {
     const barberQ = await pool.query(
       'SELECT id, name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
@@ -454,14 +456,48 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       );
     }
 
-    // Registrar egreso en caja
-    await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id)
-       VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4)`,
-      [req.shopId, commissionAmount,
-       `Liquidación ${barber.name} — ${notesExtra}`,
-       settlement.rows[0].id]
-    );
+    // Validar splits si vienen
+    let effectiveSplits = null;
+    if (Array.isArray(payout_splits) && payout_splits.length) {
+      const clean = payout_splits
+        .map(s => ({ method: String(s.method||'').trim(), amount: parseFloat(s.amount) || 0 }))
+        .filter(s => s.method && s.amount > 0);
+      if (clean.length) {
+        const total = clean.reduce((n, s) => n + s.amount, 0);
+        if (Math.abs(total - commissionAmount) > 1) {
+          return res.status(400).json({ error: `Los pagos ($${total.toFixed(2)}) no coinciden con la comisión ($${commissionAmount.toFixed(2)})` });
+        }
+        effectiveSplits = clean;
+      }
+    }
+
+    // Registrar egreso en caja: una fila por método si hay splits, o 1 sola si no.
+    if (effectiveSplits && effectiveSplits.length > 1) {
+      for (const s of effectiveSplits) {
+        const exp = await pool.query(
+          `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
+           VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4,$5) RETURNING id`,
+          [req.shopId, s.amount,
+           `Liquidación ${barber.name} (${s.method}) — ${notesExtra}`,
+           settlement.rows[0].id, s.method]
+        );
+        // Registrar split para auditoría
+        await pool.query(
+          `INSERT INTO payment_splits (shop_id, settlement_id, expense_id, method, amount)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [req.shopId, settlement.rows[0].id, exp.rows[0].id, s.method, s.amount]
+        ).catch(()=>{}); // tolerante si la tabla no existe aún
+      }
+    } else {
+      const singleMethod = effectiveSplits?.[0]?.method || null;
+      await pool.query(
+        `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
+         VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4,$5)`,
+        [req.shopId, commissionAmount,
+         `Liquidación ${barber.name} — ${notesExtra}`,
+         settlement.rows[0].id, singleMethod]
+      );
+    }
 
     res.json({ ok: true, settlement: settlement.rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }

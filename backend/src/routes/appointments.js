@@ -277,8 +277,36 @@ router.post('/', auth, async (req, res) => {
 });
 
 // PUT /api/appointments/:id/status
+// Helper: valida y persiste splits de pago para un appointment.
+// Si llegan splits válidos, pisa payment_method a 'mixed'.
+// Retorna { effectivePaymentMethod, totalPaid } o null si no se mandaron splits.
+async function _writeAppointmentSplits(client, shopId, apptId, price, splits) {
+  if (!Array.isArray(splits) || splits.length === 0) return null;
+  const clean = splits
+    .map(s => ({ method: String(s.method||'').trim(), amount: parseFloat(s.amount) || 0 }))
+    .filter(s => s.method && s.amount > 0);
+  if (!clean.length) return null;
+  const total = clean.reduce((n, s) => n + s.amount, 0);
+  const priceN = parseFloat(price || 0);
+  // Toleramos ±1 peso de redondeo
+  if (priceN > 0 && Math.abs(total - priceN) > 1) {
+    throw new Error(`Los pagos ($${total.toFixed(2)}) no suman el precio del servicio ($${priceN.toFixed(2)})`);
+  }
+  await client.query('DELETE FROM payment_splits WHERE appointment_id=$1', [apptId]);
+  for (const s of clean) {
+    await client.query(
+      `INSERT INTO payment_splits (shop_id, appointment_id, method, amount) VALUES ($1,$2,$3,$4)`,
+      [shopId, apptId, s.method, s.amount]
+    );
+  }
+  return {
+    effectivePaymentMethod: clean.length === 1 ? clean[0].method : 'mixed',
+    totalPaid: total
+  };
+}
+
 router.put('/:id/status', auth, async (req, res) => {
-  const { status, payment_method, tip } = req.body;
+  const { status, payment_method, tip, payment_splits } = req.body;
   const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled','waiting_sena'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
@@ -302,12 +330,27 @@ router.put('/:id/status', auth, async (req, res) => {
     );
     const prevStatus = prevQ.rows[0]?.status || null;
 
+    // Si vinieron splits, el payment_method efectivo lo determina el helper (puede ser 'mixed')
+    let effectivePM = payment_method;
+    if (Array.isArray(payment_splits) && payment_splits.length) {
+      // Necesitamos el price del turno. Lo leemos antes del UPDATE.
+      const priceQ = await pool.query(`SELECT price FROM appointments WHERE id=$1`, [req.params.id]);
+      const price = priceQ.rows[0]?.price || 0;
+      try {
+        const r = await _writeAppointmentSplits(pool, shopId, parseInt(req.params.id), price, payment_splits);
+        if (r) effectivePM = r.effectivePaymentMethod;
+      } catch(spErr) { return res.status(400).json({ error: spErr.message }); }
+    } else {
+      // Si no vienen splits y venía con splits (edición), limpiarlos
+      await pool.query('DELETE FROM payment_splits WHERE appointment_id=$1', [req.params.id]).catch(()=>{});
+    }
+
     const result = await pool.query(
       `UPDATE appointments SET status=$1,
          payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
          tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
        WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
-      [status, payment_method || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
+      [status, effectivePM || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 

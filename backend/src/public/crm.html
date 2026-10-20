@@ -7345,7 +7345,21 @@ function showPaymentPopup(apptId) {
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo pagó el cliente?</div>
       <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">Elegí el método de pago para registrar en caja</div>
       ${senaNote}
-      <div id="complete-pay-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px"></div>
+      <div id="pay-mode-single">
+        <div id="complete-pay-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px"></div>
+        <button onclick="togglePaySplitMode(true)" style="background:transparent;border:none;color:rgba(255,209,0,.75);font-size:12px;cursor:pointer;text-decoration:underline;padding:0 0 12px;font-family:'Barlow',sans-serif">✂️ Dividir en varios métodos</button>
+      </div>
+      <div id="pay-mode-split" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px">
+          <span style="color:var(--gray)">Dividir pago</span>
+          <button onclick="togglePaySplitMode(false)" style="background:transparent;border:none;color:rgba(255,255,255,.4);font-size:11.5px;cursor:pointer;text-decoration:underline">← Volver a un solo método</button>
+        </div>
+        <div id="pay-split-rows" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <button onclick="addPaySplitRow()" style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);color:#FFD100;padding:7px 12px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer">+ Método</button>
+          <div id="pay-split-remaining" style="font-size:12.5px;color:rgba(255,255,255,.75)"></div>
+        </div>
+      </div>
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">Propina (opcional)</label>
         <input type="number" id="tip-input" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
@@ -7359,7 +7373,85 @@ function showPaymentPopup(apptId) {
     </div>`;
   document.body.appendChild(popup);
   window._selectedPayMethod = null;
+  // Guardar el total a cobrar para la UI de split (price total menos seña si corresponde)
+  window._paySplitTotal = hasSena ? remaining : parseFloat(appt.price || 0);
+  window._paySplitMode = false;
+  window._paySplitRows = [];
   renderPayMethodButtons('complete-pay-buttons', 'selectPayMethod');
+}
+
+function togglePaySplitMode(on) {
+  window._paySplitMode = !!on;
+  document.getElementById('pay-mode-single').style.display = on ? 'none' : 'block';
+  document.getElementById('pay-mode-split').style.display  = on ? 'block' : 'none';
+  if (on && window._paySplitRows.length === 0) {
+    // Primera row por default
+    addPaySplitRow();
+  }
+  updatePaySplitRemaining();
+}
+
+function _availablePayMethods() {
+  const list = window._paymentMethods || [];
+  if (list.length) return list;
+  return [
+    { key:'cash', label:'Efectivo', icon:'💵' },
+    { key:'debit', label:'Débito', icon:'💳' },
+    { key:'credit', label:'Crédito', icon:'💳' },
+    { key:'transfer', label:'Transferencia', icon:'📲' },
+  ];
+}
+
+function addPaySplitRow(method = '', amount = '') {
+  window._paySplitRows.push({ method, amount });
+  renderPaySplitRows();
+}
+
+function removePaySplitRow(idx) {
+  window._paySplitRows.splice(idx, 1);
+  renderPaySplitRows();
+}
+
+function updatePaySplitRow(idx, field, value) {
+  if (!window._paySplitRows[idx]) return;
+  window._paySplitRows[idx][field] = field === 'amount' ? value : value;
+  updatePaySplitRemaining();
+}
+
+function renderPaySplitRows() {
+  const el = document.getElementById('pay-split-rows');
+  if (!el) return;
+  const methods = _availablePayMethods();
+  const options = methods.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
+  el.innerHTML = window._paySplitRows.map((row, i) => `
+    <div style="display:flex;gap:6px;align-items:center">
+      <select onchange="updatePaySplitRow(${i},'method',this.value)" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px;color:#fff;font-size:12.5px;outline:none">
+        <option value="">— elegir —</option>
+        ${options.replace(`value="${row.method}"`, `value="${row.method}" selected`)}
+      </select>
+      <div style="position:relative;flex:0 0 110px">
+        <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:12.5px">$</span>
+        <input type="number" min="0" step="0.01" value="${row.amount}" oninput="updatePaySplitRow(${i},'amount',this.value)" placeholder="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px 9px 20px;color:#fff;font-size:12.5px;outline:none;box-sizing:border-box;text-align:right">
+      </div>
+      <button onclick="removePaySplitRow(${i})" ${window._paySplitRows.length <= 1 ? 'disabled style="opacity:.3;cursor:not-allowed"' : 'style="cursor:pointer"'} title="Quitar" style="background:transparent;border:1px solid rgba(255,67,67,.3);color:#f87171;width:30px;height:30px;border-radius:7px;font-size:14px;line-height:1;flex-shrink:0">×</button>
+    </div>
+  `).join('');
+  updatePaySplitRemaining();
+}
+
+function updatePaySplitRemaining() {
+  const el = document.getElementById('pay-split-remaining');
+  if (!el) return;
+  const total = window._paySplitTotal || 0;
+  const sum = window._paySplitRows.reduce((n, r) => n + (parseFloat(r.amount)||0), 0);
+  const left = total - sum;
+  if (left > 0.5) {
+    el.innerHTML = `Faltan <strong style="color:#FFD100">$${left.toLocaleString('es-AR',{maximumFractionDigits:2})}</strong> de $${total.toLocaleString('es-AR')}`;
+  } else if (left < -0.5) {
+    el.innerHTML = `<span style="color:#f87171">Pasaste por $${Math.abs(left).toLocaleString('es-AR',{maximumFractionDigits:2})}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:#4ade80">✓ Suma $${total.toLocaleString('es-AR')}</span>`;
+  }
 }
 
 function renderPayMethodButtons(containerId, onSelectFn) {
@@ -7409,21 +7501,40 @@ function selectPayMethod(method) {
 }
 
 async function confirmPayment(apptId) {
-  const method = window._selectedPayMethod;
-  if (!method) { showToast('⚠️', 'Seleccioná un método de pago', ''); return; }
   const tip = parseFloat(document.getElementById('tip-input')?.value) || 0;
-  // Obtener price para el mensaje de éxito (antes de cerrar el popup)
   const price = parseFloat(document.getElementById('payment-price')?.textContent?.replace(/[^0-9.-]/g,'') || '0');
+  let body = { status: 'completed', tip };
+  let successLabel = '';
+
+  if (window._paySplitMode) {
+    const splits = (window._paySplitRows || [])
+      .map(r => ({ method: r.method, amount: parseFloat(r.amount) || 0 }))
+      .filter(r => r.method && r.amount > 0);
+    if (!splits.length) { showToast('⚠️', 'Cargá al menos un método con monto', ''); return; }
+    const sum = splits.reduce((n, s) => n + s.amount, 0);
+    const total = window._paySplitTotal || price;
+    if (Math.abs(sum - total) > 1) {
+      showToast('⚠️', 'Los pagos no suman el total', `Total: $${total.toLocaleString('es-AR')} · Ingresado: $${sum.toLocaleString('es-AR')}`);
+      return;
+    }
+    body.payment_splits = splits;
+    successLabel = splits.map(s => {
+      const m = (window._paymentMethods||[]).find(x=>x.key===s.method);
+      return `${m?.icon || ''} $${s.amount.toLocaleString('es-AR')}`;
+    }).join(' · ');
+  } else {
+    const method = window._selectedPayMethod;
+    if (!method) { showToast('⚠️', 'Seleccioná un método de pago', ''); return; }
+    body.payment_method = method;
+    const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', debit:'Débito', credit:'Crédito', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[method] || method;
+    successLabel = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
+    if (method === 'debt') successLabel = '💰 Deuda cargada en el cliente';
+  }
+
   document.getElementById('payment-popup')?.remove();
   try {
-    await api('PUT', `/appointments/${apptId}/status`, { status: 'completed', payment_method: method, tip });
-    const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[method] || method;
-    if (method === 'debt') {
-      showSuccessPop({ title: 'Fiado registrado', sub: '💰 Deuda cargada en el cliente' });
-    } else {
-      const amount = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
-      showSuccessPop({ title: '¡Cobrado!', sub: amount });
-    }
+    await api('PUT', `/appointments/${apptId}/status`, body);
+    showSuccessPop({ title: body.payment_method === 'debt' ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();
@@ -10999,10 +11110,25 @@ async function openSettlementModal(barberId, barberName) {
       </div>` : ''}
       <div>
         <label style="font-size:12px;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px">Nota (opcional)</label>
-        <input id="settlement-notes" type="text" placeholder="Ej: Efectivo, transferencia..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;box-sizing:border-box">
+        <input id="settlement-notes" type="text" placeholder="Ej: pago parcial, nota interna..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;box-sizing:border-box">
+      </div>
+      <div id="settlement-split-wrap" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600">Método de pago</label>
+          <button id="settlement-split-toggle" type="button" onclick="toggleSettlementSplit()" style="background:transparent;border:none;color:rgba(255,209,0,.75);font-size:11.5px;cursor:pointer;text-decoration:underline">✂️ Dividir en varios</button>
+        </div>
+        <div id="settlement-single-method"></div>
+        <div id="settlement-split-rows" style="display:none"></div>
+        <div id="settlement-split-remaining" style="margin-top:6px;font-size:12px;text-align:right"></div>
       </div>
     `;
     document.getElementById('settlement-actions').style.display = 'flex';
+
+    // Init estado del split (single method por default, un pago único)
+    window._settlementSplitMode = false;
+    window._settlementSplitRows = [];
+    window._settlementTotal = parseFloat(data.commission_amount || 0);
+    renderSettlementSingleMethod();
 
     // Enganchar los botones de bonus (data-* en vez de inline JSON.stringify para
     // soportar notas con comillas, backticks o chars raros).
@@ -11034,13 +11160,107 @@ function closeSettlementModal() {
   _settlementData = null;
 }
 
+function renderSettlementSingleMethod() {
+  const methods = _availablePayMethods();
+  const el = document.getElementById('settlement-single-method');
+  if (!el) return;
+  const opts = methods.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
+  el.innerHTML = `
+    <select id="settlement-method-single" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px;color:#fff;font-size:13px;outline:none">
+      <option value="">— elegir —</option>
+      ${opts}
+    </select>
+  `;
+}
+
+function toggleSettlementSplit() {
+  window._settlementSplitMode = !window._settlementSplitMode;
+  const on = window._settlementSplitMode;
+  document.getElementById('settlement-single-method').style.display = on ? 'none' : 'block';
+  document.getElementById('settlement-split-rows').style.display = on ? 'block' : 'none';
+  document.getElementById('settlement-split-toggle').textContent = on ? '← Volver a un solo método' : '✂️ Dividir en varios';
+  if (on && window._settlementSplitRows.length === 0) {
+    window._settlementSplitRows.push({ method: '', amount: '' });
+  }
+  renderSettlementSplitRows();
+}
+
+function addSettlementSplitRow() {
+  window._settlementSplitRows.push({ method:'', amount:'' });
+  renderSettlementSplitRows();
+}
+function removeSettlementSplitRow(i) {
+  window._settlementSplitRows.splice(i, 1);
+  renderSettlementSplitRows();
+}
+function updateSettlementSplitRow(i, field, value) {
+  if (!window._settlementSplitRows[i]) return;
+  window._settlementSplitRows[i][field] = value;
+  updateSettlementSplitRemaining();
+}
+
+function renderSettlementSplitRows() {
+  const el = document.getElementById('settlement-split-rows');
+  if (!el) return;
+  const methods = _availablePayMethods();
+  const options = methods.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">
+      ${window._settlementSplitRows.map((row, i) => `
+        <div style="display:flex;gap:6px;align-items:center">
+          <select onchange="updateSettlementSplitRow(${i},'method',this.value)" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px;color:#fff;font-size:12.5px;outline:none">
+            <option value="">— elegir —</option>
+            ${options.replace(`value="${row.method}"`, `value="${row.method}" selected`)}
+          </select>
+          <div style="position:relative;flex:0 0 110px">
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:12.5px">$</span>
+            <input type="number" min="0" step="0.01" value="${row.amount}" oninput="updateSettlementSplitRow(${i},'amount',this.value)" placeholder="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px 9px 20px;color:#fff;font-size:12.5px;outline:none;box-sizing:border-box;text-align:right">
+          </div>
+          <button onclick="removeSettlementSplitRow(${i})" ${window._settlementSplitRows.length <= 1 ? 'disabled style="opacity:.3;cursor:not-allowed"' : 'style="cursor:pointer"'} title="Quitar" style="background:transparent;border:1px solid rgba(255,67,67,.3);color:#f87171;width:30px;height:30px;border-radius:7px;font-size:14px;line-height:1;flex-shrink:0">×</button>
+        </div>`).join('')}
+    </div>
+    <button onclick="addSettlementSplitRow()" style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);color:#FFD100;padding:6px 12px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer">+ Método</button>
+  `;
+  updateSettlementSplitRemaining();
+}
+
+function updateSettlementSplitRemaining() {
+  const el = document.getElementById('settlement-split-remaining');
+  if (!el || !window._settlementSplitMode) { if(el) el.innerHTML=''; return; }
+  const total = window._settlementTotal || 0;
+  const sum = window._settlementSplitRows.reduce((n, r) => n + (parseFloat(r.amount)||0), 0);
+  const left = total - sum;
+  if (left > 0.5) el.innerHTML = `Faltan <strong style="color:#FFD100">$${left.toLocaleString('es-AR',{maximumFractionDigits:2})}</strong>`;
+  else if (left < -0.5) el.innerHTML = `<span style="color:#f87171">Pasaste por $${Math.abs(left).toLocaleString('es-AR',{maximumFractionDigits:2})}</span>`;
+  else el.innerHTML = `<span style="color:#4ade80">✓ Suma $${total.toLocaleString('es-AR')}</span>`;
+}
+
 async function confirmSettlement() {
   if (!_settlementBarberId || !_settlementData) return;
   const notes = document.getElementById('settlement-notes')?.value?.trim() || null;
   const btn = document.getElementById('btn-confirm-settlement');
+
+  // Preparar splits si corresponde
+  const body = { notes };
+  if (window._settlementSplitMode) {
+    const splits = (window._settlementSplitRows || [])
+      .map(r => ({ method: r.method, amount: parseFloat(r.amount)||0 }))
+      .filter(r => r.method && r.amount > 0);
+    if (!splits.length) { showToast('⚠️','Cargá al menos un método con monto',''); return; }
+    const total = window._settlementTotal || 0;
+    const sum = splits.reduce((n,s) => n + s.amount, 0);
+    if (Math.abs(sum - total) > 1) {
+      showToast('⚠️','No coincide', `Total: $${total.toLocaleString('es-AR')} · Ingresado: $${sum.toLocaleString('es-AR')}`); return;
+    }
+    body.payout_splits = splits;
+  } else {
+    const single = document.getElementById('settlement-method-single')?.value;
+    if (single) body.payout_splits = [{ method: single, amount: window._settlementTotal }];
+  }
+
   btn.disabled = true; btn.textContent = 'Procesando...';
   try {
-    const res = await api('POST', `/barbers/${_settlementBarberId}/settle`, { notes });
+    const res = await api('POST', `/barbers/${_settlementBarberId}/settle`, body);
     closeSettlementModal();
     const amt = parseFloat(res.settlement.commission_amount).toLocaleString('es-AR', { maximumFractionDigits: 0 });
     showSuccessPop({ title: 'Liquidación OK', sub: `$${amt} liquidados a ${res.settlement.barber_name}` });

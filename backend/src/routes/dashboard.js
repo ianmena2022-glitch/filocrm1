@@ -313,22 +313,66 @@ router.get('/cash', auth, async (req, res) => {
   const date = req.query.date || shopDate(await getShopTz(req.shopId));
   const shopId = req.shopId;
   try {
-    // Ingresos por método de pago (precio completo — la seña se suma como income_item aparte)
-    const appts = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
-         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
-         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
-         COALESCE(SUM(CASE WHEN payment_method IS NULL    THEN price ELSE 0 END),0) AS no_method_total,
-         COALESCE(SUM(tip),0)                                                        AS tips_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
-         COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
-       FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+    // Ingresos por método de pago (precio completo — la seña se suma como income_item aparte).
+    // Soporta multi-método: si appt.payment_method='mixed', se usan los payment_splits.
+    let appts;
+    try {
+      appts = await pool.query(
+      `WITH
+         by_appt AS (
+           SELECT a.id, a.price, a.payment_method, a.tip, a.status
+             FROM appointments a
+             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+         ),
+         splits_by_appt AS (
+           SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
+             FROM payment_splits ps
+             JOIN by_appt ba ON ba.id = ps.appointment_id
+             GROUP BY ps.appointment_id, ps.method
+         ),
+         method_totals AS (
+           -- Appointments sin splits: cuenta por payment_method directo
+           SELECT ba.payment_method AS method, SUM(ba.price) AS amount
+             FROM by_appt ba
+             WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)
+             GROUP BY ba.payment_method
+           UNION ALL
+           -- Appointments con splits: cuenta por cada split
+           SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method
+         )
+       SELECT
+         COALESCE(SUM(CASE WHEN method='cash'     THEN amount END),0) AS cash_total,
+         COALESCE(SUM(CASE WHEN method='debit'    THEN amount END),0) AS debit_total,
+         COALESCE(SUM(CASE WHEN method='credit'   THEN amount END),0) AS credit_total,
+         COALESCE(SUM(CASE WHEN method='transfer' THEN amount END),0) AS transfer_total,
+         COALESCE(SUM(CASE WHEN method='debt'     THEN amount END),0) AS debt_total,
+         COALESCE(SUM(CASE WHEN method IS NULL    THEN amount END),0) AS no_method_total,
+         (SELECT COALESCE(SUM(tip),0)   FROM by_appt) AS tips_total,
+         (SELECT COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) FROM by_appt) AS revenue_total,
+         (SELECT COUNT(*) FROM by_appt) AS cuts_count
+       FROM method_totals`,
       [shopId, date]
     );
+    } catch(spErr) {
+      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
+        // Fallback a la query vieja si la migración 044 no corrió aún
+        appts = await pool.query(
+          `SELECT
+             COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
+             COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
+             COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
+             COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+             COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
+             COALESCE(SUM(CASE WHEN payment_method IS NULL    THEN price ELSE 0 END),0) AS no_method_total,
+             COALESCE(SUM(tip),0)                                                        AS tips_total,
+             COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+             COUNT(*) FILTER (WHERE status='completed')                                  AS cuts_count
+           FROM appointments
+           WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+          [shopId, date]
+        );
+      } else throw spErr;
+    }
     // Gastos e ingresos extras del día (señas son informativas, no suman al net para evitar doble conteo)
     const exps = await pool.query(
       `SELECT
