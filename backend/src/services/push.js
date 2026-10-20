@@ -49,25 +49,27 @@ async function sendToRecipient(shopId, payload) {
   }
   console.log(`[push] enviando a shop=${shopId} subs=${subs.rows.length} title="${(payload?.title||'').slice(0,40)}"`);
 
-  let sent = 0, failed = 0;
   const data = JSON.stringify(payload || {});
-  for (const row of subs.rows) {
-    try {
-      await _webpush.sendNotification({
-        endpoint: row.endpoint,
-        keys: { p256dh: row.p256dh, auth: row.auth }
-      }, data);
-      sent++;
+  const results = await Promise.allSettled(subs.rows.map(row =>
+    _webpush.sendNotification({
+      endpoint: row.endpoint,
+      keys: { p256dh: row.p256dh, auth: row.auth }
+    }, data).then(() => {
       pool.query(`UPDATE push_subscriptions SET last_used_at=NOW() WHERE id=$1`, [row.id]).catch(()=>{});
-    } catch(err) {
-      failed++;
-      // 404/410 → la suscripción está muerta, la borramos
+      return { ok: true, row };
+    }, err => {
       if (err && (err.statusCode === 404 || err.statusCode === 410)) {
         pool.query(`DELETE FROM push_subscriptions WHERE id=$1`, [row.id]).catch(()=>{});
       } else {
         console.warn(`[push] send error (shop=${shopId} sub=${row.id}):`, err?.statusCode, err?.body?.slice?.(0,120) || err?.message);
       }
-    }
+      return { ok: false, row };
+    })
+  ));
+  let sent = 0, failed = 0;
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.ok) sent++;
+    else failed++;
   }
   return { sent, failed };
 }
@@ -87,24 +89,26 @@ async function sendToAdmins(payload) {
   }
   if (!subs.rows.length) return { sent: 0, failed: 0, reason: 'no_subs' };
   console.log(`[push admin] enviando a ${subs.rows.length} sub(s) title="${(payload?.title||'').slice(0,40)}"`);
-  let sent = 0, failed = 0;
   const data = JSON.stringify(payload || {});
-  for (const row of subs.rows) {
-    try {
-      await _webpush.sendNotification({
-        endpoint: row.endpoint,
-        keys: { p256dh: row.p256dh, auth: row.auth }
-      }, data);
-      sent++;
+  const results = await Promise.allSettled(subs.rows.map(row =>
+    _webpush.sendNotification({
+      endpoint: row.endpoint,
+      keys: { p256dh: row.p256dh, auth: row.auth }
+    }, data).then(() => {
       pool.query(`UPDATE admin_push_subscriptions SET last_used_at=NOW() WHERE id=$1`, [row.id]).catch(()=>{});
-    } catch(err) {
-      failed++;
+      return true;
+    }, err => {
       if (err && (err.statusCode === 404 || err.statusCode === 410)) {
         pool.query(`DELETE FROM admin_push_subscriptions WHERE id=$1`, [row.id]).catch(()=>{});
       } else {
         console.warn(`[push admin] send error sub=${row.id}:`, err?.statusCode, err?.body?.slice?.(0,120) || err?.message);
       }
-    }
+      return false;
+    })
+  ));
+  let sent = 0, failed = 0;
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) sent++; else failed++;
   }
   return { sent, failed };
 }

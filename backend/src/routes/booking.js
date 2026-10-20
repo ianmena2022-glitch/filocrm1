@@ -1,6 +1,16 @@
-const router = require('express').Router();
-const pool   = require('../db/pool');
-const wpp    = require('../services/whatsapp');
+const router    = require('express').Router();
+const rateLimit = require('express-rate-limit');
+const pool      = require('../db/pool');
+const wpp       = require('../services/whatsapp');
+
+// Rate limits para endpoints públicos sin auth (bots scraping / abuso)
+const publicGetLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,                 // 60 lecturas/min por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Esperá un momento.' },
+});
 
 // Helper: verificar si un barbero trabaja en una fecha+hora dada
 // barberSchedule: null = sin restricciones (siempre disponible)
@@ -17,7 +27,7 @@ function isBarberAvailable(barberSchedule, date, timeStart) {
 }
 
 // GET /api/booking/:slug — info pública de la barbería para el formulario
-router.get('/:slug', async (req, res) => {
+router.get('/:slug', publicGetLimiter, async (req, res) => {
   try {
     const shop = await pool.query(
       `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url, social_links
@@ -90,7 +100,7 @@ router.get('/:slug', async (req, res) => {
 });
 
 // GET /api/booking/:slug/team — lista pública de barberos con sus fotos
-router.get('/:slug/team', async (req, res) => {
+router.get('/:slug/team', publicGetLimiter, async (req, res) => {
   try {
     const shop = await pool.query(
       `SELECT id, is_branch, parent_enterprise_id
@@ -116,7 +126,7 @@ router.get('/:slug/team', async (req, res) => {
 });
 
 // GET /api/booking/:slug/member-verify?phone=XXX — verifica membresía activa
-router.get('/:slug/member-verify', async (req, res) => {
+router.get('/:slug/member-verify', publicGetLimiter, async (req, res) => {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: 'Teléfono requerido' });
 
@@ -153,7 +163,7 @@ router.get('/:slug/member-verify', async (req, res) => {
 
 // GET /api/booking/:slug/available?date=YYYY-MM-DD&service_id=X
 // Devuelve los slots disponibles para una fecha y servicio
-router.get('/:slug/available', async (req, res) => {
+router.get('/:slug/available', publicGetLimiter, async (req, res) => {
   const { date, service_id } = req.query;
   if (!date) return res.status(400).json({ error: 'Fecha requerida' });
 
@@ -343,7 +353,7 @@ router.get('/:slug/available', async (req, res) => {
 
 // GET /api/booking/:slug/barber-busy?date=YYYY-MM-DD&time=HH:MM&duration=30
 // Devuelve los IDs de barberos que ya tienen turno en ese slot
-router.get('/:slug/barber-busy', async (req, res) => {
+router.get('/:slug/barber-busy', publicGetLimiter, async (req, res) => {
   const { date, time, duration } = req.query;
   if (!date || !time) return res.status(400).json({ error: 'Faltan parámetros' });
   try {
@@ -374,7 +384,7 @@ router.get('/:slug/barber-busy', async (req, res) => {
 
 // GET /api/booking/:slug/barber-counts?date=YYYY-MM-DD
 // Devuelve cuántos turnos tiene cada barbero ese día (para elegir el menos cargado)
-router.get('/:slug/barber-counts', async (req, res) => {
+router.get('/:slug/barber-counts', publicGetLimiter, async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'Falta date' });
   try {

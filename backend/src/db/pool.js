@@ -23,7 +23,7 @@ console.log(`[DB] ${isInternal ? 'INTERNAL(no-ssl)' : 'EXTERNAL(ssl-bypass)'} | 
 const pool = new Pool({
   connectionString: DB_URL,
   ssl: sslConfig,
-  max: 10,
+  max: parseInt(process.env.PG_POOL_MAX) || 30,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000,
   statement_timeout: 10000,
