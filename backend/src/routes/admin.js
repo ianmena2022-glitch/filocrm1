@@ -605,6 +605,23 @@ router.post('/accounts/:id/wpp-reset', adminAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/wpp/stats — estado de sesiones Baileys activas
+router.get('/wpp/stats', adminAuth, (req, res) => {
+  try {
+    const wpp = require('../services/whatsapp');
+    res.json(wpp.wppStats ? wpp.wppStats() : { error: 'not available' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/wpp/sweep — forzar sweeper (útil para testing/liberar RAM)
+router.post('/wpp/sweep', adminAuth, async (req, res) => {
+  try {
+    const wpp = require('../services/whatsapp');
+    if (wpp.sweepIdle) await wpp.sweepIdle();
+    res.json({ ok: true, stats: wpp.wppStats ? wpp.wppStats() : null });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Web Push admin ────────────────────────────────────────────────────────────
 
 // GET /api/admin/push/public-key — devuelve la VAPID public key para el browser

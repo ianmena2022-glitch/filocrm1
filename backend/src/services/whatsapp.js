@@ -18,6 +18,14 @@ function baileysDir(shopId) { return path.join(BAILEYS_BASE, `shop_${shopId}`); 
 
 // Mapa de sockets activos por shopId
 const sockets  = {};
+// Última actividad (ms epoch) por shopId para idle sweeper + LRU
+const _lastActivity = Object.create(null);
+function _touch(shopId) { _lastActivity[shopId] = Date.now(); }
+
+// Config: idle TTL + hard cap (configurable por env, con defaults seguros)
+const WPP_IDLE_TTL_MS   = (parseInt(process.env.WPP_IDLE_TTL_MIN) || 90) * 60 * 1000;
+const WPP_MAX_SESSIONS  = parseInt(process.env.WPP_MAX_SESSIONS) || 50;
+const WPP_SWEEP_EVERY   = 5 * 60 * 1000;
 const qrCodes  = {};
 const statuses = {};
 const decryptErrors = {};
@@ -648,6 +656,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
   });
 
   sockets[shopId]  = sock;
+  _touch(shopId);
   statuses[shopId] = 'connecting';
 
   sock.ev.on('CB:receipt', () => {});
@@ -765,6 +774,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
   // Escuchar mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    _touch(shopId); // mantiene viva la sesión mientras llegue tráfico
     const firstJid = messages[0]?.key?.remoteJid || 'unknown';
     const fromMe = messages[0]?.key?.fromMe;
     console.log(`[WPP] upsert type=${type} count=${messages.length} fromMe=${fromMe} jid=${firstJid}`);
@@ -1034,6 +1044,7 @@ async function sendText(shopId, phone, message) {
   const jid = `${phoneClean}@s.whatsapp.net`;
 
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
+  _touch(wppShopId);
 
   await throttleSend(wppShopId);
 
@@ -1078,11 +1089,18 @@ async function reconnectAllShops() {
   const CONCURRENCY = 3;
   const STAGGER_MS  = 1500;
   try {
+    // Cap al nivel del cap de sesiones. Si hay más shops conectados que cap,
+    // priorizamos las últimas creadas (proxy de más activas). El resto arranca
+    // cold y se reconecta on-demand en la próxima sendText.
     const result = await pool.query(
-      'SELECT id FROM shops WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL'
+      `SELECT id FROM shops
+         WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL
+         ORDER BY id DESC
+         LIMIT $1`,
+      [WPP_MAX_SESSIONS]
     );
     const queue = result.rows.map(r => r.id);
-    console.log(`Baileys: reconectando ${queue.length} shop(s) con concurrencia=${CONCURRENCY}`);
+    console.log(`Baileys: reconectando ${queue.length} shop(s) con concurrencia=${CONCURRENCY} (cap=${WPP_MAX_SESSIONS})`);
 
     async function worker() {
       while (queue.length) {
@@ -1109,4 +1127,73 @@ async function reconnectAllShops() {
   }
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR };
+// ── Idle sweeper + LRU cap ──────────────────────────────────────────────────
+// Pensado para escalar: una barbería que no envía/recibe hace ≥90min baja a cold.
+// La próxima llamada a sendText la reconecta on-demand (ya existe esa lógica).
+// Las entrantes se pierden mientras está cold — por eso TTL amplio (90m default).
+async function _closeIdleSock(shopId, reason) {
+  const sock = sockets[shopId];
+  if (!sock) return;
+  try {
+    console.log(`[WPP sweep] shop ${shopId} cold-down (${reason})`);
+    stopHealthCheck?.(shopId);
+    cancelReconnect?.(shopId);
+    try { sock.end?.(new Error(reason)); } catch(_) {}
+    delete sockets[shopId];
+    statuses[shopId] = 'disconnected';
+    delete _lastActivity[shopId];
+  } catch(e) { console.warn('[WPP sweep] close error:', e.message); }
+}
+
+async function sweepIdle() {
+  try {
+    const now = Date.now();
+    const activeIds = Object.keys(sockets);
+
+    // 1) Cerrar sesiones idle > TTL
+    for (const id of activeIds) {
+      const last = _lastActivity[id] || 0;
+      if (now - last > WPP_IDLE_TTL_MS) {
+        await _closeIdleSock(id, `idle>${Math.round(WPP_IDLE_TTL_MS/60000)}min`);
+      }
+    }
+
+    // 2) Hard cap LRU: si quedan más de MAX, cerrar las más viejas
+    const remaining = Object.keys(sockets);
+    if (remaining.length > WPP_MAX_SESSIONS) {
+      const excess = remaining.length - WPP_MAX_SESSIONS;
+      const sorted = remaining
+        .map(id => ({ id, last: _lastActivity[id] || 0 }))
+        .sort((a,b) => a.last - b.last);
+      for (let i = 0; i < excess; i++) {
+        await _closeIdleSock(sorted[i].id, `LRU cap ${WPP_MAX_SESSIONS}`);
+      }
+    }
+  } catch(e) { console.error('[WPP sweep] error:', e.message); }
+}
+
+// Arrancar el sweeper una sola vez
+if (!global.__wppSweeperStarted) {
+  global.__wppSweeperStarted = true;
+  const h = setInterval(sweepIdle, WPP_SWEEP_EVERY);
+  if (typeof h.unref === 'function') h.unref();
+  console.log(`⏰ [WPP] sweeper iniciado — idle TTL=${WPP_IDLE_TTL_MS/60000}min, cap=${WPP_MAX_SESSIONS}`);
+}
+
+// Stats para admin / debugging
+function wppStats() {
+  const now = Date.now();
+  const active = Object.keys(sockets).map(id => ({
+    shopId: parseInt(id),
+    status: statuses[id] || 'unknown',
+    last_activity_min: _lastActivity[id] ? Math.round((now - _lastActivity[id]) / 60000) : null
+  })).sort((a,b) => (a.last_activity_min||0) - (b.last_activity_min||0));
+  return {
+    active_sessions: active.length,
+    max_sessions: WPP_MAX_SESSIONS,
+    idle_ttl_min: Math.round(WPP_IDLE_TTL_MS/60000),
+    sessions: active
+  };
+}
+
+module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
