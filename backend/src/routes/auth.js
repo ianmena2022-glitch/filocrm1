@@ -483,7 +483,7 @@ router.post('/verify-email', async (req, res) => {
       shop = r.rows[0];
     } else {
       const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + 7);
+      trialEnds.setDate(trialEnds.getDate() + 15); // Trial de 15 días para nuevos signups
       const isEnterpriseOwner = pending.filo_plan === 'enterprise';
 
       const r = await pool.query(

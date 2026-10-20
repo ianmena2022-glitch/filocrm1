@@ -2095,7 +2095,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       <div style="background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.6">
         <div style="font-weight:700;color:var(--yellow);margin-bottom:6px;font-size:13px">📋 Período de prueba gratuito</div>
         <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px">
-          <li><strong>7 días gratis</strong> — sin tarjeta, sin cobro</li>
+          <li><strong>15 días gratis</strong> — sin tarjeta, sin cobro</li>
           <li>Al vencer, pagás con QR desde cualquier billetera</li>
           <li>Podés pagar en cualquier momento durante el trial</li>
         </ul>
@@ -4897,7 +4897,7 @@ async function register() {
   const btn = document.querySelector('#form-register .btn-primary');
   btn.disabled = true; btn.textContent = 'Creando tu cuenta...';
   try {
-    // Crear cuenta con trial 7 días — sin pago previo
+    // Crear cuenta con trial 15 días — sin pago previo
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -13835,7 +13835,7 @@ async function bcmSave(id) {
   <div class="pw-logo">F</div>
   <div class="pw-badge">Período de prueba finalizado</div>
   <div class="pw-title">Seguí usando FILO</div>
-  <div class="pw-sub">Tu prueba gratuita de 7 días terminó. Elegí tu plan para continuar.</div>
+  <div class="pw-sub">Tu prueba gratuita de 15 días terminó. Elegí tu plan para continuar.</div>
   <div id="pw-redeem-wrap" style="display:none;width:100%;max-width:320px;margin-bottom:12px">
     <button onclick="redeemFreeMonth()" style="width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
       🎁 Canjear mes gratis <span id="pw-free-months-badge" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:13px"></span>

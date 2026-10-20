@@ -411,7 +411,7 @@ router.post('/accounts', adminAuth, async (req, res) => {
     const status = ['trial','active'].includes(subscription_status) ? subscription_status : 'trial';
 
     const trialEnds = new Date();
-    trialEnds.setDate(trialEnds.getDate() + 7);
+    trialEnds.setDate(trialEnds.getDate() + 15); // Trial de 15 días
 
     const result = await pool.query(
       `INSERT INTO shops (name, email, password, phone, plan, filo_plan, subscription_status, trial_ends_at)
