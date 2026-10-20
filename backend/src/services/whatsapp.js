@@ -22,8 +22,11 @@ const sockets  = {};
 const _lastActivity = Object.create(null);
 function _touch(shopId) { _lastActivity[shopId] = Date.now(); }
 
-// Config: idle TTL + hard cap (configurable por env, con defaults seguros)
-const WPP_IDLE_TTL_MS   = (parseInt(process.env.WPP_IDLE_TTL_MIN) || 90) * 60 * 1000;
+// Config: idle TTL + hard cap (configurable por env, con defaults seguros).
+// WPP_IDLE_TTL_MIN=0 (default) DESACTIVA el idle-sweep → sesiones hot para siempre
+// mientras alcance el cap. Esto garantiza que el bot IA nunca se pierda mensajes.
+// Pasá un valor >0 si querés que cierre sockets inactivos tras N minutos.
+const WPP_IDLE_TTL_MS   = (parseInt(process.env.WPP_IDLE_TTL_MIN) || 0) * 60 * 1000;
 const WPP_MAX_SESSIONS  = parseInt(process.env.WPP_MAX_SESSIONS) || 50;
 const WPP_SWEEP_EVERY   = 5 * 60 * 1000;
 const qrCodes  = {};
@@ -1150,11 +1153,14 @@ async function sweepIdle() {
     const now = Date.now();
     const activeIds = Object.keys(sockets);
 
-    // 1) Cerrar sesiones idle > TTL
-    for (const id of activeIds) {
-      const last = _lastActivity[id] || 0;
-      if (now - last > WPP_IDLE_TTL_MS) {
-        await _closeIdleSock(id, `idle>${Math.round(WPP_IDLE_TTL_MS/60000)}min`);
+    // 1) Cerrar sesiones idle > TTL (solo si WPP_IDLE_TTL_MIN > 0).
+    //    Con default 0 nunca se cold-ea por idle — el bot IA nunca pierde msgs.
+    if (WPP_IDLE_TTL_MS > 0) {
+      for (const id of activeIds) {
+        const last = _lastActivity[id] || 0;
+        if (now - last > WPP_IDLE_TTL_MS) {
+          await _closeIdleSock(id, `idle>${Math.round(WPP_IDLE_TTL_MS/60000)}min`);
+        }
       }
     }
 
@@ -1177,7 +1183,8 @@ if (!global.__wppSweeperStarted) {
   global.__wppSweeperStarted = true;
   const h = setInterval(sweepIdle, WPP_SWEEP_EVERY);
   if (typeof h.unref === 'function') h.unref();
-  console.log(`⏰ [WPP] sweeper iniciado — idle TTL=${WPP_IDLE_TTL_MS/60000}min, cap=${WPP_MAX_SESSIONS}`);
+  const ttlMsg = WPP_IDLE_TTL_MS > 0 ? `${WPP_IDLE_TTL_MS/60000}min` : 'OFF (always-hot)';
+  console.log(`⏰ [WPP] sweeper iniciado — idle TTL=${ttlMsg}, cap=${WPP_MAX_SESSIONS}`);
 }
 
 // Stats para admin / debugging
