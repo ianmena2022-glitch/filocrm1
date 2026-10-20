@@ -5082,6 +5082,38 @@ async function openQRModal(plan) {
   if (pwWrap)  pwWrap.style.display  = hasMonths ? 'block' : 'none';
   if (pwBadge) pwBadge.textContent   = hasMonths ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   document.getElementById('modal-qr-payment').classList.add('show');
+  applyPromosToPaywall(); // fetch precios con descuento (si hay promo activa)
+}
+
+// Consulta el precio real (con promo aplicada) de cada plan y actualiza la UI.
+async function applyPromosToPaywall() {
+  const plans = ['starter','staff','enterprise'];
+  const results = await Promise.all(plans.map(p =>
+    api('GET', `/payments/price/${p}`).catch(() => null)
+  ));
+  results.forEach((data, i) => {
+    const plan = plans[i];
+    if (!data) return;
+    const card = document.querySelector(`.qr-plan-opt[data-plan="${plan}"]`);
+    if (!card) return;
+    const priceEl = card.querySelector('.qr-plan-price');
+    if (!priceEl) return;
+    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+    if (data.discount > 0) {
+      const pct = data.promo?.discount_type === 'percent'
+        ? Math.round(data.promo.discount_value)
+        : Math.round((data.discount / data.base) * 100);
+      priceEl.innerHTML = `
+        <div style="font-size:12px;color:rgba(255,255,255,.4);text-decoration:line-through;font-weight:400;font-family:'Barlow',sans-serif;margin-bottom:2px">${fmt(data.base)}</div>
+        <div style="color:#4ade80">${fmt(data.final)}</div>
+        <div style="display:inline-block;margin-top:4px;padding:2px 7px;background:#4ade80;color:#052e16;font-size:9.5px;font-weight:800;letter-spacing:.5px;border-radius:4px;font-family:'Barlow Condensed',sans-serif">-${pct}% OFF</div>
+      `;
+      // Tooltip con nombre de la promo
+      if (data.promo?.name) card.title = `Promo: ${data.promo.name}`;
+    } else {
+      priceEl.innerHTML = fmt(data.base);
+    }
+  });
 }
 
 // Determina si el usuario puede canjear un mes gratis ahora
