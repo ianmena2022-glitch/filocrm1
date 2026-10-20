@@ -6090,7 +6090,7 @@ function showSection(name) {
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
   if (name === 'configuracion') loadSubscriptionStatus();
-  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); initBrandingUI(); }
+  if (name === 'configuracion') { loadSettings(); loadStoreConfig(); loadStoreItems(); loadProductos(); initBrandingUI(); try { renderNotifPrefs(); } catch(_){} }
   if (name === 'configuracion') {
     // En desktop: reset a primer tab. En mobile: mostrar menú (drill-down), no navegar a ningún item.
     const _isMobileCfg = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;

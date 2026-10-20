@@ -11,15 +11,23 @@ function ownerOnly(req, res, next) {
 
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, name, email, phone, city, address, calendly_url,
+  async function doSelect(includeNotifPrefs) {
+    const cols = `id, name, email, phone, city, address, calendly_url,
               service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
               sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes,
-              revenue_pin_enabled, social_links, notification_prefs
-       FROM shops WHERE id=$1`,
-      [req.shopId]
-    );
+              revenue_pin_enabled, social_links${includeNotifPrefs ? ', notification_prefs' : ''}`;
+    return pool.query(`SELECT ${cols} FROM shops WHERE id=$1`, [req.shopId]);
+  }
+  try {
+    let result;
+    try { result = await doSelect(true); }
+    catch(e) {
+      // Fallback si la columna notification_prefs no existe aún (migración 041 pendiente)
+      if (/notification_prefs/i.test(e.message)) {
+        console.warn('[settings] notification_prefs no existe aún — fallback. Correr migration 041.');
+        result = await doSelect(false);
+      } else throw e;
+    }
     if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
     res.json(result.rows[0]);
   } catch (e) {
