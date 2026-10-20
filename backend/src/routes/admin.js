@@ -644,7 +644,14 @@ router.get('/promotions', adminAuth, async (req, res) => {
          ORDER BY status ASC, created_at DESC`
     );
     res.json({ promotions: r.rows });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    // Fallback si la tabla no existe aún (migración 043 pendiente)
+    if (/promotions.*does not exist|relation "promotions"|relation "promotion_uses"/i.test(e.message)) {
+      return res.json({ promotions: [], _warning: 'Migración 043 pendiente — correr el SQL en la DB para habilitar promociones' });
+    }
+    console.error('[admin promotions]', e.message);
+    res.status(500).json({ error: 'Error cargando promociones' });
+  }
 });
 
 // POST /api/admin/promotions — crear
