@@ -448,7 +448,17 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
     let i = 1;
 
     if (name)                              { updates.push(`name=$${i++}`);                  params.push(name.trim()); }
-    if (validPlans.includes(filo_plan))    { updates.push(`filo_plan=$${i++}`);             params.push(filo_plan); }
+    if (validPlans.includes(filo_plan))    {
+      updates.push(`filo_plan=$${i++}`);               params.push(filo_plan);
+      // Sincronizar flag is_enterprise_owner con el plan — sino el CRM sigue mostrando
+      // el dashboard viejo. starter/staff ⇒ FALSE, enterprise ⇒ TRUE.
+      updates.push(`is_enterprise_owner=$${i++}`);     params.push(filo_plan === 'enterprise');
+      // Si pasa a enterprise, limpiar is_branch / parent_enterprise_id por si venía como sucursal
+      if (filo_plan === 'enterprise') {
+        updates.push(`is_branch=FALSE`);
+        updates.push(`parent_enterprise_id=NULL`);
+      }
+    }
     if (validStatus.includes(subscription_status)) {
       updates.push(`subscription_status=$${i++}`);
       params.push(subscription_status);
