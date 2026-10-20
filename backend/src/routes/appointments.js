@@ -401,10 +401,10 @@ router.put('/:id/status', auth, async (req, res) => {
           await pool.query(
             `UPDATE clients SET
                total_visits = GREATEST(total_visits - 1, 0),
-               total_spent  = GREATEST(total_spent - $1, 0),
-               points       = GREATEST(points - $2, 0)
-             WHERE id = $3 AND shop_id = $4`,
-            [appt.price, pointsToRemove, appt.client_id, shopId]
+               total_spent  = GREATEST(total_spent - $1::numeric, 0),
+               points       = GREATEST(points - $2::int, 0)
+             WHERE id = $3::int AND shop_id = $4::int`,
+            [parseFloat(appt.price || 0), parseInt(pointsToRemove) || 0, appt.client_id, shopId]
           );
           console.log(`[APPT ${appt.id}] rollback: -${pointsToRemove} pts, -$${appt.price} de cliente ${appt.client_id}`);
         }
