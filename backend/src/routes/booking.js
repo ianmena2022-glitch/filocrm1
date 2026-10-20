@@ -722,13 +722,14 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       );
       appt = apptResult;
 
-      // Fix #20: registrar canje dentro de la transacción con ON CONFLICT para idempotencia
+      // Fix #20: registrar canje dentro de la transacción con ON CONFLICT para idempotencia.
+      // Link al appointment para rollback automático si se cancela.
       if (redeemInfo && redeemItemId && clientId) {
         await pgClient.query(
-          `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status)
-           VALUES ($1,$2,$3,$4,$5,'pending')
+          `INSERT INTO points_redemptions (shop_id, client_id, item_id, item_name, points_used, status, appointment_id)
+           VALUES ($1,$2,$3,$4,$5,'pending',$6)
            ON CONFLICT DO NOTHING`,
-          [shopData.id, clientId, redeemItemId, redeemInfo, redeemPointsCost]
+          [shopData.id, clientId, redeemItemId, redeemInfo, redeemPointsCost, appt.rows[0].id]
         );
       }
 

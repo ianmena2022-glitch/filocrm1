@@ -291,6 +291,13 @@ router.put('/:id/status', auth, async (req, res) => {
     // Barberos solo pueden modificar sus propios turnos
     const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
 
+    // Capturar status PREVIO para detectar transiciones y evitar doble award de puntos
+    const prevQ = await pool.query(
+      `SELECT status FROM appointments WHERE id=$1 AND ${shopConditionStatus}${barberCondition}`,
+      [req.params.id, shopId]
+    );
+    const prevStatus = prevQ.rows[0]?.status || null;
+
     const result = await pool.query(
       `UPDATE appointments SET status=$1,
          payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
@@ -301,6 +308,8 @@ router.put('/:id/status', auth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 
     const appt = result.rows[0];
+    const wasCompleted = prevStatus === 'completed';
+    const nowCompleted = status === 'completed';
 
     // SSE: broadcast cambio de status para refrescar agendas abiertas en vivo
     try {
@@ -354,9 +363,53 @@ router.put('/:id/status', auth, async (req, res) => {
       }
     }
 
-    // Actualizar stats del cliente al completar
+    // Si el turno pasa a cancelled/noshow, devolver el premio canjeado (si lo había)
+    if (['cancelled','noshow'].includes(status) && prevStatus !== status) {
+      try {
+        const redQ = await pool.query(
+          `SELECT id, client_id, item_id, points_used FROM points_redemptions
+           WHERE appointment_id=$1 AND shop_id=$2 AND status='pending'`,
+          [appt.id, appt.shop_id]
+        );
+        for (const red of redQ.rows) {
+          if (red.client_id) {
+            await pool.query(`UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3`,
+              [red.points_used, red.client_id, appt.shop_id]);
+          }
+          if (red.item_id) {
+            await pool.query(`UPDATE points_store SET stock = stock + 1 WHERE id=$1 AND shop_id=$2 AND stock IS NOT NULL`,
+              [red.item_id, appt.shop_id]);
+          }
+          await pool.query(`UPDATE points_redemptions SET status='cancelled' WHERE id=$1`, [red.id]);
+          console.log(`[APPT ${appt.id}] status=${status} → redemption ${red.id} refund: +${red.points_used} pts`);
+        }
+      } catch(e) { console.error('[APPT] refund redemption error:', e.message); }
+    }
+
+    // Rollback de puntos si el turno sale de 'completed' (ej: dueño lo marcó completed por error)
+    if (wasCompleted && !nowCompleted && appt.client_id) {
+      try {
+        const shop = await pool.query('SELECT points_per_peso FROM shops WHERE id=$1', [shopId]);
+        const rawPpp = shop.rows[0]?.points_per_peso;
+        const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
+        const pointsToRemove = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
+        if (pointsToRemove > 0 || parseFloat(appt.price || 0) > 0) {
+          await pool.query(
+            `UPDATE clients SET
+               total_visits = GREATEST(total_visits - 1, 0),
+               total_spent  = GREATEST(total_spent - $1, 0),
+               points       = GREATEST(points - $2, 0)
+             WHERE id = $3 AND shop_id = $4`,
+            [appt.price, pointsToRemove, appt.client_id, shopId]
+          );
+          console.log(`[APPT ${appt.id}] rollback: -${pointsToRemove} pts, -$${appt.price} de cliente ${appt.client_id}`);
+        }
+      } catch(e) { console.error('[APPT] rollback points error:', e.message); }
+    }
+
+    // Actualizar stats del cliente al completar (SOLO si no estaba ya completado — evita doble award)
     // Fix #3: usar enterprise owner para WPP si la sucursal no tiene socket propio
-    if (status === 'completed' && appt.client_id) {
+    if (status === 'completed' && !wasCompleted && appt.client_id) {
       const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);
       const shopData = shop.rows[0];
       const rawPpp = shopData.points_per_peso;
@@ -591,6 +644,63 @@ router.delete('/:id', auth, async (req, res) => {
 
     // Barberos solo pueden borrar sus propios turnos
     const barberCondition = req.isBarber ? ` AND barber_id = ${parseInt(req.shopId)}` : '';
+
+    // Capturar datos del turno ANTES del delete para hacer rollback de puntos/stats y redemption
+    const apptQ = await pool.query(
+      `SELECT id, client_id, shop_id, price, status FROM appointments
+       WHERE id=$1 AND ${shopConditionDel}${barberCondition}`,
+      [req.params.id, shopId]
+    );
+    if (!apptQ.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
+    const apptBefore = apptQ.rows[0];
+
+    // Rollback de redemption asociado (devuelve puntos + stock + marca el canje como cancelado)
+    try {
+      const redQ = await pool.query(
+        `SELECT id, client_id, item_id, points_used, status FROM points_redemptions
+         WHERE appointment_id=$1 AND shop_id=$2 AND status='pending'`,
+        [apptBefore.id, apptBefore.shop_id]
+      );
+      for (const red of redQ.rows) {
+        if (red.client_id) {
+          await pool.query(
+            `UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3`,
+            [red.points_used, red.client_id, apptBefore.shop_id]
+          );
+        }
+        if (red.item_id) {
+          // Si el item tiene stock, lo devolvemos (si es NULL = ilimitado, no toca)
+          await pool.query(
+            `UPDATE points_store SET stock = stock + 1
+             WHERE id=$1 AND shop_id=$2 AND stock IS NOT NULL`,
+            [red.item_id, apptBefore.shop_id]
+          );
+        }
+        await pool.query(
+          `UPDATE points_redemptions SET status='cancelled' WHERE id=$1`,
+          [red.id]
+        );
+        console.log(`[APPT ${apptBefore.id}] redemption ${red.id} cancelled: +${red.points_used} pts, +1 stock`);
+      }
+    } catch(e) { console.error('[APPT] rollback redemption error:', e.message); }
+
+    // Si estaba completed, revertir stats y puntos ganados por el turno
+    if (apptBefore.status === 'completed' && apptBefore.client_id) {
+      try {
+        const shop = await pool.query('SELECT points_per_peso FROM shops WHERE id=$1', [apptBefore.shop_id]);
+        const rawPpp = shop.rows[0]?.points_per_peso;
+        const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
+        const pointsToRemove = Math.floor(parseFloat(apptBefore.price || 0) * pointsPerPeso);
+        await pool.query(
+          `UPDATE clients SET
+             total_visits = GREATEST(total_visits - 1, 0),
+             total_spent  = GREATEST(total_spent - $1, 0),
+             points       = GREATEST(points - $2, 0)
+           WHERE id = $3 AND shop_id = $4`,
+          [apptBefore.price, pointsToRemove, apptBefore.client_id, apptBefore.shop_id]
+        );
+      } catch(e) { console.error('[APPT] rollback stats error:', e.message); }
+    }
 
     const result = await pool.query(
       `DELETE FROM appointments WHERE id=$1 AND ${shopConditionDel}${barberCondition} RETURNING id`,
