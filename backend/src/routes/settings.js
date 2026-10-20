@@ -16,7 +16,7 @@ router.get('/', auth, async (req, res) => {
       `SELECT id, name, email, phone, city, address, calendly_url,
               service_radius_km, churn_days, wpp_connected, logo_url, msg_templates, booking_slug, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
               sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes,
-              revenue_pin_enabled, social_links
+              revenue_pin_enabled, social_links, notification_prefs
        FROM shops WHERE id=$1`,
       [req.shopId]
     );
@@ -29,7 +29,18 @@ router.get('/', auth, async (req, res) => {
 
 // PUT /api/settings
 router.put('/', auth, async (req, res) => {
-  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days, sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes, booking_slug, social_links } = req.body;
+  const { name, phone, city, address, service_radius_km, churn_days, msg_templates, commission_enabled, membership_plans, filo_plan, schedule, home_service, allow_barber_choice, closed_days, sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes, booking_slug, social_links, notification_prefs } = req.body;
+
+  // Sanitizar notification_prefs: solo claves bool conocidas
+  let notifPrefsJson = null;
+  if (notification_prefs && typeof notification_prefs === 'object') {
+    const allowed = ['toasts','inapp','push','trial','wpp_alerts','sse_live'];
+    const clean = {};
+    for (const k of allowed) {
+      if (typeof notification_prefs[k] === 'boolean') clean[k] = notification_prefs[k];
+    }
+    notifPrefsJson = JSON.stringify(clean);
+  }
 
   // Sanitizar social_links: solo claves conocidas, values string trim
   let socialJson = null;
@@ -97,11 +108,12 @@ router.put('/', auth, async (req, res) => {
          sena_payment_method=COALESCE($20, sena_payment_method),
          timezone=COALESCE($21, timezone),
          slot_interval_minutes=COALESCE($22, slot_interval_minutes),
-         social_links=COALESCE($23::jsonb, social_links)
+         social_links=COALESCE($23::jsonb, social_links),
+         notification_prefs=COALESCE($24::jsonb, notification_prefs)
        WHERE id=$16
        RETURNING id, name, email, phone, city, address,
                  service_radius_km, churn_days, wpp_connected, msg_templates, booking_slug, commission_enabled, membership_plans, schedule, home_service, allow_barber_choice, closed_days,
-                 sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes, social_links`,
+                 sena_enabled, sena_pct, sena_alias, sena_payment_method, timezone, slot_interval_minutes, social_links, notification_prefs`,
       [name||null, phone||null, city||null, address||null,
        service_radius_km||null, churn_days||null, msg_templates||null,
        slug, commission_enabled !== undefined ? commission_enabled : null,
@@ -115,7 +127,8 @@ router.put('/', auth, async (req, res) => {
        sena_payment_method !== undefined ? (sena_payment_method || null) : null,
        timezone || null,
        slot_interval_minutes !== undefined && slot_interval_minutes !== null ? Math.min(200, Math.max(5, parseInt(slot_interval_minutes) || 30)) : null,
-       socialJson]
+       socialJson,
+       notifPrefsJson]
     );
     // Sincronizar sena_cbu desde sena_alias (config de señas)
     if (sena_alias !== undefined && sena_alias) {

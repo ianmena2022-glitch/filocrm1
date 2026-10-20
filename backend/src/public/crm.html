@@ -3487,6 +3487,12 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <div style="font-size:11px;color:var(--gray);margin-top:4px">Formato IANA (ej: America/Mexico_City, Europe/Madrid, America/Bogota)</div>
             </div>
           </div>
+          <!-- Preferencias de notificaciones -->
+          <div style="margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="font-size:13px;font-weight:700">🔕 Notificaciones y avisos</div></div>
+            <div style="font-size:11px;color:var(--gray);margin-bottom:12px">Elegí qué querés recibir. Los errores siempre se muestran.</div>
+            <div id="notif-prefs-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
           <!-- Toggle servicios a domicilio -->
           <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
             <div>
@@ -5592,6 +5598,7 @@ function startSSE() {
   if (!window.EventSource) return;
   if (_sse) return;
   if (!token) return;
+  if (typeof getPref === 'function' && !getPref('sse_live')) return;
   try {
     _sse = new EventSource(`/api/events/stream?token=${encodeURIComponent(token)}`);
   } catch(e) { console.warn('[sse] open error:', e); return; }
@@ -5839,6 +5846,7 @@ async function pushRegisterSW() {
 
 async function pushMaybeShowPrompt() {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (typeof getPref === 'function' && !getPref('push')) return;
   if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
   // Dismissed solo por sesión (así re-pregunta al reabrir / reinstalar PWA)
   if (sessionStorage.getItem('filo_push_dismissed')) return;
@@ -8285,6 +8293,18 @@ async function loadSettings() {
       const el = document.getElementById('cfg-social-' + k);
       if (el) el.value = sl[k] || '';
     });
+    // Prefs de notificaciones
+    const np = settings.notification_prefs || {};
+    window._notifPrefs = {
+      toasts:     np.toasts     !== false,
+      inapp:      np.inapp      !== false,
+      push:       np.push       !== false,
+      trial:      np.trial      !== false,
+      wpp_alerts: np.wpp_alerts !== false,
+      sse_live:   np.sse_live   !== false
+    };
+    renderNotifPrefs();
+    applyNotifPrefs();
     const slotEl = document.getElementById('cfg-slot-interval');
     if (slotEl) slotEl.value = String(settings.slot_interval_minutes || 30);
 
@@ -8514,7 +8534,8 @@ async function saveSettings(silent = false) {
       const v = (document.getElementById('cfg-social-' + k)?.value || '').trim();
       if (v) acc[k] = v;
       return acc;
-    }, {})
+    }, {}),
+    notification_prefs: window._notifPrefs
   };
   try {
     const res = await api('PUT', '/settings', body);
@@ -9434,11 +9455,68 @@ function initBrandingUI() {
   if (t) t.checked = !!currentShop.barber_self_upload_enabled;
 }
 
+// ── Preferencias de notificaciones ──────────────────────────────────────────
+window._notifPrefs = { toasts: true, inapp: true, push: true, trial: true, wpp_alerts: true, sse_live: true };
+function getPref(k) { return window._notifPrefs[k] !== false; }
+
+const NOTIF_PREF_META = [
+  { k: 'toasts',     emoji: '💬', label: 'Avisos emergentes (toasts)', hint: 'Los chiquitos que aparecen abajo. Los errores igual se muestran.' },
+  { k: 'inapp',      emoji: '🔔', label: 'Campana de notificaciones',   hint: 'Badge rojo con cantidad y lista desplegable.' },
+  { k: 'push',       emoji: '📲', label: 'Notificaciones push al celular', hint: 'Avisos del sistema aunque la app esté cerrada.' },
+  { k: 'trial',      emoji: '⏳', label: 'Avisos de trial y plan',      hint: 'Badge "quedan X días" y recordatorios para activar un plan.' },
+  { k: 'wpp_alerts', emoji: '📱', label: 'Alerta de WhatsApp desconectado', hint: 'Banner arriba cuando se cae la conexión del bot.' },
+  { k: 'sse_live',   emoji: '⚡', label: 'Actualizaciones en vivo',      hint: 'Refresco automático de agenda y pagos sin recargar.' },
+];
+
+function renderNotifPrefs() {
+  const el = document.getElementById('notif-prefs-list');
+  if (!el) return;
+  el.innerHTML = NOTIF_PREF_META.map(m => `
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;cursor:pointer">
+      <div style="display:flex;flex-direction:column;min-width:0;flex:1">
+        <div style="font-size:13px;color:#fff;font-weight:600"><span style="margin-right:6px">${m.emoji}</span>${m.label}</div>
+        <div style="font-size:11px;color:var(--gray);margin-top:2px;line-height:1.35">${m.hint}</div>
+      </div>
+      <span style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0">
+        <input type="checkbox" ${window._notifPrefs[m.k] ? 'checked' : ''} onchange="toggleNotifPref('${m.k}', this.checked)" style="opacity:0;width:0;height:0;position:absolute">
+        <span class="np-sl" style="position:absolute;inset:0;background:${window._notifPrefs[m.k] ? 'var(--yellow)' : 'rgba(255,255,255,.14)'};border-radius:26px;transition:.25s;border:1px solid ${window._notifPrefs[m.k] ? 'var(--yellow)' : 'rgba(255,255,255,.1)'}">
+          <span style="position:absolute;top:2.5px;left:${window._notifPrefs[m.k] ? '22px' : '3px'};width:19px;height:19px;background:${window._notifPrefs[m.k] ? '#000d1f' : '#8a9ab5'};border-radius:50%;transition:.25s"></span>
+        </span>
+      </span>
+    </label>
+  `).join('');
+}
+
+function toggleNotifPref(k, val) {
+  window._notifPrefs[k] = !!val;
+  renderNotifPrefs();
+  applyNotifPrefs();
+  // Autosave (saveSettings ya está debounced vía _cfgAutoSave en los otros campos)
+  if (typeof saveSettings === 'function') saveSettings(true);
+}
+
+function applyNotifPrefs() {
+  // Campana
+  document.querySelectorAll('.notif-bell').forEach(b => { b.style.display = getPref('inapp') ? '' : 'none'; });
+  // Trial badge + banners de upsell
+  document.querySelectorAll('.trial-badge, [data-upsell]').forEach(b => { b.style.display = getPref('trial') ? '' : 'none'; });
+  // Alerta de WhatsApp desconectado
+  const wa = document.getElementById('wpp-alert-banner');
+  if (wa) wa.style.display = getPref('wpp_alerts') ? '' : 'none';
+  // SSE: si lo apagan y había conexión, cerrar
+  if (!getPref('sse_live') && typeof _sse !== 'undefined' && _sse) {
+    try { _sse.close(); } catch(_) {}
+    window._sse = null;
+  }
+}
+
 function showToast(icon, title, msg, opts) {
   // Fix: si llega solo 1 string, interpretarlo como mensaje de advertencia
   if (title === undefined && msg === undefined) {
     msg = icon; title = 'Aviso'; icon = '⚠️';
   }
+  // Respetar preferencia — errores siempre pasan
+  if (icon !== '❌' && !getPref('toasts')) return;
   document.getElementById('toast-icon').textContent  = icon  || '';
   document.getElementById('toast-title').textContent = title || '';
   document.getElementById('toast-msg').textContent   = msg   || '';
