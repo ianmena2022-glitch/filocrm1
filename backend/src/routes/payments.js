@@ -328,8 +328,8 @@ router.post('/qr-order', auth, async (req, res) => {
       plan
     });
   } catch(e) {
-    console.error('[QR Order] Error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[QR Order] Error:', e.message, e.stack);
+    res.status(500).json({ error: 'Error generando QR: ' + e.message });
   }
 });
 
@@ -375,11 +375,23 @@ router.post('/transfer-order', auth, async (req, res) => {
     if (!amountCents) return res.status(503).json({ error: 'No se pudo generar monto único, probá en unos segundos' });
 
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
-    const ins = await pool.query(
-      `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at, promotion_id)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-      [req.shopId, plan, amountCents, expires.toISOString(), pricing.promo?.id || null]
-    );
+    let ins;
+    try {
+      ins = await pool.query(
+        `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at, promotion_id)
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [req.shopId, plan, amountCents, expires.toISOString(), pricing.promo?.id || null]
+      );
+    } catch(e) {
+      // Fallback si la columna promotion_id no existe aún (migración 043 pendiente)
+      if (/promotion_id|column.*does not exist/i.test(e.message)) {
+        ins = await pool.query(
+          `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at)
+           VALUES ($1,$2,$3,$4) RETURNING id`,
+          [req.shopId, plan, amountCents, expires.toISOString()]
+        );
+      } else throw e;
+    }
     const transferId = ins.rows[0].id;
     console.log(`[Transfer] Shop ${req.shopId} · plan ${plan} · $${(amountCents/100).toFixed(2)} · id=${transferId}`);
 
@@ -427,12 +439,24 @@ router.get('/transfer-status/:id', auth, async (req, res) => {
 async function tryMatchIncomingTransfer(paymentId, amount) {
   const amountCents = Math.round(parseFloat(amount) * 100);
   if (!amountCents) return { matched: false };
-  const q = await pool.query(
-    `SELECT id, shop_id, plan, promotion_id FROM pending_transfers
-     WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
-     ORDER BY created_at ASC LIMIT 1`,
-    [amountCents]
-  );
+  let q;
+  try {
+    q = await pool.query(
+      `SELECT id, shop_id, plan, promotion_id FROM pending_transfers
+       WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
+       ORDER BY created_at ASC LIMIT 1`,
+      [amountCents]
+    );
+  } catch(e) {
+    if (/promotion_id|column.*does not exist/i.test(e.message)) {
+      q = await pool.query(
+        `SELECT id, shop_id, plan FROM pending_transfers
+         WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
+         ORDER BY created_at ASC LIMIT 1`,
+        [amountCents]
+      );
+    } else throw e;
+  }
   if (!q.rows.length) return { matched: false };
   const row = q.rows[0];
   await pool.query(

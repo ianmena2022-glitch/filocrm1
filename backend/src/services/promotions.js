@@ -12,16 +12,26 @@ async function getBestPromoForShop({ shopId, plan, code = null }) {
   if (basePrice <= 0) return null;
 
   const now = new Date();
-  const q = await pool.query(
-    `SELECT * FROM promotions
-       WHERE status = 'active'
-         AND (starts_at IS NULL OR starts_at <= $1)
-         AND (ends_at   IS NULL OR ends_at   >  $1)
-         AND (applies_to = 'all' OR $2 = ANY(shop_ids))
-         AND (plans IS NULL OR $3 = ANY(plans))
-         AND (code IS NULL OR code = $4)`,
-    [now, shopId, plan, code]
-  );
+  let q;
+  try {
+    q = await pool.query(
+      `SELECT * FROM promotions
+         WHERE status = 'active'
+           AND (starts_at IS NULL OR starts_at <= $1)
+           AND (ends_at   IS NULL OR ends_at   >  $1)
+           AND (applies_to = 'all' OR $2 = ANY(shop_ids))
+           AND (plans IS NULL OR $3 = ANY(plans))
+           AND (code IS NULL OR code = $4)`,
+      [now, shopId, plan, code]
+    );
+  } catch(e) {
+    // Si la tabla no existe aún (migración 043 pendiente), seguimos sin promo
+    if (/promotions.*does not exist|relation "promotions"/i.test(e.message)) {
+      console.warn('[promotions] tabla no existe aún, correr migration 043');
+      return null;
+    }
+    throw e;
+  }
   if (!q.rows.length) return null;
 
   // Filtrar por max_total_uses y max_uses_per_shop + renewable
