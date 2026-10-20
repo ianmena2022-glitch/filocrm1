@@ -308,7 +308,8 @@ async function runTransferPolling() {
             shopId: match.shopId,
             plan:   match.plan,
             paymentId,
-            paidAmount: parseFloat(p.transaction_amount) || 0
+            paidAmount: parseFloat(p.transaction_amount) || 0,
+            promotionId: match.promotionId || null
           });
         }
       } catch(e) { console.error('[Poll Transfer] item error:', e.message); }

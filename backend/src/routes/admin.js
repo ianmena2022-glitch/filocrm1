@@ -632,6 +632,139 @@ router.post('/wpp/sweep', adminAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Promociones (CRUD + usos) ────────────────────────────────────────────────
+
+// GET /api/admin/promotions — listar todas
+router.get('/promotions', adminAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT p.*,
+              (SELECT COUNT(*)::int FROM promotion_uses WHERE promotion_id=p.id) AS uses_count
+         FROM promotions p
+         ORDER BY status ASC, created_at DESC`
+    );
+    res.json({ promotions: r.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/promotions — crear
+router.post('/promotions', adminAuth, async (req, res) => {
+  const {
+    name, code, discount_type, discount_value,
+    applies_to, shop_ids, plans, renewable,
+    starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes
+  } = req.body || {};
+  if (!name || !discount_type || discount_value === undefined || discount_value === null) {
+    return res.status(400).json({ error: 'name, discount_type y discount_value son requeridos' });
+  }
+  if (!['percent','fixed'].includes(discount_type)) return res.status(400).json({ error: 'discount_type inválido' });
+  if (discount_type === 'percent' && (discount_value < 0 || discount_value > 100)) {
+    return res.status(400).json({ error: 'percent debe estar entre 0 y 100' });
+  }
+  const appliesClean = applies_to === 'specific' ? 'specific' : 'all';
+  const shopIdsClean = appliesClean === 'specific' && Array.isArray(shop_ids) ? shop_ids.map(Number).filter(Boolean) : null;
+  const plansClean   = Array.isArray(plans) && plans.length ? plans.filter(p => ['starter','staff','enterprise'].includes(p)) : null;
+  const statusClean  = ['active','paused','archived'].includes(status) ? status : 'active';
+  try {
+    const r = await pool.query(
+      `INSERT INTO promotions
+         (name, code, discount_type, discount_value, applies_to, shop_ids, plans,
+          renewable, starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [name.trim(), (code||'').trim() || null, discount_type, parseFloat(discount_value),
+       appliesClean, shopIdsClean, plansClean, renewable !== false,
+       starts_at || null, ends_at || null,
+       max_total_uses ? parseInt(max_total_uses) : null,
+       max_uses_per_shop ? parseInt(max_uses_per_shop) : null,
+       statusClean, (notes||'').trim() || null]
+    );
+    res.json(r.rows[0]);
+  } catch(e) {
+    if (/duplicate key.*code/i.test(e.message)) return res.status(409).json({ error: 'El código ya está en uso' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/promotions/:id — editar
+router.put('/promotions/:id', adminAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'id inválido' });
+  const b = req.body || {};
+  const fields = [];
+  const vals   = [];
+  let i = 1;
+  function add(col, val) { fields.push(`${col}=$${i++}`); vals.push(val); }
+
+  if (b.name !== undefined)              add('name', String(b.name).trim());
+  if (b.code !== undefined)              add('code', (b.code||'').trim() || null);
+  if (b.discount_type !== undefined && ['percent','fixed'].includes(b.discount_type)) add('discount_type', b.discount_type);
+  if (b.discount_value !== undefined)    add('discount_value', parseFloat(b.discount_value));
+  if (b.applies_to !== undefined)        add('applies_to', b.applies_to === 'specific' ? 'specific' : 'all');
+  if (b.shop_ids !== undefined)          add('shop_ids', Array.isArray(b.shop_ids) ? b.shop_ids.map(Number).filter(Boolean) : null);
+  if (b.plans !== undefined)             add('plans', Array.isArray(b.plans) && b.plans.length ? b.plans.filter(p => ['starter','staff','enterprise'].includes(p)) : null);
+  if (b.renewable !== undefined)         add('renewable', !!b.renewable);
+  if (b.starts_at !== undefined)         add('starts_at', b.starts_at || null);
+  if (b.ends_at !== undefined)           add('ends_at', b.ends_at || null);
+  if (b.max_total_uses !== undefined)    add('max_total_uses', b.max_total_uses ? parseInt(b.max_total_uses) : null);
+  if (b.max_uses_per_shop !== undefined) add('max_uses_per_shop', b.max_uses_per_shop ? parseInt(b.max_uses_per_shop) : null);
+  if (b.status !== undefined && ['active','paused','archived'].includes(b.status)) add('status', b.status);
+  if (b.notes !== undefined)             add('notes', (b.notes||'').trim() || null);
+
+  if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
+  fields.push(`updated_at=NOW()`);
+  vals.push(id);
+  try {
+    const r = await pool.query(
+      `UPDATE promotions SET ${fields.join(',')} WHERE id=$${i} RETURNING *`,
+      vals
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'No existe' });
+    res.json(r.rows[0]);
+  } catch(e) {
+    if (/duplicate key.*code/i.test(e.message)) return res.status(409).json({ error: 'El código ya está en uso' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/promotions/:id
+router.delete('/promotions/:id', adminAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM promotions WHERE id=$1', [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/promotions/:id/uses — historial de usos
+router.get('/promotions/:id/uses', adminAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT u.*, s.name AS shop_name, s.email AS shop_email
+         FROM promotion_uses u
+         LEFT JOIN shops s ON s.id = u.shop_id
+         WHERE u.promotion_id=$1
+         ORDER BY u.used_at DESC`,
+      [parseInt(req.params.id)]
+    );
+    res.json({ uses: r.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/shops-search?q=... — buscador para armar shop_ids
+router.get('/shops-search', adminAuth, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ shops: [] });
+  try {
+    const r = await pool.query(
+      `SELECT id, name, email, filo_plan FROM shops
+         WHERE (name ILIKE $1 OR email ILIKE $1)
+           AND (is_barber IS NULL OR is_barber = FALSE)
+         ORDER BY name LIMIT 20`,
+      ['%' + q + '%']
+    );
+    res.json({ shops: r.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Web Push admin ────────────────────────────────────────────────────────────
 
 // GET /api/admin/push/public-key — devuelve la VAPID public key para el browser

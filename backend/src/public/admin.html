@@ -450,6 +450,18 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       </div>
     </div>
 
+    <!-- ── PROMOCIONES ── -->
+    <div style="margin-top:30px;padding:22px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:#fff">📣 PROMOCIONES</div>
+          <div style="font-size:12px;color:var(--g);margin-top:2px">Descuentos para signups y renovaciones · aplicables a todos o shops específicos</div>
+        </div>
+        <button onclick="promoOpenNew()" style="background:var(--y);color:var(--nk);border:none;padding:9px 18px;border-radius:7px;font-weight:700;font-size:12px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">+ Nueva promo</button>
+      </div>
+      <div id="promo-list"></div>
+    </div>
+
     </div><!-- /crm-content -->
 
     <!-- ── NAILS CONTENT ── -->
@@ -1082,6 +1094,8 @@ async function loadAll() {
       fetch('/api/admin/vendors',  { headers: { 'Authorization': `Bearer ${adminToken}` } })
     ]);
     if (accRes.status === 401) { logout(); return; }
+    // Cargar promos en paralelo (no bloquea)
+    promoLoad().catch(()=>{});
     const accData = await accRes.json();
     const venData = venRes.ok ? await venRes.json() : { vendors: [] };
     allAccounts = accData.accounts || [];
@@ -2504,6 +2518,331 @@ window.addEventListener('DOMContentLoaded', () => {
   if (savedUrl)   document.getElementById('nails-api-url').value = savedUrl;
   if (savedToken) document.getElementById('nails-admin-token').value = savedToken;
 });
+
+// ─────────────────────────────────────────────────────────────
+// PROMOCIONES
+// ─────────────────────────────────────────────────────────────
+let _promos = [];
+let _promoShopPicker = []; // shops seleccionados en el editor
+
+async function promoApi(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch('/api/admin' + path, opts);
+  const txt = await r.text();
+  let data = {}; try { data = JSON.parse(txt); } catch(_) {}
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+async function promoLoad() {
+  const el = document.getElementById('promo-list');
+  if (!el) return;
+  try {
+    const d = await promoApi('GET', '/promotions');
+    _promos = d.promotions || [];
+    promoRender();
+  } catch(e) {
+    el.innerHTML = `<div style="color:#f87171;font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+function promoRender() {
+  const el = document.getElementById('promo-list');
+  if (!el) return;
+  if (!_promos.length) {
+    el.innerHTML = '<div style="color:var(--g);font-size:13px;padding:16px 0">No hay promociones todavía. Creá la primera con el botón de arriba.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="color:var(--g);text-align:left;font-size:11px;letter-spacing:.5px;text-transform:uppercase">
+          <th style="padding:8px 10px">Nombre</th>
+          <th style="padding:8px 10px">Descuento</th>
+          <th style="padding:8px 10px">Aplica a</th>
+          <th style="padding:8px 10px">Renov.</th>
+          <th style="padding:8px 10px">Vence</th>
+          <th style="padding:8px 10px">Usos</th>
+          <th style="padding:8px 10px">Estado</th>
+          <th style="padding:8px 10px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${_promos.map(p => `
+          <tr style="border-top:1px solid rgba(255,255,255,.06)">
+            <td style="padding:10px">
+              <div style="font-weight:600;color:#fff">${escapeHtml(p.name)}</div>
+              ${p.code ? `<div style="font-size:11px;color:var(--y);font-family:monospace">${escapeHtml(p.code)}</div>` : ''}
+            </td>
+            <td style="padding:10px;color:#4ade80;font-weight:700">
+              ${p.discount_type === 'percent' ? `${parseFloat(p.discount_value)}%` : `$${parseFloat(p.discount_value).toLocaleString('es-AR')}`}
+            </td>
+            <td style="padding:10px;color:rgba(255,255,255,.75)">
+              ${p.applies_to === 'all' ? 'Todos' : `${(p.shop_ids||[]).length} shop(s)`}
+              ${p.plans?.length ? `<div style="font-size:10.5px;color:var(--g)">${p.plans.join(', ')}</div>` : ''}
+            </td>
+            <td style="padding:10px">${p.renewable ? '♻️ Sí' : '1️⃣ No'}</td>
+            <td style="padding:10px;font-size:12px">${p.ends_at ? new Date(p.ends_at).toLocaleDateString('es-AR') : '∞'}</td>
+            <td style="padding:10px">${p.uses_count}${p.max_total_uses ? ` / ${p.max_total_uses}` : ''}</td>
+            <td style="padding:10px">
+              <span style="padding:3px 8px;border-radius:5px;font-size:11px;font-weight:700;${p.status==='active'?'background:rgba(74,222,128,.15);color:#4ade80':p.status==='paused'?'background:rgba(255,209,0,.15);color:#FFD100':'background:rgba(255,255,255,.08);color:var(--g)'}">${p.status}</span>
+            </td>
+            <td style="padding:10px;text-align:right;white-space:nowrap">
+              <button onclick="promoToggleStatus(${p.id})" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">${p.status==='active'?'Pausar':'Activar'}</button>
+              <button onclick="promoOpenEdit(${p.id})" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">✏️</button>
+              <button onclick="promoDelete(${p.id})" style="background:transparent;border:1px solid rgba(239,68,68,.3);color:#f87171;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer">🗑</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function promoOpenNew() { promoOpenEditor(null); }
+function promoOpenEdit(id) {
+  const p = _promos.find(x => x.id === id);
+  if (p) promoOpenEditor(p);
+}
+
+async function promoToggleStatus(id) {
+  const p = _promos.find(x => x.id === id);
+  if (!p) return;
+  const next = p.status === 'active' ? 'paused' : 'active';
+  try { await promoApi('PUT', '/promotions/' + id, { status: next }); await promoLoad(); }
+  catch(e) { alert('Error: ' + e.message); }
+}
+
+async function promoDelete(id) {
+  const p = _promos.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`¿Eliminar la promo "${p.name}"? Esta acción no se puede deshacer.`)) return;
+  try { await promoApi('DELETE', '/promotions/' + id); await promoLoad(); }
+  catch(e) { alert('Error: ' + e.message); }
+}
+
+function promoOpenEditor(p) {
+  _promoShopPicker = Array.isArray(p?.shop_ids) ? [...p.shop_ids] : [];
+  const existing = document.getElementById('promo-modal');
+  if (existing) existing.remove();
+  const toInputDate = v => v ? new Date(v).toISOString().slice(0,16) : '';
+  const m = document.createElement('div');
+  m.id = 'promo-modal';
+  m.innerHTML = `
+    <div class="promo-mod-backdrop" onclick="promoCloseEditor()"></div>
+    <div class="promo-mod-dialog">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-family:'Oswald',sans-serif;font-size:19px;font-weight:700;color:#fff">${p ? 'Editar promoción' : 'Nueva promoción'}</div>
+        <button onclick="promoCloseEditor()" style="background:transparent;border:none;color:rgba(255,255,255,.5);font-size:24px;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="grid-column:1/-1">
+          <label class="pml">Nombre interno</label>
+          <input id="pm-name" class="pmi" placeholder="Ej: Lanzamiento mayo 2026" value="${escapeHtml(p?.name||'')}">
+        </div>
+        <div>
+          <label class="pml">Código (opcional)</label>
+          <input id="pm-code" class="pmi" placeholder="Ej: LANZAMIENTO50" value="${escapeHtml(p?.code||'')}" style="font-family:monospace;text-transform:uppercase">
+        </div>
+        <div>
+          <label class="pml">Tipo de descuento</label>
+          <select id="pm-dtype" class="pmi" onchange="promoUpdateValueHint()">
+            <option value="percent" ${p?.discount_type==='percent'?'selected':''}>Porcentaje (%)</option>
+            <option value="fixed"   ${p?.discount_type==='fixed'?'selected':''}>Monto fijo ($)</option>
+          </select>
+        </div>
+        <div>
+          <label class="pml">Valor <span id="pm-dhint" style="color:var(--g);font-weight:400">(0-100)</span></label>
+          <input id="pm-dvalue" class="pmi" type="number" step="0.01" min="0" value="${p?.discount_value||''}">
+        </div>
+        <div>
+          <label class="pml">Aplica a</label>
+          <select id="pm-applies" class="pmi" onchange="promoApplyToChange()">
+            <option value="all"      ${(!p||p.applies_to==='all')?'selected':''}>Todos los shops</option>
+            <option value="specific" ${p?.applies_to==='specific'?'selected':''}>Shops específicos</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1" id="pm-shops-wrap" style="display:none">
+          <label class="pml">Shops incluidos</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+            <input id="pm-shop-search" class="pmi" style="flex:1" placeholder="Buscar por nombre o email..." oninput="promoShopSearch(this.value)">
+          </div>
+          <div id="pm-shop-results" style="max-height:120px;overflow-y:auto;background:rgba(0,0,0,.3);border-radius:6px;padding:4px;margin-bottom:6px"></div>
+          <div id="pm-shops-selected" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+        </div>
+        <div>
+          <label class="pml">Planes aplicables</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:6px">
+            ${['starter','staff','enterprise'].map(pl => `
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
+                <input type="checkbox" class="pm-plan" value="${pl}" ${(!p?.plans || p.plans.includes(pl))?'checked':''}>${pl}
+              </label>`).join('')}
+          </div>
+          <div style="font-size:10.5px;color:var(--g);margin-top:4px">Dejá los 3 tildados para que aplique a cualquier plan</div>
+        </div>
+        <div>
+          <label class="pml">¿Renovable?</label>
+          <select id="pm-renew" class="pmi">
+            <option value="1" ${(!p||p.renewable)?'selected':''}>♻️ Sí, cada renovación</option>
+            <option value="0" ${p?.renewable===false?'selected':''}>1️⃣ Solo primera vez (one-shot)</option>
+          </select>
+        </div>
+        <div>
+          <label class="pml">Vence el (opcional)</label>
+          <input id="pm-ends" class="pmi" type="datetime-local" value="${toInputDate(p?.ends_at)}">
+        </div>
+        <div>
+          <label class="pml">Arranca el (opcional)</label>
+          <input id="pm-starts" class="pmi" type="datetime-local" value="${toInputDate(p?.starts_at)}">
+        </div>
+        <div>
+          <label class="pml">Máx. usos totales (opcional)</label>
+          <input id="pm-maxtot" class="pmi" type="number" min="1" placeholder="∞" value="${p?.max_total_uses||''}">
+        </div>
+        <div>
+          <label class="pml">Máx. usos por shop</label>
+          <input id="pm-maxshop" class="pmi" type="number" min="1" placeholder="1" value="${p?.max_uses_per_shop||1}">
+        </div>
+        <div>
+          <label class="pml">Estado</label>
+          <select id="pm-status" class="pmi">
+            <option value="active"   ${(!p||p.status==='active')?'selected':''}>🟢 Activa</option>
+            <option value="paused"   ${p?.status==='paused'?'selected':''}>⏸ Pausada</option>
+            <option value="archived" ${p?.status==='archived'?'selected':''}>📦 Archivada</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="pml">Notas internas (opcional)</label>
+          <textarea id="pm-notes" class="pmi" rows="2" placeholder="Para qué sirve, campaña de marketing, etc.">${escapeHtml(p?.notes||'')}</textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+        <button onclick="promoCloseEditor()" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:9px 20px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="promoSave(${p?.id||'null'})" style="background:var(--y);color:var(--nk);border:none;padding:9px 24px;border-radius:7px;font-weight:800;font-size:13px;cursor:pointer">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(m);
+  // Inyectar estilos si no están
+  if (!document.getElementById('promo-styles')) {
+    const st = document.createElement('style');
+    st.id = 'promo-styles';
+    st.textContent = `
+      #promo-modal { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
+      .promo-mod-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(6px); }
+      .promo-mod-dialog { position:relative; background:#0a1828; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:22px; max-width:720px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+      .pml { display:block; font-size:11px; color:var(--g); font-weight:600; letter-spacing:.3px; text-transform:uppercase; margin-bottom:4px; }
+      .pmi { width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:7px; padding:9px 11px; color:#fff; font-size:13px; font-family:'Barlow',sans-serif; outline:none; }
+      .pmi:focus { border-color:var(--y); background:rgba(255,255,255,.08); }
+      .pm-shop-chip { display:inline-flex; align-items:center; gap:6px; background:rgba(255,209,0,.12); border:1px solid rgba(255,209,0,.3); color:#FFD100; padding:3px 8px; border-radius:6px; font-size:11.5px; }
+      .pm-shop-chip button { background:transparent; border:none; color:#FFD100; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
+    `;
+    document.head.appendChild(st);
+  }
+  promoApplyToChange();
+  promoUpdateValueHint();
+  promoRenderShops();
+}
+
+function promoCloseEditor() {
+  document.getElementById('promo-modal')?.remove();
+}
+
+function promoApplyToChange() {
+  const sel = document.getElementById('pm-applies').value;
+  document.getElementById('pm-shops-wrap').style.display = sel === 'specific' ? 'block' : 'none';
+}
+
+function promoUpdateValueHint() {
+  const t = document.getElementById('pm-dtype').value;
+  document.getElementById('pm-dhint').textContent = t === 'percent' ? '(0-100)' : '(pesos)';
+}
+
+async function promoShopSearch(q) {
+  const el = document.getElementById('pm-shop-results');
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  try {
+    const d = await promoApi('GET', '/shops-search?q=' + encodeURIComponent(q));
+    el.innerHTML = (d.shops||[]).map(s => `
+      <div onclick="promoShopPick(${s.id}, '${escapeHtml(s.name).replace(/'/g,"\\'")}')" style="padding:7px 10px;cursor:pointer;border-radius:5px;font-size:12.5px;display:flex;justify-content:space-between;color:rgba(255,255,255,.85)" onmouseover="this.style.background='rgba(255,209,0,.08)'" onmouseout="this.style.background='transparent'">
+        <span>${escapeHtml(s.name)} <span style="color:var(--g);font-size:11px">· ${escapeHtml(s.email||'')}</span></span>
+        <span style="color:var(--g);font-size:11px">${s.filo_plan||''}</span>
+      </div>
+    `).join('') || '<div style="padding:8px;color:var(--g);font-size:12px">Sin resultados</div>';
+  } catch(e) {}
+}
+
+function promoShopPick(id, name) {
+  if (!_promoShopPicker.includes(id)) {
+    _promoShopPicker.push(id);
+    window._promoShopNames = window._promoShopNames || {};
+    window._promoShopNames[id] = name;
+  }
+  document.getElementById('pm-shop-search').value = '';
+  document.getElementById('pm-shop-results').innerHTML = '';
+  promoRenderShops();
+}
+
+function promoShopRemove(id) {
+  _promoShopPicker = _promoShopPicker.filter(x => x !== id);
+  promoRenderShops();
+}
+
+function promoRenderShops() {
+  const el = document.getElementById('pm-shops-selected');
+  if (!el) return;
+  window._promoShopNames = window._promoShopNames || {};
+  el.innerHTML = _promoShopPicker.map(id => `
+    <span class="pm-shop-chip">
+      <span>${escapeHtml(window._promoShopNames[id] || ('#' + id))}</span>
+      <button onclick="promoShopRemove(${id})">×</button>
+    </span>
+  `).join('') || '<span style="color:var(--g);font-size:11.5px">Ningún shop seleccionado</span>';
+}
+
+async function promoSave(id) {
+  const planChecks = Array.from(document.querySelectorAll('.pm-plan:checked')).map(c => c.value);
+  const body = {
+    name:              document.getElementById('pm-name').value.trim(),
+    code:              document.getElementById('pm-code').value.trim().toUpperCase() || null,
+    discount_type:     document.getElementById('pm-dtype').value,
+    discount_value:    parseFloat(document.getElementById('pm-dvalue').value) || 0,
+    applies_to:        document.getElementById('pm-applies').value,
+    shop_ids:          document.getElementById('pm-applies').value === 'specific' ? _promoShopPicker : null,
+    plans:             planChecks.length === 3 ? null : planChecks,
+    renewable:         document.getElementById('pm-renew').value === '1',
+    starts_at:         document.getElementById('pm-starts').value ? new Date(document.getElementById('pm-starts').value).toISOString() : null,
+    ends_at:           document.getElementById('pm-ends').value   ? new Date(document.getElementById('pm-ends').value).toISOString()   : null,
+    max_total_uses:    document.getElementById('pm-maxtot').value  ? parseInt(document.getElementById('pm-maxtot').value)  : null,
+    max_uses_per_shop: parseInt(document.getElementById('pm-maxshop').value) || 1,
+    status:            document.getElementById('pm-status').value,
+    notes:             document.getElementById('pm-notes').value.trim() || null,
+  };
+  if (!body.name) { alert('Falta el nombre'); return; }
+  if (body.discount_type === 'percent' && (body.discount_value < 0 || body.discount_value > 100)) {
+    alert('El porcentaje tiene que estar entre 0 y 100'); return;
+  }
+  if (body.applies_to === 'specific' && (!body.shop_ids || !body.shop_ids.length)) {
+    alert('Elegí al menos un shop o cambiá a "Todos"'); return;
+  }
+  try {
+    if (id) await promoApi('PUT', '/promotions/' + id, body);
+    else    await promoApi('POST', '/promotions', body);
+    promoCloseEditor();
+    await promoLoad();
+  } catch(e) { alert('Error: ' + e.message); }
+}
 </script>
 </body>
 </html>

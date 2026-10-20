@@ -276,19 +276,38 @@ const QR_PLANS = {
   enterprise: { price: 130000, label: 'FILO Enterprise'  },
 };
 
+// GET /api/payments/price/:plan?code=XXX — precio final (con promo aplicada si existe)
+router.get('/price/:plan', auth, async (req, res) => {
+  const plan = req.params.plan;
+  if (!QR_PLANS[plan]) return res.status(400).json({ error: 'Plan inválido' });
+  try {
+    const promos = require('../services/promotions');
+    const pricing = await promos.priceForShop({ shopId: req.shopId, plan, code: req.query.code || null });
+    res.json({ plan, label: QR_PLANS[plan].label, ...pricing });
+  } catch(e) {
+    res.status(500).json({ error: 'Error calculando precio' });
+  }
+});
+
 // POST /api/payments/qr-order — crear orden Checkout Pro (QR escaneable + link).
 // El init_point abre Checkout Pro donde el cliente puede pagar con tarjeta, débito,
 // transferencia desde cualquier banco (Transferencias 3.0), MP, Rapipago o Pago Fácil.
 router.post('/qr-order', auth, async (req, res) => {
-  const { plan } = req.body;
+  const { plan, code } = req.body;
   if (!QR_PLANS[plan]) return res.status(400).json({ error: 'Plan inválido' });
   const planCfg = QR_PLANS[plan];
   const appUrl  = process.env.APP_URL || 'https://filocrm.com.ar';
-  const extRef  = `filo:${req.shopId}:${plan}:${Date.now()}`;
 
   try {
+    const promos  = require('../services/promotions');
+    const pricing = await promos.priceForShop({ shopId: req.shopId, plan, code: code || null });
+    const finalPrice = pricing.final;
+    const promoId    = pricing.promo?.id || 0;
+    // extRef incluye promo_id para registrar uso en el webhook/activate
+    const extRef  = `filo:${req.shopId}:${plan}:${promoId}:${Date.now()}`;
+
     const pref = await mpFetch('POST', '/checkout/preferences', {
-      items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: planCfg.price, currency_id: 'ARS' }],
+      items: [{ title: `${planCfg.label} — 30 días`, quantity: 1, unit_price: finalPrice, currency_id: 'ARS' }],
       external_reference: extRef,
       notification_url: `${appUrl}/api/payments/webhook-qr`,
       back_urls: { success: `${appUrl}/gracias`, failure: `${appUrl}/app` },
@@ -297,12 +316,15 @@ router.post('/qr-order', auth, async (req, res) => {
 
     await pool.query("UPDATE shops SET mp_shop_status='pending_qr' WHERE id=$1", [req.shopId]);
 
-    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · pref ${pref.id}`);
+    console.log(`[QR Order] Shop ${req.shopId} → plan ${plan} · $${finalPrice} (promo=${promoId||'-'}) · pref ${pref.id}`);
     res.json({
       ok: true,
       preference_id: pref.id,
       init_point: pref.init_point,
-      amount: planCfg.price,
+      amount: finalPrice,
+      base_amount: pricing.base,
+      discount: pricing.discount,
+      promo: pricing.promo,
       plan
     });
   } catch(e) {
@@ -317,7 +339,7 @@ router.post('/qr-order', auth, async (req, res) => {
 
 // POST /api/payments/transfer-order — crear orden de pago por transferencia
 router.post('/transfer-order', auth, async (req, res) => {
-  const { plan } = req.body;
+  const { plan, code } = req.body;
   if (!QR_PLANS[plan]) return res.status(400).json({ error: 'Plan inválido' });
   const planCfg = QR_PLANS[plan];
   const alias = process.env.MP_RECEIVER_ALIAS || '';
@@ -333,8 +355,12 @@ router.post('/transfer-order', auth, async (req, res) => {
        WHERE matched=FALSE AND expires_at < NOW()`
     );
 
-    // Generar monto único: precio base + 1..999 centavos que no colisionen con pendings activos.
-    const baseCents = planCfg.price * 100;
+    // Aplicar promo si corresponde
+    const promos  = require('../services/promotions');
+    const pricing = await promos.priceForShop({ shopId: req.shopId, plan, code: code || null });
+    const finalPrice = pricing.final;
+    // Generar monto único: precio (con descuento) + 1..999 centavos que no colisionen con pendings activos.
+    const baseCents = finalPrice * 100;
     let amountCents = null;
     for (let attempt = 0; attempt < 50; attempt++) {
       const candidate = baseCents + Math.floor(Math.random() * 999) + 1;
@@ -350,9 +376,9 @@ router.post('/transfer-order', auth, async (req, res) => {
 
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
     const ins = await pool.query(
-      `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at)
-       VALUES ($1,$2,$3,$4) RETURNING id`,
-      [req.shopId, plan, amountCents, expires.toISOString()]
+      `INSERT INTO pending_transfers (shop_id, plan, amount_cents, expires_at, promotion_id)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [req.shopId, plan, amountCents, expires.toISOString(), pricing.promo?.id || null]
     );
     const transferId = ins.rows[0].id;
     console.log(`[Transfer] Shop ${req.shopId} · plan ${plan} · $${(amountCents/100).toFixed(2)} · id=${transferId}`);
@@ -402,7 +428,7 @@ async function tryMatchIncomingTransfer(paymentId, amount) {
   const amountCents = Math.round(parseFloat(amount) * 100);
   if (!amountCents) return { matched: false };
   const q = await pool.query(
-    `SELECT id, shop_id, plan FROM pending_transfers
+    `SELECT id, shop_id, plan, promotion_id FROM pending_transfers
      WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
      ORDER BY created_at ASC LIMIT 1`,
     [amountCents]
@@ -419,16 +445,33 @@ async function tryMatchIncomingTransfer(paymentId, amount) {
     const sse = require('../services/sse');
     sse.emit(row.shop_id, 'transfer.matched', { transfer_id: row.id, plan: row.plan });
   } catch(_) {}
-  return { matched: true, shopId: row.shop_id, plan: row.plan };
+  return { matched: true, shopId: row.shop_id, plan: row.plan, promotionId: row.promotion_id };
 }
 
 // Activa un plan mensual para una barbería. Centraliza la lógica (shops row,
 // idempotencia, referrals, afiliados, WhatsApp de confirmación). No tira; loguea errores.
-async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
-  const expectedPrice = QR_PLANS[plan]?.price;
+async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId = null }) {
+  const basePrice = QR_PLANS[plan]?.price;
+  // Si hay promo, el precio esperado puede ser menor. Recalcular con promo activa.
+  let expectedPrice = basePrice;
+  let resolvedPromoId = promotionId;
+  try {
+    const promos = require('../services/promotions');
+    if (!resolvedPromoId) {
+      const pricing = await promos.priceForShop({ shopId, plan });
+      expectedPrice = pricing.final;
+      resolvedPromoId = pricing.promo?.id || null;
+    } else {
+      // Si viene con promoId explícito (ej. desde transferencia), calcular con esa promo
+      const promoRow = await pool.query('SELECT * FROM promotions WHERE id=$1', [resolvedPromoId]);
+      if (promoRow.rows.length) {
+        const d = promos.computeDiscount(basePrice, promoRow.rows[0]);
+        expectedPrice = d.final_amount;
+      }
+    }
+  } catch(e) { console.warn('[Activate] promo lookup error:', e.message); }
+
   if (expectedPrice && paidAmount < (expectedPrice - 1)) {
-    // Para transferencia el monto trae centavos extra, siempre es >= price. Para Checkout
-    // también. Solo rechazamos si está por debajo del plan base.
     console.warn(`[Activate] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para ${plan} (esperado $${expectedPrice}). Ignorando.`);
     return;
   }
@@ -515,6 +558,21 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount }) {
       await wpp.sendText(shopId, shop.phone, msg);
     } catch(e) { console.error('[Activate] WPP:', e.message); }
   }
+
+  // Registrar uso de la promo si aplicó
+  if (resolvedPromoId) {
+    try {
+      const promos = require('../services/promotions');
+      await promos.recordUse({
+        promotionId: resolvedPromoId,
+        shopId,
+        paymentId,
+        plan,
+        originalAmount: basePrice,
+        finalAmount: expectedPrice
+      });
+    } catch(e) { console.error('[Activate] promo recordUse:', e.message); }
+  }
 }
 
 // POST /api/payments/webhook-qr — MP notifica pago aprobado (QR / Checkout / Transferencia)
@@ -544,20 +602,25 @@ router.post('/webhook-qr', async (req, res) => {
 
       if (status !== 'approved') return res.sendStatus(200);
 
-      let shopId = null, plan = null;
+      let shopId = null, plan = null, promotionId = null;
       if (external_reference?.startsWith('filo:')) {
         const parts = external_reference.split(':');
         shopId = parseInt(parts[1]);
         plan   = parts[2];
+        // extRef: filo:shopId:plan:promoId:ts (promoId '0' = sin promo)
+        if (parts.length >= 5) {
+          const p = parseInt(parts[3]);
+          if (p > 0) promotionId = p;
+        }
       } else {
         // No tiene external_reference nuestro → intentar match con pending_transfers por monto exacto
         const match = await tryMatchIncomingTransfer(paymentId, transaction_amount);
-        if (match.matched) { shopId = match.shopId; plan = match.plan; }
+        if (match.matched) { shopId = match.shopId; plan = match.plan; promotionId = match.promotionId; }
       }
 
       if (shopId && plan) {
         const paidAmount = parseFloat(transaction_amount) || 0;
-        await activateShopPlan({ shopId, plan, paymentId, paidAmount });
+        await activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId });
       }
     }
     res.sendStatus(200);
