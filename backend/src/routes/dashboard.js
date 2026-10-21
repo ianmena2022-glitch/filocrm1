@@ -479,6 +479,43 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
 
+    // Propinas por método: entran físicamente por el mismo método que el turno
+    // (en mixtos, proporcional a cada split). Sin esto, al liquidar la propina al
+    // barbero la cuenta queda en déficit porque nunca se sumó.
+    let tipRows = [];
+    try {
+      const q = await pool.query(
+        `SELECT method AS key, SUM(amt) AS total FROM (
+           SELECT a.payment_method AS method, a.tip AS amt
+             FROM appointments a
+             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0
+               AND a.payment_method IS NOT NULL AND a.payment_method NOT IN ('debt','mixed')
+               AND NOT EXISTS (SELECT 1 FROM payment_splits ps WHERE ps.appointment_id=a.id)
+           UNION ALL
+           SELECT ps.method, a.tip * ps.amount / NULLIF(t.total,0)
+             FROM appointments a
+             JOIN payment_splits ps ON ps.appointment_id=a.id
+             JOIN (SELECT appointment_id, SUM(amount) AS total FROM payment_splits GROUP BY appointment_id) t
+               ON t.appointment_id=a.id
+             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0
+               AND ps.method <> 'debt'
+         ) x GROUP BY method`,
+        [shopId, date]
+      );
+      tipRows = q.rows;
+    } catch(spErr) {
+      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
+        const q = await pool.query(
+          `SELECT payment_method AS key, SUM(tip) AS total FROM appointments
+            WHERE shop_id=$1 AND date=$2 AND status='completed' AND tip > 0
+              AND payment_method IS NOT NULL AND payment_method NOT IN ('debt','mixed')
+            GROUP BY payment_method`,
+          [shopId, date]
+        );
+        tipRows = q.rows;
+      } else throw spErr;
+    }
+
     // Egresos por método (liquidaciones, insumos, etc.) — se RESTAN del flujo por método
     const expensesByMethodQ = await pool.query(
       `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
@@ -498,6 +535,9 @@ router.get('/cash', auth, async (req, res) => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     debtBreakdownQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    tipRows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     expensesByMethodQ.rows.forEach(r => {
