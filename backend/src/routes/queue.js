@@ -484,6 +484,11 @@ router.post('/complete/:id', auth, async (req, res) => {
     );
     const apptId = apptRes.rows[0].id;
 
+    if (t > 0 && req.body.tip_method) {
+      await pool.query('UPDATE appointments SET tip_method=$1 WHERE id=$2', [String(req.body.tip_method).trim(), apptId])
+        .catch(() => {}); // tolerante si la migración 045 no corrió aún
+    }
+
     // Mark queue entry as served
     await pool.query(
       `UPDATE queue_entries

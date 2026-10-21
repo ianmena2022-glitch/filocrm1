@@ -6448,7 +6448,14 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
 
       <div style="margin-bottom:18px">
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Propina (opcional)</label>
-        <input type="number" id="wip-tip" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <input type="number" id="wip-tip" placeholder="$0" min="0" oninput="document.getElementById('wip-tip-method-wrap').style.display = (parseFloat(this.value)>0) ? 'block' : 'none'" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <div id="wip-tip-method-wrap" style="display:none;margin-top:8px">
+          <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">¿Cómo dejó la propina?</label>
+          <select id="wip-tip-method">
+            <option value="">Igual que el servicio</option>
+            ${(window._paymentMethods||[]).filter(m=>!m.is_debt).map(m=>`<option value="${m.key}">${m.icon||''} ${m.label}</option>`).join('')}
+          </select>
+        </div>
       </div>
 
       <button onclick="confirmWalkInPayment()" style="width:100%;background:#FFD100;color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">✅ Confirmar cobro</button>
@@ -6498,6 +6505,7 @@ async function confirmWalkInPayment() {
   const price    = parseFloat(priceEl?.value) || 0;
   const tip      = parseFloat(tipEl?.value) || 0;
   const barberId = barberEl?.value || null;
+  const tipMethod = document.getElementById('wip-tip-method')?.value || '';
 
   // Get commission_pct from selected barber
   let commissionPct = 50;
@@ -6514,6 +6522,7 @@ async function confirmWalkInPayment() {
       service_id: serviceId || undefined,
       payment_method: _walkInPayMethod,
       tip, barber_id: barberId || undefined,
+      tip_method: (tip > 0 && tipMethod) ? tipMethod : undefined,
       commission_pct: commissionPct
     });
     const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[_walkInPayMethod] || _walkInPayMethod;
