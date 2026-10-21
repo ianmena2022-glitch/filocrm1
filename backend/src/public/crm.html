@@ -7362,7 +7362,14 @@ function showPaymentPopup(apptId) {
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">Propina (opcional)</label>
-        <input type="number" id="tip-input" placeholder="$0" min="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <input type="number" id="tip-input" placeholder="$0" min="0" oninput="document.getElementById('tip-method-wrap').style.display = (parseFloat(this.value)>0) ? 'block' : 'none'" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:white;font-size:14px;box-sizing:border-box">
+        <div id="tip-method-wrap" style="display:none;margin-top:8px">
+          <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">¿Cómo dejó la propina?</label>
+          <select id="tip-method">
+            <option value="">Igual que el servicio</option>
+            ${(window._paymentMethods||[]).filter(m=>!m.is_debt).map(m=>`<option value="${m.key}">${m.icon||''} ${m.label}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <button onclick="confirmPayment(${apptId})" style="width:100%;background:var(--yellow);color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">
         ✅ Confirmar pago
@@ -7504,6 +7511,8 @@ async function confirmPayment(apptId) {
   const tip = parseFloat(document.getElementById('tip-input')?.value) || 0;
   const price = parseFloat(document.getElementById('payment-price')?.textContent?.replace(/[^0-9.-]/g,'') || '0');
   let body = { status: 'completed', tip };
+  const tipMethod = document.getElementById('tip-method')?.value;
+  if (tip > 0 && tipMethod) body.tip_method = tipMethod;
   let successLabel = '';
 
   if (window._paySplitMode) {

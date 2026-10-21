@@ -306,7 +306,7 @@ async function _writeAppointmentSplits(client, shopId, apptId, price, splits) {
 }
 
 router.put('/:id/status', auth, async (req, res) => {
-  const { status, payment_method, tip, payment_splits } = req.body;
+  const { status, payment_method, tip, payment_splits, tip_method } = req.body;
   const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled','waiting_sena'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
@@ -345,13 +345,28 @@ router.put('/:id/status', auth, async (req, res) => {
       await pool.query('DELETE FROM payment_splits WHERE appointment_id=$1', [req.params.id]).catch(()=>{});
     }
 
-    const result = await pool.query(
-      `UPDATE appointments SET status=$1,
-         payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
-         tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
-       WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
-      [status, effectivePM || null, tip !== undefined ? parseFloat(tip) : null, req.params.id, shopId]
-    );
+    const tipVal = tip !== undefined ? parseFloat(tip) : null;
+    const tipMethodVal = (tipVal && tip_method) ? String(tip_method).trim() : null;
+    let result;
+    try {
+      result = await pool.query(
+        `UPDATE appointments SET status=$1,
+           payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
+           tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END,
+           tip_method = CASE WHEN $3::numeric IS NOT NULL THEN $6::text ELSE tip_method END
+         WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
+        [status, effectivePM || null, tipVal, req.params.id, shopId, tipMethodVal]
+      );
+    } catch (tmErr) {
+      if (!/tip_method/i.test(tmErr.message)) throw tmErr;
+      result = await pool.query(
+        `UPDATE appointments SET status=$1,
+           payment_method = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE payment_method END,
+           tip = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE tip END
+         WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
+        [status, effectivePM || null, tipVal, req.params.id, shopId]
+      );
+    }
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 
     const appt = result.rows[0];
