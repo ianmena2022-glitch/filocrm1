@@ -1339,7 +1339,7 @@ async function openBarberWalkInPayment(entryId, clientName='', preServiceName=''
   let services = [];
   try {
     const [svcData, payData] = await Promise.all([
-      api('GET', '/services'),
+      api('GET', '/settings/services'),
       api('GET', '/payment-methods')
     ]);
     services = Array.isArray(svcData) ? svcData.filter(s => s.active) : [];

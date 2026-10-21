@@ -11,6 +11,10 @@ const PUBLIC_PATHS = [
   '/api/auth/complete-registration',
   '/api/payments/filo-subscription', // necesario para que cuentas expiradas puedan re-suscribirse
   '/api/payments/qr-order',          // cuentas expiradas necesitan pagar
+  '/api/payments/transfer-order',    // pago por transferencia (cuentas expiradas)
+  '/api/payments/transfer-status',   // polling del pago por transferencia
+  '/api/payments/subscription',      // estado de la suscripción
+  '/api/payments/price',             // precio con promo en el paywall
   '/api/payments/webhook-qr',        // webhook MP (sin auth)
   '/api/auth/setup-test',
   '/api/payments/webhook',

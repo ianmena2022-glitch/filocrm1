@@ -6384,7 +6384,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
   // Fetch services, barbers, and payment methods in parallel
   try {
     const [svcData, barbersData, payData] = await Promise.all([
-      api('GET', '/services'),
+      api('GET', '/settings/services'),
       currentShop?.commission_enabled ? api('GET', '/barbers') : Promise.resolve([]),
       api('GET', '/payment-methods')
     ]);
@@ -13776,9 +13776,9 @@ function renderDashProductos(ventas) {
           </div>
           <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;color:${col};min-width:28px;text-align:right">${stock}</div>
           <div style="display:flex;gap:4px">
-            <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\'")}',${p.precio_venta},${stock})" title="Vender"
+            <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\\'")}',${p.precio_venta},${stock})" title="Vender"
               style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">💰</button>
-            <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\'")}')" title="Stock"
+            <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\\'")}')" title="Stock"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">📦</button>
             <button onclick="openProductoModal(${p.id})" title="Editar"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">✏️</button>
@@ -13847,9 +13847,9 @@ function renderProductosCfg() {
         <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-        <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\'")}',${p.precio_venta},${stock})"
+        <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\\'")}',${p.precio_venta},${stock})"
           style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Vender</button>
-        <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\'")}')"
+        <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\\'")}')"
           style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">📦 Stock</button>
         <button onclick="openProductoModal(${p.id})"
           style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer">✏️</button>
