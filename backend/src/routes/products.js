@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
+const { getShopTz, shopDate } = require('../db/shopTz');
 
 // ── GET /api/products — listar productos activos ───────────────────────────
 router.get('/', auth, async (req, res) => {
@@ -249,8 +250,8 @@ router.post('/:id/sell', auth, async (req, res) => {
     try {
       await pool.query(
         `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method, date)
-         VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,CURRENT_DATE)`,
-        [shopId, total, ventaDesc, venta.rows[0].id, pmValue]
+         VALUES ($1,$2,'ventas',$3,TRUE,'product_sale',$4,$5,$6)`,
+        [shopId, total, ventaDesc, venta.rows[0].id, pmValue, shopDate(await getShopTz(shopId))]
       );
     } catch(expErr) {
       console.error(`[SELL-EXPENSE-ERROR] ${expErr.message}`);
@@ -310,8 +311,8 @@ router.post('/:id/stock', auth, async (req, res) => {
         : `Stock ${prodNombre} x${qty}`;
       await pool.query(
         `INSERT INTO expenses (shop_id, amount, category, description, date)
-         VALUES ($1, $2, 'insumos', $3, CURRENT_DATE)`,
-        [req.shopId, montoGasto, descGasto]
+         VALUES ($1, $2, 'insumos', $3, $4)`,
+        [req.shopId, montoGasto, descGasto, shopDate(await getShopTz(req.shopId))]
       );
       gastoRegistrado = true;
     }

@@ -325,24 +325,32 @@ router.put('/:id/status', auth, async (req, res) => {
       ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
       : `shop_id = $2`;
     const prevQ = await pool.query(
-      `SELECT status FROM appointments WHERE id=$1 AND ${shopCondPrev}${barberCondition}`,
+      `SELECT status, shop_id FROM appointments WHERE id=$1 AND ${shopCondPrev}${barberCondition}`,
       [req.params.id, shopId]
     );
-    const prevStatus = prevQ.rows[0]?.status || null;
+    // Validar pertenencia ANTES de tocar payment_splits (evita borrar/crear splits de turnos ajenos)
+    if (!prevQ.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
+    const prevStatus = prevQ.rows[0].status || null;
+    const apptShopId = prevQ.rows[0].shop_id;
 
     // Si vinieron splits, el payment_method efectivo lo determina el helper (puede ser 'mixed')
     let effectivePM = payment_method;
     if (Array.isArray(payment_splits) && payment_splits.length) {
-      // Necesitamos el price del turno. Lo leemos antes del UPDATE.
-      const priceQ = await pool.query(`SELECT price FROM appointments WHERE id=$1`, [req.params.id]);
-      const price = priceQ.rows[0]?.price || 0;
+      // Total a repartir = precio menos la seña ya cobrada (la seña entra a caja por su cuenta)
+      const priceQ = await pool.query(
+        `SELECT price, CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END AS sena
+           FROM appointments WHERE id=$1 AND shop_id=$2`,
+        [req.params.id, apptShopId]
+      );
+      const price = Math.max(parseFloat(priceQ.rows[0]?.price || 0) - parseFloat(priceQ.rows[0]?.sena || 0), 0);
       try {
-        const r = await _writeAppointmentSplits(pool, shopId, parseInt(req.params.id), price, payment_splits);
+        const r = await _writeAppointmentSplits(pool, apptShopId, parseInt(req.params.id), price, payment_splits);
         if (r) effectivePM = r.effectivePaymentMethod;
       } catch(spErr) { return res.status(400).json({ error: spErr.message }); }
-    } else {
-      // Si no vienen splits y venía con splits (edición), limpiarlos
-      await pool.query('DELETE FROM payment_splits WHERE appointment_id=$1', [req.params.id]).catch(()=>{});
+    } else if (status !== 'completed' || payment_method) {
+      // Reabrir el turno o cambiar a un método simple invalida los splits viejos.
+      // (Si sigue 'completed' sin método nuevo, se conservan: p.ej. solo se edita la propina.)
+      await pool.query('DELETE FROM payment_splits WHERE appointment_id=$1 AND shop_id=$2', [req.params.id, apptShopId]).catch(()=>{});
     }
 
     const tipVal = tip !== undefined ? parseFloat(tip) : null;
@@ -390,10 +398,12 @@ router.put('/:id/status', auth, async (req, res) => {
     if (status === 'completed' && payment_method === 'debt') {
       await pool.query(
         `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT DO NOTHING`,
+         SELECT $1::int, $2::int, $3::text, $4::int, $5::numeric, $6::text
+          WHERE NOT EXISTS (SELECT 1 FROM client_debts WHERE appointment_id=$4::int AND paid=FALSE)`,
         [shopId, appt.client_id || null, appt.client_name, appt.id,
-         parseFloat(appt.price || 0), `Turno ${appt.service_name || ''} - ${appt.date}`]
+         // La seña ya cobrada no es deuda
+         Math.max(parseFloat(appt.price || 0) - (appt.sena_status === 'confirmed' ? parseFloat(appt.sena_amount || 0) : 0), 0),
+         `Turno ${appt.service_name || ''} - ${appt.date}`]
       );
       console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${appt.price}`);
     }

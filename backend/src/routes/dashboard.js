@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
+const { computeNet, dayCommissions, computeDayClose, saveDayClose } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -273,16 +274,17 @@ router.get('/top-clients', auth, async (req, res) => {
 
 // POST /api/dashboard/expenses — registrar gasto
 router.post('/expenses', auth, async (req, res) => {
-  const { amount, category, description, date } = req.body;
+  const { amount, category, description, date, payment_method } = req.body;
   if (!amount || !category) return res.status(400).json({ error: 'Monto y categoría requeridos' });
   const validCats = ['insumos','alquiler','servicios','salarios','otros'];
   if (!validCats.includes(category)) return res.status(400).json({ error: 'Categoría inválida' });
   try {
     const result = await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, date)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO expenses (shop_id, amount, category, description, date, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [req.shopId, parseFloat(amount), category, description || null,
-       date || shopDate(await getShopTz(req.shopId))]
+       date || shopDate(await getShopTz(req.shopId)),
+       payment_method ? String(payment_method).trim() : null]
     );
     res.status(201).json(result.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -303,7 +305,14 @@ router.get('/expenses', auth, async (req, res) => {
 // DELETE /api/dashboard/expenses/:id — eliminar gasto
 router.delete('/expenses/:id', auth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM expenses WHERE id=$1 AND shop_id=$2', [req.params.id, req.shopId]);
+    // Las filas automáticas dejan estado asociado (liquidación, deuda, seña): borrarlas dejaría la caja inconsistente.
+    const r = await pool.query(
+      `DELETE FROM expenses WHERE id=$1 AND shop_id=$2
+         AND (source_type IS NULL OR source_type NOT IN ('barber_settlement','debt_payment','sena'))
+       RETURNING id`,
+      [req.params.id, req.shopId]
+    );
+    if (!r.rows.length) return res.status(409).json({ error: 'Este movimiento lo genera el sistema (liquidación, cobro de fiado o seña) y no se puede borrar desde acá.' });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -409,12 +418,8 @@ router.get('/cash', auth, async (req, res) => {
     const expenses     = parseFloat(e.expenses_total);
     const tips         = parseFloat(a.tips_total);
     // Comisiones devengadas del día (accrual diario)
-    const commissionQ = await pool.query(
-      `SELECT COALESCE(SUM(price * commission_pct / 100.0),0) AS total_commission
-       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
-      [shopId, date]
-    );
-    const commissions = parseFloat(commissionQ.rows[0].total_commission);
+    const dayComm = await dayCommissions(shopId, date);
+    const commissions = dayComm.appt + dayComm.product;
 
     // Breakdown de turnos por método de pago — SPLITS-AWARE:
     //  - turnos sin split: cuentan por su payment_method directo
@@ -424,7 +429,7 @@ router.get('/cash', auth, async (req, res) => {
       const q = await pool.query(
         `WITH
            by_appt AS (
-             SELECT id, price, payment_method
+             SELECT id, GREATEST(price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END, 0) AS price, payment_method
                FROM appointments
                WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
            ),
@@ -523,6 +528,16 @@ router.get('/cash', auth, async (req, res) => {
       }
     }
 
+    // Señas cobradas ese día, por su método (el turno ya descuenta la seña al completarse)
+    const senaBreakdownQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='sena'
+         AND payment_method IS NOT NULL
+       GROUP BY payment_method`,
+      [shopId, date]
+    );
+
     // Egresos por método (liquidaciones, insumos, etc.) — se RESTAN del flujo por método
     const expensesByMethodQ = await pool.query(
       `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
@@ -542,6 +557,9 @@ router.get('/cash', auth, async (req, res) => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     debtBreakdownQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    senaBreakdownQ.rows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     tipRows.forEach(r => {
@@ -567,7 +585,7 @@ router.get('/cash', auth, async (req, res) => {
       extra_income:      extraIncome,
       expenses_total:    expenses,
       commissions_total: commissions,
-      net_total:         await _computeNet(shopId, date, { revenue, allIncome, expenses, commissions }),
+      net_total:         await computeNet(shopId, date, { revenue, allIncome, expenses, apptCommissions: dayComm.appt, productCommissions: dayComm.product }),
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
@@ -668,124 +686,15 @@ router.get('/cash/method-detail', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Neto = facturado + propinas del dueño + ingresos extra − gastos (sin liquidaciones) − comisiones devengadas − bonus liquidados.
-// Las liquidaciones (comisiones+propinas+bonus) ya están contadas por devengado, así que no se restan de nuevo.
-async function _computeNet(shopId, date, { revenue, allIncome, expenses, commissions }) {
-  const tz = await getShopTz(shopId);
-  const r = await pool.query(
-    `SELECT
-       COALESCE((SELECT SUM(amount) FROM expenses
-                  WHERE shop_id=$1 AND date=$2::date AND source_type='barber_settlement'
-                    AND (is_income IS NULL OR is_income=FALSE)),0) AS settlements,
-       COALESCE((SELECT SUM(amount) FROM barber_bonuses
-                  WHERE shop_id=$1 AND commission_settled=TRUE
-                    AND (settled_at AT TIME ZONE $3::text)::date = $2::date),0) AS bonuses,
-       COALESCE((SELECT SUM(tip) FROM appointments
-                  WHERE shop_id=$1 AND date=$2::date AND status='completed' AND barber_id IS NULL),0) AS owner_tips`,
-    [shopId, date, tz]
-  );
-  const x = r.rows[0];
-  return revenue + parseFloat(x.owner_tips) + allIncome
-       - (expenses - parseFloat(x.settlements)) - commissions - parseFloat(x.bonuses);
-}
-
-// Helper: totales por método splits-aware para un shop/fecha.
-async function _methodTotalsForDay(shopId, date) {
-  try {
-    const q = await pool.query(
-      `WITH
-         by_appt AS (
-           SELECT id, price, payment_method
-             FROM appointments
-             WHERE shop_id=$1 AND date=$2 AND status='completed'
-         ),
-         splits_by_appt AS (
-           SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
-             FROM payment_splits ps
-             JOIN by_appt ba ON ba.id = ps.appointment_id
-             GROUP BY ps.appointment_id, ps.method
-         ),
-         method_totals AS (
-           SELECT ba.payment_method AS method, SUM(ba.price) AS amount
-             FROM by_appt ba
-             WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)
-             GROUP BY ba.payment_method
-           UNION ALL
-           SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method
-         )
-       SELECT
-         COALESCE(SUM(CASE WHEN method='cash'     THEN amount END),0)::numeric AS cash_total,
-         COALESCE(SUM(CASE WHEN method='debit'    THEN amount END),0)::numeric AS debit_total,
-         COALESCE(SUM(CASE WHEN method='credit'   THEN amount END),0)::numeric AS credit_total,
-         COALESCE(SUM(CASE WHEN method='transfer' THEN amount END),0)::numeric AS transfer_total,
-         COALESCE(SUM(CASE WHEN method='debt'     THEN amount END),0)::numeric AS debt_total
-       FROM method_totals`,
-      [shopId, date]
-    );
-    return q.rows[0];
-  } catch(spErr) {
-    if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
-      const q = await pool.query(
-        `SELECT
-           COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
-           COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
-           COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
-           COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-           COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total
-         FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
-        [shopId, date]
-      );
-      return q.rows[0];
-    }
-    throw spErr;
-  }
-}
-
-// POST /api/dashboard/cash/close — cerrar caja del día
-router.post('/cash/close', auth, async (req, res) => {
+// POST /api/dashboard/cash/close — cerrar caja del día (misma lógica que el cierre automático)
+router.post("/cash/close", auth, async (req, res) => {
   const date = req.body.date || shopDate(await getShopTz(req.shopId));
   const shopId = req.shopId;
   try {
-    const methodTotals = await _methodTotalsForDay(shopId, date);
-    const appts = await pool.query(
-      `SELECT
-         COALESCE(SUM(tip),0) AS tips_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price * commission_pct / 100.0 ELSE 0 END),0) AS commissions_total,
-         COUNT(*) FILTER (WHERE status='completed') AS cuts_count
-       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
-      [shopId, date]
-    );
-    Object.assign(appts.rows[0], methodTotals);
-    const exps = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
-         COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income
-       FROM expenses WHERE shop_id=$1 AND date=$2`,
-      [shopId, date]
-    );
-    const a = appts.rows[0];
-    const revenue = parseFloat(a.revenue_total);
-    const expenses = parseFloat(exps.rows[0].expenses_total);
-    const allIncome = parseFloat(exps.rows[0].all_income || 0);
-    const tips = parseFloat(a.tips_total);
-    const commissions = parseFloat(a.commissions_total);
-    const net = await _computeNet(shopId, date, { revenue, allIncome, expenses, commissions });
-
-    await pool.query(
-      `INSERT INTO cash_registers
-         (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
-          debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       ON CONFLICT (shop_id, date) DO UPDATE SET
-         cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
-         debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
-         net_total=$11, cuts_count=$12, closed_at=NOW()`,
-      [shopId, date, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
-       a.debt_total, tips, expenses, revenue, net, a.cuts_count]
-    );
-    console.log(`[CAJA] Cierre registrado para shop ${shopId} fecha ${date} net=$${net}`);
-    res.json({ ok: true, net_total: net });
+    const d = await computeDayClose(shopId, date);
+    await saveDayClose(shopId, date, d);
+    console.log(`[CAJA] Cierre registrado para shop ${shopId} fecha ${date} net=$${d.net_total}`);
+    res.json({ ok: true, net_total: d.net_total });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1039,23 +948,24 @@ router.put('/debts/:id/pay', auth, async (req, res) => {
     // Marcar deuda como pagada y obtener datos para caja
     const debtQ = await pool.query(
       `UPDATE client_debts SET paid=TRUE, paid_at=NOW()
-       WHERE id=$1 AND shop_id=$2
+       WHERE id=$1 AND shop_id=$2 AND paid=FALSE
        RETURNING appointment_id, amount, client_name`,
       [req.params.id, req.shopId]
     );
-    if (!debtQ.rows.length) return res.status(404).json({ error: 'Deuda no encontrada' });
+    if (!debtQ.rows.length) return res.status(404).json({ error: 'Deuda no encontrada o ya cobrada' });
     const debt = debtQ.rows[0];
 
     // Registrar el cobro como INGRESO en caja del día de hoy
     const pmLabel = { cash:'Efectivo', debit:'Débito', credit:'Crédito', transfer:'Transferencia' };
     const methodStr = payment_method && pmLabel[payment_method] ? ` (${pmLabel[payment_method]})` : '';
     await pool.query(
-      `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
-       VALUES ($1,$2,'ventas',$3,TRUE,'debt_payment',$4,$5)`,
+      `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+       VALUES ($1,$2,'ventas',$3,$6,TRUE,'debt_payment',$4,$5)`,
       [req.shopId, parseFloat(debt.amount || 0),
        `Cobro fiado — ${debt.client_name}${methodStr}`,
        parseInt(req.params.id),
-       payment_method || null]
+       payment_method || null,
+       shopDate(await getShopTz(req.shopId))]
     );
 
     res.json({ ok: true });
@@ -1091,47 +1001,10 @@ router.post('/cash/auto-close', async (req, res) => {
         const closeMins = endH * 60 + endM + 180; // cierre + 3hs
         // Solo cerrar si estamos en la ventana ±30min del cierre + 3hs
         if (Math.abs(nowMins - closeMins) <= 30) {
-          // Calcular y guardar cierre (splits-aware)
-          const methodTotals = await _methodTotalsForDay(shop.id, today);
-          const appts = await pool.query(
-            `SELECT
-               COALESCE(SUM(tip),0) AS tips_total,
-               COALESCE(SUM(price),0) AS revenue_total,
-               COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
-               COUNT(*) FILTER (WHERE status='completed') AS cuts_count
-             FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
-            [shop.id, today]
-          );
-          Object.assign(appts.rows[0], methodTotals);
-          const exps = await pool.query(
-            `SELECT
-               COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
-               COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income
-             FROM expenses WHERE shop_id=$1 AND date=$2`,
-            [shop.id, today]
-          );
-          const a = appts.rows[0];
-          const e = exps.rows[0];
-          const revenue = parseFloat(a.revenue_total);
-          const expenses = parseFloat(e.expenses_total);
-          const allIncome = parseFloat(e.all_income || 0);
-          const tips = parseFloat(a.tips_total);
-          const commissions = parseFloat(a.commissions_total);
-          const net = await _computeNet(shop.id, today, { revenue, allIncome, expenses, commissions });
-          await pool.query(
-            `INSERT INTO cash_registers
-               (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
-                debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-             ON CONFLICT (shop_id, date) DO UPDATE SET
-               cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
-               debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
-               net_total=$11, cuts_count=$12, closed_at=NOW()`,
-            [shop.id, today, a.cash_total, a.debit_total, a.credit_total, a.transfer_total,
-             a.debt_total, tips, expenses, revenue, net, a.cuts_count]
-          );
+          const d = await computeDayClose(shop.id, today);
+          await saveDayClose(shop.id, today, d);
           closed++;
-          console.log(`[CAJA AUTO] Shop ${shop.id} cerrado · net=$${net}`);
+          console.log(`[CAJA AUTO] Shop ${shop.id} cerrado · net=$${d.net_total}`);
         }
       } catch(e) { console.error(`[CAJA AUTO] Error shop ${shop.id}:`, e.message); }
     }
@@ -1151,7 +1024,7 @@ router.get('/month-report', auth, async (req, res) => {
     // Métricas generales
     const metricsQ = await pool.query(
       `SELECT
-         COALESCE(SUM(price),0)                                                          AS revenue,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue,
          COALESCE(SUM(tip),0)                                                             AS tips_total,
          COALESCE(SUM(price * commission_pct / 100.0),0)                                 AS commissions_total,
          COUNT(*) FILTER (WHERE status='completed')                                       AS completed,
@@ -1178,7 +1051,11 @@ router.get('/month-report', auth, async (req, res) => {
     );
 
     const m = metricsQ.rows[0];
-    const expTotal = expensesQ.rows.reduce((s,e) => s + parseFloat(e.amount), 0);
+    // La tabla expenses mezcla egresos e ingresos (ventas, fiado, señas): separarlos.
+    const expTotal = expensesQ.rows.filter(e => !e.is_income).reduce((s,e) => s + parseFloat(e.amount), 0);
+    const incomeTotal = expensesQ.rows
+      .filter(e => e.is_income && e.source_type !== 'sena')
+      .reduce((s,e) => s + parseFloat(e.amount), 0);
     const settlementsTotal = expensesQ.rows
       .filter(e => e.source_type === 'barber_settlement' && !e.is_income)
       .reduce((s,e) => s + parseFloat(e.amount), 0);
@@ -1193,6 +1070,12 @@ router.get('/month-report', auth, async (req, res) => {
                       AND status='completed' AND barber_id IS NULL),0) AS owner_tips`,
       [shopId, from, to, tz]
     );
+    const prodCommQ = await pool.query(
+      `SELECT COALESCE(SUM(barber_commission_amount),0) AS c FROM product_sales
+        WHERE shop_id=$1 AND (sold_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date`,
+      [shopId, from, to, tz]
+    ).catch(() => ({ rows: [{ c: 0 }] }));
+    const productCommissions = parseFloat(prodCommQ.rows[0].c);
     const bonusesSettled = parseFloat(extraQ.rows[0].bonuses);
     const ownerTips = parseFloat(extraQ.rows[0].owner_tips);
     const revenue = parseFloat(m.revenue);
@@ -1204,7 +1087,7 @@ router.get('/month-report', auth, async (req, res) => {
       tips_total:        tips,
       commissions_total: commissions,
       expenses_total:    expTotal,
-      net_total:         revenue + ownerTips - commissions - (expTotal - settlementsTotal) - bonusesSettled,
+      net_total:         revenue + ownerTips + incomeTotal - commissions - productCommissions - (expTotal - settlementsTotal) - bonusesSettled,
       completed:         parseInt(m.completed),
       by_payment: {
         cash:     parseFloat(m.cash),

@@ -593,13 +593,14 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
         [status, dataJson, pending.id]
       );
       if (verified) {
-        await pool.query(`UPDATE appointments SET status='pending', sena_status='confirmed' WHERE id=$1`, [pending.id]);
-        // Registrar seña en caja (igual que confirmación manual)
-        if (pending.amount > 0) {
+        const senaUpd = await pool.query(`UPDATE appointments SET status='pending', sena_status='confirmed' WHERE id=$1 AND status='waiting_sena' RETURNING id`, [pending.id]);
+        // Registrar seña en caja (igual que confirmación manual) — solo si recién se confirmó (evita duplicar)
+        if (pending.amount > 0 && senaUpd.rows.length) {
           try {
-            const today = new Date().toISOString().split('T')[0];
             const apptRow = await pool.query('SELECT shop_id, client_name FROM appointments WHERE id=$1', [pending.id]);
             if (apptRow.rows.length) {
+              const { getShopTz, shopDate } = require('../db/shopTz');
+              const today = shopDate(await getShopTz(apptRow.rows[0].shop_id));
               const shopCfg = await pool.query('SELECT sena_payment_method FROM shops WHERE id=$1', [apptRow.rows[0].shop_id]);
               const senaPayMethod = shopCfg.rows[0]?.sena_payment_method || 'transfer';
               await pool.query(

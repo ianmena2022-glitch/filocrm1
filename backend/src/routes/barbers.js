@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
+const { getShopTz, shopDate } = require('../db/shopTz');
 const crypto = require('crypto');
 
 // Middleware: solo dueños (no barberos)
@@ -271,7 +272,9 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
 
     const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
     const apptCommission = appts.rows.reduce((s, a) => {
-      const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
+      const pct = (a.commission_pct !== null && a.commission_pct !== undefined)
+        ? parseFloat(a.commission_pct)
+        : parseFloat(barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
     const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
@@ -409,13 +412,30 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
 
     const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
     const apptCommission = appts.rows.reduce((s, a) => {
-      const pct = parseInt(a.commission_pct || barber.barber_commission_pct || 50);
+      const pct = (a.commission_pct !== null && a.commission_pct !== undefined)
+        ? parseFloat(a.commission_pct)
+        : parseFloat(barber.barber_commission_pct || 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
     const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
     const productCommission = productSalesQ.rows.reduce((s, ps) => s + parseFloat(ps.barber_commission_amount || 0), 0);
     const bonusTotal = bonusesQ.rows.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
     const commissionAmount = apptCommission + productCommission + tipsTotal + bonusTotal;
+
+    // Validar splits ANTES de consumir las comisiones (si falla, no queda nada marcado como liquidado)
+    let effectiveSplits = null;
+    if (Array.isArray(payout_splits) && payout_splits.length) {
+      const clean = payout_splits
+        .map(s => ({ method: String(s.method||'').trim(), amount: parseFloat(s.amount) || 0 }))
+        .filter(s => s.method && s.amount > 0);
+      if (clean.length) {
+        const total = clean.reduce((n, s) => n + s.amount, 0);
+        if (Math.abs(total - commissionAmount) > 1) {
+          return res.status(400).json({ error: `Los pagos ($${total.toFixed(2)}) no coinciden con la comisión ($${commissionAmount.toFixed(2)})` });
+        }
+        effectiveSplits = clean;
+      }
+    }
 
     const notesExtra = [
       appts.rows.length ? `${appts.rows.length} turno${appts.rows.length !== 1 ? 's' : ''}` : null,
@@ -443,43 +463,29 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     if (productSalesQ.rows.length) {
       await pool.query(
         `UPDATE product_sales SET commission_settled=TRUE, settlement_id=$1
-         WHERE barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE`,
-        [settlement.rows[0].id, barber.id, req.shopId]
+         WHERE id = ANY($2::int[]) AND shop_id=$3`,
+        [settlement.rows[0].id, productSalesQ.rows.map(r => r.id), req.shopId]
       );
     }
 
     if (bonusesQ.rows.length) {
       await pool.query(
         `UPDATE barber_bonuses SET commission_settled=TRUE, settlement_id=$1, settled_at=NOW()
-         WHERE barber_id=$2 AND shop_id=$3 AND commission_settled=FALSE`,
-        [settlement.rows[0].id, barber.id, req.shopId]
+         WHERE id = ANY($2::int[]) AND shop_id=$3`,
+        [settlement.rows[0].id, bonusesQ.rows.map(r => r.id), req.shopId]
       );
     }
 
-    // Validar splits si vienen
-    let effectiveSplits = null;
-    if (Array.isArray(payout_splits) && payout_splits.length) {
-      const clean = payout_splits
-        .map(s => ({ method: String(s.method||'').trim(), amount: parseFloat(s.amount) || 0 }))
-        .filter(s => s.method && s.amount > 0);
-      if (clean.length) {
-        const total = clean.reduce((n, s) => n + s.amount, 0);
-        if (Math.abs(total - commissionAmount) > 1) {
-          return res.status(400).json({ error: `Los pagos ($${total.toFixed(2)}) no coinciden con la comisión ($${commissionAmount.toFixed(2)})` });
-        }
-        effectiveSplits = clean;
-      }
-    }
-
     // Registrar egreso en caja: una fila por método si hay splits, o 1 sola si no.
+    const expDate = shopDate(await getShopTz(req.shopId));
     if (effectiveSplits && effectiveSplits.length > 1) {
       for (const s of effectiveSplits) {
         const exp = await pool.query(
-          `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
-           VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4,$5) RETURNING id`,
+          `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+           VALUES ($1,$2,'comisiones',$3,$6,FALSE,'barber_settlement',$4,$5) RETURNING id`,
           [req.shopId, s.amount,
            `Liquidación ${barber.name} (${s.method}) — ${notesExtra}`,
-           settlement.rows[0].id, s.method]
+           settlement.rows[0].id, s.method, expDate]
         );
         // Registrar split para auditoría
         await pool.query(
@@ -491,11 +497,11 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     } else {
       const singleMethod = effectiveSplits?.[0]?.method || null;
       await pool.query(
-        `INSERT INTO expenses (shop_id, amount, category, description, is_income, source_type, source_id, payment_method)
-         VALUES ($1,$2,'comisiones',$3,FALSE,'barber_settlement',$4,$5)`,
+        `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
+         VALUES ($1,$2,'comisiones',$3,$6,FALSE,'barber_settlement',$4,$5)`,
         [req.shopId, commissionAmount,
          `Liquidación ${barber.name} — ${notesExtra}`,
-         settlement.rows[0].id, singleMethod]
+         settlement.rows[0].id, singleMethod, expDate]
       );
     }
 

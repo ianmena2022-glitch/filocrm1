@@ -7437,7 +7437,8 @@ function updatePaySplitRow(idx, field, value) {
 function renderPaySplitRows() {
   const el = document.getElementById('pay-split-rows');
   if (!el) return;
-  const methods = _availablePayMethods();
+  // El fiado no puede ser parte de un split: no generaría deuda y el monto desaparecería de la caja
+  const methods = _availablePayMethods().filter(m => !m.is_debt);
   const options = methods.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
   el.innerHTML = window._paySplitRows.map((row, i) => `
     <div style="display:flex;gap:6px;align-items:center">
@@ -12711,6 +12712,13 @@ function openExpenseModal() {
   document.getElementById('gasto-amount').value = '';
   document.getElementById('gasto-desc').value = '';
   document.getElementById('gasto-category').value = 'insumos';
+  const gm = document.getElementById('gasto-method');
+  if (gm) {
+    gm.innerHTML = '<option value="">No descontar de ninguna cuenta</option>' +
+      (window._paymentMethods || []).filter(m => !m.is_debt)
+        .map(m => `<option value="${m.key}">${m.icon || ''} ${m.label}</option>`).join('');
+    gm.value = '';
+  }
   openModal('modal-gasto');
 }
 
@@ -12718,10 +12726,14 @@ async function saveExpense() {
   const amount = parseFloat(document.getElementById('gasto-amount').value);
   const category = document.getElementById('gasto-category').value;
   const description = document.getElementById('gasto-desc').value.trim();
-  const date = document.getElementById('caja-date')?.value || new Date().toISOString().split('T')[0];
+  // Fecha local (toISOString da la fecha UTC y de noche cae al día siguiente)
+  const _n = new Date();
+  const localToday = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+  const date = document.getElementById('caja-date')?.value || localToday;
+  const payment_method = document.getElementById('gasto-method')?.value || undefined;
   if (!amount || amount <= 0) return showToast('⚠️','Ingresá un monto válido','');
   try {
-    await api('POST', '/dashboard/expenses', { amount, category, description, date });
+    await api('POST', '/dashboard/expenses', { amount, category, description, date, payment_method });
     closeModal('modal-gasto');
     showToast('✅','Gasto registrado','');
     loadCashSummary();
@@ -14272,6 +14284,12 @@ async function bcmSave(id) {
         <div>
           <label class="input-label">DESCRIPCIÓN (OPCIONAL)</label>
           <input type="text" id="gasto-desc" placeholder="Ej: Gel fijador x3" class="modal-input" style="width:100%;box-sizing:border-box">
+        </div>
+        <div>
+          <label class="input-label">¿CON QUÉ SE PAGÓ?</label>
+          <select id="gasto-method" class="modal-input" style="width:100%;box-sizing:border-box">
+            <option value="">No descontar de ninguna cuenta</option>
+          </select>
         </div>
       </div>
       <div class="modal-actions">

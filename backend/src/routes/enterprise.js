@@ -3,6 +3,8 @@ const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { getShopTz, shopDate } = require('../db/shopTz');
+const { methodTotalsForDay, dayCommissions, computeNet } = require('../services/cashMath');
 
 // Solo enterprise owners pueden acceder
 // Verifica JWT primero; si el flag no está en el token (cuenta creada antes del fix),
@@ -304,7 +306,7 @@ async function verifyBranch(req, res) {
 router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
   const branchId = await verifyBranch(req, res);
   if (!branchId) return;
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || shopDate(await getShopTz(branchId));
   try {
     const appts = await pool.query(
       `SELECT
@@ -325,6 +327,7 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       `SELECT
          COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
          COALESCE(SUM(CASE WHEN is_income=TRUE THEN amount ELSE 0 END),0) AS all_income,
+         COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type='sena' THEN amount ELSE 0 END),0) AS sena_income,
          COALESCE(SUM(CASE WHEN is_income=TRUE AND (source_type IS DISTINCT FROM 'debt_payment') THEN amount ELSE 0 END),0) AS extra_income,
          json_agg(json_build_object('id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method) ORDER BY created_at DESC)
            FILTER (WHERE is_income IS NULL OR is_income=FALSE) AS items,
@@ -343,18 +346,19 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
        FROM expenses WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment'`,
       [branchId, date]
     )).rows[0];
-    const commQ = await pool.query(
-      `SELECT COALESCE(SUM(price * commission_pct / 100.0),0) AS total_commission
-       FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
-      [branchId, date]
-    );
+    const dayComm = await dayCommissions(branchId, date);
+    const mt = await methodTotalsForDay(branchId, date);
     const a = appts.rows[0]; const e = exps.rows[0];
+    // Totales por método splits-aware (mismos que la caja de la sucursal)
+    a.cash_total = mt.cash_total; a.debit_total = mt.debit_total; a.credit_total = mt.credit_total;
+    a.transfer_total = mt.transfer_total; a.debt_total = mt.debt_total;
     const revenue = parseFloat(a.revenue_total);
-    const allIncome = parseFloat(e.all_income || 0);
+    // all_income SIN la seña (el turno ya cuenta el precio completo)
+    const allIncome = parseFloat(e.all_income || 0) - parseFloat(e.sena_income || 0);
     const extraIncome = parseFloat(e.extra_income || 0);
     const expenses = parseFloat(e.expenses_total);
     const tips = parseFloat(a.tips_total);
-    const commissions = parseFloat(commQ.rows[0].total_commission);
+    const commissions = dayComm.appt + dayComm.product;
     res.json({
       date,
       cash_total:        parseFloat(a.cash_total)     + parseFloat(dc.cash_col),
@@ -368,7 +372,7 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       extra_income:      extraIncome,
       expenses_total:    expenses,
       commissions_total: commissions,
-      net_total:         revenue + tips + allIncome - expenses - commissions,
+      net_total:         await computeNet(branchId, date, { revenue, allIncome, expenses, apptCommissions: dayComm.appt, productCommissions: dayComm.product }),
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
