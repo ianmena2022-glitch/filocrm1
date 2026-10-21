@@ -520,7 +520,7 @@ router.get('/cash', auth, async (req, res) => {
       extra_income:      extraIncome,
       expenses_total:    expenses,
       commissions_total: commissions,
-      net_total:         revenue + tips + allIncome - expenses - commissions,
+      net_total:         await _computeNet(shopId, date, { revenue, allIncome, expenses, commissions }),
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
@@ -621,6 +621,27 @@ router.get('/cash/method-detail', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Neto = facturado + propinas del dueño + ingresos extra − gastos (sin liquidaciones) − comisiones devengadas − bonus liquidados.
+// Las liquidaciones (comisiones+propinas+bonus) ya están contadas por devengado, así que no se restan de nuevo.
+async function _computeNet(shopId, date, { revenue, allIncome, expenses, commissions }) {
+  const tz = await getShopTz(shopId);
+  const r = await pool.query(
+    `SELECT
+       COALESCE((SELECT SUM(amount) FROM expenses
+                  WHERE shop_id=$1 AND date=$2::date AND source_type='barber_settlement'
+                    AND (is_income IS NULL OR is_income=FALSE)),0) AS settlements,
+       COALESCE((SELECT SUM(amount) FROM barber_bonuses
+                  WHERE shop_id=$1 AND commission_settled=TRUE
+                    AND (settled_at AT TIME ZONE $3::text)::date = $2::date),0) AS bonuses,
+       COALESCE((SELECT SUM(tip) FROM appointments
+                  WHERE shop_id=$1 AND date=$2::date AND status='completed' AND barber_id IS NULL),0) AS owner_tips`,
+    [shopId, date, tz]
+  );
+  const x = r.rows[0];
+  return revenue + parseFloat(x.owner_tips) + allIncome
+       - (expenses - parseFloat(x.settlements)) - commissions - parseFloat(x.bonuses);
+}
+
 // Helper: totales por método splits-aware para un shop/fecha.
 async function _methodTotalsForDay(shopId, date) {
   try {
@@ -702,7 +723,7 @@ router.post('/cash/close', auth, async (req, res) => {
     const allIncome = parseFloat(exps.rows[0].all_income || 0);
     const tips = parseFloat(a.tips_total);
     const commissions = parseFloat(a.commissions_total);
-    const net = revenue + tips + allIncome - expenses - commissions;
+    const net = await _computeNet(shopId, date, { revenue, allIncome, expenses, commissions });
 
     await pool.query(
       `INSERT INTO cash_registers
@@ -1049,7 +1070,7 @@ router.post('/cash/auto-close', async (req, res) => {
           const allIncome = parseFloat(e.all_income || 0);
           const tips = parseFloat(a.tips_total);
           const commissions = parseFloat(a.commissions_total);
-          const net = revenue + tips + allIncome - expenses - commissions;
+          const net = await _computeNet(shop.id, today, { revenue, allIncome, expenses, commissions });
           await pool.query(
             `INSERT INTO cash_registers
                (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
@@ -1111,6 +1132,22 @@ router.get('/month-report', auth, async (req, res) => {
 
     const m = metricsQ.rows[0];
     const expTotal = expensesQ.rows.reduce((s,e) => s + parseFloat(e.amount), 0);
+    const settlementsTotal = expensesQ.rows
+      .filter(e => e.source_type === 'barber_settlement' && !e.is_income)
+      .reduce((s,e) => s + parseFloat(e.amount), 0);
+    const tz = await getShopTz(shopId);
+    const extraQ = await pool.query(
+      `SELECT
+         COALESCE((SELECT SUM(amount) FROM barber_bonuses
+                    WHERE shop_id=$1 AND commission_settled=TRUE
+                      AND (settled_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date),0) AS bonuses,
+         COALESCE((SELECT SUM(tip) FROM appointments
+                    WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date
+                      AND status='completed' AND barber_id IS NULL),0) AS owner_tips`,
+      [shopId, from, to, tz]
+    );
+    const bonusesSettled = parseFloat(extraQ.rows[0].bonuses);
+    const ownerTips = parseFloat(extraQ.rows[0].owner_tips);
     const revenue = parseFloat(m.revenue);
     const tips = parseFloat(m.tips_total);
     const commissions = parseFloat(m.commissions_total);
@@ -1120,7 +1157,7 @@ router.get('/month-report', auth, async (req, res) => {
       tips_total:        tips,
       commissions_total: commissions,
       expenses_total:    expTotal,
-      net_total:         revenue + tips - commissions - expTotal,
+      net_total:         revenue + ownerTips - commissions - (expTotal - settlementsTotal) - bonusesSettled,
       completed:         parseInt(m.completed),
       by_payment: {
         cash:     parseFloat(m.cash),
