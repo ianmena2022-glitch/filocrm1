@@ -479,7 +479,17 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
 
-    // Merge todo en un único mapa
+    // Egresos por método (liquidaciones, insumos, etc.) — se RESTAN del flujo por método
+    const expensesByMethodQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND (is_income IS NULL OR is_income=FALSE)
+         AND payment_method IS NOT NULL
+       GROUP BY payment_method`,
+      [shopId, date]
+    );
+
+    // Merge todo en un único mapa — ingresos suman, egresos restan
     const breakdownMap = {};
     apptBreakdownRows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
@@ -489,6 +499,9 @@ router.get('/cash', auth, async (req, res) => {
     });
     debtBreakdownQ.rows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    expensesByMethodQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) - parseFloat(r.total);
     });
     const breakdownRows = Object.entries(breakdownMap)
       .map(([key, total]) => ({ key, total: String(total) }))

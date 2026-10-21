@@ -12402,8 +12402,8 @@ function renderCashSummary(c) {
         : (legacyMap[m.key] !== undefined ? legacyMap[m.key] : 0);
       const isDebt = m.is_debt;
       const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)')
-        : (defaultColors[m.key] || '#FF9800');
-      const canExpand = !isDebt && val > 0;
+        : (val < 0 ? '#FF4343' : (defaultColors[m.key] || '#FF9800'));
+      const canExpand = !isDebt && val !== 0;
       return `
         <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
              ${canExpand ? `onclick="toggleMethodDetail('${m.key}')"` : ''}>
