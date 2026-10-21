@@ -416,16 +416,50 @@ router.get('/cash', auth, async (req, res) => {
     );
     const commissions = parseFloat(commissionQ.rows[0].total_commission);
 
-    // Breakdown de turnos por método de pago
-    const apptBreakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
-       FROM appointments
-       WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
-       GROUP BY payment_method`,
-      [shopId, date]
-    );
+    // Breakdown de turnos por método de pago — SPLITS-AWARE:
+    //  - turnos sin split: cuentan por su payment_method directo
+    //  - turnos con split: cuentan por cada payment_splits.method con su amount
+    let apptBreakdownRows = [];
+    try {
+      const q = await pool.query(
+        `WITH
+           by_appt AS (
+             SELECT id, price, payment_method
+               FROM appointments
+               WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+           ),
+           splits_by_appt AS (
+             SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
+               FROM payment_splits ps
+               JOIN by_appt ba ON ba.id = ps.appointment_id
+               GROUP BY ps.appointment_id, ps.method
+           )
+         SELECT method AS key, SUM(amount) AS total FROM (
+           SELECT ba.payment_method AS method, SUM(ba.price) AS amount
+             FROM by_appt ba
+             WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)
+             GROUP BY ba.payment_method
+           UNION ALL
+           SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method
+         ) t
+         GROUP BY method`,
+        [shopId, date]
+      );
+      apptBreakdownRows = q.rows;
+    } catch(spErr) {
+      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
+        const q = await pool.query(
+          `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
+           FROM appointments
+           WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+           GROUP BY payment_method`,
+          [shopId, date]
+        );
+        apptBreakdownRows = q.rows;
+      } else throw spErr;
+    }
 
-    // Breakdown de ventas de productos por método de pago (consulta separada para debuggear)
+    // Breakdown de ventas de productos por método de pago
     const prodBreakdownQ = await pool.query(
       `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
        FROM expenses
@@ -435,12 +469,25 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
 
-    // Merge ambos en un único mapa
+    // Cobros de fiado por método (también cuentan como ingreso)
+    const debtBreakdownQ = await pool.query(
+      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='debt_payment'
+         AND payment_method IS NOT NULL
+       GROUP BY payment_method`,
+      [shopId, date]
+    );
+
+    // Merge todo en un único mapa
     const breakdownMap = {};
-    apptBreakdownQ.rows.forEach(r => {
+    apptBreakdownRows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     prodBreakdownQ.rows.forEach(r => {
+      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
+    });
+    debtBreakdownQ.rows.forEach(r => {
       breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
     });
     const breakdownRows = Object.entries(breakdownMap)
@@ -475,19 +522,59 @@ router.get('/cash/method-detail', auth, async (req, res) => {
   const date = req.query.date || shopDate(await getShopTz(req.shopId));
   if (!method) return res.status(400).json({ error: 'Se requiere method' });
   try {
-    // Turnos completados con ese método
-    const appts = await pool.query(
-      `SELECT a.id, a.client_name, a.service_name, a.price, a.cost, a.commission_pct,
-              a.tip, a.time_start,
-              ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
-              ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
-              s.name AS barber_name
-       FROM appointments a
-       LEFT JOIN shops s ON s.id = a.barber_id
-       WHERE a.shop_id=$1 AND a.date=$2 AND a.payment_method=$3 AND a.status='completed'
-       ORDER BY a.time_start ASC`,
-      [req.shopId, date, method]
-    );
+    // Turnos completados con ese método — incluye los mixtos cuyo split tiene ese método.
+    // Para los mixtos usamos el amount del split, no el price total.
+    let appts;
+    try {
+      appts = await pool.query(
+        `WITH
+           direct AS (
+             SELECT a.id, a.client_name, a.service_name, a.price AS amount, a.price,
+                    a.cost, a.commission_pct, a.tip, a.time_start, a.barber_id,
+                    FALSE AS is_split
+               FROM appointments a
+               WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+                 AND a.payment_method=$3
+                 AND NOT EXISTS (SELECT 1 FROM payment_splits ps WHERE ps.appointment_id=a.id)
+           ),
+           from_splits AS (
+             SELECT a.id, a.client_name, a.service_name,
+                    SUM(ps.amount) AS amount, a.price,
+                    a.cost, a.commission_pct, a.tip, a.time_start, a.barber_id,
+                    TRUE AS is_split
+               FROM appointments a
+               JOIN payment_splits ps ON ps.appointment_id=a.id
+               WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+                 AND ps.method=$3
+               GROUP BY a.id
+           ),
+           merged AS (SELECT * FROM direct UNION ALL SELECT * FROM from_splits)
+         SELECT m.id, m.client_name, m.service_name, m.amount::numeric AS price,
+                m.cost, m.commission_pct, m.tip, m.time_start, m.is_split,
+                ROUND(m.amount::numeric * m.commission_pct / 100.0, 2) AS commission_amount,
+                ROUND(m.amount::numeric - COALESCE(m.cost,0) - (m.amount::numeric * m.commission_pct / 100.0), 2) AS profit,
+                s.name AS barber_name
+           FROM merged m
+           LEFT JOIN shops s ON s.id = m.barber_id
+           ORDER BY m.time_start ASC`,
+        [req.shopId, date, method]
+      );
+    } catch(spErr) {
+      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
+        appts = await pool.query(
+          `SELECT a.id, a.client_name, a.service_name, a.price, a.cost, a.commission_pct,
+                  a.tip, a.time_start,
+                  ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
+                  ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
+                  s.name AS barber_name
+           FROM appointments a
+           LEFT JOIN shops s ON s.id = a.barber_id
+           WHERE a.shop_id=$1 AND a.date=$2 AND a.payment_method=$3 AND a.status='completed'
+           ORDER BY a.time_start ASC`,
+          [req.shopId, date, method]
+        );
+      } else throw spErr;
+    }
     // Cobros de fiado con ese método
     const debts = await pool.query(
       `SELECT id, description, amount, created_at
