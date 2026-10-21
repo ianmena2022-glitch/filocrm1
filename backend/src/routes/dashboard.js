@@ -621,19 +621,66 @@ router.get('/cash/method-detail', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Helper: totales por método splits-aware para un shop/fecha.
+async function _methodTotalsForDay(shopId, date) {
+  try {
+    const q = await pool.query(
+      `WITH
+         by_appt AS (
+           SELECT id, price, payment_method
+             FROM appointments
+             WHERE shop_id=$1 AND date=$2 AND status='completed'
+         ),
+         splits_by_appt AS (
+           SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
+             FROM payment_splits ps
+             JOIN by_appt ba ON ba.id = ps.appointment_id
+             GROUP BY ps.appointment_id, ps.method
+         ),
+         method_totals AS (
+           SELECT ba.payment_method AS method, SUM(ba.price) AS amount
+             FROM by_appt ba
+             WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)
+             GROUP BY ba.payment_method
+           UNION ALL
+           SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method
+         )
+       SELECT
+         COALESCE(SUM(CASE WHEN method='cash'     THEN amount END),0)::numeric AS cash_total,
+         COALESCE(SUM(CASE WHEN method='debit'    THEN amount END),0)::numeric AS debit_total,
+         COALESCE(SUM(CASE WHEN method='credit'   THEN amount END),0)::numeric AS credit_total,
+         COALESCE(SUM(CASE WHEN method='transfer' THEN amount END),0)::numeric AS transfer_total,
+         COALESCE(SUM(CASE WHEN method='debt'     THEN amount END),0)::numeric AS debt_total
+       FROM method_totals`,
+      [shopId, date]
+    );
+    return q.rows[0];
+  } catch(spErr) {
+    if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
+      const q = await pool.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
+           COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
+           COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
+           COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
+           COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total
+         FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
+        [shopId, date]
+      );
+      return q.rows[0];
+    }
+    throw spErr;
+  }
+}
+
 // POST /api/dashboard/cash/close — cerrar caja del día
 router.post('/cash/close', auth, async (req, res) => {
   const date = req.body.date || shopDate(await getShopTz(req.shopId));
   const shopId = req.shopId;
   try {
-    // Calcular todo
+    const methodTotals = await _methodTotalsForDay(shopId, date);
     const appts = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN payment_method='cash' THEN price ELSE 0 END),0)     AS cash_total,
-         COALESCE(SUM(CASE WHEN payment_method='debit' THEN price ELSE 0 END),0)    AS debit_total,
-         COALESCE(SUM(CASE WHEN payment_method='credit' THEN price ELSE 0 END),0)   AS credit_total,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-         COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
          COALESCE(SUM(tip),0) AS tips_total,
          COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
          COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price * commission_pct / 100.0 ELSE 0 END),0) AS commissions_total,
@@ -641,6 +688,7 @@ router.post('/cash/close', auth, async (req, res) => {
        FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
       [shopId, date]
     );
+    Object.assign(appts.rows[0], methodTotals);
     const exps = await pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
@@ -975,14 +1023,10 @@ router.post('/cash/auto-close', async (req, res) => {
         const closeMins = endH * 60 + endM + 180; // cierre + 3hs
         // Solo cerrar si estamos en la ventana ±30min del cierre + 3hs
         if (Math.abs(nowMins - closeMins) <= 30) {
-          // Calcular y guardar cierre
+          // Calcular y guardar cierre (splits-aware)
+          const methodTotals = await _methodTotalsForDay(shop.id, today);
           const appts = await pool.query(
             `SELECT
-               COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash_total,
-               COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit_total,
-               COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit_total,
-               COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer_total,
-               COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt_total,
                COALESCE(SUM(tip),0) AS tips_total,
                COALESCE(SUM(price),0) AS revenue_total,
                COALESCE(SUM(price * commission_pct / 100.0),0) AS commissions_total,
@@ -990,6 +1034,7 @@ router.post('/cash/auto-close', async (req, res) => {
              FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'`,
             [shop.id, today]
           );
+          Object.assign(appts.rows[0], methodTotals);
           const exps = await pool.query(
             `SELECT
                COALESCE(SUM(CASE WHEN is_income IS NULL OR is_income=FALSE THEN amount ELSE 0 END),0) AS expenses_total,
