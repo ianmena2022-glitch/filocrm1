@@ -7547,13 +7547,14 @@ async function confirmPayment(apptId) {
     body.payment_method = method;
     const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', debit:'Débito', credit:'Crédito', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[method] || method;
     successLabel = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
-    if (method === 'debt') successLabel = '💰 Deuda cargada en el cliente';
+    const _isDebtSel = method === 'debt' || (window._paymentMethods||[]).find(m => m.key === method)?.is_debt;
+    if (_isDebtSel) successLabel = '💰 Deuda cargada en el cliente';
   }
 
   document.getElementById('payment-popup')?.remove();
   try {
     await api('PUT', `/appointments/${apptId}/status`, body);
-    showSuccessPop({ title: body.payment_method === 'debt' ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
+    showSuccessPop({ title: (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();
@@ -14022,6 +14023,15 @@ function openAjusteStock(id, nombre) {
   document.getElementById('ajuste-tipo').value='entrada';
   document.getElementById('ajuste-cantidad').value=1;
   document.getElementById('ajuste-nota').value='';
+  const am = document.getElementById('ajuste-method');
+  if (am) {
+    am.innerHTML = '<option value="">No descontar de ninguna cuenta</option>' +
+      (window._paymentMethods || []).filter(m => !m.is_debt)
+        .map(m => `<option value="${m.key}">${m.icon || ''} ${m.label}</option>`).join('');
+    am.value = '';
+  }
+  const aw = document.getElementById('ajuste-method-wrap');
+  if (aw) aw.style.display = 'block';
   openModal('modal-ajuste-stock');
 }
 
@@ -14031,7 +14041,8 @@ async function confirmarAjusteStock() {
   const cant=parseInt(document.getElementById('ajuste-cantidad').value||0);
   const nota=document.getElementById('ajuste-nota').value.trim();
   try {
-    const r = await api('POST',`/products/${id}/stock`,{tipo,cantidad:cant,nota});
+    const payment_method = (tipo === 'entrada' && document.getElementById('ajuste-method')?.value) || undefined;
+    const r = await api('POST',`/products/${id}/stock`,{tipo,cantidad:cant,nota,payment_method});
     const msg = (tipo === 'entrada' && r.gasto_registrado) ? 'Stock sumado · Gasto registrado en caja' : 'Stock ajustado';
     showToast('✅', msg, '');
     closeModal('modal-ajuste-stock');
@@ -14420,7 +14431,7 @@ async function bcmSave(id) {
     <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
       <div class="form-field" style="margin-bottom:0">
         <label>Tipo de ajuste</label>
-        <select id="ajuste-tipo">
+        <select id="ajuste-tipo" onchange="document.getElementById('ajuste-method-wrap').style.display = this.value==='entrada' ? 'block' : 'none'">
           <option value="entrada">📥 Entrada (compra/reposición)</option>
           <option value="salida">📤 Salida (uso interno)</option>
           <option value="ajuste">✏️ Ajuste manual (inventario)</option>
@@ -14429,6 +14440,12 @@ async function bcmSave(id) {
       <div class="form-field" style="margin-bottom:0">
         <label>Cantidad</label>
         <input type="number" id="ajuste-cantidad" value="1" min="0" step="1">
+      </div>
+      <div class="form-field" id="ajuste-method-wrap" style="margin-bottom:0">
+        <label>¿Con qué se pagó la compra?</label>
+        <select id="ajuste-method">
+          <option value="">No descontar de ninguna cuenta</option>
+        </select>
       </div>
       <div class="form-field" style="margin-bottom:0">
         <label>Nota (opcional)</label>

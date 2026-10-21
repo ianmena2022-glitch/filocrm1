@@ -3,6 +3,7 @@ const router  = express.Router();
 const pool    = require('../db/pool');
 const auth    = require('../middleware/auth');
 const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
+const { normalizeDebtMethod } = require('../services/cashMath');
 
 // ─── PUBLIC: join queue ──────────────────────────────────────────────────────
 router.post('/:slug/join', async (req, res) => {
@@ -433,7 +434,8 @@ router.post('/serve/:id', auth, async (req, res) => {
 router.post('/complete/:id', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
-    const { price, cost, service_name, service_id, payment_method, tip, barber_id, commission_pct, client_name } = req.body;
+    const { price, cost, service_name, service_id, payment_method: rawPaymentMethod, tip, barber_id, commission_pct, client_name } = req.body;
+    const payment_method = await normalizeDebtMethod([shopId], rawPaymentMethod);
 
     const entryRes = await pool.query(
       'SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2',

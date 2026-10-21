@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
+const { normalizeDebtMethod } = require('../services/cashMath');
 
 // Retorna el shopId real (dueño), sea barbero o dueño
 function realShopId(req) {
@@ -334,7 +335,7 @@ router.put('/:id/status', auth, async (req, res) => {
     const apptShopId = prevQ.rows[0].shop_id;
 
     // Si vinieron splits, el payment_method efectivo lo determina el helper (puede ser 'mixed')
-    let effectivePM = payment_method;
+    let effectivePM = await normalizeDebtMethod([apptShopId, shopId], payment_method);
     if (Array.isArray(payment_splits) && payment_splits.length) {
       // Total a repartir = precio menos la seña ya cobrada (la seña entra a caja por su cuenta)
       const priceQ = await pool.query(
@@ -395,7 +396,7 @@ router.put('/:id/status', auth, async (req, res) => {
 
 
     // Si es fiado, registrar deuda
-    if (status === 'completed' && payment_method === 'debt') {
+    if (status === 'completed' && effectivePM === 'debt') {
       await pool.query(
         `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
          SELECT $1::int, $2::int, $3::text, $4::int, $5::numeric, $6::text
@@ -608,6 +609,11 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
+    const priceBeforeQ = price !== undefined
+      ? await pool.query('SELECT price FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId])
+      : { rows: [] };
+    const priceBefore = priceBeforeQ.rows.length ? parseFloat(priceBeforeQ.rows[0].price || 0) : null;
+
     const result = await pool.query(
       `UPDATE appointments SET
          client_name    = COALESCE($1, client_name),
@@ -624,7 +630,40 @@ router.put('/:id', auth, async (req, res) => {
        hasBarberField, newBarberId, newCommissionPct]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
-    res.json(result.rows[0]);
+    const edited = result.rows[0];
+
+    // Si el turno ya estaba cobrado y cambió el precio, mantener coherentes splits y deuda.
+    const newPrice = parseFloat(edited.price || 0);
+    if (edited.status === 'completed' && priceBefore !== null && Math.abs(newPrice - priceBefore) > 0.005) {
+      const sena = edited.sena_status === 'confirmed' ? parseFloat(edited.sena_amount || 0) : 0;
+      const target = Math.max(newPrice - sena, 0);   // lo que se cobra por métodos (la seña entra aparte)
+      try {
+        // Splits: se reescalan proporcionalmente; el último absorbe el redondeo
+        const sp = await pool.query(
+          'SELECT id, amount FROM payment_splits WHERE appointment_id=$1 ORDER BY id', [edited.id]
+        );
+        const oldTotal = sp.rows.reduce((n, r) => n + parseFloat(r.amount), 0);
+        if (sp.rows.length && oldTotal > 0) {
+          let acc = 0;
+          for (let i = 0; i < sp.rows.length; i++) {
+            const isLast = i === sp.rows.length - 1;
+            const amt = isLast ? Math.round((target - acc) * 100) / 100
+                               : Math.round(target * parseFloat(sp.rows[i].amount) / oldTotal * 100) / 100;
+            acc += amt;
+            await pool.query('UPDATE payment_splits SET amount=$1 WHERE id=$2', [Math.max(amt, 0), sp.rows[i].id]);
+          }
+        }
+      } catch (spErr) {
+        if (!/payment_splits/i.test(spErr.message)) console.error('[APPT] resync splits:', spErr.message);
+      }
+      // Deuda pendiente: ajustar el monto. Si ya fue cobrada no se toca (la plata ya entró a caja).
+      await pool.query(
+        `UPDATE client_debts SET amount=$1 WHERE appointment_id=$2 AND paid=FALSE`,
+        [target, edited.id]
+      ).catch(() => {});
+    }
+
+    res.json(edited);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

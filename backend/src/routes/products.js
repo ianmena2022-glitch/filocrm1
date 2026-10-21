@@ -263,7 +263,7 @@ router.post('/:id/sell', auth, async (req, res) => {
 
 // ── POST /api/products/:id/stock — ajuste de stock ────────────────────────
 router.post('/:id/stock', auth, async (req, res) => {
-  const { tipo, cantidad, nota } = req.body;
+  const { tipo, cantidad, nota, payment_method } = req.body;
   const qty = parseInt(cantidad) || 0;
   const validTipos = ['entrada','salida','ajuste'];
   if (!validTipos.includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' });
@@ -310,9 +310,10 @@ router.post('/:id/stock', auth, async (req, res) => {
         ? `Stock ${prodNombre} x${qty} — ${nota}`
         : `Stock ${prodNombre} x${qty}`;
       await pool.query(
-        `INSERT INTO expenses (shop_id, amount, category, description, date)
-         VALUES ($1, $2, 'insumos', $3, $4)`,
-        [req.shopId, montoGasto, descGasto, shopDate(await getShopTz(req.shopId))]
+        `INSERT INTO expenses (shop_id, amount, category, description, date, payment_method)
+         VALUES ($1, $2, 'insumos', $3, $4, $5)`,
+        [req.shopId, montoGasto, descGasto, shopDate(await getShopTz(req.shopId)),
+         payment_method ? String(payment_method).trim() : null]
       );
       gastoRegistrado = true;
     }

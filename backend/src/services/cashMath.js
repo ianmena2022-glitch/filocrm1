@@ -136,4 +136,20 @@ async function saveDayClose(shopId, date, d) {
   );
 }
 
-module.exports = { methodTotalsForDay, dayCommissions, computeNet, computeDayClose, saveDayClose };
+// El sistema reconoce el fiado por la clave 'debt'. Si el shop creó un método propio marcado
+// como fiado (is_debt) con otra clave, se normaliza a 'debt' al guardar para que caja, deudas
+// y reportes lo traten igual.
+async function normalizeDebtMethod(shopIds, key) {
+  if (!key || key === 'debt') return key;
+  const ids = (Array.isArray(shopIds) ? shopIds : [shopIds]).filter(Boolean).map(Number);
+  if (!ids.length) return key;
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM payment_methods WHERE shop_id = ANY($1::int[]) AND key=$2 AND is_debt=TRUE LIMIT 1`,
+      [ids, key]
+    );
+    return r.rows.length ? 'debt' : key;
+  } catch (_) { return key; }
+}
+
+module.exports = { normalizeDebtMethod, methodTotalsForDay, dayCommissions, computeNet, computeDayClose, saveDayClose };
