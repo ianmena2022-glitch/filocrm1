@@ -1,7 +1,8 @@
 // Promociones: resolver mejor descuento aplicable + registrar usos.
 const pool = require('../db/pool');
 
-const PLAN_PRICES = { starter: 50000, staff: 80000, enterprise: 130000 };
+// Debe coincidir con QR_PLANS (routes/payments.js) y con los precios que ve el cliente en el CRM.
+const PLAN_PRICES = { starter: 40000, staff: 80000, enterprise: 130000 };
 function planBasePrice(plan) { return PLAN_PRICES[plan] || 0; }
 
 // Devuelve la MEJOR promo aplicable a (shopId, plan, code opcional) o null.

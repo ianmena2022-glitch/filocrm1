@@ -320,6 +320,26 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
+// GET /api/auth/promo-check?code=XXX&plan=staff — días de prueba que da un código (para mostrarlo al registrarse)
+const promoCheckLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'Demasiadas consultas. Esperá un momento.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+router.get('/promo-check', promoCheckLimiter, async (req, res) => {
+  try {
+    const code = String(req.query.code || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 60);
+    const plan = ['starter', 'staff', 'enterprise'].includes(req.query.plan) ? req.query.plan : 'starter';
+    if (!code) return res.json({ trial_days: null });
+    const p = await require('../services/promotions').getTrialPromoForSignup({ code, plan });
+    res.json({ trial_days: p ? p.trial_days : null });
+  } catch (e) {
+    res.json({ trial_days: null });
+  }
+});
+
 // GET /api/auth/status — verificar estado de suscripción
 router.get('/status', async (req, res) => {
   const header = req.headers.authorization || '';
