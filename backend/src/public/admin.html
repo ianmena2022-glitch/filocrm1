@@ -354,7 +354,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 
     <!-- TAB: ARCHIVADAS -->
     <div id="tab-archived" style="display:none">
-      <div style="font-size:12px;color:var(--g);margin:2px 0 12px">Cuentas vencidas hace más de 30 días. No se borran: conservan sus datos y se pueden reactivar editando su estado. La búsqueda y el filtro de plan de "Cuentas" también aplican acá.</div>
+      <div style="font-size:12px;color:var(--g);margin:2px 0 12px">Cuentas archivadas a mano y las vencidas hace más de 30 días. No se borran: conservan sus datos. Con "📤 Desarchivar" vuelven a la lista principal. La búsqueda y el filtro de plan de "Cuentas" también aplican acá.</div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -1304,6 +1304,9 @@ function renderTreeRow(a, depth, parentId) {
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
       ${a.phone ? `<button class="action-btn" onclick="openWelcomeModal(${a.id})" style="background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.3);color:#25D366" title="Enviar mensaje de bienvenida a ${esc(a.phone)}">💬 Chat</button>` : ''}
       ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},'${esc(a.name)}')" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
+      ${!isBarber && !isBranch ? (isArchivedAccount(a)
+        ? `<button class="action-btn" onclick="setArchived(${a.id}, false)" title="Volver a la lista principal">📤 Desarchivar</button>`
+        : `<button class="action-btn" onclick="setArchived(${a.id}, true)" title="Mover a Archivadas (no se borra)">📦 Archivar</button>`) : ''}
       <button class="action-btn" onclick="resetWpp(${a.id},'${esc(a.name)}')" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
       <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
     </td>
@@ -1335,11 +1338,28 @@ function filterAccounts() {
   if (btn) btn.textContent = `📦 Archivadas${archivedAll.length ? ` (${archivedAll.length})` : ''}`;
 }
 
-// Archivada = cuenta raíz (no barbero, sucursal ni test) vencida hace más de 30 días.
+// Archivar / desarchivar una cuenta a mano (no borra nada)
+async function setArchived(id, archived) {
+  try {
+    const res = await fetch(`/api/admin/accounts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({ archived })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'No se pudo cambiar'); return; }
+    loadAll();
+  } catch (e) { alert('Error de conexión'); }
+}
+
+// Archivada = cuenta raíz (no barbero ni sucursal) archivada a mano, o vencida hace más de 30 días (no test).
 // Es solo una vista: no se borra ni se modifica nada; al reactivarla vuelve a la lista principal.
 const ARCHIVE_AFTER_DAYS = 30;
 function isArchivedAccount(a) {
-  if (a.is_barber || a.is_branch || a.is_test) return false;
+  if (a.is_barber || a.is_branch) return false;
+  if (a.archived_manual === true)  return true;    // archivada a mano
+  if (a.archived_manual === false) return false;   // sacada de archivadas a mano: se queda en la lista principal
+  if (a.is_test) return false;
   if (!['expired', 'cancelled'].includes(effectiveStatus(a))) return false;
   const ref = a.expired_at || a.trial_ends_at;
   if (!ref) return false;

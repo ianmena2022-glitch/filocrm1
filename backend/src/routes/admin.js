@@ -71,7 +71,8 @@ let _kpiColReady = null;
 function ensureKpiColumn() {
   if (!_kpiColReady) {
     _kpiColReady = pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS exclude_from_kpis BOOLEAN NOT NULL DEFAULT FALSE')
-      .catch(e => { _kpiColReady = null; console.warn('[admin] exclude_from_kpis:', e.message); });
+      .then(() => pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS archived_manual BOOLEAN'))
+      .catch(e => { _kpiColReady = null; console.warn('[admin] columnas de cuentas:', e.message); });
   }
   return _kpiColReady;
 }
@@ -89,6 +90,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
         s.mp_shop_subscription_id, s.mp_shop_status,
         s.is_test,
         COALESCE(s.exclude_from_kpis, FALSE) AS exclude_from_kpis,
+        s.archived_manual,
         s.is_barber, s.is_branch, s.is_enterprise_owner,
         s.parent_shop_id, s.parent_enterprise_id,
         s.barber_commission_pct,
@@ -467,7 +469,7 @@ router.post('/accounts', adminAuth, async (req, res) => {
 
 // PUT /api/admin/accounts/:id — editar plan/estado
 router.put('/accounts/:id', adminAuth, async (req, res) => {
-  const { name, filo_plan, subscription_status, exclude_from_kpis } = req.body;
+  const { name, filo_plan, subscription_status, exclude_from_kpis, archived } = req.body;
   const validPlans   = ['starter','staff','enterprise'];
   const validStatus  = ['trial','active','expired','cancelled'];
 
@@ -479,6 +481,11 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
     if (typeof exclude_from_kpis === 'boolean') {
       await ensureKpiColumn();
       updates.push(`exclude_from_kpis=$${i++}`); params.push(exclude_from_kpis);
+    }
+    // Archivar / desarchivar a mano (null = volver a la regla automática)
+    if (typeof archived === 'boolean' || archived === null) {
+      await ensureKpiColumn();
+      updates.push(`archived_manual=$${i++}`); params.push(archived);
     }
     if (name)                              { updates.push(`name=$${i++}`);                  params.push(name.trim()); }
     if (validPlans.includes(filo_plan))    {
