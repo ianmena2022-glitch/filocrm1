@@ -2595,6 +2595,7 @@ function promoRender() {
               <span style="padding:3px 8px;border-radius:5px;font-size:11px;font-weight:700;${p.status==='active'?'background:rgba(74,222,128,.15);color:#4ade80':p.status==='paused'?'background:rgba(255,209,0,.15);color:#FFD100':'background:rgba(255,255,255,.08);color:var(--g)'}">${p.status}</span>
             </td>
             <td style="padding:10px;text-align:right;white-space:nowrap">
+              ${p.code ? `<button onclick="promoCopyLink(${p.id}, this)" style="background:transparent;border:1px solid rgba(255,209,0,.4);color:var(--y);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px" title="Copiar link de la promo">🔗 Link</button>` : ''}
               <button onclick="promoShowUses(${p.id})" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px" title="Ver usos">📊</button>
               <button onclick="promoToggleStatus(${p.id})" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">${p.status==='active'?'Pausar':'Activar'}</button>
               <button onclick="promoOpenEdit(${p.id})" style="background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">✏️</button>
@@ -2605,6 +2606,31 @@ function promoRender() {
       </tbody>
     </table>
   `;
+}
+
+// Link para compartir una promo: al abrirlo, el CRM guarda el código y lo aplica en el próximo pago
+function promoLink(p) {
+  const base = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : 'https://filocrm.com.ar';
+  return `${base}/app?promo=${encodeURIComponent(String(p.code).toUpperCase())}`;
+}
+async function promoCopyLink(id, btn) {
+  const p = _promos.find(x => x.id === id);
+  if (!p || !p.code) return;
+  const link = promoLink(p);
+  let ok = false;
+  try { await navigator.clipboard.writeText(link); ok = true; } catch (_) {}
+  if (!ok) {
+    // Fallback (navegadores sin permiso de portapapeles)
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = link; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      ok = document.execCommand('copy');
+      ta.remove();
+    } catch (_) {}
+  }
+  if (!ok) { window.prompt('Copiá el link de la promo:', link); return; }
+  if (btn) { const orig = btn.textContent; btn.textContent = '✅ Copiado'; setTimeout(() => { btn.textContent = orig; }, 1500); }
 }
 
 function escapeHtml(s) {
