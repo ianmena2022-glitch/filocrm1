@@ -54,7 +54,7 @@ router.post('/login', async (req, res) => {
   if (!ADMIN_SECRET) {
     return res.status(503).json({ error: 'Login admin no configurado en el servidor' });
   }
-  const { password } = req.body;
+  const { password, remember } = req.body;
   if (!password) return res.status(401).json({ error: 'Contraseña incorrecta' });
   // Comparación en tiempo constante para prevenir timing attacks
   const a = Buffer.from(password);
@@ -62,8 +62,9 @@ router.post('/login', async (req, res) => {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
-  const token = jwt.sign({ isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token });
+  // "Recordar este dispositivo": sesión de 90 días (el celular de confianza no vuelve a pedir la contraseña)
+  const token = jwt.sign({ isAdmin: true }, process.env.JWT_SECRET, { expiresIn: remember === true ? '90d' : '8h' });
+  res.json({ token, remember: remember === true });
 });
 
 // La columna exclude_from_kpis se crea sola si la migración 048 todavía no corrió (idempotente)

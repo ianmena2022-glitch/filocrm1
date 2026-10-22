@@ -227,6 +227,9 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     <h1>✂ FILO</h1>
     <p>Panel de administración</p>
     <input class="input" type="password" id="admin-pass" placeholder="Contraseña maestra" onkeydown="if(event.key==='Enter')doLogin()">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.65);margin:2px 0 12px;cursor:pointer;text-align:left">
+      <input type="checkbox" id="admin-remember" checked style="width:auto"> Recordar este dispositivo (90 días)
+    </label>
     <button class="btn-y" onclick="doLogin()">Ingresar</button>
     <div class="login-err" id="login-err">Contraseña incorrecta</div>
   </div>
@@ -980,12 +983,16 @@ async function doLogin() {
     const res = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pass })
+      body: JSON.stringify({ password: pass, remember: !!document.getElementById('admin-remember')?.checked })
     });
     const data = await res.json();
     if (!res.ok) { err.style.display = 'block'; return; }
     adminToken = data.token;
-    sessionStorage.setItem('admin_token', adminToken);
+    // Dispositivo recordado: el token queda guardado y no pide la contraseña al volver a abrir
+    try {
+      localStorage.removeItem('admin_token'); sessionStorage.removeItem('admin_token');
+      (data.remember ? localStorage : sessionStorage).setItem('admin_token', adminToken);
+    } catch (_) { try { sessionStorage.setItem('admin_token', adminToken); } catch (__) {} }
     showPanel();
   } catch(e) {
     err.style.display = 'block';
@@ -994,7 +1001,7 @@ async function doLogin() {
 
 function logout() {
   adminToken = null;
-  sessionStorage.removeItem('admin_token');
+  try { sessionStorage.removeItem('admin_token'); localStorage.removeItem('admin_token'); } catch (_) {}
   document.getElementById('panel').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('admin-pass').value = '';
@@ -1121,7 +1128,8 @@ async function adminPushInit() {
 
 // Auto-login si hay token en session
 window.addEventListener('DOMContentLoaded', () => {
-  const t = sessionStorage.getItem('admin_token');
+  let t = null;
+  try { t = localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token'); } catch (_) {}
   if (t) { adminToken = t; showPanel(); }
 });
 
