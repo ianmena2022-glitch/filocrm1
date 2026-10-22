@@ -12472,7 +12472,7 @@ function renderCashSummary(c) {
       const isDebt = m.is_debt;
       const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)')
         : (val < 0 ? '#FF4343' : (defaultColors[m.key] || '#FF9800'));
-      const canExpand = !isDebt && val !== 0;
+      const canExpand = !isDebt;
       return `
         <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
              ${canExpand ? `onclick="toggleMethodDetail('${m.key}')"` : ''}>
@@ -12487,12 +12487,16 @@ function renderCashSummary(c) {
     // Show orphan methods (have data but not in active shop list, e.g. legacy data)
     const knownKeys = new Set(shopMethods.map(m => m.key));
     const orphanRows = breakdown
-      .filter(b => !knownKeys.has(b.key) && parseFloat(b.total) > 0)
+      .filter(b => !knownKeys.has(b.key) && parseFloat(b.total) !== 0)
       .map(b => `
-        <div class="caja-method-row">
-          <div class="caja-method-label">💳 ${b.key}</div>
-          <div class="caja-method-val">${fmt(b.total)}</div>
-        </div>`);
+        <div class="caja-method-row caja-method-expandable" onclick="toggleMethodDetail('${escHtml(b.key)}')">
+          <div class="caja-method-label">💳 ${escHtml(b.key)}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div class="caja-method-val" style="color:${parseFloat(b.total) < 0 ? '#FF4343' : 'inherit'}">${fmt(b.total)}</div>
+            <span id="method-chevron-${escHtml(b.key)}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>
+          </div>
+        </div>
+        <div id="method-detail-${escHtml(b.key)}" style="display:none"></div>`);
     methods.innerHTML = [...methodRows, ...orphanRows].join('');
   }
 
@@ -12854,6 +12858,45 @@ async function toggleMethodDetail(method) {
 function renderMethodDetail(el, data) {
   const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
   const rows = [];
+
+  // Versión completa: ingresos y egresos de la cuenta, en orden del día, con el total al pie
+  if (Array.isArray(data.movements)) {
+    const icon = { appointment:'✂️', sena:'💰', product_sale:'🛒', debt_payment:'💳', tip:'🪙', expense:'📤' };
+    const srcLabel = { manual:'Gasto manual', stock_compra:'Compra de insumos', barber_settlement:'Liquidación a barbero' };
+    data.movements.forEach(m => {
+      const out = m.sign < 0;
+      const color = out ? '#FF4343' : '#4CAF50';
+      const label = m.kind === 'expense' ? (srcLabel[m.source_type] || 'Gasto') : m.title;
+      const extra = m.kind === 'expense' && m.category ? ` · ${escHtml(m.category)}` : '';
+      const isAppt = m.kind === 'appointment';
+      rows.push(`
+        <div class="method-detail-item">
+          <div>
+            <div style="font-size:12px;font-weight:600">${icon[m.kind] || ''} ${escHtml(isAppt ? (m.title || 'Sin nombre') : label)}<span style="color:var(--gray);font-weight:400"> · ${escHtml(m.time || '')}</span></div>
+            ${isAppt
+              ? `<div style="font-size:11px;color:var(--gray)">${escHtml(m.subtitle || '')}${m.is_split ? ' · pago dividido' : ''}${m.sena_applied > 0 ? ` · seña ${fmt(m.sena_applied)} ya cobrada` : ''}</div>
+                 ${m.barber_name ? `<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">✂️ ${escHtml(m.barber_name)}</div>` : ''}`
+              : `<div style="font-size:11px;color:var(--gray)">${escHtml(m.subtitle || '')}${extra}</div>`}
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:10px">
+            <div style="font-size:13px;font-weight:700;color:${isAppt ? 'inherit' : color}">${out ? '−' : (isAppt ? '' : '+')}${fmt(m.amount)}</div>
+            ${isAppt ? `<div style="font-size:10px;color:#4CAF50">Gan. ${fmt(m.profit)}</div>${m.commission_amount > 0 ? `<div style="font-size:10px;color:#FF9800">Com. ${fmt(m.commission_amount)}</div>` : ''}` : ''}
+          </div>
+        </div>`);
+    });
+    if (!rows.length) {
+      el.innerHTML = '<div style="padding:8px 12px;color:var(--gray);font-size:11px">Sin movimientos en esta cuenta</div>';
+      return;
+    }
+    const tot = parseFloat(data.grand_total || 0);
+    el.innerHTML = `<div style="background:rgba(0,0,0,.25);border-radius:8px;padding:0 12px;margin:0 0 8px">${rows.join('')}
+      <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.12);font-size:11px;color:var(--gray)">
+        <span>Ingresos <strong style="color:#4CAF50">+${fmt(data.income_total)}</strong></span>
+        <span>Egresos <strong style="color:#FF4343">−${fmt(data.expense_total)}</strong></span>
+        <span>Saldo de la cuenta <strong style="color:${tot < 0 ? '#FF4343' : '#fff'};font-size:13px">${fmt(tot)}</strong></span>
+      </div></div>`;
+    return;
+  }
 
   (data.appointments || []).forEach(a => {
     const profit = parseFloat(a.profit || 0);
@@ -13329,27 +13372,28 @@ function renderBranchCajaSummary(c) {
   const methodsEl = document.getElementById('ent-caja-methods');
   if (methodsEl) {
     // cerrar detalles previos
-    ['cash','debit','credit','transfer'].forEach(m => {
-      const d = document.getElementById(`ent-method-detail-${m}`);
-      const chv = document.getElementById(`ent-method-chevron-${m}`);
-      if (d) { d.style.display = 'none'; d.innerHTML = ''; }
-      if (chv) chv.style.transform = '';
-    });
-    methodsEl.innerHTML = payMethods.map(m => {
-      const val = parseFloat(c[m.key] || 0);
-      const isDebt = m.key === 'debt_total';
-      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : m.color;
-      const canExpand = !isDebt && val > 0;
+    methodsEl.querySelectorAll('[id^="ent-method-detail-"]').forEach(d => { d.style.display = 'none'; d.innerHTML = ''; });
+    methodsEl.querySelectorAll('[id^="ent-method-chevron-"]').forEach(chv => { chv.style.transform = ''; });
+    // Cuentas reales del local con su saldo (ingresos − egresos); si la API no las trae, formato anterior
+    const rowsSrc = Array.isArray(c.methods) && c.methods.length
+      ? c.methods.map(x => ({ method: x.key, label: `${x.icon || ''} ${x.label}`, val: parseFloat(x.total || 0), isDebt: !!x.is_debt,
+                              color: ({cash:'#4CAF50', debit:'#2196F3', credit:'#9C27B0', transfer:'#FF9800'})[x.key] || '#FF9800' }))
+      : payMethods.map(m => ({ method: m.method, label: m.label, val: parseFloat(c[m.key] || 0), isDebt: m.key === 'debt_total', color: m.color }));
+    methodsEl.innerHTML = rowsSrc.map(m => {
+      const val = m.val;
+      const isDebt = m.isDebt;
+      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)') : (val < 0 ? '#FF4343' : m.color);
+      const canExpand = !isDebt;
       return `
         <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
-             ${canExpand ? `onclick="toggleBranchMethodDetail('${m.method}')"` : ''}>
-          <div class="caja-method-label">${m.label}</div>
+             ${canExpand ? `onclick="toggleBranchMethodDetail('${escHtml(m.method)}')"` : ''}>
+          <div class="caja-method-label">${escHtml(m.label)}</div>
           <div style="display:flex;align-items:center;gap:6px">
             <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
-            ${canExpand ? `<span id="ent-method-chevron-${m.method}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
+            ${canExpand ? `<span id="ent-method-chevron-${escHtml(m.method)}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
           </div>
         </div>
-        <div id="ent-method-detail-${m.method}" style="display:none"></div>`;
+        <div id="ent-method-detail-${escHtml(m.method)}" style="display:none"></div>`;
     }).join('');
   }
 

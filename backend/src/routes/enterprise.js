@@ -4,7 +4,7 @@ const auth   = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { methodTotalsForDay, dayCommissions, computeNet } = require('../services/cashMath');
+const { methodTotalsForDay, dayCommissions, computeNet, methodMovementsForDay } = require('../services/cashMath');
 
 // Solo enterprise owners pueden acceder
 // Verifica JWT primero; si el flag no está en el token (cuenta creada antes del fix),
@@ -531,47 +531,59 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
+      // Saldo de cada cuenta del local (ingresos − egresos), igual que en la caja del propio local
+      methods:           await branchMethodBalances(branchId, date, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Cuentas (métodos de pago) de una sucursal con su saldo del día. Cada saldo sale del mismo
+// cálculo que el detalle de la cuenta, así que lo que se ve al abrirla siempre coincide.
+async function branchMethodBalances(branchId, date, debtOutstanding) {
+  const tz = await getShopTz(branchId);
+  let methods = [];
+  try {
+    const r = await pool.query(
+      `SELECT key, label, icon, is_debt FROM payment_methods WHERE shop_id=$1 AND active=TRUE ORDER BY sort_order, id`, [branchId]);
+    methods = r.rows;
+  } catch (_) {}
+  if (!methods.length) methods = [
+    { key: 'cash', label: 'Efectivo', icon: '💵', is_debt: false }, { key: 'debit', label: 'Débito', icon: '💳', is_debt: false },
+    { key: 'credit', label: 'Crédito', icon: '💳', is_debt: false }, { key: 'transfer', label: 'Transferencia', icon: '📲', is_debt: false },
+    { key: 'debt', label: 'Fiado', icon: '🤝', is_debt: true },
+  ];
+  // Cuentas que aparecen en los movimientos del día aunque ya no estén activas
+  const known = new Set(methods.map(m => m.key));
+  let used = [];
+  try {
+    used = (await pool.query(
+      `SELECT DISTINCT m FROM (
+         SELECT payment_method AS m FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'
+         UNION SELECT payment_method FROM expenses WHERE shop_id=$1 AND date=$2
+       ) t WHERE m IS NOT NULL AND m NOT IN ('debt','mixed')`, [branchId, date])).rows.map(r => r.m);
+  } catch (_) {}
+  for (const k of used) if (!known.has(k)) { methods.push({ key: k, label: k, icon: '💳', is_debt: false }); known.add(k); }
+
+  const out = [];
+  for (const m of methods) {
+    if (m.is_debt) { out.push({ ...m, total: Math.max(0, debtOutstanding || 0) }); continue; }
+    const d = await methodMovementsForDay(branchId, date, m.key, tz);
+    out.push({ ...m, total: d.grand_total });
+  }
+  return out;
+}
+
 // ── GET /api/enterprise/branches/:id/cash/method-detail?date=&method= ─────────
+// Mismo detalle completo que ve cada local (ingresos y egresos de la cuenta).
 router.get('/branches/:id/cash/method-detail', auth, enterpriseOnly, async (req, res) => {
   const branchId = await verifyBranch(req, res);
   if (!branchId) return;
   const { method } = req.query;
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const tz = await getShopTz(branchId);
+  const date = req.query.date || shopDate(tz);
   if (!method) return res.status(400).json({ error: 'Se requiere method' });
   try {
-    const appts = await pool.query(
-      `SELECT a.id, a.client_name, a.service_name, a.price, a.cost, a.commission_pct,
-              a.tip, a.time_start,
-              ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
-              ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
-              s.name AS barber_name
-       FROM appointments a
-       LEFT JOIN shops s ON s.id = a.barber_id
-       WHERE a.shop_id=$1 AND a.date=$2 AND a.payment_method=$3 AND a.status='completed'
-       ORDER BY a.time_start ASC`,
-      [branchId, date, method]
-    );
-    const debts = await pool.query(
-      `SELECT id, description, amount, created_at
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment' AND payment_method=$3
-       ORDER BY created_at ASC`,
-      [branchId, date, method]
-    );
-    const apptTotal = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
-    const debtTotal = debts.rows.reduce((s, d) => s + parseFloat(d.amount || 0), 0);
-    res.json({
-      method, date,
-      appointments:       appts.rows,
-      debt_payments:      debts.rows,
-      appointments_total: apptTotal,
-      debt_total:         debtTotal,
-      grand_total:        apptTotal + debtTotal,
-    });
+    res.json(await methodMovementsForDay(branchId, date, method, tz));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { computeNet, dayCommissions, computeDayClose, saveDayClose } = require("../services/cashMath");
+const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -613,95 +613,14 @@ router.get('/cash', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/dashboard/cash/method-detail?date=&method= — detalle por método de pago
+// GET /api/dashboard/cash/method-detail?date=&method= — TODOS los movimientos de una cuenta del día
 router.get('/cash/method-detail', auth, async (req, res) => {
   const { method } = req.query;
-  const date = req.query.date || shopDate(await getShopTz(req.shopId));
+  const tz = await getShopTz(req.shopId);
+  const date = req.query.date || shopDate(tz);
   if (!method) return res.status(400).json({ error: 'Se requiere method' });
   try {
-    // Turnos completados con ese método — incluye los mixtos cuyo split tiene ese método.
-    // Para los mixtos usamos el amount del split, no el price total.
-    let appts;
-    try {
-      appts = await pool.query(
-        `WITH
-           direct AS (
-             SELECT a.id, a.client_name, a.service_name, a.price AS amount, a.price,
-                    a.cost, a.commission_pct, a.tip, a.time_start, a.barber_id,
-                    FALSE AS is_split
-               FROM appointments a
-               WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
-                 AND a.payment_method=$3
-                 AND NOT EXISTS (SELECT 1 FROM payment_splits ps WHERE ps.appointment_id=a.id)
-           ),
-           from_splits AS (
-             SELECT a.id, a.client_name, a.service_name,
-                    SUM(ps.amount) AS amount, a.price,
-                    a.cost, a.commission_pct, a.tip, a.time_start, a.barber_id,
-                    TRUE AS is_split
-               FROM appointments a
-               JOIN payment_splits ps ON ps.appointment_id=a.id
-               WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
-                 AND ps.method=$3
-               GROUP BY a.id
-           ),
-           merged AS (SELECT * FROM direct UNION ALL SELECT * FROM from_splits)
-         SELECT m.id, m.client_name, m.service_name, m.amount::numeric AS price,
-                m.cost, m.commission_pct, m.tip, m.time_start, m.is_split,
-                ROUND(m.amount::numeric * m.commission_pct / 100.0, 2) AS commission_amount,
-                ROUND(m.amount::numeric - COALESCE(m.cost,0) - (m.amount::numeric * m.commission_pct / 100.0), 2) AS profit,
-                s.name AS barber_name
-           FROM merged m
-           LEFT JOIN shops s ON s.id = m.barber_id
-           ORDER BY m.time_start ASC`,
-        [req.shopId, date, method]
-      );
-    } catch(spErr) {
-      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
-        appts = await pool.query(
-          `SELECT a.id, a.client_name, a.service_name, a.price, a.cost, a.commission_pct,
-                  a.tip, a.time_start,
-                  ROUND(a.price * a.commission_pct / 100.0, 2) AS commission_amount,
-                  ROUND(a.price - COALESCE(a.cost,0) - (a.price * a.commission_pct / 100.0), 2) AS profit,
-                  s.name AS barber_name
-           FROM appointments a
-           LEFT JOIN shops s ON s.id = a.barber_id
-           WHERE a.shop_id=$1 AND a.date=$2 AND a.payment_method=$3 AND a.status='completed'
-           ORDER BY a.time_start ASC`,
-          [req.shopId, date, method]
-        );
-      } else throw spErr;
-    }
-    // Cobros de fiado con ese método
-    const debts = await pool.query(
-      `SELECT id, description, amount, created_at
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment' AND payment_method=$3
-       ORDER BY created_at ASC`,
-      [req.shopId, date, method]
-    );
-    // Ventas de productos con ese método
-    const prodSales = await pool.query(
-      `SELECT id, description, amount, created_at
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND source_type='product_sale' AND payment_method=$3
-         AND is_income=TRUE
-       ORDER BY created_at ASC`,
-      [req.shopId, date, method]
-    );
-    const apptTotal  = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
-    const debtTotal  = debts.rows.reduce((s, d) => s + parseFloat(d.amount || 0), 0);
-    const prodTotal  = prodSales.rows.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
-    res.json({
-      method, date,
-      appointments:       appts.rows,
-      debt_payments:      debts.rows,
-      product_sales:      prodSales.rows,
-      appointments_total: apptTotal,
-      debt_total:         debtTotal,
-      product_sales_total: prodTotal,
-      grand_total:        apptTotal + debtTotal + prodTotal,
-    });
+    res.json(await methodMovementsForDay(req.shopId, date, method, tz));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
