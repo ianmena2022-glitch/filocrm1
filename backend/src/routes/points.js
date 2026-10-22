@@ -51,7 +51,7 @@ router.get('/store', auth, async (req, res) => {
 router.get('/store/public/:slug', async (req, res) => {
   try {
     const shop = await pool.query(
-      'SELECT id, name, store_name, city, points_per_peso FROM shops WHERE booking_slug=$1',
+      'SELECT id, name, store_name, city FROM shops WHERE booking_slug=$1',
       [req.params.slug]
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
