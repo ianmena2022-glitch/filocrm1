@@ -475,6 +475,12 @@ async function tryMatchIncomingTransfer(paymentId, amount) {
 // Activa un plan mensual para una barbería. Centraliza la lógica (shops row,
 // idempotencia, referrals, afiliados, WhatsApp de confirmación). No tira; loguea errores.
 async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId = null }) {
+  // Si el pago quedó ligado a una sucursal (ej: una orden generada antes de separar la
+  // sede del dueño enterprise), la suscripción se acredita al dueño, no a la sucursal.
+  try {
+    const br = await pool.query('SELECT is_branch, parent_enterprise_id FROM shops WHERE id=$1', [shopId]);
+    if (br.rows[0]?.is_branch && br.rows[0].parent_enterprise_id) shopId = br.rows[0].parent_enterprise_id;
+  } catch (_) { /* seguir con el shop original */ }
   const basePrice = QR_PLANS[plan]?.price;
   // Si hay promo, el precio esperado puede ser menor. Recalcular con promo activa.
   let expectedPrice = basePrice;

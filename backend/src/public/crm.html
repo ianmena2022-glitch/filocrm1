@@ -5590,12 +5590,14 @@ async function startApp() {
   //   - es enterprise owner real (no test), O
   //   - es cuenta test con filo_plan='enterprise' (para previsualizar la UX enterprise)
   if (currentShop?.is_enterprise_owner) {
-    // Mostrar setup enterprise la primera vez que el usuario llega a este plan
-    const setupKey = 'filo_ent_setup_' + currentShop.id;
-    if (!localStorage.getItem(setupKey)) {
-      showEnterpriseSetup();
-      return;
-    }
+    // Si el shop vino de un plan Staff (tiene turnos/clientes/equipo propios), primero hay
+    // que darle a esa sede su propio acceso (email + contraseña): pasa a ser una sucursal.
+    try {
+      const st = await api('GET', '/enterprise/main-site-status');
+      if (st && st.needs_split) { showMainSiteSplit(st); return; }
+    } catch(e) { /* si falla la consulta, seguir con el flujo normal */ }
+    // El dueño enterprise ya no tiene una "Sede Principal" propia (su sede existente se
+    // separó como sucursal arriba), así que se omite el viejo asistente que decía lo contrario.
     launchEnterprisePanel();
     return;
   }
@@ -5637,6 +5639,49 @@ function showEnterpriseSetup() {
   if (nameInput) nameInput.value = currentShop?.name || '';
   if (cityInput) cityInput.value = currentShop?.city || '';
   document.getElementById('modal-enterprise-setup').style.display = 'flex';
+}
+
+function showMainSiteSplit(st) {
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('copilot-widget').style.display = 'block';
+  const n = document.getElementById('msplit-name'), c = document.getElementById('msplit-city');
+  if (n) n.value = st?.name || currentShop?.name || '';
+  if (c) c.value = st?.city || currentShop?.city || '';
+  document.getElementById('msplit-error').textContent = '';
+  document.getElementById('modal-main-site-split').style.display = 'flex';
+}
+
+async function confirmMainSiteSplit() {
+  const email = document.getElementById('msplit-email').value.trim();
+  const pass  = document.getElementById('msplit-pass').value;
+  const name  = document.getElementById('msplit-name').value.trim();
+  const city  = document.getElementById('msplit-city').value.trim();
+  const err   = document.getElementById('msplit-error');
+  err.textContent = '';
+  if (!name)  { err.textContent = 'Ingresá el nombre de la sede'; return; }
+  if (!email) { err.textContent = 'Ingresá el email de la sede'; return; }
+  if (pass.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
+  const btn = document.getElementById('msplit-btn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const r = await api('POST', '/enterprise/split-main-site', { email, password: pass, name, city });
+    if (!r || !r.token) throw new Error((r && r.error) || 'No se pudo guardar');
+    token = r.token;
+    localStorage.setItem('filo_token', token);
+    const me = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } }).then(x => x.json());
+    if (me && me.shop) { currentShop = me.shop; localStorage.setItem('filo_shop', JSON.stringify(currentShop)); }
+    document.getElementById('msplit-done-email').textContent = r.branch_email;
+    document.getElementById('msplit-form').style.display = 'none';
+    document.getElementById('msplit-done').style.display = 'block';
+  } catch(e) {
+    err.textContent = e.message || 'No se pudo guardar';
+    btn.disabled = false; btn.textContent = 'Crear acceso de la sede →';
+  }
+}
+
+function finishMainSiteSplit() {
+  document.getElementById('modal-main-site-split').style.display = 'none';
+  location.reload();
 }
 
 async function confirmEnterpriseSetup() {
@@ -14524,6 +14569,46 @@ async function bcmSave(id) {
 <!-- ═══════════════════════════════════════════
      FILO PRODUCT TOUR — overlay + card
      ═══════════════════════════════════════════ -->
+<!-- Separar la sede existente al pasar de Staff a Enterprise -->
+<div id="modal-main-site-split" style="display:none;position:fixed;inset:0;background:rgba(2,8,18,0.95);z-index:9650;align-items:center;justify-content:center">
+  <div style="background:#0a1828;border:1px solid rgba(255,209,0,0.4);border-radius:20px;padding:32px 28px;max-width:480px;width:92%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.7)">
+    <div id="msplit-form">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:42px;margin-bottom:8px">🏢</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:21px;font-weight:700;letter-spacing:1px;color:#fff;margin-bottom:8px">Creá el acceso de tu barbería</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.55">Tu barbería actual pasa a ser una <strong style="color:#FFD100">sede de tu red</strong> con su propio usuario, para que la use tu equipo en el local. <strong style="color:#fff">Se conserva todo: turnos, clientes, caja y equipo.</strong><br>Vos seguís entrando con tu email y contraseña de siempre al panel Enterprise.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Nombre de la sede *</label>
+          <input id="msplit-name" type="text" maxlength="100" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;outline:none">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Ciudad</label>
+          <input id="msplit-city" type="text" maxlength="100" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;outline:none">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Email de acceso de la sede *</label>
+          <input id="msplit-email" type="email" autocomplete="off" placeholder="sede@tubarberia.com" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;outline:none">
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px">Distinto del tuyo. Es el que va a usar el empleado.</div>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Contraseña de la sede * (mín. 6)</label>
+          <input id="msplit-pass" type="text" autocomplete="off" style="width:100%;background:#050d18;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:12px 14px;font-size:14px;color:#fff;outline:none">
+        </div>
+      </div>
+      <div id="msplit-error" style="color:#ff6b6b;font-size:13px;min-height:18px;margin-bottom:10px"></div>
+      <button id="msplit-btn" onclick="confirmMainSiteSplit()" style="width:100%;background:#FFD100;color:#050d18;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer">Crear acceso de la sede →</button>
+    </div>
+    <div id="msplit-done" style="display:none;text-align:center">
+      <div style="font-size:42px;margin-bottom:8px">✅</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:21px;font-weight:700;color:#fff;margin-bottom:10px">¡Listo!</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6;margin-bottom:18px">Tu empleado ya puede entrar a <strong>/app</strong> con el email <strong id="msplit-done-email" style="color:#FFD100"></strong> y la contraseña que acabás de elegir.<br><br>Vos entrás con tu email de siempre al panel Enterprise.</div>
+      <button onclick="finishMainSiteSplit()" style="width:100%;background:#FFD100;color:#050d18;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer">Ir al panel Enterprise →</button>
+    </div>
+  </div>
+</div>
+
 <div id="tour-overlay"></div>
 <div id="tour-spotlight"></div>
 <div id="tour-card">

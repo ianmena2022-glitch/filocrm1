@@ -38,8 +38,11 @@ router.get('/branches', auth, enterpriseOnly, async (req, res) => {
       pool.query(`SELECT ${cols} FROM shops WHERE id=$1`, [req.shopId]),
       pool.query(`SELECT ${cols} FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE ORDER BY name`, [req.shopId])
     ]);
+    // El dueño enterprise solo figura como "Sede Principal" si opera una sede propia
+    // (datos propios). Si no, es solo la cuenta de gestión y no se lista como sede.
+    const ownerHasSite = (await pool.query(`SELECT ${OWNER_HAS_SITE_DATA_SQL} AS has_data`, [req.shopId])).rows[0].has_data;
     const main = { ...ownerRes.rows[0], is_main: true, branch_label: ownerRes.rows[0]?.branch_label || 'Sede Principal' };
-    res.json([main, ...branchRes.rows]);
+    res.json(ownerHasSite ? [main, ...branchRes.rows] : branchRes.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -87,6 +90,158 @@ router.post('/branches', auth, enterpriseOnly, async (req, res) => {
 
     res.status(201).json({ ok: true, branch, generated_password: password });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Sede propia del dueño enterprise ─────────────────────────────────────────
+// Una cuenta que pasa de Staff a Enterprise conserva en su shop todo el historial
+// (turnos, clientes, caja, equipo). El dueño enterprise no opera una sede: por eso
+// ese shop se convierte en una SUCURSAL con su propio email/contraseña (para el
+// empleado), y el dueño pasa a una cuenta nueva que hereda la suscripción.
+const OWNER_HAS_SITE_DATA_SQL = `(
+  EXISTS (SELECT 1 FROM appointments WHERE shop_id = $1)
+  OR EXISTS (SELECT 1 FROM clients WHERE shop_id = $1)
+  OR EXISTS (SELECT 1 FROM services WHERE shop_id = $1)
+  OR EXISTS (SELECT 1 FROM shops WHERE parent_shop_id = $1 AND is_barber = TRUE)
+)`;
+
+async function ownerNeedsSiteSplit(db, shopId) {
+  const r = await db.query(
+    `SELECT is_enterprise_owner, is_branch, is_barber, is_test, plan,
+            ${OWNER_HAS_SITE_DATA_SQL} AS has_data
+       FROM shops WHERE id = $1`,
+    [shopId]
+  );
+  const s = r.rows[0];
+  if (!s) return { needs: false };
+  if (!s.is_enterprise_owner || s.is_branch || s.is_barber) return { needs: false };
+  if (s.is_test || s.plan === 'test') return { needs: false }; // cuentas de prueba: se mantienen como están
+  return { needs: !!s.has_data };
+}
+
+// ── GET /api/enterprise/main-site-status — ¿hay que separar la sede del dueño? ─
+router.get('/main-site-status', auth, enterpriseOnly, async (req, res) => {
+  try {
+    const { needs } = await ownerNeedsSiteSplit(pool, req.shopId);
+    const r = await pool.query('SELECT name, city FROM shops WHERE id=$1', [req.shopId]);
+    res.json({ needs_split: needs, name: r.rows[0]?.name || '', city: r.rows[0]?.city || '' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/enterprise/split-main-site ─────────────────────────────────────
+// Body: { email, password, name?, city?, branch_label? }  (acceso para la sede existente)
+router.post('/split-main-site', auth, enterpriseOnly, async (req, res) => {
+  const { email, password, name, city, branch_label } = req.body || {};
+  const emailNorm = String(email || '').toLowerCase().trim();
+  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(emailNorm))
+    return res.status(400).json({ error: 'Ingresá un email válido para la sede' });
+  if (typeof password !== 'string' || password.length < 6)
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+
+  const oldId = req.shopId;
+  const client = await pool.connect();
+  let began = false;
+  try {
+    await client.query('BEGIN'); began = true;
+
+    // Bloquear la fila del shop para que dos pedidos simultáneos no lo separen dos veces
+    const lock = await client.query('SELECT * FROM shops WHERE id=$1 FOR UPDATE', [oldId]);
+    const old = lock.rows[0];
+    if (!old) { await client.query('ROLLBACK'); began = false; return res.status(404).json({ error: 'Cuenta no encontrada' }); }
+    const chk = await ownerNeedsSiteSplit(client, oldId);
+    if (!chk.needs) {
+      await client.query('ROLLBACK'); began = false;
+      return res.status(409).json({ error: 'Esta cuenta no necesita separar su sede' });
+    }
+
+    const dupe = await client.query('SELECT 1 FROM shops WHERE email=$1', [emailNorm]);
+    if (dupe.rows.length) { await client.query('ROLLBACK'); began = false; return res.status(400).json({ error: 'Ya existe una cuenta con ese email' }); }
+    const pend = await client.query('SELECT 1 FROM pending_registrations WHERE email=$1', [emailNorm]);
+    if (pend.rows.length) { await client.query('ROLLBACK'); began = false; return res.status(400).json({ error: 'Hay un registro pendiente de verificación con ese email' }); }
+
+    const hash = await bcrypt.hash(password, 12);
+
+    // Columnas "de dueño" que se pasan a la cuenta enterprise nueva (solo las que existan)
+    const OWNER_COLS = [
+      'name','phone','password','plan','filo_plan','subscription_status','trial_ends_at',
+      'expired_at','first_payment_at','last_payment_at','mp_shop_subscription_id','mp_shop_status',
+      'mp_shop_payment_url','mp_payer_email','is_test','vendor_id','referral_code',
+      'referred_by_shop_id','ref_bonus_granted','free_months','affiliate_id','timezone',
+      'email_verified','created_at','enterprise_currency','enterprise_timezone','enterprise_notes',
+      'enterprise_logo_url','enterprise_shared_wpp','notification_prefs'
+    ];
+    const colsQ = await client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='shops'`
+    );
+    const have = new Set(colsQ.rows.map(r => r.column_name));
+    const copyCols = OWNER_COLS.filter(c => have.has(c) && old[c] !== undefined);
+
+    // 1) La sede existente toma el email/contraseña del empleado y deja los datos de cobro
+    const clear = ['vendor_id','referral_code','referred_by_shop_id','affiliate_id',
+                   'mp_shop_subscription_id','mp_shop_status','mp_shop_payment_url','mp_payer_email',
+                   'first_payment_at','last_payment_at','expired_at']
+      .filter(c => have.has(c)).map(c => `${c}=NULL`);
+    const siteName = (name && String(name).trim()) || old.name;
+    await client.query(
+      `UPDATE shops SET email=$1, password=$2, name=$3, city=COALESCE($4, city),
+              branch_label=$5, email_verified=TRUE
+              ${have.has('free_months') ? ', free_months=0' : ''}
+              ${have.has('ref_bonus_granted') ? ', ref_bonus_granted=FALSE' : ''}
+              ${clear.length ? ', ' + clear.join(', ') : ''}
+        WHERE id=$6`,
+      [emailNorm, hash, siteName, city ? String(city).trim() : null,
+       (branch_label && String(branch_label).trim()) || null, oldId]
+    );
+
+    // 2) Cuenta nueva de dueño enterprise con el email/contraseña/suscripción de siempre
+    const vals = copyCols.map(c => old[c]);
+    const ins = await client.query(
+      `INSERT INTO shops (email, is_enterprise_owner, is_branch, is_barber, ${copyCols.join(', ')})
+       VALUES ($1, TRUE, FALSE, FALSE, ${copyCols.map((_, i) => '$' + (i + 2)).join(', ')})
+       RETURNING id, email`,
+      [old.email, ...vals]
+    );
+    const newId = ins.rows[0].id;
+
+    // 3) La sede existente pasa a ser sucursal del dueño nuevo
+    await client.query(
+      `UPDATE shops SET is_enterprise_owner=FALSE, is_branch=TRUE, parent_enterprise_id=$1,
+              filo_plan='enterprise', subscription_status='active', trial_ends_at='2099-12-31'
+        WHERE id=$2`,
+      [newId, oldId]
+    );
+
+    // 4) Re-apuntar lo que colgaba del dueño viejo. SAVEPOINT por cada tabla: si alguna
+    //    no existe en este entorno no aborta la transacción.
+    const repoint = [
+      'UPDATE shops SET parent_enterprise_id=$1 WHERE parent_enterprise_id=$2 AND is_branch=TRUE AND id<>$2',
+      'UPDATE shops SET referred_by_shop_id=$1 WHERE referred_by_shop_id=$2 AND id<>$1',
+      'UPDATE mp_processed_payments SET shop_id=$1 WHERE shop_id=$2',
+      'UPDATE pending_transfers SET shop_id=$1 WHERE shop_id=$2',
+      'UPDATE promotion_uses SET shop_id=$1 WHERE shop_id=$2',
+      'UPDATE affiliate_commissions SET shop_id=$1 WHERE shop_id=$2',
+    ];
+    for (const sql of repoint) {
+      await client.query('SAVEPOINT rp');
+      try { await client.query(sql, [newId, oldId]); await client.query('RELEASE SAVEPOINT rp'); }
+      catch (e) { await client.query('ROLLBACK TO SAVEPOINT rp'); console.warn('[split-main-site] omitido:', e.message); }
+    }
+
+    await client.query('COMMIT'); began = false;
+    console.log(`[ENTERPRISE] sede ${oldId} separada → sucursal; nuevo dueño enterprise ${newId}`);
+
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign({
+      shopId: newId, email: old.email, isBarber: false, parentShopId: null,
+      isEnterpriseOwner: true, isBranch: false, parentEnterpriseId: null,
+    }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ ok: true, token, owner_id: newId, branch_id: oldId, branch_email: emailNorm });
+  } catch (e) {
+    if (began) { try { await client.query('ROLLBACK'); } catch (_) {} }
+    console.error('[split-main-site] error:', e.message);
+    res.status(500).json({ error: 'No se pudo separar la sede. No se hicieron cambios.' });
+  } finally {
+    client.release();
+  }
 });
 
 // ── PUT /api/enterprise/branches/:id — editar sucursal ───────────────────────
@@ -167,7 +322,7 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
            WHERE a2.shop_id=s.id AND a2.date=CURRENT_DATE AND a2.status IN ('pending','confirmed')) AS next_appt
        FROM shops s
        LEFT JOIN appointments a ON a.shop_id=s.id
-       WHERE s.id=$1 OR (s.parent_enterprise_id=$1 AND s.is_branch=TRUE)
+       WHERE (s.id=$1 AND ${OWNER_HAS_SITE_DATA_SQL}) OR (s.parent_enterprise_id=$1 AND s.is_branch=TRUE)
        GROUP BY s.id,s.name,s.branch_label,s.wpp_connected,s.subscription_status,s.city,s.address,s.created_at
        ORDER BY revenue_month DESC`,
       [req.shopId]
