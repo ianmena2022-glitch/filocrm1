@@ -133,15 +133,15 @@ footer{text-align:center;padding:24px;font-size:12px;color:var(--g);border-top:1
     </div>
     <div class="hiw-step">
       <div class="hiw-num">2</div>
-      <div class="hiw-text"><strong>Acumulás puntos</strong> automáticamente. Cada $1.000 gastados = 10 puntos FILO.</div>
+      <div class="hiw-text"><strong>Acumulás puntos</strong> automáticamente. <span id="hiw-rate">Cada $1.000 gastados = 10 puntos FILO.</span></div>
     </div>
     <div class="hiw-step">
       <div class="hiw-num">3</div>
-      <div class="hiw-text"><strong>Cuando tengas suficientes</strong>, avisale a tu barbero y elegí tu premio. Él lo aplica al momento.</div>
+      <div class="hiw-text"><strong>Reservá tu próximo turno online</strong> e ingresá tu número de WhatsApp. Si tenés puntos suficientes, te aparece un cuadro con tus premios para que elijas uno.</div>
     </div>
     <div class="hiw-step">
       <div class="hiw-num">4</div>
-      <div class="hiw-text"><strong>¡Disfrutá tu premio!</strong> Los puntos se descuentan automáticamente del saldo.</div>
+      <div class="hiw-text"><strong>¡Disfrutá tu premio!</strong> Al confirmar la reserva se descuentan los puntos de tu saldo y el premio queda anotado en tu turno para recibirlo en la barbería.</div>
     </div>
   </div>
 
@@ -168,6 +168,12 @@ async function init() {
 
     shopData = data.shop;
     storeItems = data.items;
+
+    // Cuántos puntos se ganan por cada $1.000 según la configuración real del local
+    const ppp = parseFloat(shopData.points_per_peso);
+    const per1000 = Math.round((Number.isFinite(ppp) && ppp > 0 ? ppp : 0.01) * 1000 * 100) / 100;
+    const rateEl = document.getElementById('hiw-rate');
+    if (rateEl) rateEl.textContent = `Cada $1.000 gastados = ${per1000.toLocaleString('es-AR')} puntos FILO.`;
 
     document.getElementById('shop-name-label').textContent = shopData.name;
     document.getElementById('store-name').textContent = shopData.store_name || 'Tienda de Puntos';
