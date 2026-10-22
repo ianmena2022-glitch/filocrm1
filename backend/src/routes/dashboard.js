@@ -303,6 +303,24 @@ router.get('/expenses', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// PUT /api/dashboard/expenses/:id — asignar o cambiar con qué cuenta (método) se pagó un gasto.
+// Solo egresos cargados a mano o compras de insumos; los automáticos (liquidaciones, fiado, señas) no se tocan.
+router.put('/expenses/:id', auth, async (req, res) => {
+  const pm = req.body && req.body.payment_method != null ? String(req.body.payment_method).trim() : '';
+  if (!pm || pm.length > 40) return res.status(400).json({ error: 'Elegí una cuenta válida' });
+  try {
+    const r = await pool.query(
+      `UPDATE expenses SET payment_method=$1
+        WHERE id=$2 AND shop_id=$3 AND (is_income IS NULL OR is_income=FALSE)
+          AND (source_type IS NULL OR source_type IN ('manual','stock_compra'))
+        RETURNING id, payment_method`,
+      [pm, req.params.id, req.shopId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Este gasto no se puede modificar' });
+    res.json({ ok: true, expense: r.rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // DELETE /api/dashboard/expenses/:id — eliminar gasto
 router.delete('/expenses/:id', auth, async (req, res) => {
   try {

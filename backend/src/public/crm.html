@@ -12513,6 +12513,7 @@ function renderCashSummary(c) {
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
             ${e.description ? `<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>` : ''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
+            ${expenseAccountHtml(e)}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:14px;font-weight:700;color:#FF4343">-${fmt(e.amount)}</span>
@@ -12760,10 +12761,12 @@ function openExpenseModal() {
   document.getElementById('gasto-category').value = 'insumos';
   const gm = document.getElementById('gasto-method');
   if (gm) {
-    gm.innerHTML = '<option value="">No descontar de ninguna cuenta</option>' +
-      (window._paymentMethods || []).filter(m => !m.is_debt)
-        .map(m => `<option value="${m.key}">${m.icon || ''} ${m.label}</option>`).join('');
-    gm.value = '';
+    const _ms = (window._paymentMethods || []).filter(m => !m.is_debt);
+    gm.innerHTML = _ms.map(m => `<option value="${escHtml(m.key)}">${escHtml(m.icon || '')} ${escHtml(m.label)}</option>`).join('') +
+      '<option value="">Sin cuenta (no resta de ningún método)</option>';
+    // Por defecto el gasto sale de Efectivo: es el caso normal y evita olvidarse de elegir
+    const _cash = _ms.find(m => m.key === 'cash') || _ms[0];
+    gm.value = _cash ? _cash.key : '';
   }
   openModal('modal-gasto');
 }
@@ -12784,6 +12787,32 @@ async function saveExpense() {
     showToast('✅','Gasto registrado','');
     loadCashSummary();
   } catch(e) { showToast('❌','Error',e.message); }
+}
+
+// Cuenta con la que se pagó un gasto: se muestra siempre, y si falta se puede asignar
+function expenseAccountHtml(e, readOnly) {
+  const methods = (window._paymentMethods || []).filter(m => !m.is_debt);
+  const m = methods.find(x => x.key === e.payment_method);
+  if (e.payment_method) {
+    return `<div style="font-size:11px;color:var(--gray);margin-top:2px">Pagado con: ${escHtml(m ? ((m.icon || '') + ' ' + m.label) : e.payment_method)}</div>`;
+  }
+  // Los movimientos automáticos sin método (ej. liquidaciones viejas) no se editan
+  const editable = !readOnly && (!e.source_type || e.source_type === 'manual' || e.source_type === 'stock_compra');
+  if (!editable) return `<div style="font-size:11px;color:#FF9800;margin-top:2px">⚠️ Sin cuenta asignada</div>`;
+  return `<div style="margin-top:4px"><span style="font-size:11px;color:#FF9800">⚠️ No resta de ninguna cuenta</span>
+    <select onchange="setExpenseMethod(${e.id}, this.value)" style="margin-left:6px;font-size:11px;background:#050d18;color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:3px 6px">
+      <option value="">Asignar cuenta…</option>
+      ${methods.map(x => `<option value="${escHtml(x.key)}">${escHtml(x.icon || '')} ${escHtml(x.label)}</option>`).join('')}
+    </select></div>`;
+}
+
+async function setExpenseMethod(id, method) {
+  if (!method) return;
+  try {
+    await api('PUT', `/dashboard/expenses/${id}`, { payment_method: method });
+    showToast('✅', 'Cuenta asignada', 'El gasto ya se descuenta de esa cuenta');
+    loadCashSummary();
+  } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
 async function deleteExpense(id) {
@@ -13336,6 +13365,7 @@ function renderBranchCajaSummary(c) {
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
             ${e.description ? `<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>` : ''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
+            ${expenseAccountHtml(e, true)}
           </div>
           <span style="font-size:14px;font-weight:700;color:#FF4343">-${fmt(e.amount)}</span>
         </div>`).join('');
