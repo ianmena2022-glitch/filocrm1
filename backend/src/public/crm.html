@@ -8062,7 +8062,8 @@ async function sendFlashOffer() {
   try {
     const res = await api('POST', '/yield/send-flash-offer', { slot: sillonSelectedSlot, client_ids: ids, incentivo });
     closeModal('modal-sillon');
-    showToast('💬', `WhatsApp enviado a ${res.sent} clientes`, 'Motor Sillón Libre activado');
+    showToast('💬', res.queued != null ? `Enviando WhatsApp a ${res.queued} clientes de a poco` : `WhatsApp enviado a ${res.sent} clientes`,
+      res.skipped ? `Máximo 30 por tanda (${res.skipped} quedaron afuera). Los mensajes salen espaciados para cuidar tu número.` : 'Los mensajes salen espaciados para cuidar tu número de WhatsApp.');
   } catch (e) {
     showToast('❌', 'Error', e.message);
     btn.disabled = false; btn.textContent = `💬 Enviar WhatsApp`;

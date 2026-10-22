@@ -7,6 +7,120 @@ async function getBaileys() {
 
 const { Boom } = require('@hapi/boom');
 const pool = require('../db/pool');
+
+// ─── Reglas anti-baneo de envío ──────────────────────────────────────────────
+// WhatsApp banea números que se comportan como bot: mensajes a desconocidos, ritmo
+// constante, ráfagas, volumen alto de golpe y destinatarios que reportan o bloquean.
+// TODO envío (respuestas del bot, avisos, promociones) pasa por _deliver() y estas reglas.
+//
+// Tipos de envío (kind):
+//   reply     → respuesta a un mensaje que el cliente nos escribió
+//   notify    → aviso transaccional que el cliente espera (turno, seña, fila)
+//   marketing → promociones / rescates
+//   cold      → primer contacto a un número que no es cliente (prospección)
+const wppGuard = (() => {
+  const KINDS = ['reply', 'notify', 'marketing', 'cold'];
+  const envInt = (name, def) => { const n = parseInt(process.env[name]); return Number.isFinite(n) && n >= 0 ? n : def; };
+  const config = () => ({
+    dailyCap:        envInt('WPP_DAILY_CAP', 300),         // todos los envíos del día por número
+    firstContactCap: envInt('WPP_FIRST_CONTACT_CAP', 40),  // a números sin conversación previa
+    marketingCap:    envInt('WPP_MARKETING_CAP', 60),
+    coldCap:         envInt('WPP_COLD_CAP', 20),
+    recipientHourly: envInt('WPP_RECIPIENT_HOURLY', 6),    // a un mismo destinatario por hora
+    marketingCooldownDays: envInt('WPP_MARKETING_COOLDOWN_DAYS', 7),
+    // pausa (ms) entre un envío y el siguiente, con jitter aleatorio dentro del rango
+    gaps: {
+      chat: [envInt('WPP_GAP_CHAT_MIN_MS', 2500),  envInt('WPP_GAP_CHAT_MAX_MS', 6000)],
+      bulk: [envInt('WPP_GAP_BULK_MIN_MS', 20000), envInt('WPP_GAP_BULK_MAX_MS', 45000)],
+    },
+  });
+  // El "día" de los topes se reinicia a medianoche, hora Argentina
+  const dayKey = (now = Date.now()) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(now));
+
+  const counters  = Object.create(null);   // `${shop}:${day}:${bucket}` → n
+  const recipient = new Map();             // `${shop}:${phone}` → [timestamps]
+  const nextFree  = Object.create(null);   // `${shop}:${lane}` → ms epoch
+  const lastDigits = (phone) => String(phone || '').replace(/\D/g, '').slice(-10);
+  const guardError = (code, message) => { const e = new Error(message); e.code = code; return e; };
+
+  // Lanza si el envío no corresponde. No modifica contadores (eso lo hace record()).
+  function check(shopId, phone, kind, { firstContact = false, now = Date.now() } = {}) {
+    if (!KINDS.includes(kind)) kind = 'notify';
+    const c = config();
+    const day = dayKey(now);
+    const get = (b) => counters[`${shopId}:${day}:${b}`] || 0;
+    if (get('total') >= c.dailyCap)
+      throw guardError('DAILY_CAP', `WhatsApp: límite diario de ${c.dailyCap} mensajes alcanzado (se reinicia a medianoche)`);
+    if (kind === 'marketing' && get('marketing') >= c.marketingCap)
+      throw guardError('MARKETING_CAP', `WhatsApp: límite diario de ${c.marketingCap} mensajes promocionales alcanzado`);
+    if (kind === 'cold' && get('cold') >= c.coldCap)
+      throw guardError('COLD_CAP', `WhatsApp: límite diario de ${c.coldCap} primeros contactos alcanzado`);
+    if (kind !== 'reply' && firstContact && get('first') >= c.firstContactCap)
+      throw guardError('FIRST_CONTACT_CAP', `WhatsApp: límite diario de ${c.firstContactCap} mensajes a contactos nuevos alcanzado`);
+    const list = (recipient.get(`${shopId}:${lastDigits(phone)}`) || []).filter(t => now - t < 3600000);
+    if (list.length >= c.recipientHourly)
+      throw guardError('RECIPIENT_RATE', 'WhatsApp: demasiados mensajes a este mismo número en la última hora');
+  }
+
+  function record(shopId, phone, kind, { firstContact = false, now = Date.now() } = {}) {
+    if (!KINDS.includes(kind)) kind = 'notify';
+    const day = dayKey(now);
+    const inc = (b) => { const k = `${shopId}:${day}:${b}`; counters[k] = (counters[k] || 0) + 1; };
+    inc('total');
+    if (kind === 'marketing') inc('marketing');
+    if (kind === 'cold') inc('cold');
+    if (kind !== 'reply' && firstContact) inc('first');
+    const key = `${shopId}:${lastDigits(phone)}`;
+    const list = (recipient.get(key) || []).filter(t => now - t < 3600000);
+    list.push(now);
+    recipient.set(key, list);
+    // Limpieza ocasional de días viejos y destinatarios inactivos
+    if (Math.random() < 0.02) {
+      for (const k of Object.keys(counters)) if (!k.includes(`:${day}:`)) delete counters[k];
+      for (const [k, v] of recipient) if (!v.length || now - v[v.length - 1] > 3600000) recipient.delete(k);
+    }
+  }
+
+  const countToday = (shopId, bucket = 'total', now = Date.now()) => counters[`${shopId}:${dayKey(now)}:${bucket}`] || 0;
+
+  // Reserva el próximo "turno" de envío del número y devuelve cuántos ms hay que esperar.
+  // Chat y promociones van por carriles separados: una tanda de promociones no demora la
+  // respuesta a un cliente que acaba de escribir.
+  function reserve(shopId, kind, { now = Date.now(), rand = Math.random } = {}) {
+    const c = config();
+    const lane = (kind === 'marketing' || kind === 'cold') ? 'bulk' : 'chat';
+    const [min, max] = c.gaps[lane];
+    const key = `${shopId}:${lane}`;
+    const start = Math.max(now, nextFree[key] || 0);
+    nextFree[key] = start + min + Math.floor(rand() * Math.max(0, max - min));
+    return start - now;
+  }
+
+  // Pedidos de baja: solo frases inequívocas ("cancelar" suelto puede ser un turno)
+  const normalizeText = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  const OPT_OUT_WHOLE = /^(stop|baja|basta|parar|unsubscribe|desuscribir(me)?|darme de baja|dame de baja|dar de baja)[\s.!]*$/;
+  const OPT_OUT_PHRASES = [
+    /\bno (quiero|deseo|necesito) (recibir|mas mensajes|que me (escriban|manden|envien|molesten|contacten))/,
+    /\b(dejen|deja|dejame|dejenme) de (escribir|escribirme|mandar|mandarme|enviar|enviarme|molestar|molestarme)/,
+    /\bno me (escriban|escribas|manden|mandes|envien|envies|molesten|molestes|contacten|contactes)\b/,
+    /\bsacame de (la|esta|su) (lista|base)/,
+    /\bbaja de (los )?mensajes/,
+    /\bno (quiero|deseo) (ser )?(contactado|contactada)/,
+  ];
+  function isOptOutIntent(text) {
+    const t = normalizeText(text);
+    if (!t || t.length > 200) return false;
+    return OPT_OUT_WHOLE.test(t) || OPT_OUT_PHRASES.some(r => r.test(t));
+  }
+
+  function __reset() {
+    for (const k of Object.keys(counters)) delete counters[k];
+    for (const k of Object.keys(nextFree)) delete nextFree[k];
+    recipient.clear();
+  }
+  return { KINDS, config, check, record, reserve, countToday, isOptOutIntent, lastDigits, dayKey, __reset };
+})();
 const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
@@ -544,19 +658,19 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
           new Promise((_, rej) => setTimeout(() => rej(new Error('pdf_parse_timeout_8s')), 8000))
         ]);
         if (!pdfData.text?.trim()) {
-          await sock.sendMessage(remoteJid, { text: 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.' });
+          await _say(shopId, sock, remoteJid, phone, 'El PDF no tiene texto legible. Por favor mandá una foto del comprobante.');
           return true;
         }
         result = await verifyComprobanteFromText(pdfData.text, pending);
       } catch (pdfErr) {
         console.error('[WPP] pdf-parse error:', pdfErr.message);
-        await sock.sendMessage(remoteJid, { text: 'No pudimos leer el PDF. Por favor mandá una foto del comprobante.' });
+        await _say(shopId, sock, remoteJid, phone, 'No pudimos leer el PDF. Por favor mandá una foto del comprobante.');
         return true;
       }
     }
 
     if (!result) {
-      await sock.sendMessage(remoteJid, { text: 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.' });
+      await _say(shopId, sock, remoteJid, phone, 'No pudimos verificar el comprobante. Intentá de nuevo o contactá al barbero.');
       return true;
     }
 
@@ -616,13 +730,13 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
             console.error('[SENA] Error registrando en caja:', cajaErr.message);
           }
         }
-        await sock.sendMessage(remoteJid, { text: '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.' });
+        await _say(shopId, sock, remoteJid, phone, '✅ Comprobante verificado. Tu seña fue confirmada y el turno está reservado.');
       } else {
         const reasons = [];
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
         if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
-        await sock.sendMessage(remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+        await _say(shopId, sock, remoteJid, phone, `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.`);
       }
     } else if (pending.type === 'membership') {
       await pool.query(
@@ -631,7 +745,7 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
       );
       if (verified) {
         await pool.query(`UPDATE memberships SET payment_status='paid', last_payment_at=NOW() WHERE id=$1`, [pending.id]);
-        await sock.sendMessage(remoteJid, { text: '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!' });
+        await _say(shopId, sock, remoteJid, phone, '✅ Pago de membresía verificado. ¡Ya tenés tus créditos activos!');
         try {
           const sse = require('./sse');
           sse.emit(pending.shop_id, 'membership.verified', { id: pending.id, client_name: pending.client_name || null });
@@ -651,7 +765,7 @@ async function handleComprobanteMedia(shopId, phone, remoteJid, sock, mediaType,
         if (!amountOk) reasons.push(`monto incorrecto (esperado $${pending.amount})`);
         if (!dateOk) reasons.push('la fecha no corresponde a hoy o ayer');
         if (!cbuOk) reasons.push('el CBU/CVU del destinatario no coincide');
-        await sock.sendMessage(remoteJid, { text: `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.` });
+        await _say(shopId, sock, remoteJid, phone, `❌ No pudimos verificar el comprobante: ${reasons.join(', ')}. Por favor verificá y volvé a intentarlo.`);
       }
     }
 
@@ -974,6 +1088,16 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         console.log(`[WPP] Texto extraído de ${phone}: "${text}"`);
 
+        _markKnown(shopId, phone); // nos escribió: es un contacto con conversación
+
+        // Pedido de baja: se registra y se confirma una sola vez. No pasa por la IA.
+        if (wppGuard.isOptOutIntent(text)) {
+          await addOptOut(shopId, phone);
+          await _say(shopId, sock, msg.key.remoteJid, phone,
+            'Listo, no te vamos a enviar más mensajes por este medio. Si necesitás algo, escribinos cuando quieras. 🙌');
+          continue;
+        }
+
         const { getAIResponse } = require('./ai');
         const reply = await getAIResponse(shopId, phone, text);
 
@@ -987,7 +1111,12 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
             if (cleanPn.includes('@')) sendJid = cleanPn;
             else sendJid = cleanPn + '@s.whatsapp.net';
           }
-          await sock.sendMessage(sendJid, { text: reply });
+          // Respuesta "humana": leído → escribiendo → mensaje, con pacing y topes (no instantánea)
+          try {
+            await _deliver(shopId, sock, sendJid, phone, reply, 'reply', { readKey: msg.key });
+          } catch (e) {
+            console.warn(`[WPP] respuesta del bot omitida (${e.code || 'error'}): ${e.message}`);
+          }
         } else {
           console.log(`[WPP] AI no respondió (ignorado por clasificador o sin contexto)`);
         }
@@ -1070,8 +1199,139 @@ async function resolveWppShopId(shopId) {
   return shopId;
 }
 
-// Enviar mensaje de texto
-async function sendText(shopId, phone, message) {
+// ─── Bajas (opt-out) ─────────────────────────────────────────────────────────
+// Un cliente que pide que no le escriban más NO recibe más mensajes proactivos.
+// Es la principal defensa contra reportes ("spam") que terminan en baneo.
+const _optOutSets = Object.create(null);   // shopId → Set(últimos 10 dígitos)
+const _optOutLoaded = Object.create(null);
+let _optOutTableReady = false;
+async function _ensureOptOutTable() {
+  if (_optOutTableReady) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS wpp_optouts (
+      shop_id INT NOT NULL, phone VARCHAR(30) NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (shop_id, phone))`);
+    _optOutTableReady = true;
+  } catch (e) { console.warn('[WPP] no se pudo preparar wpp_optouts:', e.message); }
+}
+async function _loadOptOuts(shopId) {
+  if (_optOutLoaded[shopId]) return _optOutSets[shopId];
+  _optOutSets[shopId] = _optOutSets[shopId] || new Set();
+  await _ensureOptOutTable();
+  try {
+    const r = await pool.query('SELECT phone FROM wpp_optouts WHERE shop_id=$1', [shopId]);
+    for (const row of r.rows) _optOutSets[shopId].add(wppGuard.lastDigits(row.phone));
+    _optOutLoaded[shopId] = true;
+  } catch (e) { console.warn('[WPP] no se pudieron leer bajas:', e.message); }
+  return _optOutSets[shopId];
+}
+async function isOptedOut(shopId, phone) {
+  const set = await _loadOptOuts(shopId);
+  return set.has(wppGuard.lastDigits(phone));
+}
+async function addOptOut(shopId, phone) {
+  const set = await _loadOptOuts(shopId);
+  const key = wppGuard.lastDigits(phone);
+  set.add(key);
+  try {
+    await pool.query('INSERT INTO wpp_optouts (shop_id, phone) VALUES ($1,$2) ON CONFLICT DO NOTHING', [shopId, key]);
+  } catch (e) { console.warn('[WPP] no se pudo guardar la baja:', e.message); }
+  console.log(`[WPP] baja registrada: shop ${shopId} · ${key}`);
+}
+
+// ─── Contactos conocidos / número registrado en WhatsApp ─────────────────────
+const _knownInbound = new Set();           // `${shopId}:${últimos10}` — nos escribieron
+function _markKnown(shopId, phone) { _knownInbound.add(`${shopId}:${wppGuard.lastDigits(phone)}`); }
+async function _isKnownContact(shopId, phone) {
+  const key = `${shopId}:${wppGuard.lastDigits(phone)}`;
+  if (_knownInbound.has(key)) return true;
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM clients WHERE shop_id=$1 AND phone LIKE $2
+         AND (last_visit IS NOT NULL OR COALESCE(total_visits,0) > 0) LIMIT 1`,
+      [shopId, '%' + wppGuard.lastDigits(phone).slice(-8)]
+    );
+    if (r.rows.length) { _knownInbound.add(key); return true; }
+  } catch (_) { /* sin dato: se trata como contacto nuevo (más estricto) */ }
+  return false;
+}
+
+const _waExists = new Map();               // jid → { exists, at }
+async function _ensureOnWhatsApp(sock, jid) {
+  const hit = _waExists.get(jid);
+  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) {
+    if (hit.exists === false) { const e = new Error('El número no tiene WhatsApp'); e.code = 'NOT_ON_WHATSAPP'; throw e; }
+    return;
+  }
+  let exists;
+  try {
+    const r = await Promise.race([
+      sock.onWhatsApp(jid),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('onWhatsApp_timeout')), 6000))
+    ]);
+    exists = Array.isArray(r) && r.length ? r[0]?.exists : undefined;
+  } catch (_) { return; }                  // si no se puede verificar, no bloquear
+  if (exists === undefined) return;
+  _waExists.set(jid, { exists: !!exists, at: Date.now() });
+  if (_waExists.size > 5000) _waExists.clear();
+  if (!exists) { const e = new Error('El número no tiene WhatsApp'); e.code = 'NOT_ON_WHATSAPP'; throw e; }
+}
+
+const MARKETING_LOG_TYPES = ['sillon_libre', 'churn_rescue', 'rescate', 'rescate_auto', 'birthday', 'cumpleanos', 'promo'];
+async function _marketingCooldownHit(shopId, phone) {
+  const days = wppGuard.config().marketingCooldownDays;
+  if (!days) return false;
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM whatsapp_logs WHERE shop_id=$1 AND phone LIKE $2 AND type = ANY($3)
+         AND sent_at > NOW() - ($4 || ' days')::interval LIMIT 1`,
+      [shopId, '%' + wppGuard.lastDigits(phone).slice(-8), MARKETING_LOG_TYPES, String(days)]
+    );
+    return r.rows.length > 0;
+  } catch (_) { return false; }
+}
+
+// Envío "humano": respeta límites, espacia los mensajes con jitter, marca como leído
+// (si es respuesta), simula escritura y recién ahí manda. TODO envío pasa por acá.
+async function _deliver(wppShopId, sock, jid, phone, text, kind, opts = {}) {
+  const firstContact = !!opts.firstContact;
+  wppGuard.check(wppShopId, phone, kind, { firstContact });
+  const wait = wppGuard.reserve(wppShopId, kind);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  if (opts.readKey) { try { await sock.readMessages([opts.readKey]); } catch (_) {} }
+  await simulateTyping(sock, jid, (text || '').length);
+
+  // Timeout corto: si el socket es zombie, no colgamos el request HTTP del CRM 30s.
+  // Marcamos el socket como caído y disparamos reconexión en background.
+  const result = await Promise.race([
+    sock.sendMessage(jid, { text }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('sendText_timeout_8s')), 12000))
+  ]).catch(err => {
+    if (err.message === 'sendText_timeout_8s') {
+      console.warn(`[WPP] sendText timeout en shop ${wppShopId} — marcando zombie`);
+      statuses[wppShopId] = 'disconnected';
+      try { sock.end?.(new Error('sendText timeout')); } catch(_){}
+      delete sockets[wppShopId];
+      scheduleReconnect(wppShopId, 1000);
+    }
+    throw err;
+  });
+  wppGuard.record(wppShopId, phone, kind, { firstContact });
+  return result;
+}
+
+// Responder dentro de una conversación (comprobantes, avisos al cliente que escribió)
+async function _say(shopId, sock, jid, phone, text) {
+  try {
+    return await _deliver(shopId, sock, jid, phone, text, 'reply');
+  } catch (e) {
+    console.warn(`[WPP] respuesta omitida (${e.code || 'error'}): ${e.message}`);
+  }
+}
+
+// Enviar mensaje de texto.  opts.kind: 'notify' (default) | 'marketing' | 'cold'
+async function sendText(shopId, phone, message, opts = {}) {
+  const kind = ['notify', 'marketing', 'cold', 'reply'].includes(opts.kind) ? opts.kind : 'notify';
   // Auto-resolver enterprise owner si la sucursal no tiene socket activo
   const wppShopId = await resolveWppShopId(shopId);
   let sock = sockets[wppShopId];
@@ -1098,32 +1358,21 @@ async function sendText(shopId, phone, message) {
   const phoneClean = normalizePhoneAR(phone);
   const jid = `${phoneClean}@s.whatsapp.net`;
 
-  console.log(`Baileys sendText → ${jid} (shop ${wppShopId})`);
+  // Quien pidió la baja no recibe nada proactivo
+  if (kind !== 'reply' && await isOptedOut(wppShopId, phoneClean)) {
+    const e = new Error('El cliente pidió no recibir más mensajes'); e.code = 'OPTED_OUT'; throw e;
+  }
+  const firstContact = kind === 'reply' ? false : !(await _isKnownContact(wppShopId, phoneClean));
+  if (kind === 'marketing' && await _marketingCooldownHit(wppShopId, phoneClean)) {
+    const e = new Error('Ya se le envió una promoción hace poco'); e.code = 'MARKETING_COOLDOWN'; throw e;
+  }
+  // A un número que nunca nos escribió: antes de mandar, verificar que tenga WhatsApp
+  if (firstContact) await _ensureOnWhatsApp(sock, jid);
+
+  console.log(`Baileys sendText → ${jid} (shop ${wppShopId}, ${kind}${firstContact ? ', contacto nuevo' : ''})`);
   _touch(wppShopId);
 
-  // Cap diario anti-abuso
-  _checkDailyCap(wppShopId);
-
-  await throttleSend(wppShopId);
-  // Simular escritura humana (presence 'composing' + delay según largo del msg)
-  await simulateTyping(sock, jid, (message || '').length);
-
-  // Timeout corto: si el socket es zombie, no colgamos el request HTTP del CRM 30s.
-  // Marcamos el socket como caído y disparamos reconexión en background.
-  const result = await Promise.race([
-    sock.sendMessage(jid, { text: message }),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('sendText_timeout_8s')), 12000))
-  ]).catch(err => {
-    if (err.message === 'sendText_timeout_8s') {
-      console.warn(`[WPP] sendText timeout en shop ${wppShopId} — marcando zombie`);
-      statuses[wppShopId] = 'disconnected';
-      try { sock.end?.(new Error('sendText timeout')); } catch(_){}
-      delete sockets[wppShopId];
-      scheduleReconnect(wppShopId, 1000);
-    }
-    throw err;
-  });
-  _incrementDailyCount(wppShopId);
+  const result = await _deliver(wppShopId, sock, jid, phoneClean, message, kind, { firstContact });
   console.log(`Baileys sendText OK → ${result?.key?.id}`);
   return result;
 }
@@ -1253,16 +1502,16 @@ function wppStats() {
     shopId: parseInt(id),
     status: statuses[id] || 'unknown',
     last_activity_min: _lastActivity[id] ? Math.round((now - _lastActivity[id]) / 60000) : null,
-    sent_today: _dailySendCount[`${id}:${today}`] || 0
+    sent_today: wppGuard.countToday(id)
   })).sort((a,b) => (a.last_activity_min||0) - (b.last_activity_min||0));
   return {
     active_sessions: active.length,
     max_sessions: WPP_MAX_SESSIONS,
     idle_ttl_min: Math.round(WPP_IDLE_TTL_MS/60000),
-    min_gap_ms: parseInt(process.env.WPP_MIN_GAP_MS) || 1200,
-    daily_cap: DAILY_CAP,
+    min_gap_ms: wppGuard.config().gaps.chat[0],
+    daily_cap: wppGuard.config().dailyCap,
     sessions: active
   };
 }
 
-module.exports = { startSession, getStatus, sendText, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard }, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };

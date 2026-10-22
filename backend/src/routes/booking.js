@@ -822,6 +822,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         console.log(`[booking] sin client_phone — no se envía WPP seña`);
       }
     } else {
+      // Notificaciones por WhatsApp en segundo plano: con el ritmo anti-baneo cada envío
+      // espera su turno, y el cliente que reserva no tiene que esperarlo.
+      (async () => {
       // Notificar al barbero
       if (shopData.phone) {
         const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
@@ -844,6 +847,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
           console.error('Error notificando al cliente:', e.message);
         }
       }
+      })().catch(() => {});
     }
 
     const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });

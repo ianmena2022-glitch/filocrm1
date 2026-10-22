@@ -82,11 +82,17 @@ router.post('/send-flash-offer', auth, async (req, res) => {
       [client_ids, req.shopId]
     );
 
-    let sent = 0;
     const { generateMessage } = require('../services/ai');
 
-    for (const c of clients.rows) {
-      if (!c.phone) continue;
+    // Tope por tanda y envío en segundo plano: las promociones salen de a una, con pausas
+    // largas entre mensajes (ver services/wppGuard.js). Responder de inmediato evita que el
+    // pedido HTTP quede abierto minutos.
+    const MAX_BATCH = 30;
+    const targets = clients.rows.filter(c => c.phone).slice(0, MAX_BATCH);
+    res.json({ ok: true, sent: 0, queued: targets.length, skipped: Math.max(0, clients.rows.filter(c => c.phone).length - targets.length) });
+
+    let sent = 0;
+    for (const c of targets) {
       let msg = await generateMessage(req.shopId, 'sillon_libre', {
         clientName: c.name,
         slot,
@@ -106,23 +112,22 @@ router.post('/send-flash-offer', auth, async (req, res) => {
       }
 
       try {
-        await wpp.sendText(req.shopId, c.phone, msg);
+        await wpp.sendText(req.shopId, c.phone, msg, { kind: 'marketing' });
         await pool.query(
           `INSERT INTO whatsapp_logs (shop_id, client_id, phone, message, type)
            VALUES ($1,$2,$3,$4,'sillon_libre')`,
           [req.shopId, c.id, c.phone, msg]
         );
         sent++;
-        await new Promise(r => setTimeout(r, 800));
       } catch (sendErr) {
-        console.error(`Error enviando a ${c.name}:`, sendErr.message);
+        console.warn(`[flash-offer] no se envió a ${c.name} (${sendErr.code || 'error'}): ${sendErr.message}`);
+        if (sendErr.code === 'DAILY_CAP' || sendErr.code === 'MARKETING_CAP') break; // no insistir
       }
     }
-
-    res.json({ ok: true, sent });
+    console.log(`[flash-offer] shop ${req.shopId}: ${sent}/${targets.length} enviados`);
   } catch (e) {
     console.error('send-flash-offer error:', e.message);
-    res.status(500).json({ error: e.message });
+    if (!res.headersSent) res.status(500).json({ error: e.message });
   }
 });
 
@@ -191,7 +196,7 @@ router.post('/churn/rescue/:clientId', auth, async (req, res) => {
       msg = wpp.renderTemplate(tplBase, { nombre: client.name, barberia: shopData.name });
     }
 
-    await wpp.sendText(req.shopId, client.phone, msg);
+    await wpp.sendText(req.shopId, client.phone, msg, { kind: 'marketing' });
 
     await pool.query(
       `INSERT INTO whatsapp_logs (shop_id, client_id, phone, message, type)

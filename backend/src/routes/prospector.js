@@ -53,7 +53,7 @@ router.post('/send', auth, async (req, res) => {
     const cleanPhone = String(phone).replace(/\D/g, '');
     if (!cleanPhone) return res.status(400).json({ error: 'phone inválido' });
 
-    await wpp.sendText(req.shopId, cleanPhone, message);
+    await wpp.sendText(req.shopId, cleanPhone, message, { kind: 'cold' });
 
     // Guardar prospecto en DB (upsert — si ya existía, actualizar mensaje y fecha)
     await pool.query(
