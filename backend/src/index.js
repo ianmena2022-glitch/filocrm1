@@ -120,7 +120,6 @@ app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/vendor',        require('./routes/vendor'));
 app.use('/api/queue',         require('./routes/queue'));
 app.use('/api/media',         require('./routes/media'));
-app.use('/api/prospector',    require('./routes/prospector'));
 app.use('/api/referrals',     require('./routes/referrals'));
 app.use('/api/affiliates',    require('./routes/affiliates'));
 app.use('/api/copilot',       require('./routes/copilot'));
