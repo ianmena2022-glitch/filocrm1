@@ -231,3 +231,28 @@ test('anti-baneo — detecta pedidos de baja sin confundir con turnos', () => {
                    'no puedo ir mañana', 'dame de baja el turno de las 5 y pasalo a las 6', '', 'basta de espera jaja vengo ya'])
     assert.equal(guard.isOptOutIntent(t), false, t);
 });
+
+test('anti-baneo — freno automático tras 5 envíos fallidos seguidos y se recupera solo', () => {
+  guard.__reset();
+  const now = 1_000_000;
+  for (let i = 0; i < 4; i++) guard.failed(3, now);
+  guard.check(3, '5491155550000', 'notify', { now });  // 4 fallas: todavía manda
+  guard.failed(3, now);
+  assert.throws(() => guard.check(3, '5491155550000', 'notify', { now: now + 1000 }), e => e.code === 'CIRCUIT_OPEN');
+  assert.throws(() => guard.check(3, '5491155550000', 'reply', { now: now + 1000 }), e => e.code === 'CIRCUIT_OPEN');
+  guard.check(3, '5491155550000', 'notify', { now: now + 31 * 60000 });  // pasó la pausa
+  guard.failed(4, now); guard.failed(4, now); guard.succeeded(4); guard.failed(4, now); guard.failed(4, now); guard.failed(4, now);
+  guard.check(4, '5491155550000', 'notify', { now });  // un éxito en el medio reinicia la cuenta
+});
+
+test('mensajes automáticos — recordatorio y confirmación salen con redacciones distintas', () => {
+  const v = require('../src/services/msgVariants');
+  const seen = new Set(), seen2 = new Set();
+  for (let i = 0; i < 80; i++) {
+    seen.add(v.reminderText({ nombre: 'Ana', hora: '15:00', shop: 'Filo' }));
+    seen2.add(v.bookingText({ nombre: 'Ana', shop: 'Filo', fecha: 'lunes 5', hora: '15:00', servicio: 'Corte' }));
+  }
+  assert.ok(seen.size >= 6 && seen2.size >= 3, `poca variedad: ${seen.size}/${seen2.size}`);
+  for (const m of seen) assert.ok(m.includes('Ana') && m.includes('15:00') && m.includes('Filo'));
+  for (const m of seen2) assert.ok(m.includes('Ana') && m.includes('lunes 5') && m.includes('Corte'));
+});

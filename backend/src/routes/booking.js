@@ -841,7 +841,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             hora: time_start,
             serviceName: svcName || null,
           });
-          if (!msg) msg = `✅ ¡Hola ${client_name}! Tu turno en ${shopData.name} está confirmado para el ${dateFormatted} a las ${time_start}${svcName ? ` (${svcName})` : ''}. ¡Te esperamos! ✂️`;
+          if (!msg) msg = require('../services/msgVariants').bookingText({ nombre: client_name, shop: shopData.name, fecha: dateFormatted, hora: time_start, servicio: svcName || null });
           await wpp.sendText(wppShopId, client_phone, msg);
         } catch (e) {
           console.error('Error notificando al cliente:', e.message);

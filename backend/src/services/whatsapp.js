@@ -38,6 +38,22 @@ const wppGuard = (() => {
   const dayKey = (now = Date.now()) =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(now));
 
+  // Freno automático: tras varios envíos fallidos seguidos se pausa el número un rato
+  // en vez de seguir insistiendo (insistir con la conexión rota es una señal de bot).
+  const BREAKER_FAILS = 5, BREAKER_PAUSE_MS = 30 * 60 * 1000;
+  const breaker = Object.create(null);     // shop → { fails, until }
+  function failed(shopId, now = Date.now()) {
+    const b = breaker[shopId] || (breaker[shopId] = { fails: 0, until: 0 });
+    b.fails++;
+    if (b.fails >= BREAKER_FAILS) {
+      b.fails = 0;
+      b.until = now + BREAKER_PAUSE_MS;
+      console.warn(`[WPP] shop ${shopId}: ${BREAKER_FAILS} envíos fallidos seguidos — envíos en pausa ${BREAKER_PAUSE_MS / 60000} min`);
+    }
+  }
+  const succeeded = (shopId) => { delete breaker[shopId]; };
+  const pausedUntil = (shopId, now = Date.now()) => { const b = breaker[shopId]; return b && b.until > now ? b.until : 0; };
+
   const counters  = Object.create(null);   // `${shop}:${day}:${bucket}` → n
   const recipient = new Map();             // `${shop}:${phone}` → [timestamps]
   const nextFree  = Object.create(null);   // `${shop}:${lane}` → ms epoch
@@ -47,6 +63,9 @@ const wppGuard = (() => {
   // Lanza si el envío no corresponde. No modifica contadores (eso lo hace record()).
   function check(shopId, phone, kind, { firstContact = false, now = Date.now() } = {}) {
     if (!KINDS.includes(kind)) kind = 'notify';
+    const paused = pausedUntil(shopId, now);
+    if (paused)
+      throw guardError('CIRCUIT_OPEN', `WhatsApp en pausa por envíos fallidos; se reintenta en ${Math.ceil((paused - now) / 60000)} min`);
     const c = config();
     const day = dayKey(now);
     const get = (b) => counters[`${shopId}:${day}:${b}`] || 0;
@@ -117,9 +136,11 @@ const wppGuard = (() => {
   function __reset() {
     for (const k of Object.keys(counters)) delete counters[k];
     for (const k of Object.keys(nextFree)) delete nextFree[k];
+    for (const k of Object.keys(breaker)) delete breaker[k];
     recipient.clear();
   }
-  return { KINDS, config, check, record, reserve, countToday, isOptOutIntent, lastDigits, dayKey, __reset };
+  return { KINDS, config, check, record, reserve, countToday, isOptOutIntent, lastDigits, dayKey, __reset,
+           failed, succeeded, pausedUntil };
 })();
 const fs   = require('fs');
 const os   = require('os');
@@ -1178,10 +1199,13 @@ async function getStatus(shopId) {
   const connected = status === 'connected';
   const cooldownUntil = qrCooldownUntil[shopId];
   const inCooldown = cooldownUntil && Date.now() < cooldownUntil;
+  const paused = wppGuard.pausedUntil(shopId);
   return {
     connected,
     status: inCooldown ? 'qr_limit' : (status || 'disconnected'),
-    cooldownMinutes: inCooldown ? Math.ceil((cooldownUntil - Date.now()) / 60000) : null
+    cooldownMinutes: inCooldown ? Math.ceil((cooldownUntil - Date.now()) / 60000) : null,
+    paused: !!paused,
+    pausedMinutes: paused ? Math.ceil((paused - Date.now()) / 60000) : null
   };
 }
 
@@ -1314,8 +1338,10 @@ async function _deliver(wppShopId, sock, jid, phone, text, kind, opts = {}) {
       delete sockets[wppShopId];
       scheduleReconnect(wppShopId, 1000);
     }
+    wppGuard.failed(wppShopId);
     throw err;
   });
+  wppGuard.succeeded(wppShopId);
   wppGuard.record(wppShopId, phone, kind, { firstContact });
   return result;
 }

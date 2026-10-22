@@ -341,7 +341,7 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
           msg = await generateMessage(a.shop_id, 'recordatorio', { clientName: nombre, hora, fecha, shopName: a.shop_name || 'la barbería', serviceName: a.service_name || null });
         } catch (_) {}
       }
-      if (!msg) msg = `¡Hola ${nombre}! 👋\n\nTe recordamos tu turno de hoy a las *${hora}* en ${a.shop_name || 'la barbería'}. ¡Te esperamos! ✂️`;
+      if (!msg) msg = require('./msgVariants').reminderText({ nombre, hora, shop: a.shop_name || 'la barbería' });
       // El aviso sale ~2 h antes: plantillas viejas que dicen "mañana" se corrigen
       msg = msg.replace(/\bmañana\b/gi, 'hoy');
 
@@ -353,7 +353,7 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
         if (e.code === 'OPTED_OUT' || e.code === 'NOT_ON_WHATSAPP') {
           await markDone(a.id).catch(() => {});   // no reintentar nunca
           skipped++;
-        } else if (e.code === 'DAILY_CAP' || e.code === 'FIRST_CONTACT_CAP') {
+        } else if (e.code === 'DAILY_CAP' || e.code === 'FIRST_CONTACT_CAP' || e.code === 'CIRCUIT_OPEN') {
           console.warn(`[REMINDERS] pausa por tope (${e.code}) en shop ${a.shop_id}`);
           skipped++;
         } else {
