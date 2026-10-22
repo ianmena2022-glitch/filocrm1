@@ -14917,6 +14917,8 @@ window._failedPinAttempts = 0;
 // para no mostrar valores en claro durante el bootstrap (fix race).
 function isRevenuePinEnabled() {
   if (!currentShop) return true; // conservador antes del bootstrap
+  // El dueño enterprise es el único que ve su panel: sus montos mensuales no se tapan.
+  if (currentShop.is_enterprise_owner) return false;
   return !!currentShop.revenue_pin_enabled;
 }
 function isRevenueUnlocked() { return !isRevenuePinEnabled() || !!window._revenuePinSessionOk; }
@@ -14962,9 +14964,11 @@ function unmaskAllMonthlyRevenue() {
   const pnlList = document.getElementById('pnl-months-list');
   if (pnlList) pnlList.style.filter = '', pnlList.style.pointerEvents = '';
   // Re-ejecutar los loaders que pintan montos sensibles
-  if (typeof loadDashboard === 'function') loadDashboard();
-  if (typeof loadEnterprise === 'function') try { loadEnterprise(); } catch(_){}
-  if (typeof loadEquipo === 'function')   try { loadEquipo(); }   catch(_){}
+  const _run = (fn) => { try { if (typeof fn === 'function') { const r = fn(); if (r && r.catch) r.catch(() => {}); } } catch(_) {} };
+  _run(window.loadDashboard);
+  _run(window.loadEnterpriseDashboard);
+  _run(window.loadPnLMonthly);
+  _run(window.loadEquipo);
 }
 
 // Modal de unlock — PIN enmascarado + rate limit cliente (bloqueo tras 5 intentos)
@@ -14981,6 +14985,10 @@ async function askRevenuePin() {
     showToast('🔓','Desbloqueado','Las facturaciones mensuales están visibles en esta sesión');
     unmaskAllMonthlyRevenue();
   } catch(e) {
+    // Límite del servidor (429) u otro error que no es un PIN equivocado: mostrar el motivo real
+    if (/Demasiados intentos|Error del servidor|Failed to fetch|NetworkError/i.test(e.message || '')) {
+      return showToast('⛔', 'No se pudo verificar', e.message);
+    }
     window._failedPinAttempts = (window._failedPinAttempts || 0) + 1;
     showToast('❌','PIN incorrecto', `Intentos restantes: ${Math.max(0, 5 - window._failedPinAttempts)}`);
     if (window._failedPinAttempts >= 5) setTimeout(() => { window._failedPinAttempts = 0; }, 5 * 60 * 1000);

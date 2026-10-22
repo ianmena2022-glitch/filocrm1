@@ -494,6 +494,7 @@ router.post('/revenue-pin/verify', auth, ownerOnly, pinRateLimit, async (req, re
   const { pin } = req.body || {};
   const ok = await verifyStoredPin(req.shopId, pin);
   if (!ok) return res.status(401).json({ error: 'PIN incorrecto' });
+  pinAttempts.delete(String(req.shopId)); // un PIN correcto no cuenta contra el límite
   res.json({ ok: true });
 });
 
