@@ -5150,7 +5150,7 @@ function renderPromoCodeInput(activeData) {
   const form = document.getElementById('qr-promo-form');
   if (!toggle) return;
   if (activeData && activeData.promo) {
-    toggle.innerHTML = `✅ Promo aplicada: <strong style="color:#4ade80">${activeData.promo.name}</strong>`;
+    toggle.innerHTML = `✅ Promo aplicada: <strong style="color:#4ade80">${escHtml(activeData.promo.name)}</strong>`;
     toggle.style.color = '#4ade80';
     toggle.style.textDecoration = 'none';
     toggle.style.cursor = 'default';
@@ -6306,7 +6306,7 @@ function sectionLabel(text, color) {
 function apptRowHtml(appt) {
   const time = String(appt.time_start || '').slice(0,5);
   const barberBadge = appt.barber_name
-    ? `<span style="font-size:10px;background:rgba(122,184,255,.1);color:#7ab8ff;border-radius:4px;padding:2px 6px">${appt.barber_name}</span>`
+    ? `<span style="font-size:10px;background:rgba(122,184,255,.1);color:#7ab8ff;border-radius:4px;padding:2px 6px">${escHtml(appt.barber_name)}</span>`
     : '';
   return `
     <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(122,184,255,.05);border:1px solid rgba(122,184,255,.15);border-radius:10px;margin-bottom:6px">
@@ -6324,7 +6324,7 @@ function walkInRowHtml(entry, isCalled, position) {
   const mins = Math.round((Date.now() - new Date(entry.created_at).getTime()) / 60000);
   const waitStr = mins < 1 ? 'Ahora' : `${mins} min`;
   const phoneHtml = entry.client_phone
-    ? `<span style="font-size:11px;color:var(--gray)">${entry.client_phone}</span>`
+    ? `<span style="font-size:11px;color:var(--gray)">${escHtml(entry.client_phone)}</span>`
     : '';
   const barberBadge = entry.barber_id
     ? `<span style="font-size:10px;background:rgba(0,200,117,.08);color:#4ade80;border-radius:4px;padding:2px 6px" id="barber-badge-${entry.id}">${entry.barber_name ? escHtml(entry.barber_name) : 'Asignado'}</span>`
@@ -6867,7 +6867,7 @@ async function loadDashboard() {
       clientsEl.innerHTML = topClients.map((c, i) => `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <div style="width:24px;height:24px;background:rgba(255,209,0,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--yellow)">${i+1}</div>
-          <div style="flex:1;font-size:13px">${c.name}</div>
+          <div style="flex:1;font-size:13px">${escHtml(c.name)}</div>
           <div style="font-size:12px;color:var(--gray)">${c.visits} visitas</div>
           <div style="font-size:13px;font-weight:700;color:var(--yellow)">$${parseFloat(c.spent).toLocaleString('es-AR')}</div>
         </div>`).join('');
@@ -6881,7 +6881,7 @@ async function loadDashboard() {
       if (today.splits?.length) {
         document.getElementById('dash-splits').innerHTML = today.splits.map(s => `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
-            <span>${s.barber_name}</span>
+            <span>${escHtml(s.barber_name)}</span>
             <span style="color:var(--yellow);font-weight:700">$${parseFloat(s.commission).toLocaleString('es-AR')} <span style="color:var(--gray);font-weight:400">(${s.cuts} cortes)</span></span>
           </div>`).join('');
       } else {
@@ -7034,8 +7034,8 @@ function renderDashAppointments(appts) {
       <div class="dar-time">${time}</div>
       <div class="dar-dot" style="background:${dot}"></div>
       <div class="dar-info">
-        <div class="dar-name">${a.client_name || 'Sin nombre'}</div>
-        <div class="dar-service">${a.service_name || 'Sin servicio'}</div>
+        <div class="dar-name">${escHtml(a.client_name || 'Sin nombre')}</div>
+        <div class="dar-service">${escHtml(a.service_name || 'Sin servicio')}</div>
       </div>
       <div class="dar-price${isDone ? ' dar-price-done' : ''}">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
       ${!isDone
@@ -7075,8 +7075,8 @@ function renderApptCard(a) {
       <div class="appt-time-end">${String(a.time_end||'').slice(0,5)}</div>
     </div>
     <div class="appt-info">
-      <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
-      <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
+      <div class="appt-client">${escHtml(a.client_name || 'Sin nombre')}</div>
+      <div class="appt-service">${escHtml(a.service_name || 'Sin servicio')}</div>
       ${(a.assigned_barber_name || a.barber_name) ? `<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,209,0,0.1);border:1px solid rgba(255,209,0,0.25);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--yellow)"><svg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>${a.assigned_barber_name || a.barber_name}</span></div>` : ''}
       ${redeemBadge}
       ${memberBadge}
@@ -7610,22 +7610,22 @@ function renderClients(filtered) {
       <div class="client-avatar">${initials}</div>
       <div class="client-info">
         <div class="client-name">
-          ${c.name}
+          ${escHtml(c.name)}
           ${c.membership_active ? `<span class="member-badge" style="margin-left:8px">👑 ${c.membership_plan === 'premium' ? 'Premium' : 'Básico'}</span>` : ''}
         </div>
         <div class="client-meta">
-          <span>${c.phone || 'Sin teléfono'}</span>
-          ${c.address ? `<span>🏠 ${c.address}</span>` : ''}
+          <span>${escHtml(c.phone || 'Sin teléfono')}</span>
+          ${c.address ? `<span>🏠 ${escHtml(c.address)}</span>` : ''}
           <span>Última visita: ${lastVisit}</span>
           <span>Visitas: ${c.total_visits}</span>
           <span>Total: $${parseFloat(c.total_spent||0).toLocaleString('es-AR')}</span>
           <span style="color:var(--yellow);font-weight:700">⭐ ${c.points || 0} pts</span>
-          ${c.notes ? `<span style="color:var(--gray);font-style:italic">📝 ${c.notes}</span>` : ''}
+          ${c.notes ? `<span style="color:var(--gray);font-style:italic">📝 ${escHtml(c.notes)}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="appt-btn" onclick="editClientById(${c.id})" title="Editar">✏️</button>
-        <button class="appt-btn" onclick="quickRescue(${c.id},'${c.name}')" title="Enviar WhatsApp de rescate">💬</button>
+        <button class="appt-btn" onclick="quickRescue(${c.id},'${escHtml(c.name).replace(/'/g,"\\'")}')" title="Enviar WhatsApp de rescate">💬</button>
         <button class="appt-btn" onclick="deleteClient(${c.id})" title="Eliminar">🗑</button>
       </div>
     </div>`;
@@ -7642,10 +7642,10 @@ function searchClients(query) {
 }
 
 function fillClientSelects() {
-  const opts = '<option value="">-- Sin asignar --</option>' + clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${c.name}${c.points > 0 ? ` (${c.points} pts)` : ''}</option>`).join('');
+  const opts = '<option value="">-- Sin asignar --</option>' + clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${escHtml(c.name)}${c.points > 0 ? ` (${c.points} pts)` : ''}</option>`).join('');
   document.getElementById('t-client').innerHTML = opts;
   document.getElementById('t-client').onchange = onClientSelectChange;
-  const mOpts = '<option value="">-- Elegí un cliente --</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const mOpts = '<option value="">-- Elegí un cliente --</option>' + clients.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
   document.getElementById('m-client').innerHTML = mOpts;
 }
 
@@ -7670,7 +7670,7 @@ function onClientSelectChange() {
   const redeemSel = document.getElementById('t-redeem-item');
   redeemSel.innerHTML = '<option value="">-- Sin canje --</option>' +
     storeItems.filter(i => i.active).map(i =>
-      `<option value="${i.id}" data-cost="${i.points_cost}" data-name="${i.name}">${i.name} (${i.points_cost} pts)</option>`
+      `<option value="${i.id}" data-cost="${i.points_cost}" data-name="${escHtml(i.name)}">${escHtml(i.name)} (${i.points_cost} pts)</option>`
     ).join('');
 
   section.style.display = storeItems.filter(i => i.active).length > 0 ? 'block' : 'none';
@@ -7739,7 +7739,7 @@ async function loadServices() {
 }
 
 function fillServiceSelect() {
-  const opts = '<option value="">-- Elegí un servicio --</option>' + services.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost}">${s.name} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('');
+  const opts = '<option value="">-- Elegí un servicio --</option>' + services.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('');
   document.getElementById('t-service').innerHTML = opts;
 }
 
@@ -7756,7 +7756,7 @@ function renderServicesList() {
   el.innerHTML = services.map(s => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
       <div>
-        <div style="font-size:14px;font-weight:600">${s.name}</div>
+        <div style="font-size:14px;font-weight:600">${escHtml(s.name)}</div>
         <div style="font-size:12px;color:var(--gray)">$${parseFloat(s.price).toLocaleString('es-AR')} · ${s.duration_minutes} min</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -8039,14 +8039,14 @@ async function showChurnList() {
       <div class="client-card">
         <div class="client-avatar">${c.name.charAt(0).toUpperCase()}</div>
         <div class="client-info">
-          <div class="client-name">${c.name} <span class="risk-badge risk-${c.risk_level}" style="margin-left:8px">${c.risk_level === 'critico' ? '🔴 Crítico' : '🟠 En fuga'}</span></div>
+          <div class="client-name">${escHtml(c.name)} <span class="risk-badge risk-${c.risk_level}" style="margin-left:8px">${c.risk_level === 'critico' ? '🔴 Crítico' : '🟠 En fuga'}</span></div>
           <div class="client-meta">
-            <span>${c.phone || 'Sin teléfono'}</span>
-          ${c.address ? `<span>🏠 ${c.address}</span>` : ''}
+            <span>${escHtml(c.phone || 'Sin teléfono')}</span>
+          ${c.address ? `<span>🏠 ${escHtml(c.address)}</span>` : ''}
             <span>Hace ${c.days_since_last} días sin visitar</span>
           </div>
         </div>
-        <button class="btn-motor" style="width:auto;padding:10px 16px" onclick="rescueClient(${c.id},'${c.name}')">💬 Rescatar</button>
+        <button class="btn-motor" style="width:auto;padding:10px 16px" onclick="rescueClient(${c.id},'${escHtml(c.name).replace(/'/g,"\\'")}')">💬 Rescatar</button>
       </div>
     `).join('');
   } catch (e) {
@@ -8144,9 +8144,9 @@ async function loadMemberships() {
       <div class="memb-card">
         <div class="client-avatar">${m.client_name.charAt(0).toUpperCase()}</div>
         <div class="client-info">
-          <div class="client-name">${m.client_name} <span class="memb-plan ${m.plan}">${m.plan === 'premium' ? 'Premium' : 'Básico'}</span></div>
+          <div class="client-name">${escHtml(m.client_name)} <span class="memb-plan ${m.plan}">${m.plan === 'premium' ? 'Premium' : 'Básico'}</span></div>
           <div class="client-meta">
-            <span>${m.client_phone || ''}</span>
+            <span>${escHtml(m.client_phone || '')}</span>
             <span>Renueva: ${m.renews_at ? new Date(m.renews_at).toLocaleDateString('es-AR') : '—'}</span>
             <span>$${parseFloat(m.price_monthly||0).toLocaleString('es-AR')}/mes</span>
           </div>
@@ -9893,8 +9893,8 @@ function renderStoreItems() {
   el.innerHTML = storeItems.map(item => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
       <div>
-        <div style="font-size:14px;font-weight:600">${item.name}</div>
-        <div style="font-size:12px;color:var(--gray)">${item.description || ''} · <span style="color:var(--yellow)">${item.points_cost} puntos</span></div>
+        <div style="font-size:14px;font-weight:600">${escHtml(item.name)}</div>
+        <div style="font-size:12px;color:var(--gray)">${escHtml(item.description || '')} · <span style="color:var(--yellow)">${item.points_cost} puntos</span></div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="appt-btn" onclick="editStoreItemById(${item.id})" title="Editar">✏️</button>
@@ -9942,7 +9942,7 @@ async function saveStoreConfig() {
 async function openReferidoModal() {
   const sel = document.getElementById('ref-client');
   sel.innerHTML = '<option value="">-- Elegí el cliente referente --</option>' +
-    clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${c.name} (${c.points||0} pts)</option>`).join('');
+    clients.map(c => `<option value="${c.id}" data-points="${c.points||0}">${escHtml(c.name)} (${c.points||0} pts)</option>`).join('');
   try {
     const config = await api('GET', '/points/config');
     document.getElementById('ref-points').value = config.referral_points || 100;
@@ -10399,7 +10399,7 @@ async function loadReferrals() {
           const fecha = new Date(r.created_at).toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)">
             <div>
-              <div style="font-size:14px;font-weight:600;margin-bottom:2px">${r.name}</div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:2px">${escHtml(r.name)}</div>
               <div style="font-size:11px;color:rgba(255,255,255,.35)">${fecha}</div>
             </div>
             ${badge}
@@ -10537,7 +10537,7 @@ async function loadRecurrentes() {
       const freqLabel = r.every_weeks === 1 ? 'Semanal' : `Cada ${r.every_weeks} semanas`;
       const dayName   = DAY_NAMES_FULL[r.day_of_week];
       const barber    = r.barber_display ? `<span style="color:var(--gray);font-size:12px">· ${r.barber_display}</span>` : '';
-      const svc       = r.service_name ? `<span style="background:rgba(255,209,0,.1);color:var(--yellow);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700">${r.service_name}</span>` : '';
+      const svc       = r.service_name ? `<span style="background:rgba(255,209,0,.1);color:var(--yellow);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700">${escHtml(r.service_name)}</span>` : '';
       const badge     = r.active
         ? `<span style="background:rgba(0,200,117,.1);color:var(--green);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:.5px">ACTIVO</span>`
         : `<span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px">PAUSADO</span>`;
@@ -10545,17 +10545,17 @@ async function loadRecurrentes() {
         <div class="recur-card${r.active ? '' : ' paused'}">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
-              <span style="font-size:15px;font-weight:700">${r.client_name}</span>
+              <span style="font-size:15px;font-weight:700">${escHtml(r.client_name)}</span>
               ${badge}
               ${svc}
             </div>
             <div style="font-size:13px;color:rgba(255,255,255,.6);display:flex;gap:16px;flex-wrap:wrap">
               <span>📅 ${dayName} ${r.time_start}</span>
               <span>🔁 ${freqLabel}</span>
-              ${r.client_phone ? `<span>📱 ${r.client_phone}</span>` : ''}
+              ${r.client_phone ? `<span>📱 ${escHtml(r.client_phone)}</span>` : ''}
               ${barber}
             </div>
-            ${r.notes ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;font-style:italic">💬 ${r.notes}</div>` : ''}
+            ${r.notes ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;font-style:italic">💬 ${escHtml(r.notes)}</div>` : ''}
           </div>
           <div style="display:flex;gap:8px;flex-shrink:0">
             <button onclick="toggleRecurrente(${r.id}, ${!r.active})"
@@ -10587,18 +10587,18 @@ async function openRecurringModal() {
   // Poblar selects
   const cSel = document.getElementById('rf-client');
   cSel.innerHTML = '<option value="">-- Seleccionar cliente --</option>'
-    + _rfClients.map(c => `<option value="${c.id}" data-name="${c.name}" data-phone="${c.phone||''}">${c.name}${c.phone ? ' · '+c.phone : ''}</option>`).join('');
+    + _rfClients.map(c => `<option value="${c.id}" data-name="${escHtml(c.name)}" data-phone="${escHtml(c.phone||'')}">${escHtml(c.name)}${c.phone ? ' · '+c.phone : ''}</option>`).join('');
 
   const bSel = document.getElementById('rf-barber');
   bSel.innerHTML = '<option value="">-- Sin asignar --</option>'
-    + _rfBarbers.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    + _rfBarbers.map(b => `<option value="${b.id}">${escHtml(b.name)}</option>`).join('');
 
   // Ocultar barbero si no hay
   document.getElementById('rf-barber-wrap').style.display = _rfBarbers.length ? '' : 'none';
 
   const sSel = document.getElementById('rf-service');
   sSel.innerHTML = '<option value="">-- Sin servicio --</option>'
-    + _rfServices.map(s => `<option value="${s.id}" data-name="${s.name}" data-price="${s.price||0}" data-dur="${s.duration_minutes||30}">${s.name}${s.price ? ' · $'+Number(s.price).toLocaleString('es-AR') : ''}</option>`).join('');
+    + _rfServices.map(s => `<option value="${s.id}" data-name="${escHtml(s.name)}" data-price="${s.price||0}" data-dur="${s.duration_minutes||30}">${escHtml(s.name)}${s.price ? ' · $'+Number(s.price).toLocaleString('es-AR') : ''}</option>`).join('');
 
   // Reset
   _rfSelectedDay = null;
@@ -10795,7 +10795,7 @@ async function loadEquipo() {
       return `<div class="client-card" style="border-left:4px solid ${b.barber_color || '#FFD100'}">
         <div class="client-avatar" style="background:${b.barber_color || '#FFD100'};color:#000d1f;overflow:hidden">${avatarInner}</div>
         <div class="client-info">
-          <div class="client-name">${b.name}</div>
+          <div class="client-name">${escHtml(b.name)}</div>
           <div class="client-meta">
             <span>📅 ${b.turnos_hoy || 0} turnos hoy</span>
             <span>✅ ${stat.completados_mes || 0} completados este mes</span>
@@ -10813,7 +10813,7 @@ async function loadEquipo() {
             <button class="appt-btn" onclick="openBarberPhotosModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Fotos y portfolio">📸</button>
             <button class="appt-btn" onclick="editBarber(${b.id})" title="Editar">✏️</button>
             <button class="appt-btn" onclick="openBonusModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Dar bonus" style="background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80">🎁 Bonus</button>
-            <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${b.name}')" title="Eliminar">🗑</button>
+            <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')" title="Eliminar">🗑</button>
           </div>
           ${hasPending ? `<button class="btn-add equipo-barber-cta" onclick="openSettlementModal(${b.id},'${b.name.replace(/'/g,"\\'")}')">💸 Liquidar</button>` : `<button class="appt-btn equipo-barber-cta liquidado" onclick="openSettlementHistory(${b.id},'${b.name.replace(/'/g,"\\'")}')">📋 Historial</button>`}
         </div>
@@ -11052,7 +11052,7 @@ async function openSettlementModal(barberId, barberName) {
       return;
     }
     const rows = data.appointments.slice(0, 8).map(a =>
-      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${a.date} ${a.time_start || ''}</td><td style="padding:6px 4px;font-size:12px">${a.service_name || 'Servicio'}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
+      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${a.date} ${a.time_start || ''}</td><td style="padding:6px 4px;font-size:12px">${escHtml(a.service_name || 'Servicio')}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
     ).join('');
     const extra = data.count > 8 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.count - 8} turno${data.count-8!==1?'s':''} más</td></tr>` : '';
     const prodRows = (data.product_sales || []).slice(0, 5).map(ps =>
@@ -11067,7 +11067,7 @@ async function openSettlementModal(barberId, barberName) {
       <div style="margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <span style="color:rgba(255,255,255,0.6);font-size:13px">Barbero</span>
-          <strong>${data.barber.name}</strong>
+          <strong>${escHtml(data.barber.name)}</strong>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <span style="color:rgba(255,255,255,0.6);font-size:13px">Turnos a liquidar</span>
@@ -11307,7 +11307,7 @@ async function openSettlementHistory(barberId, barberName) {
           <strong style="color:#FFD100;font-size:16px">$${parseFloat(s.commission_amount).toLocaleString('es-AR', {maximumFractionDigits:0})}</strong>
         </div>
         <div style="font-size:12px;color:rgba(255,255,255,0.5)">${s.appointments_count} turnos · $${parseFloat(s.total_price).toLocaleString('es-AR', {maximumFractionDigits:0})} facturado · ${s.commission_pct_avg}%</div>
-        ${s.notes ? `<div style="font-size:12px;color:rgba(255,209,0,0.6);margin-top:4px">📝 ${s.notes}</div>` : ''}
+        ${s.notes ? `<div style="font-size:12px;color:rgba(255,209,0,0.6);margin-top:4px">📝 ${escHtml(s.notes)}</div>` : ''}
       </div>
     `).join('');
   } catch(e) {
@@ -11375,7 +11375,7 @@ function openReferidoModal() {
   // Llenar selector con clientes
   const sel = document.getElementById('ref-client');
   sel.innerHTML = '<option value="">-- Elegí el cliente --</option>' +
-    clients.map(c => `<option value="${c.id}">${c.name}${c.points > 0 ? ` · ${c.points} pts` : ''}</option>`).join('');
+    clients.map(c => `<option value="${c.id}">${escHtml(c.name)}${c.points > 0 ? ` · ${c.points} pts` : ''}</option>`).join('');
   document.getElementById('ref-points').value = 100;
   document.getElementById('ref-note').value = '';
   openModal('modal-referido');
@@ -12466,7 +12466,7 @@ function renderCashSummary(c) {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
           <div>
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
-            ${e.description ? `<div style="font-size:11px;color:var(--gray)">${e.description}</div>` : ''}
+            ${e.description ? `<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>` : ''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
@@ -12498,7 +12498,7 @@ function renderCashSummary(c) {
             <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04)">
               <div>
                 <div style="font-size:13px;font-weight:600">${iLabel}</div>
-                ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+                ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
                 <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>
               </div>
               <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
@@ -12525,8 +12525,8 @@ function renderDebts(debts) {
   el.innerHTML = debts.map(d => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
       <div>
-        <div style="font-size:13px;font-weight:600">${d.client_name || 'Sin nombre'}</div>
-        <div style="font-size:11px;color:var(--gray)">${d.description || ''} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
+        <div style="font-size:13px;font-weight:600">${escHtml(d.client_name || 'Sin nombre')}</div>
+        <div style="font-size:11px;color:var(--gray)">${escHtml(d.description || '')} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:14px;font-weight:700;color:#FF4343">${fmt(d.amount)}</span>
@@ -12648,8 +12648,8 @@ function renderCajaDayDetail(data) {
       ${appts.map(a => `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
           <div>
-            <div style="font-size:12px;font-weight:600">${a.client_name||'Sin nombre'} <span style="color:var(--gray);font-weight:400">· ${(a.time_start||'').substring(0,5)}</span></div>
-            <div style="font-size:11px;color:var(--gray)">${a.service_name||''}</div>
+            <div style="font-size:12px;font-weight:600">${escHtml(a.client_name||'Sin nombre')} <span style="color:var(--gray);font-weight:400">· ${(a.time_start||'').substring(0,5)}</span></div>
+            <div style="font-size:11px;color:var(--gray)">${escHtml(a.service_name||'')}</div>
             <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:1px">${a.barber_name?'✂️ '+a.barber_name+' · ':''} ${pmLabel[a.payment_method]||''}</div>
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:12px">
@@ -12674,7 +12674,7 @@ function renderCajaDayDetail(data) {
         <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
           <div>
             <div style="font-size:12px;font-weight:600">${catLabel[e.category]||e.category}</div>
-            ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+            ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,.25)">${srcLabel[e.source_type]||e.source_type}</div>`:''}
           </div>
           <span style="font-size:13px;font-weight:700;color:#FF4343;flex-shrink:0;margin-left:12px">-${fmt(e.amount)}</span>
@@ -12693,7 +12693,7 @@ function renderCajaDayDetail(data) {
         <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)">
           <div>
             <div style="font-size:12px;font-weight:600">${lbl}</div>
-            ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+            ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
           </div>
           <span style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:12px">+${fmt(e.amount)}</span>
         </div>`;}).join('')}
@@ -12783,9 +12783,9 @@ function renderMethodDetail(el, data) {
     rows.push(`
       <div class="method-detail-item">
         <div>
-          <div style="font-size:12px;font-weight:600">${a.client_name||'Sin nombre'}<span style="color:var(--gray);font-weight:400"> · ${(a.time_start||'').substring(0,5)}</span></div>
-          <div style="font-size:11px;color:var(--gray)">${a.service_name||''}</div>
-          ${a.barber_name ? `<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">✂️ ${a.barber_name}</div>` : ''}
+          <div style="font-size:12px;font-weight:600">${escHtml(a.client_name||'Sin nombre')}<span style="color:var(--gray);font-weight:400"> · ${(a.time_start||'').substring(0,5)}</span></div>
+          <div style="font-size:11px;color:var(--gray)">${escHtml(a.service_name||'')}</div>
+          ${a.barber_name ? `<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">✂️ ${escHtml(a.barber_name)}</div>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0;margin-left:10px">
           <div style="font-size:13px;font-weight:700">${fmt(a.price)}</div>
@@ -12800,7 +12800,7 @@ function renderMethodDetail(el, data) {
       <div class="method-detail-item">
         <div>
           <div style="font-size:12px;font-weight:600">💳 Cobro fiado</div>
-          <div style="font-size:11px;color:var(--gray)">${d.description||''}</div>
+          <div style="font-size:11px;color:var(--gray)">${escHtml(d.description||'')}</div>
         </div>
         <div style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:10px">+${fmt(d.amount)}</div>
       </div>`);
@@ -12811,7 +12811,7 @@ function renderMethodDetail(el, data) {
       <div class="method-detail-item">
         <div>
           <div style="font-size:12px;font-weight:600">🛒 Venta producto</div>
-          <div style="font-size:11px;color:var(--gray)">${p.description||''}</div>
+          <div style="font-size:11px;color:var(--gray)">${escHtml(p.description||'')}</div>
         </div>
         <div style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:10px">+${fmt(p.amount)}</div>
       </div>`);
@@ -12934,7 +12934,7 @@ function renderEntBranches(branches) {
       <div class="ent-status-dot" style="background:${dotColor}" title="${active ? 'Activa' : 'Inactiva'}"></div>
       ${b.wpp_connected ? `<div class="ent-wpp-badge" title="WhatsApp conectado">📱</div>` : ''}
       ${b.is_main ? `<div style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:rgba(255,209,0,0.12);color:var(--yellow);border:1px solid rgba(255,209,0,0.3);border-radius:4px;padding:2px 7px;margin-bottom:6px">⭐ Sede Principal</div>` : ''}
-      <div class="ent-branch-name">${b.name}</div>
+      <div class="ent-branch-name">${escHtml(b.name)}</div>
       ${b.branch_label && !b.is_main ? `<div class="ent-branch-lbl">${b.branch_label}</div>` : ''}
       ${b.city ? `<div class="ent-branch-stat" style="margin-top:4px;font-size:11px">📍 ${b.city}</div>` : ''}
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -12958,7 +12958,7 @@ function renderEntBranches(branches) {
         ${b.is_main
           ? `<button class="ent-btn-edit" onclick="showSection('configuracion')">⚙️ Configurar</button>`
           : `<button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
-             ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${b.name}')">Desactivar</button>` : ''}`
+             ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">Desactivar</button>` : ''}`
         }
       </div>
     </div>`;
@@ -13289,7 +13289,7 @@ function renderBranchCajaSummary(c) {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
           <div>
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
-            ${e.description ? `<div style="font-size:11px;color:var(--gray)">${e.description}</div>` : ''}
+            ${e.description ? `<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>` : ''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
           </div>
           <span style="font-size:14px;font-weight:700;color:#FF4343">-${fmt(e.amount)}</span>
@@ -13317,7 +13317,7 @@ function renderBranchCajaSummary(c) {
             return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04)">
               <div>
                 <div style="font-size:13px;font-weight:600">${iLabel}</div>
-                ${e.description?`<div style="font-size:11px;color:var(--gray)">${e.description}</div>`:''}
+                ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
               </div>
               <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
             </div>`;}).join('')}
@@ -13395,8 +13395,8 @@ async function loadBranchDebts() {
     el.innerHTML = debts.map(d => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
         <div>
-          <div style="font-size:13px;font-weight:600">${d.client_name || 'Sin nombre'}</div>
-          <div style="font-size:11px;color:var(--gray)">${d.description || ''} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
+          <div style="font-size:13px;font-weight:600">${escHtml(d.client_name || 'Sin nombre')}</div>
+          <div style="font-size:11px;color:var(--gray)">${escHtml(d.description || '')} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
         </div>
         <span style="font-size:14px;font-weight:700;color:#FF4343">${fmt(d.amount)}</span>
       </div>`).join('');
@@ -13796,7 +13796,7 @@ function renderDashProductos(ventas) {
           <span style="font-size:12px">${mIcon[v.payment_method]||'💰'}</span>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.product_name||'—'}</div>
-            <div style="font-size:10px;color:var(--gray)">${v.quantity} u. · ${v.client_name||'Sin nombre'}</div>
+            <div style="font-size:10px;color:var(--gray)">${v.quantity} u. · ${escHtml(v.client_name||'Sin nombre')}</div>
           </div>
           <div style="font-size:12px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
         </div>`;
@@ -13869,7 +13869,7 @@ function renderVentasCfg() {
       <span style="font-size:14px">${mIcon[v.payment_method]||'💰'}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600">${v.product_name||'—'}</div>
-        <div style="font-size:10px;color:var(--gray)">${v.client_name||'Sin nombre'} · ${v.quantity} u. · ${new Date(v.sold_at).toLocaleDateString('es-AR')}</div>
+        <div style="font-size:10px;color:var(--gray)">${escHtml(v.client_name||'Sin nombre')} · ${v.quantity} u. · ${new Date(v.sold_at).toLocaleDateString('es-AR')}</div>
       </div>
       <div style="font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
     </div>`).join('');

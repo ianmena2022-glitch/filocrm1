@@ -730,7 +730,7 @@ function renderBranches(branches) {
     return `
       <button class="branch-btn" onclick="selectBranch('${b.booking_slug}', this)" ${!b.booking_slug ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>
         ${b.branch_label ? `<div class="branch-label-tag">📍 ${b.branch_label}</div>` : ''}
-        <div class="branch-name">${b.name}</div>
+        <div class="branch-name">${escapeHtmlT(b.name)}</div>
         ${meta ? `<div class="branch-meta">📍 ${meta}</div>` : ''}
       </button>`;
   }).join('');
@@ -792,7 +792,7 @@ function renderServices() {
   }
   grid.innerHTML = services.map(s => `
     <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}">
-      <div class="svc-name">${s.name}</div>
+      <div class="svc-name">${escapeHtmlT(s.name)}</div>
       <div class="svc-meta">
         ${isMemberFlow
           ? `<span class="svc-price-member">👑 Gratis</span>`
@@ -993,10 +993,10 @@ function goToForm() {
     .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
   document.getElementById('summary').innerHTML = `
-    <div class="summary-row"><span class="summary-label">Servicio</span><span class="summary-value">${selectedService?.name || 'Sin servicio'}</span></div>
+    <div class="summary-row"><span class="summary-label">Servicio</span><span class="summary-value">${escapeHtmlT(selectedService?.name || 'Sin servicio')}</span></div>
     <div class="summary-row"><span class="summary-label">Fecha</span><span class="summary-value">${dateFormatted}</span></div>
     <div class="summary-row"><span class="summary-label">Hora</span><span class="summary-value">${selectedTime}</span></div>
-    ${selectedBarber ? `<div class="summary-row"><span class="summary-label">Barbero</span><span class="summary-value">✂️ ${selectedBarber.name}</span></div>` : ''}
+    ${selectedBarber ? `<div class="summary-row"><span class="summary-label">Barbero</span><span class="summary-value">✂️ ${escapeHtmlT(selectedBarber.name)}</span></div>` : ''}
     <div class="summary-row"><span class="summary-label">Precio</span><span class="summary-value" style="color:var(--y)">${isMemberFlow ? '👑 Membresía' : '$' + parseFloat(selectedService?.price||0).toLocaleString('es-AR')}</span></div>
   `;
 
@@ -1064,9 +1064,9 @@ async function confirmReservation() {
     document.getElementById('sena-alias-display').textContent  = shopData.sena_alias;
     document.getElementById('sena-amount-display').textContent = `$${senaAmount.toLocaleString('es-AR')}`;
     document.getElementById('success-detail-sena').innerHTML = `
-      <strong>${selectedService?.name || 'Turno'}</strong><br>
+      <strong>${escapeHtmlT(selectedService?.name || 'Turno')}</strong><br>
       📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
-      📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
+      📍 ${escapeHtmlT(shopData.name)}${shopData.address ? ' — ' + escapeHtmlT(shopData.address) : ''}
     `;
     document.getElementById('sena-ya-pague-btn').style.display = 'block';
     document.getElementById('sena-done-msg').style.display = 'none';
@@ -1125,9 +1125,9 @@ async function doReserve(clientData) {
       if (data.redeem) successMsg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
       document.getElementById('success-msg').textContent = successMsg;
       document.getElementById('success-detail').innerHTML = `
-        <strong>${selectedService?.name || 'Turno'}</strong><br>
+        <strong>${escapeHtmlT(selectedService?.name || 'Turno')}</strong><br>
         📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
-        📍 ${shopData.name}${shopData.address ? ' — ' + shopData.address : ''}
+        📍 ${escapeHtmlT(shopData.name)}${shopData.address ? ' — ' + escapeHtmlT(shopData.address) : ''}
       `;
       showScreen('success');
     }
@@ -1277,7 +1277,7 @@ async function renderBarbers() {
       ${b.profile_photo_url
         ? `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#0a1828"><img src="${b.profile_photo_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.outerHTML='<div style=\\'width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0\\'>${b.name.charAt(0).toUpperCase()}</div>'"></div>`
         : `<div style="width:38px;height:38px;border-radius:50%;background:${b.barber_color || '#FFD100'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${b.name.charAt(0).toUpperCase()}</div>`}
-      <div style="font-weight:600;font-size:15px">${b.name}</div>
+      <div style="font-weight:600;font-size:15px">${escapeHtmlT(b.name)}</div>
       ${badge}
     </div>`;
   }).join('');
@@ -1485,8 +1485,8 @@ async function loadStoreForClient() {
       prizeList.innerHTML = storeItems.map(item => `
         <button class="prize-btn" onclick="selectPrize(${item.id}, '${item.name.replace(/'/g,"\'")}', ${item.points_cost})" id="prize-btn-${item.id}">
           <div>
-            <div class="prize-name">🎁 ${item.name}</div>
-            ${item.description ? `<div class="prize-desc">${item.description}</div>` : ''}
+            <div class="prize-name">🎁 ${escapeHtmlT(item.name)}</div>
+            ${item.description ? `<div class="prize-desc">${escapeHtmlT(item.description)}</div>` : ''}
           </div>
           <div class="prize-cost">${item.points_cost} pts</div>
         </button>

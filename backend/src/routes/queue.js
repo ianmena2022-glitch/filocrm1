@@ -9,9 +9,13 @@ const { normalizeDebtMethod } = require('../services/cashMath');
 router.post('/:slug/join', async (req, res) => {
   try {
     const { slug } = req.params;
-    const { name, phone, service_name, price, barber_id } = req.body;
+    const { service_name, price, barber_id } = req.body;
+    // Datos públicos: sin < > y con largo acotado
+    const cleanTxt = (v, n) => (v == null ? '' : String(v)).replace(/[<>]/g, '').trim().slice(0, n);
+    const name  = cleanTxt(req.body.name, 100);
+    const phone = cleanTxt(req.body.phone, 30);
 
-    if (!name || !name.trim()) {
+    if (!name) {
       return res.status(400).json({ error: 'El nombre es obligatorio' });
     }
 

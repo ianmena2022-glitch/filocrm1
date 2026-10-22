@@ -988,8 +988,8 @@ function apptRowHTML(a, statusLabel) {
   return `<div class="appt-row">
     <div class="appt-time">${String(a.time_start||'').slice(0,5)}</div>
     <div>
-      <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
-      <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
+      <div class="appt-client">${escHtml(a.client_name || 'Sin nombre')}</div>
+      <div class="appt-service">${escHtml(a.service_name || 'Sin servicio')}</div>
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">🏠 ${a.client_address}</div>` : ''}
     </div>
     <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
@@ -1031,8 +1031,8 @@ async function loadAgenda() {
       <div class="appt-card-mobile">
         <div class="appt-time">${String(a.time_start||'').slice(0,5)}</div>
         <div style="flex:1">
-          <div class="appt-client">${a.client_name || 'Sin nombre'}</div>
-          <div class="appt-service">${a.service_name || 'Sin servicio'}</div>
+          <div class="appt-client">${escHtml(a.client_name || 'Sin nombre')}</div>
+          <div class="appt-service">${escHtml(a.service_name || 'Sin servicio')}</div>
           ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">🏠 ${a.client_address}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -1247,9 +1247,9 @@ async function loadFila() {
       calledListEl.innerHTML = called.map((c, i) => `
         <div class="fila-called-card show" style="${i > 0 ? 'margin-top:10px;border-color:rgba(255,145,0,0.35);' : ''}">
           <div class="fila-called-label">${i === 0 ? '💈 En el sillón ahora' : '⏳ Pendiente de marcar'}</div>
-          <div class="fila-called-name">${c.client_name}</div>
-          <div class="fila-called-phone">${c.client_phone ? `📞 ${c.client_phone}` : ''}</div>
-          ${c.service_name ? `<div style="font-size:12px;color:var(--gray);margin-bottom:10px">✂️ ${c.service_name}</div>` : ''}
+          <div class="fila-called-name">${escHtml(c.client_name)}</div>
+          <div class="fila-called-phone">${c.client_phone ? `📞 ${escHtml(c.client_phone)}` : ''}</div>
+          ${c.service_name ? `<div style="font-size:12px;color:var(--gray);margin-bottom:10px">✂️ ${escHtml(c.service_name)}</div>` : ''}
           <button class="btn-served" onclick="barberServe(${c.id}, '${(c.client_name||'').replace(/'/g,"\\'")}', '${(c.service_name||'').replace(/'/g,"\\'")}', ${parseFloat(c.price)||0})">✓ Marcar atendido</button>
         </div>
       `).join('');
@@ -1272,8 +1272,8 @@ async function loadFila() {
         return `<div class="queue-item">
           <div class="queue-pos">${i + 1}°</div>
           <div style="flex:1">
-            <div class="queue-name" style="display:flex;align-items:center;gap:8px">${e.client_name} ${barberTag}</div>
-            <div class="queue-meta">${e.client_phone ? `📞 ${e.client_phone} · ` : ''}${mins}min esperando${e.service_name ? ` · ✂️ ${e.service_name}` : ''}</div>
+            <div class="queue-name" style="display:flex;align-items:center;gap:8px">${escHtml(e.client_name)} ${barberTag}</div>
+            <div class="queue-meta">${e.client_phone ? `📞 ${escHtml(e.client_phone)} · ` : ''}${mins}min esperando${e.service_name ? ` · ✂️ ${escHtml(e.service_name)}` : ''}</div>
           </div>
         </div>`;
       }).join('');

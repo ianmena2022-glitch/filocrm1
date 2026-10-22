@@ -55,13 +55,16 @@ const allowedOrigins = [
 // Railway y otros proxies envían X-Forwarded-For — necesario para rate limiting correcto
 app.set('trust proxy', 1);
 
-app.use(cors({
-  origin: (origin, cb) => {
-    // Permitir requests sin origin (apps móviles, Postman, n8n interno)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error('CORS no permitido'));
-  },
-  credentials: true,
+allowedOrigins.push('https://www.filocrm.com.ar');
+app.use(cors((req, cb) => {
+  const origin = req.headers.origin;
+  // Mismo origen (la página y la API se sirven desde el mismo host) siempre permitido;
+  // sin origin (apps móviles, Postman, n8n interno) también.
+  const sameOrigin = origin && origin === `${req.protocol}://${req.get('host')}`;
+  if (!origin || sameOrigin || allowedOrigins.includes(origin)) {
+    return cb(null, { origin: true, credentials: true });
+  }
+  cb(new Error('CORS no permitido'));
 }));
 
 // Rate limiting global: 300 requests por minuto por IP
@@ -138,8 +141,10 @@ app.get('/test', (req, res) => {
 });
 app.post('/api/test-wpp/chat', require('./middleware/auth'), async (req, res) => {
   try {
-    const { shop_id, phone, text } = req.body;
-    if (!shop_id || !phone || !text) return res.status(400).json({ error: 'shop_id, phone y text son requeridos' });
+    const { phone, text } = req.body;
+    // Siempre el local del usuario logueado: ignora cualquier shop_id enviado
+    const shop_id = req.shopId;
+    if (!phone || !text) return res.status(400).json({ error: 'phone y text son requeridos' });
     const { getAIResponse } = require('./services/ai');
     const reply = await getAIResponse(parseInt(shop_id), phone, text);
     res.json({ reply: reply || null });
@@ -212,12 +217,19 @@ app.get('/healthdb', async (req, res) => {
     }
   }
 
-  res.json({ host: dbHost, port: dbPort, tcp: tcpMs, pg: pgResult });
+  // No se expone host/puerto de la base de datos
+  res.json({ tcp: typeof tcpMs === 'number' ? 'ok' : 'error', pg: pgResult.startsWith('ok') ? 'ok' : (pgResult === 'skipped' ? 'skipped' : 'error') });
 });
 
 // ── Frontend estático ──────────────────────────────────
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
+
+// Escapa texto controlado por usuarios antes de meterlo en HTML / JSON-LD del SSR
+const escHtmlAttr = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const safeJsonLd = (o) => JSON.stringify(o).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 
 // Tienda pública de puntos — SSR para SEO
 app.get('/tienda/:slug', async (req, res) => {
@@ -235,7 +247,7 @@ app.get('/tienda/:slug', async (req, res) => {
       const desc      = `Canjea tus puntos en ${storeName}${location ? ` · ${location}` : ''}. Programa de fidelidad digital para barberíasargentinas.`;
       const canonical = `https://filocrm.com.ar/tienda/${req.params.slug}`;
       const image     = shop.logo_url || 'https://filocrm.com.ar/logo_filo.png';
-      const jsonLd = JSON.stringify({
+      const jsonLd = safeJsonLd({
         '@context': 'https://schema.org',
         '@type': 'Store',
         'name': storeName,
@@ -244,21 +256,21 @@ app.get('/tienda/:slug', async (req, res) => {
         'image': image
       });
       const seoTags = `
-  <meta name="description" content="${desc}">
-  <link rel="canonical" href="${canonical}">
+  <meta name="description" content="${escHtmlAttr(desc)}">
+  <link rel="canonical" href="${escHtmlAttr(canonical)}">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${desc}">
-  <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${image}">
+  <meta property="og:title" content="${escHtmlAttr(title)}">
+  <meta property="og:description" content="${escHtmlAttr(desc)}">
+  <meta property="og:url" content="${escHtmlAttr(canonical)}">
+  <meta property="og:image" content="${escHtmlAttr(image)}">
   <meta property="og:site_name" content="FILO">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="${title}">
-  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:title" content="${escHtmlAttr(title)}">
+  <meta name="twitter:description" content="${escHtmlAttr(desc)}">
   <meta name="robots" content="index, follow">
   <script type="application/ld+json">${jsonLd}</script>`;
       html = html
-        .replace('<title>Tienda de Puntos FILO</title>', `<title>${title}</title>`)
+        .replace('<title>Tienda de Puntos FILO</title>', `<title>${escHtmlAttr(title)}</title>`)
         .replace('</head>', seoTags + '\n</head>');
     }
     res.send(html);
@@ -281,12 +293,12 @@ app.get('/reservar/:slug', async (req, res) => {
       const shop     = result.rows[0];
       const siteName = 'FILO CRM';
       const location = [shop.address, shop.city].filter(Boolean).join(', ');
-      const title    = `${shop.name} — Reservar turno online | ${siteName}`;
+      const title    = `${shop.name} — Reservar turno online | ${escHtmlAttr(siteName)}`;
       const desc     = `Reservá tu turno en ${shop.name}${location ? ` · ${location}` : ''}. Sin llamadas, sin esperas, disponible 24/7.`;
       const canonical = `https://filocrm.com.ar/reservar/${req.params.slug}`;
       const image     = shop.logo_url || 'https://filocrm.com.ar/logo_filo.png';
 
-      const jsonLd = JSON.stringify({
+      const jsonLd = safeJsonLd({
         '@context': 'https://schema.org',
         '@type': 'HairSalon',
         'name': shop.name,
@@ -306,22 +318,22 @@ app.get('/reservar/:slug', async (req, res) => {
       });
 
       const seoTags = `
-  <meta name="description" content="${desc}">
-  <link rel="canonical" href="${canonical}">
+  <meta name="description" content="${escHtmlAttr(desc)}">
+  <link rel="canonical" href="${escHtmlAttr(canonical)}">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${desc}">
-  <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${image}">
-  <meta property="og:site_name" content="${siteName}">
+  <meta property="og:title" content="${escHtmlAttr(title)}">
+  <meta property="og:description" content="${escHtmlAttr(desc)}">
+  <meta property="og:url" content="${escHtmlAttr(canonical)}">
+  <meta property="og:image" content="${escHtmlAttr(image)}">
+  <meta property="og:site_name" content="${escHtmlAttr(siteName)}">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="${title}">
-  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:title" content="${escHtmlAttr(title)}">
+  <meta name="twitter:description" content="${escHtmlAttr(desc)}">
   <meta name="robots" content="index, follow">
   <script type="application/ld+json">${jsonLd}</script>`;
 
       html = html
-        .replace('<title>Reservar turno — FILO</title>', `<title>${title}</title>`)
+        .replace('<title>Reservar turno — FILO</title>', `<title>${escHtmlAttr(title)}</title>`)
         .replace('</head>', seoTags + '\n</head>');
     }
 
@@ -521,10 +533,12 @@ async function initDB() {
   for (const file of migrationFiles) {
     if (appliedSet.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    // Se quitan las líneas de comentario ANTES de filtrar: antes, una sentencia que
+    // venía precedida por un comentario se descartaba entera (ej: CREATE TABLE).
     const statements = sql
       .split(/;\s*\n/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .map(s => s.split('\n').filter(l => !l.trim().startsWith('--')).join('\n').trim())
+      .filter(s => s.length > 0);
     for (const stmt of statements) {
       await pool.query(stmt);
     }

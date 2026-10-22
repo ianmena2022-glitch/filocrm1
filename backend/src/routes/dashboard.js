@@ -276,6 +276,7 @@ router.get('/top-clients', auth, async (req, res) => {
 router.post('/expenses', auth, async (req, res) => {
   const { amount, category, description, date, payment_method } = req.body;
   if (!amount || !category) return res.status(400).json({ error: 'Monto y categoría requeridos' });
+  if (!(parseFloat(amount) > 0)) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
   const validCats = ['insumos','alquiler','servicios','salarios','otros'];
   if (!validCats.includes(category)) return res.status(400).json({ error: 'Categoría inválida' });
   try {

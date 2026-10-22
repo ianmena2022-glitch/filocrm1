@@ -412,7 +412,8 @@ const _reserveCleanup = setInterval(() => {
 }, 15 * 60 * 1000);
 if (typeof _reserveCleanup.unref === 'function') _reserveCleanup.unref();
 function reserveRateLimit(req, res, next) {
-  const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().split(',')[0].trim();
+  // req.ip respeta 'trust proxy' y no se puede falsificar con un header X-Forwarded-For propio
+  const ip = (req.ip || 'unknown').toString();
   const key = `${ip}:${req.params.slug}`;
   const now = Date.now();
   const windowMs = 10 * 60 * 1000;
@@ -430,7 +431,12 @@ function reserveRateLimit(req, res, next) {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
-  const { client_name, client_phone, client_address, service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
+  const { service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
+  // Datos públicos: sin < > (evita HTML inyectado en el CRM del dueño) y con largo acotado
+  const cleanTxt = (v, n) => (v == null ? '' : String(v)).replace(/[<>]/g, '').trim().slice(0, n);
+  const client_name    = cleanTxt(req.body.client_name, 100);
+  const client_phone   = cleanTxt(req.body.client_phone, 30);
+  const client_address = cleanTxt(req.body.client_address, 200);
   console.log(`[booking POST] slug=${req.params.slug} client=${client_name} date=${date} time=${time_start} phone=${client_phone||'null'}`);
 
   if (!client_name || !date || !time_start) {
@@ -455,6 +461,15 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+
+    // No se puede reservar en un día que ya pasó (según la zona horaria del local)
+    {
+      const { getShopTz, shopDate } = require('../db/shopTz');
+      const todayLocal = shopDate(await getShopTz(shopData.id));
+      if (date < todayLocal) {
+        return res.status(400).json({ error: 'No se puede reservar en una fecha pasada.' });
+      }
+    }
 
     // Si es sucursal sin seña propia, heredar sena_* del enterprise owner
     if (shopData.is_branch && shopData.parent_enterprise_id && !shopData.sena_enabled) {

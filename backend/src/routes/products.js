@@ -155,6 +155,7 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/sell', auth, async (req, res) => {
   const { quantity, unit_price, payment_method, client_name, barber_id, barber_commission_pct } = req.body;
   const qty = parseInt(quantity) || 1;
+  if (qty < 1) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
 
   // Si el que vende es un barbero, la venta va al shop padre y el barbero se asigna automáticamente
   const isBarber  = req.isBarber && req.parentShopId;
@@ -267,6 +268,7 @@ router.post('/:id/stock', auth, async (req, res) => {
   const qty = parseInt(cantidad) || 0;
   const validTipos = ['entrada','salida','ajuste'];
   if (!validTipos.includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' });
+  if (qty < 0) return res.status(400).json({ error: 'La cantidad no puede ser negativa' });
 
   try {
     const prod = await pool.query(

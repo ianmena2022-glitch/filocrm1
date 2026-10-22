@@ -236,12 +236,13 @@ router.post('/register-barber', async (req, res) => {
       // Cuenta de ex-barbero huérfano (fue eliminado del equipo, sin parent_shop).
       // Cubre tanto orphans viejos (is_barber=FALSE) como nuevos (is_barber=TRUE).
       // Re-vincular al mismo shop conservando historia (turnos, comisiones, etc.)
-      const isOrphanBarber = existing.parent_shop_id === null;
+      // Solo se puede re-vincular una cuenta que ya era de barbero (nunca la de un dueño)
+      const isOrphanBarber = existing.parent_shop_id === null && existing.is_barber === true;
       if (!isOrphanBarber) {
         return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
       }
       const reactivated = await pool.query(
-        `UPDATE shops SET name=$1, password=$2, is_barber=TRUE, parent_shop_id=$3, plan='staff'
+        `UPDATE shops SET name=$1, password=$2, is_barber=TRUE, parent_shop_id=$3, plan='staff', email_verified=TRUE
          WHERE id=$4 RETURNING *`,
         [name.trim(), hash, inv.shop_id, existing.id]
       );
@@ -249,8 +250,8 @@ router.post('/register-barber', async (req, res) => {
       console.log(`[BARBER] ex-barbero ${emailNorm} re-vinculado a shop ${inv.shop_id}`);
     } else {
       const result = await pool.query(
-        `INSERT INTO shops (name, email, password, plan, is_barber, parent_shop_id)
-         VALUES ($1, $2, $3, 'staff', TRUE, $4) RETURNING *`,
+        `INSERT INTO shops (name, email, password, plan, is_barber, parent_shop_id, email_verified)
+         VALUES ($1, $2, $3, 'staff', TRUE, $4, TRUE) RETURNING *`,
         [name.trim(), emailNorm, hash, inv.shop_id]
       );
       shop = result.rows[0];

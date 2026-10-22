@@ -62,7 +62,7 @@ router.get('/', auth, async (req, res) => {
     if (req.isBarber) {
       // Barbero solo ve SUS turnos
       result = await pool.query(
-        `SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.address AS client_address,
+        `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
                 b.name AS assigned_barber_name
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
@@ -74,7 +74,7 @@ router.get('/', auth, async (req, res) => {
     } else if (req.isEnterpriseOwner) {
       // Enterprise owner ve sus turnos + los de todas sus sucursales
       result = await pool.query(
-        `SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.address AS client_address,
+        `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
                 b.name AS assigned_barber_name,
                 s.name AS branch_name
          FROM appointments a
@@ -91,7 +91,7 @@ router.get('/', auth, async (req, res) => {
     } else {
       // Dueño/sucursal ve todos sus turnos
       result = await pool.query(
-        `SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.address AS client_address,
+        `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
                 b.name AS assigned_barber_name
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id

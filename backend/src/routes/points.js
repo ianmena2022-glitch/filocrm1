@@ -1,6 +1,16 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
+
+// Consulta pública por teléfono: límite por IP para que no sirva para enumerar clientes
+const phoneLookupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas consultas. Esperá un momento.' },
+});
 
 // ── TIENDA ────────────────────────────────────────────
 
@@ -242,7 +252,7 @@ router.get('/config', auth, async (req, res) => {
 });
 
 // GET /api/points/client/phone/:slug/:phone — consulta pública por teléfono
-router.get('/client/phone/:slug/:phone', async (req, res) => {
+router.get('/client/phone/:slug/:phone', phoneLookupLimiter, async (req, res) => {
   try {
     const shop = await pool.query(
       'SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]

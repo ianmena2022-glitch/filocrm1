@@ -196,8 +196,8 @@ router.delete('/:id', auth, async (req, res) => {
     );
     const r = await pool.query(
       `DELETE FROM appointments
-        WHERE recurring_id=$1 AND status='pending' AND date >= CURRENT_DATE`,
-      [req.params.id]
+        WHERE recurring_id=$1 AND shop_id=$2 AND status='pending' AND date >= CURRENT_DATE`,
+      [req.params.id, req.shopId]
     );
     res.json({ ok: true, appointments_deleted: r.rowCount });
   } catch(e) { res.status(500).json({ error: e.message }); }
