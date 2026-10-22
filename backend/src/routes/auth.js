@@ -97,7 +97,7 @@ function normalizeArgPhone(raw) {
 
 // POST /api/auth/register — guarda en pending_registrations, NO crea la cuenta todavía
 router.post('/register', async (req, res) => {
-  const { name, email, password, phone, filo_plan, referral_code, aff_code, timezone } = req.body;
+  const { name, email, password, phone, filo_plan, referral_code, aff_code, timezone, promo_code } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
 
@@ -148,6 +148,14 @@ router.post('/register', async (req, res) => {
          referral_code=$7, timezone=$8, verify_code=$9, verify_expires=$10, affiliate_id=$11, created_at=NOW()`,
       [emailNorm, name.trim(), hash, phoneNorm, filoPlan, vendorId, codeNorm, tz, verifyCode, verifyExpires.toISOString(), affiliateId]
     );
+
+    // Código de promo (ej: de un link ?promo=): se guarda para aplicar los días de trial al verificar el email
+    try {
+      const promos = require('../services/promotions');
+      await promos.ensureTrialSchema();
+      const pc = String(promo_code || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 60) || null;
+      await pool.query('UPDATE pending_registrations SET promo_code=$1 WHERE email=$2', [pc, emailNorm]);
+    } catch (e) { console.warn('[REGISTRO] no se pudo guardar el código de promo:', e.message); }
 
     console.log(`[REGISTRO PENDIENTE] ${emailNorm} → plan ${filoPlan}`);
 
@@ -484,7 +492,13 @@ router.post('/verify-email', async (req, res) => {
       shop = r.rows[0];
     } else {
       const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + 15); // Trial de 15 días para nuevos signups
+      // Trial de 15 días por defecto; un código de promo con "días de trial" fija el total de días gratis
+      let trialDays = 15, trialPromo = null;
+      try {
+        trialPromo = await require('../services/promotions').getTrialPromoForSignup({ code: pending.promo_code, plan: pending.filo_plan });
+        if (trialPromo) trialDays = trialPromo.trial_days;
+      } catch (e) { console.warn('[VERIFY] promo de trial omitida:', e.message); }
+      trialEnds.setDate(trialEnds.getDate() + trialDays);
       const isEnterpriseOwner = pending.filo_plan === 'enterprise';
 
       const r = await pool.query(
@@ -497,6 +511,13 @@ router.post('/verify-email', async (req, res) => {
          pending.vendor_id, pending.referral_code, pending.timezone, pending.affiliate_id]
       );
       shop = r.rows[0];
+
+      if (trialPromo) {
+        await require('../services/promotions').recordUse({
+          promotionId: trialPromo.id, shopId: shop.id, plan: pending.filo_plan, originalAmount: 0, finalAmount: 0
+        });
+        console.log(`[VERIFY] promo de trial "${trialPromo.code}" aplicada a shop ${shop.id}: ${trialDays} días`);
+      }
 
       if (!isEnterpriseOwner) {
         await pool.query(

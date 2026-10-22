@@ -21,7 +21,8 @@ async function getBestPromoForShop({ shopId, plan, code = null }) {
            AND (ends_at   IS NULL OR ends_at   >  $1)
            AND (applies_to = 'all' OR $2 = ANY(shop_ids))
            AND (plans IS NULL OR $3 = ANY(plans))
-           AND (code IS NULL OR code = $4)`,
+           AND (code IS NULL OR code = $4)
+           AND discount_value > 0`,   // las promos de solo trial no descuentan el precio ni gastan usos al cobrar
       [now, shopId, plan, code]
     );
   } catch(e) {
@@ -66,6 +67,46 @@ async function getBestPromoForShop({ shopId, plan, code = null }) {
     }
   }
   return best;
+}
+
+// Las columnas de trial se crean solas si la migración 047 todavía no corrió (idempotente)
+let _trialSchemaReady = false;
+async function ensureTrialSchema() {
+  if (_trialSchemaReady) return;
+  try {
+    await pool.query('ALTER TABLE promotions ADD COLUMN IF NOT EXISTS trial_days INTEGER');
+    await pool.query('ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS promo_code VARCHAR(60)');
+    _trialSchemaReady = true;
+  } catch (e) { console.warn('[promotions] no se pudo asegurar el esquema de trial:', e.message); }
+}
+
+// Promo de días de trial aplicable a un registro nuevo con ese código, o null.
+// trial_days = TOTAL de días gratis (reemplaza los 15 por defecto).
+async function getTrialPromoForSignup({ code, plan }) {
+  const clean = String(code || '').trim();
+  if (!clean) return null;
+  try {
+    const q = await pool.query(
+      `SELECT * FROM promotions
+        WHERE status = 'active' AND trial_days > 0 AND UPPER(code) = UPPER($1)
+          AND applies_to = 'all'
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at   IS NULL OR ends_at   >  NOW())
+          AND (plans IS NULL OR $2 = ANY(plans))
+        LIMIT 1`,
+      [clean, plan || 'starter']
+    );
+    const p = q.rows[0];
+    if (!p) return null;
+    if (p.max_total_uses) {
+      const tot = await pool.query('SELECT COUNT(*)::int AS n FROM promotion_uses WHERE promotion_id=$1', [p.id]);
+      if (tot.rows[0].n >= p.max_total_uses) return null;
+    }
+    return p;
+  } catch (e) {
+    if (/trial_days|promotions.*does not exist|relation "promotions"/i.test(e.message)) return null;
+    throw e;
+  }
 }
 
 function computeDiscount(basePrice, promo) {
@@ -113,4 +154,4 @@ async function recordUse({ promotionId, shopId, paymentId, plan, originalAmount,
   } catch(e) { console.error('[promo recordUse]', e.message); }
 }
 
-module.exports = { planBasePrice, getBestPromoForShop, priceForShop, recordUse, computeDiscount };
+module.exports = { planBasePrice, getBestPromoForShop, priceForShop, recordUse, computeDiscount, ensureTrialSchema, getTrialPromoForSignup };

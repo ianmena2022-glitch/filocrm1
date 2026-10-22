@@ -4913,7 +4913,7 @@ async function register() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, ref_slug: getStoredRefSlug(), aff_code: affFromUrl || referral, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      body: JSON.stringify({ name, email, password: pass, phone, filo_plan: selectedRegPlan, referral_code: referral, promo_code: promoCode || getStoredPromoCode(), ref_slug: getStoredRefSlug(), aff_code: affFromUrl || referral, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     const data = await res.json();
     if (!res.ok) return showAuthError(data.error || 'Error al crear la cuenta');

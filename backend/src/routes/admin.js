@@ -659,8 +659,15 @@ router.post('/promotions', adminAuth, async (req, res) => {
   const {
     name, code, discount_type, discount_value,
     applies_to, shop_ids, plans, renewable,
-    starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes
+    starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes, trial_days
   } = req.body || {};
+  const trialDaysClean = trial_days ? parseInt(trial_days) : null;
+  if (trialDaysClean !== null && (!(trialDaysClean >= 1 && trialDaysClean <= 365))) {
+    return res.status(400).json({ error: 'Los días de trial deben estar entre 1 y 365' });
+  }
+  if (trialDaysClean && !(code || '').trim()) {
+    return res.status(400).json({ error: 'Una promo de días de trial necesita un código (es lo que ingresa el cliente al registrarse)' });
+  }
   if (!name || !discount_type || discount_value === undefined || discount_value === null) {
     return res.status(400).json({ error: 'name, discount_type y discount_value son requeridos' });
   }
@@ -673,17 +680,18 @@ router.post('/promotions', adminAuth, async (req, res) => {
   const plansClean   = Array.isArray(plans) && plans.length ? plans.filter(p => ['starter','staff','enterprise'].includes(p)) : null;
   const statusClean  = ['active','paused','archived'].includes(status) ? status : 'active';
   try {
+    await require('../services/promotions').ensureTrialSchema();
     const r = await pool.query(
       `INSERT INTO promotions
          (name, code, discount_type, discount_value, applies_to, shop_ids, plans,
-          renewable, starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+          renewable, starts_at, ends_at, max_total_uses, max_uses_per_shop, status, notes, trial_days)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [name.trim(), (code||'').trim() || null, discount_type, parseFloat(discount_value),
        appliesClean, shopIdsClean, plansClean, renewable !== false,
        starts_at || null, ends_at || null,
        max_total_uses ? parseInt(max_total_uses) : null,
        max_uses_per_shop ? parseInt(max_uses_per_shop) : null,
-       statusClean, (notes||'').trim() || null]
+       statusClean, (notes||'').trim() || null, trialDaysClean]
     );
     res.json(r.rows[0]);
   } catch(e) {
@@ -716,11 +724,24 @@ router.put('/promotions/:id', adminAuth, async (req, res) => {
   if (b.max_uses_per_shop !== undefined) add('max_uses_per_shop', b.max_uses_per_shop ? parseInt(b.max_uses_per_shop) : null);
   if (b.status !== undefined && ['active','paused','archived'].includes(b.status)) add('status', b.status);
   if (b.notes !== undefined)             add('notes', (b.notes||'').trim() || null);
+  if (b.trial_days !== undefined) {
+    const td = b.trial_days ? parseInt(b.trial_days) : null;
+    if (td !== null && !(td >= 1 && td <= 365)) return res.status(400).json({ error: 'Los días de trial deben estar entre 1 y 365' });
+    add('trial_days', td);
+  }
 
   if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
   fields.push(`updated_at=NOW()`);
   vals.push(id);
   try {
+    await require('../services/promotions').ensureTrialSchema();
+    if (b.trial_days !== undefined || b.code !== undefined) {
+      // una promo de trial necesita código: el que se está enviando o el que ya tenía
+      const cur = await pool.query('SELECT code, trial_days FROM promotions WHERE id=$1', [id]);
+      const finalCode = b.code !== undefined ? (b.code || '').trim() : (cur.rows[0]?.code || '');
+      const finalTrial = b.trial_days !== undefined ? b.trial_days : cur.rows[0]?.trial_days;
+      if (finalTrial && !finalCode) return res.status(400).json({ error: 'Una promo de días de trial necesita un código (es lo que ingresa el cliente al registrarse)' });
+    }
     const r = await pool.query(
       `UPDATE promotions SET ${fields.join(',')} WHERE id=$${i} RETURNING *`,
       vals
