@@ -1386,8 +1386,9 @@ function renderAccountsTable(treeRoots, tbodyId = 'accounts-tbody', emptyMsg = '
 // ── TABLA LIQUIDACIONES ───────────────────────────────────────────────────────
 function filterBilling() {
   const plan = document.getElementById('billing-filter').value;
+  // Las cuentas marcadas "No contar en los KPIs" (socios) y las de test no se liquidan: no aparecen acá
   const active = allAccounts.filter(a =>
-    !a.is_barber && !a.is_branch &&
+    countsInKpis(a) &&
     a.subscription_status === 'active' && (!plan || a.filo_plan === plan)
   );
   renderBillingTable(active);
