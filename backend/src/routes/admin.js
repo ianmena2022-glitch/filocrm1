@@ -66,9 +66,20 @@ router.post('/login', async (req, res) => {
   res.json({ token });
 });
 
+// La columna exclude_from_kpis se crea sola si la migración 048 todavía no corrió (idempotente)
+let _kpiColReady = null;
+function ensureKpiColumn() {
+  if (!_kpiColReady) {
+    _kpiColReady = pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS exclude_from_kpis BOOLEAN NOT NULL DEFAULT FALSE')
+      .catch(e => { _kpiColReady = null; console.warn('[admin] exclude_from_kpis:', e.message); });
+  }
+  return _kpiColReady;
+}
+
 // GET /api/admin/accounts — listar todas las cuentas con jerarquía (sucursales y barberos)
 router.get('/accounts', adminAuth, async (req, res) => {
   try {
+    await ensureKpiColumn();
     const result = await pool.query(`
       SELECT
         s.id, s.name, s.email, s.phone, s.city,
@@ -77,6 +88,7 @@ router.get('/accounts', adminAuth, async (req, res) => {
         s.wpp_connected,
         s.mp_shop_subscription_id, s.mp_shop_status,
         s.is_test,
+        COALESCE(s.exclude_from_kpis, FALSE) AS exclude_from_kpis,
         s.is_barber, s.is_branch, s.is_enterprise_owner,
         s.parent_shop_id, s.parent_enterprise_id,
         s.barber_commission_pct,
@@ -94,6 +106,23 @@ router.get('/accounts', adminAuth, async (req, res) => {
   } catch(e) {
     console.error('Admin GET accounts:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/billing-forecast — cuánto cobra FILO a cada cuenta activa (con descuentos aplicados)
+router.get('/billing-forecast', adminAuth, async (req, res) => {
+  try {
+    await ensureKpiColumn();
+    const r = await pool.query(
+      `SELECT id, filo_plan FROM shops
+        WHERE is_system IS DISTINCT FROM TRUE
+          AND (is_barber IS NULL OR is_barber = FALSE) AND (is_branch IS NULL OR is_branch = FALSE)
+          AND subscription_status = 'active'`);
+    const fc = await require('../services/promotions').forecastBilling(r.rows);
+    res.json({ forecast: fc });
+  } catch (e) {
+    console.error('Admin billing-forecast:', e.message);
+    res.status(500).json({ error: 'Error calculando el pronóstico de cobro' });
   }
 });
 
@@ -438,7 +467,7 @@ router.post('/accounts', adminAuth, async (req, res) => {
 
 // PUT /api/admin/accounts/:id — editar plan/estado
 router.put('/accounts/:id', adminAuth, async (req, res) => {
-  const { name, filo_plan, subscription_status } = req.body;
+  const { name, filo_plan, subscription_status, exclude_from_kpis } = req.body;
   const validPlans   = ['starter','staff','enterprise'];
   const validStatus  = ['trial','active','expired','cancelled'];
 
@@ -447,6 +476,10 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
     const params  = [];
     let i = 1;
 
+    if (typeof exclude_from_kpis === 'boolean') {
+      await ensureKpiColumn();
+      updates.push(`exclude_from_kpis=$${i++}`); params.push(exclude_from_kpis);
+    }
     if (name)                              { updates.push(`name=$${i++}`);                  params.push(name.trim()); }
     if (validPlans.includes(filo_plan))    {
       updates.push(`filo_plan=$${i++}`);               params.push(filo_plan);

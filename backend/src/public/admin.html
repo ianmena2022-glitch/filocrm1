@@ -269,7 +269,12 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <div class="stat-card highlight">
         <div class="stat-label">MRR Total</div>
         <div class="stat-val yellow" id="stat-mrr">—</div>
-        <div class="stat-sub">Solo cuentas activas (pagando)</div>
+        <div class="stat-sub">Cuentas activas, con descuentos permanentes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Falta cobrar este mes</div>
+        <div class="stat-val" style="color:#60a5fa" id="stat-pending">—</div>
+        <div class="stat-sub" id="stat-pending-sub">Renovaciones que vencen este mes, con descuentos</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Cuentas activas</div>
@@ -916,6 +921,10 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
           </select>
         </div>
       </div>
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;margin-top:4px">
+        <input type="checkbox" id="edit-exclude-kpis" style="margin-top:3px;width:auto">
+        <span><strong style="font-size:13px">No contar en los KPIs</strong><br><span style="font-size:11px;color:var(--g)">Para barberías de prueba o de socios: no suma en MRR, cuentas, métricas ni en "Falta cobrar este mes". La cuenta sigue funcionando normal.</span></span>
+      </label>
       <div id="edit-err" style="color:var(--r);font-size:13px;display:none"></div>
     </div>
     <div class="modal-footer">
@@ -927,6 +936,12 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 
 <script>
 const PLAN_PRICES = { starter: 40000, staff: 80000, enterprise: 130000 };
+let billingForecast = {}; // id de cuenta → { list, next_charge, mrr_price, ... } (con descuentos)
+// Precio mensual estable de una cuenta (con descuentos permanentes) y próximo cobro (con todos los descuentos)
+function mrrPriceOf(a)  { const f = billingForecast[a.id]; return f ? f.mrr_price   : (PLAN_PRICES[a.filo_plan] || 0); }
+function nextChargeOf(a){ const f = billingForecast[a.id]; return f ? f.next_charge : (PLAN_PRICES[a.filo_plan] || 0); }
+// Una cuenta cuenta en los KPIs salvo que sea test o esté marcada para excluirla
+function countsInKpis(a) { return !a.is_barber && !a.is_branch && !a.is_test && !a.exclude_from_kpis; }
 let adminToken  = null;
 let allAccounts = [];  // flat list de TODOS los shops
 let allVendors  = [];
@@ -1089,11 +1104,13 @@ window.addEventListener('DOMContentLoaded', () => {
 // ── DATOS ─────────────────────────────────────────────────────────────────────
 async function loadAll() {
   try {
-    const [accRes, venRes] = await Promise.all([
+    const [accRes, venRes, fcRes] = await Promise.all([
       fetch('/api/admin/accounts', { headers: { 'Authorization': `Bearer ${adminToken}` } }),
-      fetch('/api/admin/vendors',  { headers: { 'Authorization': `Bearer ${adminToken}` } })
+      fetch('/api/admin/vendors',  { headers: { 'Authorization': `Bearer ${adminToken}` } }),
+      fetch('/api/admin/billing-forecast', { headers: { 'Authorization': `Bearer ${adminToken}` } }).catch(() => null)
     ]);
     if (accRes.status === 401) { logout(); return; }
+    try { billingForecast = (fcRes && fcRes.ok) ? ((await fcRes.json()).forecast || {}) : {}; } catch (_) { billingForecast = {}; }
     // Cargar promos en paralelo (no bloquea)
     promoLoad().catch(()=>{});
     const accData = await accRes.json();
@@ -1114,11 +1131,27 @@ async function loadAll() {
 // ── STATS ─────────────────────────────────────────────────────────────────────
 function renderStats() {
   // Solo cuentas raíz reales (excluye barberos, sucursales y cuentas test)
-  const roots  = allAccounts.filter(a => !a.is_barber && !a.is_branch && !a.is_test);
+  const roots  = allAccounts.filter(countsInKpis);
   const active = roots.filter(a => a.subscription_status === 'active');
   const trial  = roots.filter(a => a.subscription_status === 'trial');
   const expired = roots.filter(a => ['expired','cancelled'].includes(a.subscription_status));
-  const mrr = active.reduce((sum, a) => sum + (PLAN_PRICES[a.filo_plan] || 0), 0);
+  const mrr = active.reduce((sum, a) => sum + mrrPriceOf(a), 0);
+
+  // Falta cobrar este mes: cuentas activas cuyo próximo cobro cae hasta fin de mes (incluye las ya vencidas
+  // que todavía no pagaron), con el monto de su próximo cobro (descuentos de una vez y permanentes).
+  const now = new Date();
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1); // 1° del mes siguiente
+  const due = active.filter(a => { const d = getNextBillingDate(a); return d && new Date(d) < monthEnd; });
+  const pendingTotal = due.reduce((s, a) => s + nextChargeOf(a), 0);
+  const pendingList  = due.reduce((s, a) => s + (PLAN_PRICES[a.filo_plan] || 0), 0);
+  const pendingEl = document.getElementById('stat-pending');
+  if (pendingEl) {
+    pendingEl.textContent = '$' + pendingTotal.toLocaleString('es-AR');
+    const disc = pendingList - pendingTotal;
+    document.getElementById('stat-pending-sub').textContent = due.length
+      ? `${due.length} cuenta${due.length !== 1 ? 's' : ''}${disc > 0 ? ` · −$${disc.toLocaleString('es-AR')} por descuentos` : ''}`
+      : 'Nada pendiente este mes';
+  }
 
   document.getElementById('stat-mrr').textContent     = '$' + mrr.toLocaleString('es-AR');
   document.getElementById('stat-active').textContent  = active.length;
@@ -1225,7 +1258,8 @@ function renderTreeRow(a, depth, parentId) {
   } else if (isBranch) {
     nameHtml = `<div style="font-weight:600">${esc(a.name)}</div><div style="font-size:10px;color:#38b2ac">Sucursal #${a.id}</div>`;
   } else {
-    const testTag = a.is_test ? ` <span style="font-size:9px;font-weight:700;color:var(--or);letter-spacing:.5px">TEST</span>` : '';
+    const testTag = (a.is_test ? ` <span style="font-size:9px;font-weight:700;color:var(--or);letter-spacing:.5px">TEST</span>` : '')
+      + (a.exclude_from_kpis ? ` <span title="No cuenta en los KPIs" style="font-size:9px;font-weight:700;color:#60a5fa;letter-spacing:.5px">SIN KPI</span>` : '');
     const entTag  = a.is_enterprise_owner ? ` <span style="font-size:9px;color:#9f7aea">ENT</span>` : '';
     nameHtml = `<div style="font-weight:600">${esc(a.name)}${testTag}${entTag}</div><div style="font-size:10px;color:var(--g)">#${a.id}</div>`;
   }
@@ -1313,7 +1347,12 @@ function renderBillingTable(accounts) {
   }).sort((a, b) => (a.days ?? 999) - (b.days ?? 999));
 
   tbody.innerHTML = rows.map(a => {
-    const price = PLAN_PRICES[a.filo_plan] || 0;
+    const listPrice = PLAN_PRICES[a.filo_plan] || 0;
+    const price = nextChargeOf(a);
+    const fc = billingForecast[a.id];
+    const promoNote = fc && fc.next_discount > 0
+      ? `<div style="font-size:10px;color:#4ade80;margin-top:2px"><s style="color:var(--g)">$${listPrice.toLocaleString('es-AR')}</s> · ${esc(fc.next_promo?.name || 'promo')} (${fc.next_promo?.permanent ? 'permanente' : 'una vez'})</div>`
+      : '';
     const planBadge = `<span class="badge ${a.filo_plan}">${a.filo_plan.toUpperCase()}</span>`;
     const daysClass = a.days <= 3 ? 'urgent' : a.days <= 7 ? 'soon' : '';
     const daysLabel = a.days !== null
@@ -1326,7 +1365,7 @@ function renderBillingTable(accounts) {
     return `<tr>
       <td><div style="font-weight:600">${esc(a.name)}</div><div style="font-size:11px;color:var(--g)">${esc(a.email)}</div></td>
       <td data-label="Plan">${planBadge}</td>
-      <td data-label="Monto"><span class="billing-amount">$${price.toLocaleString('es-AR')}</span></td>
+      <td data-label="Monto"><span class="billing-amount">$${price.toLocaleString('es-AR')}</span>${promoNote}</td>
       <td data-label="Último pago">${lastPaymentLabel}</td>
       <td data-label="Próx. liquidación"><span class="billing-date">${a.nextDate ? fmtDate(a.nextDate) : '—'}</span></td>
       <td data-label="Días">${daysLabel}</td>
@@ -1446,6 +1485,7 @@ function openEditModal(id) {
   document.getElementById('edit-name').value = a.name;
   document.getElementById('edit-plan').value = a.filo_plan || 'starter';
   document.getElementById('edit-status').value = a.subscription_status || 'trial';
+  document.getElementById('edit-exclude-kpis').checked = !!a.exclude_from_kpis;
   document.getElementById('edit-err').style.display = 'none';
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1461,7 +1501,7 @@ async function saveEdit() {
     const res = await fetch(`/api/admin/accounts/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-      body: JSON.stringify({ name, filo_plan: plan, subscription_status: status })
+      body: JSON.stringify({ name, filo_plan: plan, subscription_status: status, exclude_from_kpis: document.getElementById('edit-exclude-kpis').checked })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Error'; errEl.style.display = 'block'; return; }
@@ -1937,7 +1977,7 @@ function renderMetrics() {
   const el = document.getElementById('tab-metrics');
   if (!allAccounts.length) { el.innerHTML = '<div class="empty-state">Cargando datos...</div>'; return; }
 
-  const roots   = allAccounts.filter(a => !a.is_barber && !a.is_branch && !a.is_test);
+  const roots   = allAccounts.filter(countsInKpis);
   const active  = roots.filter(a => a.subscription_status === 'active');
   const trial   = roots.filter(a => a.subscription_status === 'trial');
   const churned = roots.filter(a => ['expired','cancelled'].includes(a.subscription_status));
@@ -1953,7 +1993,7 @@ function renderMetrics() {
     enterprise: trial.filter(a => a.filo_plan === 'enterprise').length,
   };
 
-  const mrr          = byPlan.starter * 40000 + byPlan.staff * 80000 + byPlan.enterprise * 130000;
+  const mrr          = active.reduce((s, a) => s + mrrPriceOf(a), 0);
   const arr          = mrr * 12;
   const potentialMrr = trialByPlan.starter * 40000 + trialByPlan.staff * 80000 + trialByPlan.enterprise * 130000;
   const avgTicket    = active.length ? Math.round(mrr / active.length) : 0;

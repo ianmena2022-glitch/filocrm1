@@ -155,4 +155,64 @@ async function recordUse({ promotionId, shopId, paymentId, plan, originalAmount,
   } catch(e) { console.error('[promo recordUse]', e.message); }
 }
 
-module.exports = { planBasePrice, getBestPromoForShop, priceForShop, recordUse, computeDiscount, ensureTrialSchema, getTrialPromoForSignup };
+// Cuánto va a cobrar FILO a cada cuenta, teniendo en cuenta las promos:
+//   next_charge → próximo cobro (aplica descuentos "de una sola vez" aún no usados y los permanentes)
+//   mrr_price   → cobro mensual estable (solo descuentos permanentes: renovables sin tope de usos)
+// Una promo con código solo cuenta si la cuenta ya la usó (en las renovaciones se reaplica ese código).
+// shops: [{ id, filo_plan }]  →  { [id]: { list, next_charge, next_discount, next_promo, mrr_price, mrr_discount } }
+const FOREVER_USES = 12; // renovable con tope >= 12 usos (o sin tope) se considera "para siempre"
+async function forecastBilling(shops) {
+  const out = {};
+  let promos = [];
+  const uses = {}, totals = {};
+  try {
+    promos = (await pool.query(
+      `SELECT * FROM promotions
+        WHERE status = 'active' AND discount_value > 0
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at   IS NULL OR ends_at   >  NOW())`)).rows;
+    if (promos.length) {
+      (await pool.query('SELECT promotion_id, shop_id, COUNT(*)::int AS n FROM promotion_uses GROUP BY promotion_id, shop_id'))
+        .rows.forEach(r => { uses[`${r.promotion_id}:${r.shop_id}`] = r.n; totals[r.promotion_id] = (totals[r.promotion_id] || 0) + r.n; });
+    }
+  } catch (e) {
+    if (!/promotions.*does not exist|relation "promotion/i.test(e.message)) throw e;
+    promos = [];
+  }
+  for (const shop of shops) {
+    const plan = shop.filo_plan;
+    const list = planBasePrice(plan);
+    const mine = promos.filter(p =>
+      (p.applies_to === 'all' || (p.shop_ids || []).includes(shop.id)) &&
+      (!p.plans || !p.plans.length || p.plans.includes(plan)) &&
+      (!p.code || (uses[`${p.id}:${shop.id}`] || 0) > 0));
+    const pick = (cands) => {
+      let best = null;
+      for (const p of cands) {
+        const d = computeDiscount(list, p);
+        if (d.discount_amount > 0 && (!best || d.discount_amount > best.discount)) best = { promo: p, discount: d.discount_amount };
+      }
+      return best;
+    };
+    const within = (p) => {
+      const used = uses[`${p.id}:${shop.id}`] || 0;
+      const cap = p.renewable ? (p.max_uses_per_shop || 999999) : 1;
+      if (used >= cap) return false;
+      if (p.max_total_uses && (totals[p.id] || 0) >= p.max_total_uses && used === 0) return false;
+      return true;
+    };
+    const next = pick(mine.filter(within));
+    const steady = pick(mine.filter(p => p.renewable && (!p.max_uses_per_shop || p.max_uses_per_shop >= FOREVER_USES)));
+    out[shop.id] = {
+      list,
+      next_charge: list - (next ? next.discount : 0),
+      next_discount: next ? next.discount : 0,
+      next_promo: next ? { id: next.promo.id, name: next.promo.name, permanent: !!(next.promo.renewable && (!next.promo.max_uses_per_shop || next.promo.max_uses_per_shop >= FOREVER_USES)) } : null,
+      mrr_price: list - (steady ? steady.discount : 0),
+      mrr_discount: steady ? steady.discount : 0,
+    };
+  }
+  return out;
+}
+
+module.exports = { forecastBilling, planBasePrice, getBestPromoForShop, priceForShop, recordUse, computeDiscount, ensureTrialSchema, getTrialPromoForSignup };
