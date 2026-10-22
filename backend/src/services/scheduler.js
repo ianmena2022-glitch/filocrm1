@@ -279,8 +279,103 @@ async function runTransferPolling() {
   }
 }
 
+// ── Recordatorios de turno por WhatsApp (~2 h antes) ──────────────────────────
+// Reactivado: antes vivía en un scheduler que dejó de cargarse y nadie los recibía.
+// Reglas: zona horaria del local, solo entre 08:00 y 22:00 locales, una sola vez por turno
+// (reminder_sent_at), sin avisar a turnos recién reservados (ya recibieron confirmación),
+// y el envío pasa por el ritmo/topes anti-baneo de services/whatsapp.js.
+// Apagar todo con WPP_REMINDERS=off; un local puede desactivarlos desde sus plantillas.
+let _remindersRunning = false;
+
+function isQuietHour(tz, now = new Date()) {
+  const h = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: tz || 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23' }).format(now));
+  return h < 8 || h >= 22;
+}
+
+async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
+  if (process.env.WPP_REMINDERS === 'off') return { sent: 0, skipped: 0 };
+  if (_remindersRunning) return { sent: 0, skipped: 0 };
+  _remindersRunning = true;
+  let sent = 0, skipped = 0;
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.id, a.shop_id, a.client_name, a.service_name, a.date::text AS date, a.time_start,
+              c.phone AS client_phone, c.name AS client_name_db,
+              s.name AS shop_name, s.msg_templates,
+              COALESCE(s.timezone, 'America/Argentina/Buenos_Aires') AS tz
+         FROM appointments a
+         JOIN shops s   ON s.id = a.shop_id
+         JOIN clients c ON c.id = a.client_id
+        WHERE a.status IN ('pending','confirmed')
+          AND a.reminder_sent_at IS NULL
+          AND a.created_at < NOW() - INTERVAL '3 hours'
+          AND c.phone IS NOT NULL AND c.phone <> ''
+          AND (s.wpp_connected = TRUE
+               OR EXISTS (SELECT 1 FROM shops o WHERE o.id = s.parent_enterprise_id AND o.wpp_connected = TRUE))
+          AND ((a.date + a.time_start)::timestamp AT TIME ZONE COALESCE(s.timezone, 'America/Argentina/Buenos_Aires'))
+              BETWEEN NOW() + INTERVAL '75 minutes' AND NOW() + INTERVAL '165 minutes'
+        ORDER BY a.date, a.time_start
+        LIMIT 200`
+    );
+    if (!rows.length) return { sent, skipped };
+
+    const wpp = require('./whatsapp');
+    const markDone = (id) => pool.query('UPDATE appointments SET reminder_sent_at = NOW() WHERE id = $1', [id]);
+
+    for (const a of rows) {
+      if (!ignoreQuietHours && isQuietHour(a.tz)) { skipped++; continue; }
+      let tpls = {};
+      try { tpls = a.msg_templates ? JSON.parse(a.msg_templates) : {}; } catch (_) {}
+      if (tpls.recordatorio_auto === false) { skipped++; continue; }   // el local los desactivó
+
+      const nombre = a.client_name_db || a.client_name || 'Cliente';
+      const hora   = String(a.time_start).slice(0, 5);
+      const fecha  = new Date(a.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      let msg = null;
+      if (tpls.recordatorio && String(tpls.recordatorio).trim()) {
+        msg = wpp.renderTemplate(tpls.recordatorio, { nombre, hora, barberia: a.shop_name || 'la barbería', fecha, servicio: a.service_name || '' });
+      } else {
+        try {
+          const { generateMessage } = require('./ai');
+          msg = await generateMessage(a.shop_id, 'recordatorio', { clientName: nombre, hora, fecha, shopName: a.shop_name || 'la barbería', serviceName: a.service_name || null });
+        } catch (_) {}
+      }
+      if (!msg) msg = `¡Hola ${nombre}! 👋\n\nTe recordamos tu turno de hoy a las *${hora}* en ${a.shop_name || 'la barbería'}. ¡Te esperamos! ✂️`;
+      // El aviso sale ~2 h antes: plantillas viejas que dicen "mañana" se corrigen
+      msg = msg.replace(/\bmañana\b/gi, 'hoy');
+
+      try {
+        await wpp.sendText(a.shop_id, a.client_phone, msg);
+        await markDone(a.id);
+        sent++;
+      } catch (e) {
+        if (e.code === 'OPTED_OUT' || e.code === 'NOT_ON_WHATSAPP') {
+          await markDone(a.id).catch(() => {});   // no reintentar nunca
+          skipped++;
+        } else if (e.code === 'DAILY_CAP' || e.code === 'FIRST_CONTACT_CAP') {
+          console.warn(`[REMINDERS] pausa por tope (${e.code}) en shop ${a.shop_id}`);
+          skipped++;
+        } else {
+          console.warn(`[REMINDERS] turno ${a.id} no enviado: ${e.message}`);
+          skipped++;
+        }
+      }
+    }
+    if (sent || skipped) console.log(`[REMINDERS] enviados=${sent} omitidos=${skipped}`);
+  } catch (e) {
+    console.error('[REMINDERS] error:', e.message);
+  } finally {
+    _remindersRunning = false;
+  }
+  return { sent, skipped };
+}
+
 function startScheduler() {
-  console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min + poll transferencias 10s)');
+  console.log('⏰ Scheduler FILO iniciado (intervalo: 30 min + poll transferencias 10s + recordatorios de turno 10 min)');
+
+  _addTimeout(runAppointmentReminders, 120_000);
+  _addInterval(runAppointmentReminders, 10 * 60 * 1000);
 
   _addTimeout(runCajaAutoClose, 10_000);
   _addInterval(runCajaAutoClose, 30 * 60 * 1000);
@@ -305,4 +400,4 @@ function stopScheduler() {
   _schedulerHandles.length = 0;
 }
 
-module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina };
+module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina, runAppointmentReminders, isQuietHour };
