@@ -520,7 +520,7 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       debit_total:       parseFloat(a.debit_total)    + parseFloat(dc.debit_col),
       credit_total:      parseFloat(a.credit_total)   + parseFloat(dc.credit_col),
       transfer_total:    parseFloat(a.transfer_total) + parseFloat(dc.transfer_col),
-      debt_total:        Math.max(0, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
+      debt_total:        parseFloat(a.debt_total),
       no_method_total:   parseFloat(a.no_method_total),
       tips_total:        tips,
       revenue_total:     revenue,
@@ -532,14 +532,14 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
       // Saldo de cada cuenta del local (ingresos − egresos), igual que en la caja del propio local
-      methods:           await branchMethodBalances(branchId, date, parseFloat(a.debt_total) - parseFloat(dc.total_col)),
+      methods:           await branchMethodBalances(branchId, date),
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Cuentas (métodos de pago) de una sucursal con su saldo del día. Cada saldo sale del mismo
 // cálculo que el detalle de la cuenta, así que lo que se ve al abrirla siempre coincide.
-async function branchMethodBalances(branchId, date, debtOutstanding) {
+async function branchMethodBalances(branchId, date) {
   const tz = await getShopTz(branchId);
   let methods = [];
   try {
@@ -566,7 +566,8 @@ async function branchMethodBalances(branchId, date, debtOutstanding) {
 
   const out = [];
   for (const m of methods) {
-    if (m.is_debt) { out.push({ ...m, total: Math.max(0, debtOutstanding || 0) }); continue; }
+    // Fiado: lo fiado ese día (igual que la caja del local); los cobros figuran como ingreso en su cuenta
+    if (m.is_debt) { out.push({ ...m, total: parseFloat((await methodTotalsForDay(branchId, date)).debt_total || 0) }); continue; }
     const d = await methodMovementsForDay(branchId, date, m.key, tz);
     out.push({ ...m, total: d.grand_total });
   }

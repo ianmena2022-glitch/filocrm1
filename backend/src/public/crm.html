@@ -12562,6 +12562,50 @@ function renderCashSummary(c) {
   }
 }
 
+// Agrupa las deudas pendientes por cliente: total adeudado, cantidad y detalle de cada una
+function debtsByClientHtml(debts, withPayButton) {
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const groups = new Map();
+  debts.forEach(d => {
+    const key = d.client_id ? 'c' + d.client_id : 'n' + String(d.client_name || 'Sin nombre').trim().toLowerCase();
+    if (!groups.has(key)) groups.set(key, { name: d.client_name || 'Sin nombre', phone: d.client_phone || '', total: 0, items: [] });
+    const g = groups.get(key);
+    g.total += parseFloat(d.amount || 0);
+    g.items.push(d);
+  });
+  const list = [...groups.values()].sort((a, b) => b.total - a.total);
+  const grand = list.reduce((s, g) => s + g.total, 0);
+  const head = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,67,67,.08);border:1px solid rgba(255,67,67,.25);border-radius:10px">
+      <div>
+        <div style="font-size:11px;color:var(--gray);letter-spacing:.5px">DEUDA TOTAL PENDIENTE</div>
+        <div style="font-size:11px;color:var(--gray);margin-top:2px">${list.length} cliente${list.length !== 1 ? 's' : ''} · ${debts.length} deuda${debts.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div style="font-size:22px;font-weight:800;color:#FF4343">${fmt(grand)}</div>
+    </div>`;
+  const body = list.map(g => `
+    <details style="border-bottom:1px solid rgba(255,255,255,.06)">
+      <summary style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 2px;cursor:pointer;list-style:none">
+        <div>
+          <div style="font-size:13px;font-weight:700">${escHtml(g.name)} <span style="font-size:10px;color:var(--gray);font-weight:400">▾</span></div>
+          <div style="font-size:11px;color:var(--gray)">${g.items.length} deuda${g.items.length !== 1 ? 's' : ''}${g.phone ? ' · ' + escHtml(g.phone) : ''}</div>
+        </div>
+        <span style="font-size:15px;font-weight:800;color:#FF4343">${fmt(g.total)}</span>
+      </summary>
+      <div style="padding:0 0 8px 10px">
+        ${g.items.map(d => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed rgba(255,255,255,.06)">
+            <div style="font-size:11px;color:var(--gray)">${escHtml(d.description || '')} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-size:13px;font-weight:700;color:#FF4343">${fmt(d.amount)}</span>
+              ${withPayButton ? `<button onclick="payDebt(${d.id})" style="background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#4CAF50;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600">Cobrar</button>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>
+    </details>`).join('');
+  return head + body;
+}
+
 function renderDebts(debts) {
   const el = document.getElementById('debts-list');
   if (!el) return;
@@ -12575,18 +12619,7 @@ function renderDebts(debts) {
     el.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin deudas pendientes 🎉</div>';
     return;
   }
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-  el.innerHTML = debts.map(d => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-      <div>
-        <div style="font-size:13px;font-weight:600">${escHtml(d.client_name || 'Sin nombre')}</div>
-        <div style="font-size:11px;color:var(--gray)">${escHtml(d.description || '')} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:14px;font-weight:700;color:#FF4343">${fmt(d.amount)}</span>
-        <button onclick="payDebt(${d.id})" style="background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#4CAF50;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600">Cobrar</button>
-      </div>
-    </div>`).join('');
+  el.innerHTML = debtsByClientHtml(debts, true);
 }
 
 function renderCashHistory(history) {
@@ -13514,15 +13547,7 @@ async function loadBranchDebts() {
     const debts = await api('GET', `/enterprise/branches/${_entCajaBranchId}/debts`);
     if (badge) { badge.textContent = debts.length > 0 ? debts.length : ''; badge.className = debts.length > 0 ? 'ctab-badge' : ''; }
     if (!debts.length) { el.innerHTML = '<div style="color:var(--gray);font-size:13px">Sin deudas pendientes 🎉</div>'; return; }
-    const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
-    el.innerHTML = debts.map(d => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-        <div>
-          <div style="font-size:13px;font-weight:600">${escHtml(d.client_name || 'Sin nombre')}</div>
-          <div style="font-size:11px;color:var(--gray)">${escHtml(d.description || '')} · ${new Date(d.created_at).toLocaleDateString('es-AR')}</div>
-        </div>
-        <span style="font-size:14px;font-weight:700;color:#FF4343">${fmt(d.amount)}</span>
-      </div>`).join('');
+    el.innerHTML = debtsByClientHtml(debts, false);
   } catch(e) { el.innerHTML = `<div style="color:#FF4343;font-size:13px">${e.message}</div>`; }
 }
 
