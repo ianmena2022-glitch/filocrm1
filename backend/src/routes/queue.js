@@ -477,22 +477,35 @@ router.post('/next', auth, async (req, res) => {
     const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
     const isBarber = callerRes.rows[0]?.is_barber || false;
 
-    const entryQuery = isBarber
+    // El dueño/cajera puede llamar para un barbero en particular (elige quién atiende) o sin barbero
+    let forBarberId = isBarber ? req.shopId : null;
+    if (!isBarber && req.body && req.body.barber_id) {
+      const bChk = await pool.query(
+        'SELECT id FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [parseInt(req.body.barber_id), shopId]
+      );
+      if (!bChk.rows.length) return res.status(400).json({ error: 'Barbero inválido para este local' });
+      forBarberId = bChk.rows[0].id;
+    }
+
+    // Para un barbero: primero los que lo eligieron a él, después los "cualquiera".
+    // Sin barbero: el primero que llegó.
+    const entryQuery = forBarberId
       ? `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
          WHERE shop_id=$1 AND status='waiting' AND (barber_id = $2 OR barber_id IS NULL)
          ORDER BY (barber_id IS NULL) ASC, created_at ASC LIMIT 1`
       : `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
          WHERE shop_id=$1 AND status='waiting'
          ORDER BY created_at ASC LIMIT 1`;
-    const entryParams = isBarber ? [shopId, req.shopId] : [shopId];
+    const entryParams = forBarberId ? [shopId, forBarberId] : [shopId];
 
     const entryRes = await pool.query(entryQuery, entryParams);
     if (!entryRes.rows.length) {
-      return res.json({ ok: false, message: 'No hay nadie en la fila para vos' });
+      return res.json({ ok: false, message: forBarberId && !isBarber ? 'No hay nadie en la fila para ese barbero' : 'No hay nadie en la fila para vos' });
     }
     const entry = entryRes.rows[0];
 
-    const assignedBarberId = isBarber ? req.shopId : null;
+    const assignedBarberId = forBarberId;
     // UPDATE condicional: si dos personas llaman a la vez, solo una se queda con el cliente
     const claimed = await pool.query(
       `UPDATE queue_entries SET status='called', called_at=NOW(), barber_id=COALESCE(barber_id,$1)

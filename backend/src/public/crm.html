@@ -3149,12 +3149,13 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         </div>
       </div>
 
-      <!-- Los barberos llaman al siguiente desde su propio dashboard -->
-      <div style="background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:20px">✂️</span>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--yellow)">Los barberos manejan su fila</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">Cada barbero llama y cobra desde su propio dashboard. La comisión se asigna automáticamente.</div>
+      <!-- Llamar al siguiente desde la cuenta del dueño / caja -->
+      <div style="background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.18);border-radius:12px;padding:14px 18px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:4px">📣 Llamar al siguiente</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:10px">Elegí quién lo va a atender: se llama primero a los que pidieron a ese barbero y después a los "cualquiera". Los barberos también pueden llamar desde su pantalla.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="flex:1;min-width:180px"><select id="fila-next-barber"><option value="">Sin barbero / lo atiendo yo</option></select></div>
+          <button id="fila-next-btn" onclick="callNextInQueue()" class="btn-add" style="white-space:nowrap">▶ Llamar siguiente</button>
         </div>
       </div>
 
@@ -6360,6 +6361,7 @@ let _queueSlug = '';
 let _appointmentsToday = [];
 
 async function loadQueue() {
+  fillQueueNextBarbers();
   try {
     const data = await api('GET', '/queue');
     _queuePaused = data.paused || false;
@@ -6481,7 +6483,7 @@ function walkInRowHtml(entry, isCalled, position) {
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${isCalled
-          ? `<span style="font-size:11px;color:rgba(74,222,128,.6);white-space:nowrap">En atención</span>`
+          ? `<button data-id="${entry.id}" data-name="${escHtml(entry.client_name)}" data-svc="${escHtml(entry.service_name || '')}" data-price="${parseFloat(entry.price || 0) || 0}" data-barber="${entry.barber_id || ''}" onclick="openWalkInPayment(parseInt(this.dataset.id), this.dataset.name, this.dataset.svc, parseFloat(this.dataset.price) || 0, this.dataset.barber || null)" style="padding:6px 12px;border-radius:6px;border:none;background:#4ade80;color:#04140a;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">💳 Cobrar</button>`
           : ''}
         <button onclick="removeQueueEntry(${entry.id})" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,67,67,.2);background:rgba(255,67,67,.06);color:#ff8080;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
@@ -6493,13 +6495,31 @@ function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&
 async function callNextInQueue() {
   const btn = document.getElementById('fila-next-btn');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  const barberId = document.getElementById('fila-next-barber')?.value || '';
   try {
-    const data = await api('POST', '/queue/next');
-    if (!data.ok) { showToast(data.message || 'No hay nadie en la fila'); }
-    else { showToast(`📣 Llamando a ${data.entry?.client_name}`); }
+    const data = await api('POST', '/queue/next', barberId ? { barber_id: parseInt(barberId) } : {});
+    if (!data.ok) { showToast('ℹ️', data.message || 'No hay nadie en la fila', ''); }
+    else {
+      const who = barberId ? (window._barbersList || []).find(b => String(b.id) === barberId)?.name : null;
+      showToast('📣', `Llamando a ${data.entry?.client_name || 'el siguiente'}`, who ? `Lo atiende ${who}` : 'Ya quedó en la agenda como "Fila virtual"');
+    }
     loadQueue();
-  } catch(e) { showToast('Error al llamar siguiente'); }
+  } catch(e) { showToast('❌', 'Error al llamar al siguiente', e.message || ''); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Llamar siguiente'; } }
+}
+
+// Selector "¿quién lo atiende?" para llamar desde la cuenta del dueño
+async function fillQueueNextBarbers() {
+  const sel = document.getElementById('fila-next-barber');
+  if (!sel || sel.dataset.loaded === '1') return;
+  if (!window._barbersList) {
+    try { window._barbersList = await api('GET', '/barbers'); } catch (_) { window._barbersList = []; }
+  }
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">Sin barbero / lo atiendo yo</option>' +
+    (window._barbersList || []).map(b => `<option value="${b.id}">${escHtml(b.name || 'Barbero')}</option>`).join('');
+  sel.value = keep;
+  sel.dataset.loaded = '1';
 }
 
 async function removeQueueEntry(id) {
@@ -6512,7 +6532,7 @@ let _walkInPayMethod = null;
 let _walkInServices = [];
 let _walkInBarbers = [];
 
-async function openWalkInPayment(entryId, clientName, preServiceName='', prePrice=0) {
+async function openWalkInPayment(entryId, clientName, preServiceName='', prePrice=0, preBarberId=null) {
   _walkInPayEntryId = entryId;
   _walkInPayMethod = null;
 
@@ -6552,7 +6572,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
         <label style="font-size:12px;color:rgba(255,255,255,.4);display:block;margin-bottom:6px">Barbero que atendió</label>
         <select id="wip-barber" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 14px;color:white;font-size:14px;box-sizing:border-box">
           <option value="">— Sin asignar —</option>
-          ${_walkInBarbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}">${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('')}
+          ${_walkInBarbers.map(b => `<option value="${b.id}" data-pct="${b.barber_commission_pct||50}"${preBarberId && String(preBarberId) === String(b.id) ? ' selected' : ''}>${escHtml(b.name)} (${b.barber_commission_pct||50}%)</option>`).join('')}
         </select>
       </div>`
     : '';
