@@ -222,38 +222,57 @@ router.post('/', auth, async (req, res) => {
 
     // En alta MANUAL del dueño/barbero se permite overlap: solo rechazamos si
     // hay otro turno con la MISMA hora exacta de inicio para ese barbero.
-    if (assignedBarberId) {
-      const conflict = await pool.query(
-        `SELECT id FROM appointments
-         WHERE shop_id=$1 AND barber_id=$2 AND date=$3
-           AND status NOT IN ('cancelled','noshow')
-           AND time_start = $4`,
-        [shopId, assignedBarberId, date, time_start]
-      );
-      if (conflict.rows.length) {
-        return res.status(409).json({ error: `El barbero ya tiene un turno a las ${time_start}. Elegí otra hora.` });
+    // La revisión y el alta van juntas bajo un candado por barbero y día: si llegan dos
+    // pedidos a la vez (doble clic, PC lenta) el segundo espera y ve el turno del primero.
+    const lockClient = await pool.connect();
+    let result;
+    try {
+      await lockClient.query('BEGIN');
+      if (assignedBarberId) {
+        await lockClient.query('SELECT pg_advisory_xact_lock($1::int, hashtext($2))', [shopId, `${assignedBarberId}:${date}`]);
+        const conflict = await lockClient.query(
+          `SELECT id FROM appointments
+           WHERE shop_id=$1 AND barber_id=$2 AND date=$3
+             AND status NOT IN ('cancelled','noshow')
+             AND time_start = $4`,
+          [shopId, assignedBarberId, date, time_start]
+        );
+        if (conflict.rows.length) {
+          await lockClient.query('ROLLBACK');
+          // Los puntos del premio ya se habían descontado: devolverlos
+          if (client_id && redeem_item_id && pointsCost > 0 && redeemInfo) {
+            await pool.query('UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3',
+              [pointsCost, parseInt(client_id), shopId]).catch(() => {});
+          }
+          return res.status(409).json({ error: `El barbero ya tiene un turno a las ${time_start}. Elegí otra hora.` });
+        }
       }
+      result = await lockClient.query(
+        `INSERT INTO appointments
+           (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
+            time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         RETURNING *`,
+        [
+          shopId,
+          client_id || null, cName,
+          service_id || null, svcName,
+          parseFloat(price)||0, parseFloat(svcCost)||0,
+          date, time_start, time_end,
+          assignedBarberId,
+          barber_name || null,
+          realCommissionPct,
+          notes || null,
+          redeemInfo
+        ]
+      );
+      await lockClient.query('COMMIT');
+    } catch (txErr) {
+      try { await lockClient.query('ROLLBACK'); } catch (_) {}
+      throw txErr;
+    } finally {
+      lockClient.release();
     }
-
-    const result = await pool.query(
-      `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
-          time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-       RETURNING *`,
-      [
-        shopId,
-        client_id || null, cName,
-        service_id || null, svcName,
-        parseFloat(price)||0, parseFloat(svcCost)||0,
-        date, time_start, time_end,
-        assignedBarberId,
-        barber_name || null,
-        realCommissionPct,
-        notes || null,
-        redeemInfo
-      ]
-    );
 
     const appt = result.rows[0];
 

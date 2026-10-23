@@ -4679,11 +4679,58 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 //  FILO CRM — Frontend Logic
 // ════════════════════════════════════════════
 
+// ─── Reloj: el CRM usa la hora del SERVIDOR, no la del dispositivo ───
+// Una PC con la hora mal puesta no puede mover "hoy" ni los horarios. Cada respuesta de la API
+// trae la hora del servidor (header Date) y con eso se corrige todo `new Date()` / `Date.now()`.
+const _RealDate = Date;
+let _clockOffset = 0;   // ms: hora del servidor - hora del dispositivo
+(function () { try { const o = parseFloat(localStorage.getItem('filo_clock_offset')); if (isFinite(o)) _clockOffset = o; } catch (_) {} })();
+function _FiloDate(...args) {
+  if (!new.target) return new _RealDate(_RealDate.now() + _clockOffset).toString();
+  return args.length === 0 ? new _RealDate(_RealDate.now() + _clockOffset) : new _RealDate(...args);
+}
+Object.setPrototypeOf(_FiloDate, _RealDate);
+_FiloDate.prototype = _RealDate.prototype;
+_FiloDate.now   = () => _RealDate.now() + _clockOffset;
+_FiloDate.parse = _RealDate.parse;
+_FiloDate.UTC   = _RealDate.UTC;
+window.Date = _FiloDate;
+
+function syncClockFromResponse(res) {
+  try {
+    const h = res.headers.get('Date');
+    if (!h || res.headers.get('Age')) return;
+    const t = _RealDate.parse(h);
+    if (!isFinite(t)) return;
+    const off = (t + 500) - _RealDate.now();   // el header tiene precisión de 1 s: tomamos el medio
+    const moved = Math.abs(off - _clockOffset) > 60000;
+    _clockOffset = off;
+    try { localStorage.setItem('filo_clock_offset', String(off)); } catch (_) {}
+    if (moved) { try { agendaDate = shopToday(); } catch (_) {} }
+    if (Math.abs(off) > 2 * 60000) {
+      let warned = false; try { warned = sessionStorage.getItem('filo_clock_warned') === '1'; } catch (_) {}
+      if (!warned) {
+        try { sessionStorage.setItem('filo_clock_warned', '1'); } catch (_) {}
+        const mins = Math.round(Math.abs(off) / 60000);
+        setTimeout(() => { try { showToast('⏰', 'La hora de este equipo está mal', `Está ${mins >= 60 ? Math.round(mins / 60) + ' h' : mins + ' min'} ${off > 0 ? 'atrasada' : 'adelantada'}. FILO usa la hora del servidor, pero conviene corregirla.`); } catch (_) {} }, 2500);
+      }
+    }
+  } catch (_) {}
+}
+
+// Fecha de "hoy" (YYYY-MM-DD) en la zona horaria del local, no la del dispositivo ni UTC
+function _shopTz() { return (typeof currentShop !== 'undefined' && currentShop && currentShop.timezone) || 'America/Argentina/Buenos_Aires'; }
+function ymd(d) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: _shopTz() }).format(d); }
+  catch (_) { return d.toISOString().split('T')[0]; }
+}
+function shopToday() { return ymd(new Date()); }
+
 const API = window.location.origin + '/api';
 let token = localStorage.getItem('filo_token');
 let currentShop = JSON.parse(localStorage.getItem('filo_shop') || 'null');
 checkInviteCode();
-let agendaDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+let agendaDate = shopToday();
 let services = [];
 let clients = [];
 let sillonTargetClients = [];
@@ -4703,6 +4750,7 @@ async function api(method, path, body) {
   // Cache-busting para GET requests
   const url = API + path + (method === 'GET' && path.includes('appointments') ? (path.includes('?') ? '&' : '?') + '_t=' + Date.now() : '');
   const res = await fetch(url, opts);
+  syncClockFromResponse(res);
   const data = await res.json();
   if (res.status === 402) {
     if (currentShop) {
@@ -6267,7 +6315,7 @@ function showSection(name) {
     btn.classList.toggle('cfg-active', name === 'configuracion');
   });
 
-  if (name === 'agenda') { agendaDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]; loadAgenda(); }
+  if (name === 'agenda') { agendaDate = shopToday(); loadAgenda(); }
   if (name === 'clientes') renderClients();
   if (name === 'motores') loadMotores();
   if (name === 'membresias') loadMemberships();
@@ -6928,7 +6976,7 @@ async function loadDashboard() {
         if (dvsAmount) dvsAmount.textContent = '$' + prodRev.toLocaleString('es-AR', {maximumFractionDigits:0});
         if (dvsCount)  dvsCount.textContent  = `· ${prodCount} venta${prodCount !== 1 ? 's' : ''}`;
         // Última venta de hoy
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = shopToday();
         const lastToday = prodVentas.find(v => v.sold_at && v.sold_at.startsWith(todayStr));
         if (dvsLast && lastToday) dvsLast.textContent = `último: ${lastToday.product_name}`;
         else if (dvsLast) dvsLast.textContent = '';
@@ -6977,7 +7025,7 @@ function renderChart30(data) {
   const el = document.getElementById('dash-chart-30');
   if (!data?.length) { el.innerHTML = `<div style="font-size:13px;color:var(--gray);align-self:center">Sin datos</div>`; return; }
   const max = Math.max(...data.map(d => parseFloat(d.revenue)), 1);
-  const today = new Date().toISOString().split('T')[0];
+  const today = shopToday();
   el.innerHTML = data.map(d => {
     const h = Math.max(4, (parseFloat(d.revenue) / max) * 110);
     const isToday = d.date === today;
@@ -7000,7 +7048,7 @@ async function loadDashCalendar() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(startOfWeek);
     d.setDate(startOfWeek.getDate() + i);
-    dates.push(d.toISOString().split('T')[0]);
+    dates.push(ymd(d));
   }
 
   try {
@@ -7018,7 +7066,7 @@ async function loadDashCalendar() {
 function renderDashCalendar(todayAppts) {
   // Si se pasan turnos de hoy, actualizamos el cache
   if (todayAppts?.length) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = shopToday();
     _dashWeekAppts[todayStr] = todayAppts;
   }
 
@@ -7029,12 +7077,12 @@ function renderDashCalendar(todayAppts) {
   startOfWeek.setDate(now.getDate() + diff + (_dashCalOffset * 7));
 
   const weekDays = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = ymd(now);
 
   const cells = weekDays.map((label, i) => {
     const d = new Date(startOfWeek);
     d.setDate(startOfWeek.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = ymd(d);
     const isToday = dateStr === todayStr;
     const isPast  = dateStr < todayStr;
     const appts = _dashWeekAppts[dateStr] || [];
@@ -7199,7 +7247,7 @@ function updateAgendaSummary() {
 // ─── AGENDA ───
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
-  const today = new Date().toISOString().split('T')[0];
+  const today = shopToday();
   if (dateStr === today) return 'Hoy';
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
@@ -7928,7 +7976,19 @@ async function selectFirstAvailableBarber() {
   }
 }
 
+let _creatingAppt = false;
 async function createAppointment() {
+  if (_creatingAppt) return;   // ya se está guardando: ignorar el segundo clic
+  _creatingAppt = true;
+  const _saveBtn = document.querySelector('#modal-turno .btn-modal-primary');
+  if (_saveBtn) { _saveBtn.disabled = true; _saveBtn.dataset.label = _saveBtn.textContent; _saveBtn.textContent = 'Guardando…'; }
+  try { await _createAppointment(); }
+  finally {
+    _creatingAppt = false;
+    if (_saveBtn) { _saveBtn.disabled = false; _saveBtn.textContent = _saveBtn.dataset.label || '✅ Guardar turno'; }
+  }
+}
+async function _createAppointment() {
   let clientId = document.getElementById('t-client').value;
   const clientName = document.getElementById('t-client-name').value.trim();
   const clientPhone = document.getElementById('t-client-phone').value.trim();
@@ -8566,7 +8626,7 @@ function addClosedDay() {
   const date = input.value;
   if (!date) return;
   if (_closedDays.includes(date)) { showToast('⚠️','Ya existe','Esa fecha ya está en la lista'); return; }
-  const today = new Date().toISOString().split('T')[0];
+  const today = shopToday();
   if (date < today) { showToast('⚠️','Fecha pasada','Elegí una fecha futura'); return; }
   _closedDays.push(date);
   renderClosedDays(_closedDays);
@@ -8583,7 +8643,7 @@ function removeClosedDay(date) {
 async function saveClosedDays() {
   try {
     // Filtrar fechas pasadas antes de guardar
-    const today = new Date().toISOString().split('T')[0];
+    const today = shopToday();
     _closedDays = _closedDays.filter(d => d >= today);
     await api('PUT', '/settings', { closed_days: JSON.stringify(_closedDays) });
     showToast('✅', 'Días no laborables guardados', '');
@@ -10265,7 +10325,7 @@ async function exportClientsCSV() {
       Notas: c.notes || '',
       'Cumpleaños': c.birthday || '',
     }));
-    const stamp = new Date().toISOString().slice(0,10);
+    const stamp = shopToday();
     downloadCSV(`clientes_filo_${stamp}.csv`, rows);
     showToast('✅', 'Listo', `${rows.length} clientes exportados`);
   } catch(e) { showToast('❌', 'Error', e.message); }
@@ -12425,7 +12485,7 @@ async function loadCashSummary() {
   if (!dateInput) return;
   // Si no tiene fecha, poner hoy
   if (!dateInput.value) {
-    dateInput.value = new Date(new Date().getTime() - new Date().getTimezoneOffset()*60000).toISOString().split('T')[0];
+    dateInput.value = shopToday();
   }
   const date = dateInput.value;
   try {
@@ -12910,7 +12970,7 @@ async function toggleMethodDetail(method) {
   el.innerHTML = '<div style="padding:8px 12px;color:var(--gray);font-size:12px">Cargando...</div>';
   try {
     const dateInput = document.getElementById('caja-date');
-    const date = dateInput?.value || new Date().toISOString().split('T')[0];
+    const date = dateInput?.value || shopToday();
     const data = await api('GET', `/dashboard/cash/method-detail?date=${date}&method=${method}`);
     renderMethodDetail(el, data);
   } catch(e) {
@@ -13381,7 +13441,7 @@ function openBranchCaja(branchId, branchName) {
   _entCajaBranchName = branchName;
   document.getElementById('ent-caja-title').textContent = `💰 Caja · ${branchName}`;
   // Poner fecha de hoy
-  const today = new Date(new Date().getTime() - new Date().getTimezoneOffset()*60000).toISOString().split('T')[0];
+  const today = shopToday();
   document.getElementById('ent-caja-date').value = today;
   // Reset tabs
   switchBranchCajaTab('pagos');
@@ -13695,7 +13755,7 @@ function generateBranchPDF(data, month, branchName) {
 // Cerrar caja manualmente desde el botón en el tab Historial
 async function manuallyCloseCaja() {
   const dateInput = document.getElementById('caja-date');
-  const date = dateInput?.value || new Date().toISOString().split('T')[0];
+  const date = dateInput?.value || shopToday();
   try {
     await api('POST', '/dashboard/cash/close', { date });
     showToast('✅', 'Caja cerrada', `${new Date(date+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'short'})} guardada en historial`);
@@ -13707,7 +13767,7 @@ async function manuallyCloseCaja() {
 async function loadCashOnNavigation() {
   const dateInput = document.getElementById('caja-date');
   if (dateInput && !dateInput.value) {
-    dateInput.value = new Date(new Date().getTime() - new Date().getTimezoneOffset()*60000).toISOString().split('T')[0];
+    dateInput.value = shopToday();
   }
   await loadCashSummary();
 }

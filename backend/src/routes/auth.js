@@ -47,6 +47,7 @@ function shopPayload(shop) {
     plan:                 shop.plan || 'starter',
     filo_plan:            shop.filo_plan || 'starter',
     is_test:              shop.is_test || shop.plan === 'test',
+    timezone:             shop.timezone || null,
     is_barber:            shop.is_barber || false,
     parent_shop_id:       shop.parent_shop_id || null,
     commission_enabled:           shop.commission_enabled || false,
