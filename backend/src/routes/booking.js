@@ -242,7 +242,10 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     }
 
     let barberMap = null; // { barberId -> [occupiedRanges] }
-    if (allowBarberChoice) {
+    let unassignedRanges = [];
+    // Con barberos, la disponibilidad es por barbero aunque el cliente no pueda elegir:
+    // cada barbero libre puede tomar un turno en el mismo horario (antes era 1 por horario en todo el local)
+    {
       const barbersQ = await pool.query(
         'SELECT id, barber_schedule FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE',
         [barberShopId]
@@ -272,6 +275,20 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
                AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())`,
             [shopId, date]
           );
+          // Turnos sin barbero asignado (p.ej. los atiende el dueño): ocupan un lugar cada uno
+          const unassignedQ = await pool.query(
+            `SELECT time_start, time_end FROM appointments
+             WHERE shop_id=$1 AND date=$2 AND barber_id IS NULL
+               AND status NOT IN ('cancelled','noshow')
+               AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())`,
+            [shopId, date]
+          );
+          unassignedRanges = unassignedQ.rows.map(a => {
+            const [sh, sm] = String(a.time_start).split(':').map(Number);
+            const [eh, em] = String(a.time_end || '00:00').split(':').map(Number);
+            const endMin = eh * 60 + em;
+            return { from: sh * 60 + sm, to: endMin > 0 ? endMin : sh * 60 + sm + 30 };
+          });
           for (const a of occupiedByBarber.rows) {
             if (!barberMap[a.barber_id]) continue;
             const [sh, sm] = String(a.time_start).split(':').map(Number);
@@ -330,7 +347,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
         const slotHH = String(Math.floor(t / 60)).padStart(2, '0');
         const slotMM = String(t % 60).padStart(2, '0');
         const slotTime = `${slotHH}:${slotMM}`;
-        available = Object.values(barberMap).some(b => {
+        const freeCount = Object.values(barberMap).filter(b => {
           // Verificar que el barbero trabaja en este slot específico
           if (b.schedule) {
             const cfg = b.schedule[bsDayKey];
@@ -338,7 +355,9 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
             if (cfg.from && cfg.to && (slotTime < cfg.from || slotTime >= cfg.to)) return false;
           }
           return !b.ranges.some(o => t < o.to && t + duration > o.from);
-        });
+        }).length;
+        const unassignedHere = unassignedRanges.filter(o => t < o.to && t + duration > o.from).length;
+        available = freeCount > unassignedHere;
       } else {
         available = !occupiedRanges.some(o => t < o.to && t + duration > o.from);
       }
@@ -595,7 +614,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       // (antes un solo barbero ocupado bloqueaba el horario aunque otros estuvieran libres)
       const wantsAny = !chosen_barber_id || anyBarber;
       let skipGlobalConflict = false;
-      if (wantsAny && shopData.allow_barber_choice) {
+      if (wantsAny) {
         const bsId = (shopData.is_branch && shopData.parent_enterprise_id) ? shopData.parent_enterprise_id : shopData.id;
         const nb = await pgClient.query('SELECT COUNT(*)::int AS n FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [bsId]);
         skipGlobalConflict = nb.rows[0].n > 0;
@@ -717,7 +736,15 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             );
             const busySet = new Set(busy.rows.map(r => r.barber_id));
             const freeBarbers = availableBarbers.filter(b => !busySet.has(b.id));
-            if (!freeBarbers.length) {
+            const unassignedQ = await pgClient.query(
+              `SELECT COUNT(*)::int AS n FROM appointments
+                WHERE shop_id=$1 AND date=$2 AND barber_id IS NULL
+                  AND status NOT IN ('cancelled','noshow')
+                  AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
+                  AND time_start < $3 AND time_end > $4`,
+              [shopData.id, date, time_end, time_start]
+            );
+            if (freeBarbers.length <= unassignedQ.rows[0].n) {
               await pgClient.query('ROLLBACK');
               pgClient.release();
               return res.status(409).json({ error: 'Ningún barbero está libre en ese horario. Elegí otro.' });
