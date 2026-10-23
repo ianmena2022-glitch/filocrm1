@@ -679,6 +679,11 @@
       });
       // Mostrar solo si hay más de 1 barbero (si hay solo 1, no tiene sentido elegir)
       if (barbers.length >= 1) field.style.display = 'block';
+      // Bonus de puntos por elegir "cualquier profesional" (si el local lo tiene activo)
+      fetch(`/api/queue/${slug}/any-bonus`).then(r => r.json()).then(d => {
+        const pct = parseInt(d && d.pct) || 0;
+        if (pct > 0 && sel.options[0]) sel.options[0].textContent = `— Cualquier profesional disponible (+${pct}% de puntos 🎁) —`;
+      }).catch(() => {});
     }
 
     function onFilaServiceChange() {

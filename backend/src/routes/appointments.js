@@ -583,7 +583,10 @@ router.put('/:id/status', auth, async (req, res) => {
         const shop = await pool.query('SELECT points_per_peso FROM shops WHERE id=$1', [shopId]);
         const rawPpp = shop.rows[0]?.points_per_peso;
         const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
-        const pointsToRemove = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
+        const pointsToRemove = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso) + (parseInt(appt.bonus_points) || 0);
+        if (parseInt(appt.bonus_points) > 0) {
+          await pool.query('UPDATE appointments SET bonus_points=0 WHERE id=$1', [appt.id]).catch(() => {});
+        }
         if (pointsToRemove > 0 || parseFloat(appt.price || 0) > 0) {
           await pool.query(
             `UPDATE clients SET
@@ -605,7 +608,17 @@ router.put('/:id/status', auth, async (req, res) => {
       const shopData = shop.rows[0];
       const rawPpp = shopData.points_per_peso;
       const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
-      const pointsEarned = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
+      const basePoints = Math.floor(parseFloat(appt.price || 0) * pointsPerPeso);
+      // Bonus por haber elegido "cualquier profesional" (si el local lo tiene activo)
+      let bonus = 0;
+      if (appt.any_barber) {
+        try {
+          const ab = require('../services/anyBarberBonus');
+          bonus = ab.bonusPoints(basePoints, await ab.getBonusConfig(appt.shop_id));
+          if (bonus > 0) await pool.query('UPDATE appointments SET bonus_points=$1 WHERE id=$2', [bonus, appt.id]);
+        } catch (e) { console.warn('[APPT] bonus cualquier profesional:', e.message); bonus = 0; }
+      }
+      const pointsEarned = basePoints + bonus;
 
       const updatedClient = await pool.query(
         `UPDATE clients SET
@@ -893,7 +906,7 @@ router.delete('/:id', auth, async (req, res) => {
       ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
       : `shop_id = $2`;
     const apptQ = await pool.query(
-      `SELECT id, client_id, shop_id, price, status, commission_settled FROM appointments
+      `SELECT * FROM appointments
        WHERE id=$1 AND ${shopCondDelSelect}${barberCondition}`,
       [req.params.id, shopId]
     );
@@ -941,7 +954,7 @@ router.delete('/:id', auth, async (req, res) => {
         const shop = await pool.query('SELECT points_per_peso FROM shops WHERE id=$1', [apptBefore.shop_id]);
         const rawPpp = shop.rows[0]?.points_per_peso;
         const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
-        const pointsToRemove = Math.floor(parseFloat(apptBefore.price || 0) * pointsPerPeso);
+        const pointsToRemove = Math.floor(parseFloat(apptBefore.price || 0) * pointsPerPeso) + (parseInt(apptBefore.bonus_points) || 0);
         await pool.query(
           `UPDATE clients SET
              total_visits = GREATEST(total_visits - 1, 0),

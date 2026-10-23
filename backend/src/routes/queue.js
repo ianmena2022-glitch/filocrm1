@@ -84,6 +84,9 @@ async function createQueueAppointment(shopId, entry, barberId) {
   );
   const apptId = ins.rows[0].id;
   await pool.query('UPDATE queue_entries SET appointment_id=$1 WHERE id=$2', [apptId, entry.id]);
+  if (entry.any_barber) {
+    await pool.query('UPDATE appointments SET any_barber=TRUE WHERE id=$1', [apptId]).catch(() => {});
+  }
   try {
     require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'confirmed', date: localDate, time_start: localTime, barber_id: finalBarberId });
   } catch (_) {}
@@ -183,6 +186,16 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
       [shop.id, resolvedName, phone || null, clientId, cleanTxt(service_name, 120) || null, safePrice, validBarberId, publicToken]
     );
     const entry_id = insertRes.rows[0].id;
+    // Eligió "cualquier profesional" pudiendo elegir (hay 2+ barberos): puede sumar el bonus de puntos
+    if (!validBarberId) {
+      try {
+        const nb = await pool.query('SELECT COUNT(*)::int AS n FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shop.id]);
+        if (nb.rows[0].n > 1) {
+          await require('../services/anyBarberBonus').ensureBonusSchema();
+          await pool.query('UPDATE queue_entries SET any_barber=TRUE WHERE id=$1', [entry_id]);
+        }
+      } catch (e) { console.warn('[QUEUE] any_barber:', e.message); }
+    }
 
     // Calculate position (number of waiting entries with lower id = people ahead)
     const posRes = await pool.query(
@@ -318,6 +331,17 @@ router.get('/:slug/barbers', async (req, res) => {
     );
     res.json(bRes.rows);
   } catch(e) { res.status(500).json([]); }
+});
+
+// ─── PUBLIC: bonus de puntos por elegir "cualquier profesional" ─────────────
+router.get('/:slug/any-bonus', async (req, res) => {
+  try {
+    const shopRes = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
+    if (!shopRes.rows.length) return res.json({ pct: 0 });
+    const nb = await pool.query('SELECT COUNT(*)::int AS n FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopRes.rows[0].id]);
+    const cfg = await require('../services/anyBarberBonus').getBonusConfig(shopRes.rows[0].id);
+    res.json({ pct: (cfg.enabled && nb.rows[0].n > 1) ? cfg.pct : 0 });
+  } catch (e) { res.json({ pct: 0 }); }
 });
 
 router.get('/:slug/services', async (req, res) => {
@@ -491,10 +515,10 @@ router.post('/next', auth, async (req, res) => {
     // Para un barbero: primero los que lo eligieron a él, después los "cualquiera".
     // Sin barbero: el primero que llegó.
     const entryQuery = forBarberId
-      ? `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
+      ? `SELECT * FROM queue_entries
          WHERE shop_id=$1 AND status='waiting' AND (barber_id = $2 OR barber_id IS NULL)
          ORDER BY (barber_id IS NULL) ASC, created_at ASC LIMIT 1`
-      : `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
+      : `SELECT * FROM queue_entries
          WHERE shop_id=$1 AND status='waiting'
          ORDER BY created_at ASC LIMIT 1`;
     const entryParams = forBarberId ? [shopId, forBarberId] : [shopId];
@@ -727,7 +751,15 @@ router.post('/complete/:id', auth, async (req, res) => {
           [shopId]
         )).rows[0];
         const pointsPerPeso = parseFloat(shopData?.points_per_peso || 0.01);
-        const pointsEarned  = Math.floor(p * pointsPerPeso);
+        const basePoints    = Math.floor(p * pointsPerPeso);
+        // Bonus por "cualquier profesional" (la marca puede venir de la fila o del turno)
+        let bonus = 0;
+        if (entry.any_barber) {
+          const ab = require('../services/anyBarberBonus');
+          bonus = ab.bonusPoints(basePoints, await ab.getBonusConfig(shopId));
+          if (bonus > 0) await pool.query('UPDATE appointments SET bonus_points=$1, any_barber=TRUE WHERE id=$2', [bonus, apptId]);
+        }
+        const pointsEarned  = basePoints + bonus;
 
         const updatedClient = await pool.query(
           `UPDATE clients SET

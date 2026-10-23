@@ -3528,6 +3528,32 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               </span>
             </label>
           </div>
+
+          <!-- Bonus de puntos por elegir "cualquier profesional" — solo Staff/Enterprise -->
+          <div id="any-bonus-wrap" style="margin-top:10px;display:none;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <div style="font-size:13px;font-weight:700">🎁 Bonus por "cualquier profesional"</div>
+                <div style="font-size:11px;color:var(--gray);margin-top:3px;line-height:1.45">Si el cliente elige "cualquier profesional" al reservar online o en la fila, suma puntos extra al cobrar. El turno va al barbero libre con menos trabajo, así el trabajo se reparte parejo.</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;flex-shrink:0">
+                <input type="checkbox" id="toggle-any-bonus" onchange="saveAnyBonus()" style="opacity:0;width:0;height:0;position:absolute">
+                <span id="any-bonus-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:28px;transition:.3s;border:1px solid rgba(255,255,255,0.1)">
+                  <span id="any-bonus-thumb" style="position:absolute;top:3px;left:3px;width:20px;height:20px;background:#8a9ab5;border-radius:50%;transition:.3s"></span>
+                </span>
+              </label>
+            </div>
+            <div id="any-bonus-pct-row" style="display:none;margin-top:12px;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--gray)">Puntos extra:</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:14px;font-weight:700">+</span>
+                <input type="number" id="any-bonus-pct" min="1" max="200" step="1" value="20" onchange="saveAnyBonus()" style="width:72px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 10px;color:#fff;font-size:14px;text-align:center">
+                <span style="font-size:14px;font-weight:700">%</span>
+              </div>
+              <span id="any-bonus-example" style="font-size:11px;color:var(--gray)"></span>
+            </div>
+            <div id="any-bonus-note" style="display:none;margin-top:10px;font-size:11px;color:#fbbf24">⚠️ Para que el cliente vea esta opción tiene que estar activada "Elección de barbero" y tener 2 o más barberos.</div>
+          </div>
         </div>
 
         </div><!-- /cfg-item local -->
@@ -8761,6 +8787,9 @@ async function loadSettings() {
     const bcWrap = document.getElementById('toggle-barber-choice-wrap');
     if (bcWrap) bcWrap.style.display = isStaffPlan ? 'flex' : 'none';
     const barberChoice = settings.allow_barber_choice || false;
+    const abWrap = document.getElementById('any-bonus-wrap');
+    if (abWrap) abWrap.style.display = isStaffPlan ? 'block' : 'none';
+    if (isStaffPlan) loadAnyBonus(barberChoice);
     const bci = document.getElementById('toggle-barber-choice');
     if (bci) bci.checked = barberChoice;
     const bcs = document.getElementById('barber-choice-slider');
@@ -9031,6 +9060,49 @@ async function toggleSenaEnabled() {
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
+// ── Bonus de puntos por elegir "cualquier profesional" ──
+function renderAnyBonusUI(enabled, pct) {
+  const t = document.getElementById('toggle-any-bonus');
+  const slider = document.getElementById('any-bonus-slider');
+  const thumb  = document.getElementById('any-bonus-thumb');
+  const row    = document.getElementById('any-bonus-pct-row');
+  const inp    = document.getElementById('any-bonus-pct');
+  if (t) t.checked = !!enabled;
+  if (slider && thumb) {
+    if (enabled) { slider.style.background = 'var(--yellow)'; thumb.style.left = '29px'; thumb.style.background = 'var(--dark)'; }
+    else { slider.style.background = 'rgba(255,255,255,0.12)'; thumb.style.left = '3px'; thumb.style.background = '#8a9ab5'; }
+  }
+  if (row) row.style.display = enabled ? 'flex' : 'none';
+  if (inp && pct) inp.value = pct;
+  const ex = document.getElementById('any-bonus-example');
+  if (ex) {
+    const p = parseInt(inp?.value) || 0;
+    ex.textContent = p ? `Ej: un corte que da 100 puntos da ${100 + Math.round(p)} puntos` : '';
+  }
+  const note = document.getElementById('any-bonus-note');
+  const choice = document.getElementById('toggle-barber-choice')?.checked;
+  if (note) note.style.display = (enabled && !choice) ? 'block' : 'none';
+}
+
+async function loadAnyBonus() {
+  try {
+    const d = await api('GET', '/settings/any-barber-bonus');
+    renderAnyBonusUI(d.enabled, d.pct);
+  } catch (_) {}
+}
+
+async function saveAnyBonus() {
+  const enabled = !!document.getElementById('toggle-any-bonus')?.checked;
+  let pct = parseInt(document.getElementById('any-bonus-pct')?.value) || 20;
+  pct = Math.min(Math.max(pct, 1), 200);
+  renderAnyBonusUI(enabled, pct);
+  try {
+    const d = await api('PUT', '/settings/any-barber-bonus', { enabled, pct });
+    renderAnyBonusUI(d.enabled, d.pct);
+    showToast('🎁', enabled ? `Bonus activado: +${d.pct}% de puntos` : 'Bonus desactivado', enabled ? 'Para quien elija "cualquier profesional"' : '');
+  } catch (e) { showToast('❌', 'Error', e.message); }
+}
+
 async function toggleBarberChoice() {
   const enabled = document.getElementById('toggle-barber-choice').checked;
   const slider = document.getElementById('barber-choice-slider');
@@ -9040,6 +9112,7 @@ async function toggleBarberChoice() {
   try {
     await api('PUT', '/settings', { allow_barber_choice: enabled });
     if (currentShop) currentShop.allow_barber_choice = enabled;
+    renderAnyBonusUI(!!document.getElementById('toggle-any-bonus')?.checked, null);
     showToast(enabled ? '✂️' : '🔀', enabled ? 'Elección de barbero activada' : 'Elección de barbero desactivada', '');
   } catch(e) { showToast('❌', 'Error', e.message); }
 }

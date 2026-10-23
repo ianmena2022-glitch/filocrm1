@@ -9,6 +9,26 @@ function ownerOnly(req, res, next) {
   next();
 }
 
+// GET/PUT /api/settings/any-barber-bonus — bonus de puntos por elegir "cualquier profesional"
+router.get('/any-barber-bonus', auth, ownerOnly, async (req, res) => {
+  try {
+    const { ensureBonusSchema, clampPct } = require('../services/anyBarberBonus');
+    await ensureBonusSchema();
+    const r = await pool.query('SELECT any_barber_bonus_enabled, any_barber_bonus_pct FROM shops WHERE id=$1', [req.shopId]);
+    res.json({ enabled: !!r.rows[0]?.any_barber_bonus_enabled, pct: clampPct(r.rows[0]?.any_barber_bonus_pct) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.put('/any-barber-bonus', auth, ownerOnly, async (req, res) => {
+  try {
+    const { ensureBonusSchema, clampPct } = require('../services/anyBarberBonus');
+    await ensureBonusSchema();
+    const enabled = req.body.enabled === true;
+    const pct = clampPct(req.body.pct);
+    await pool.query('UPDATE shops SET any_barber_bonus_enabled=$1, any_barber_bonus_pct=$2 WHERE id=$3', [enabled, pct, req.shopId]);
+    res.json({ ok: true, enabled, pct });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
   async function doSelect(includeNotifPrefs) {

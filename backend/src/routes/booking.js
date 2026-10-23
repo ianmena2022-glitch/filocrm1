@@ -93,6 +93,11 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
       }
     }
 
+    // Bonus de puntos por elegir "cualquier profesional" (solo si el cliente puede elegir barbero)
+    try {
+      const cfg = await require('../services/anyBarberBonus').getBonusConfig(shopData.id);
+      shopData.any_barber_bonus_pct = (cfg.enabled && shopData.allow_barber_choice && barbers && barbers.length > 1) ? cfg.pct : 0;
+    } catch (_) { shopData.any_barber_bonus_pct = 0; }
     res.json({ shop: shopData, services: services.rows, barbers });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -432,6 +437,8 @@ function reserveRateLimit(req, res, next) {
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
   const { service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
+  // El cliente eligió "cualquier profesional": lo asigna el sistema (al menos cargado) y puede sumar bonus
+  const anyBarber = req.body.any_barber === true;
   // Datos públicos: sin < > (evita HTML inyectado en el CRM del dueño) y con largo acotado
   const cleanTxt = (v, n) => (v == null ? '' : String(v)).replace(/[<>]/g, '').trim().slice(0, n);
   const client_name    = cleanTxt(req.body.client_name, 100);
@@ -461,6 +468,11 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+    // Sucursal: hereda la elección de barbero del dueño enterprise (igual que la página de reserva)
+    if (!shopData.allow_barber_choice && shopData.is_branch && shopData.parent_enterprise_id) {
+      const oc = await pool.query('SELECT allow_barber_choice FROM shops WHERE id=$1', [shopData.parent_enterprise_id]);
+      if (oc.rows[0]?.allow_barber_choice) shopData.allow_barber_choice = true;
+    }
 
     // No se puede reservar en un día que ya pasó (según la zona horaria del local)
     {
@@ -562,6 +574,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
 
     // Fix #1 + #2 + #6: todo dentro de una transacción con advisory lock por shop+fecha
     // para prevenir double-booking y double-redeem concurrente
+    if (anyBarber) await require('../services/anyBarberBonus').ensureBonusSchema();
     const pgClient = await pool.connect();
     let appt;
     let redeemInfo = null;
@@ -578,7 +591,16 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
 
       // Verificar que el slot sigue disponible (dentro de la transacción con lock)
       // Si se eligió un barbero específico, solo verificar conflicto para ese barbero
-      const conflictQuery = chosen_barber_id
+      // "Cualquier profesional" con barberos en el local: el choque se revisa por barbero más abajo
+      // (antes un solo barbero ocupado bloqueaba el horario aunque otros estuvieran libres)
+      const wantsAny = !chosen_barber_id || anyBarber;
+      let skipGlobalConflict = false;
+      if (wantsAny && shopData.allow_barber_choice) {
+        const bsId = (shopData.is_branch && shopData.parent_enterprise_id) ? shopData.parent_enterprise_id : shopData.id;
+        const nb = await pgClient.query('SELECT COUNT(*)::int AS n FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [bsId]);
+        skipGlobalConflict = nb.rows[0].n > 0;
+      }
+      const conflictQuery = (chosen_barber_id && !anyBarber)
         ? `SELECT id FROM appointments
            WHERE shop_id=$1 AND date=$2
              AND barber_id=$5
@@ -590,10 +612,10 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
              AND status NOT IN ('cancelled','noshow')
              AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
              AND time_start < $3 AND time_end > $4`;
-      const conflictParams = chosen_barber_id
+      const conflictParams = (chosen_barber_id && !anyBarber)
         ? [shopData.id, date, time_end, time_start, parseInt(chosen_barber_id)]
         : [shopData.id, date, time_end, time_start];
-      const conflict = await pgClient.query(conflictQuery, conflictParams);
+      const conflict = skipGlobalConflict ? { rows: [] } : await pgClient.query(conflictQuery, conflictParams);
       if (conflict.rows.length) {
         await pgClient.query('ROLLBACK');
         pgClient.release();
@@ -650,7 +672,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
           ? shopData.parent_enterprise_id
           : shopData.id;
 
-        if (chosen_barber_id && shopData.allow_barber_choice) {
+        if (chosen_barber_id && shopData.allow_barber_choice && !anyBarber) {
           // Elección manual: validar que el barbero trabaja en esa fecha/hora
           const chosenId = parseInt(chosen_barber_id);
           if (Number.isNaN(chosenId)) {
@@ -700,21 +722,41 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
               pgClient.release();
               return res.status(409).json({ error: 'Ningún barbero está libre en ese horario. Elegí otro.' });
             }
+            // El barbero libre con menos trabajo ese día (sin contar cancelados / no vino).
+            // Empate: el que tiene menos en la semana; si siguen empatados, al azar (no siempre el mismo).
             const counts = await pgClient.query(
-              `SELECT barber_id, COUNT(*) as total FROM appointments
-               WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL GROUP BY barber_id`,
+              `SELECT barber_id,
+                      COUNT(*) FILTER (WHERE date = $2::date) AS day_total,
+                      COUNT(*) AS week_total
+                 FROM appointments
+                WHERE shop_id=$1 AND barber_id IS NOT NULL
+                  AND status NOT IN ('cancelled','noshow')
+                  AND date BETWEEN $2::date - 6 AND $2::date
+                GROUP BY barber_id`,
               [shopData.id, date]
             );
-            const countMap = {};
-            counts.rows.forEach(r => { countMap[r.barber_id] = parseInt(r.total); });
-            let minCount = Infinity;
-            for (const b of freeBarbers) {
-              const c = countMap[b.id] || 0;
-              if (c < minCount) { minCount = c; assignedBarberId = b.id; assignedBarberCommission = parseInt(b.barber_commission_pct) || 50; }
-            }
+            const dayMap = {}, weekMap = {};
+            counts.rows.forEach(r => { dayMap[r.barber_id] = parseInt(r.day_total); weekMap[r.barber_id] = parseInt(r.week_total); });
+            const load = (b) => [dayMap[b.id] || 0, weekMap[b.id] || 0];
+            const minDay  = Math.min(...freeBarbers.map(b => load(b)[0]));
+            const byDay   = freeBarbers.filter(b => load(b)[0] === minDay);
+            const minWeek = Math.min(...byDay.map(b => load(b)[1]));
+            const least   = byDay.filter(b => load(b)[1] === minWeek);
+            // Si la página ya le mostró al cliente uno de los menos cargados, se respeta ese
+            const shown = anyBarber && chosen_barber_id ? least.find(b => b.id === parseInt(chosen_barber_id)) : null;
+            const pick = shown || least[Math.floor(Math.random() * least.length)];
+            assignedBarberId = pick.id;
+            assignedBarberCommission = parseInt(pick.barber_commission_pct) || 50;
           }
         }
       } catch(e) { console.error('autoAssign booking error:', e.message); }
+
+      // Sin choque global ("cualquiera" con barberos), el turno tiene que quedar con un barbero libre
+      if (skipGlobalConflict && !assignedBarberId) {
+        await pgClient.query('ROLLBACK');
+        pgClient.release();
+        return res.status(409).json({ error: 'Ningún profesional está libre en ese horario. Elegí otro.' });
+      }
 
       // Prioridad comisión: servicio custom > barbero > 0 (sin barbero asignado)
       if (assignedBarberId && svcCommissionPct !== null) {
@@ -736,6 +778,11 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
          senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
       );
       appt = apptResult;
+      // Marcar el turno pedido con "cualquier profesional" (suma el bonus de puntos al cobrarlo)
+      if (anyBarber && shopData.allow_barber_choice && assignedBarberId) {
+        await pgClient.query('UPDATE appointments SET any_barber=TRUE WHERE id=$1', [appt.rows[0].id]);
+        appt.rows[0].any_barber = true;
+      }
 
       // Fix #20: registrar canje dentro de la transacción con ON CONFLICT para idempotencia.
       // Link al appointment para rollback automático si se cancela.
