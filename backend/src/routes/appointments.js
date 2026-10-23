@@ -48,6 +48,16 @@ async function autoAssignBarber(shopId, date) {
   }
 }
 
+// El vínculo turno ↔ cliente de la fila (para la marca "Fila virtual"); se crea solo si falta
+let _queueApptCol = null;
+function ensureQueueApptColumn() {
+  if (!_queueApptCol) {
+    _queueApptCol = pool.query('ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL')
+      .catch(e => { _queueApptCol = null; console.warn('[APPT] queue_entries.appointment_id:', e.message); });
+  }
+  return _queueApptCol;
+}
+
 // GET /api/appointments?date=YYYY-MM-DD
 router.get('/', auth, async (req, res) => {
   const { date } = req.query;
@@ -57,13 +67,15 @@ router.get('/', auth, async (req, res) => {
   console.log(`[GET appts] isBarber=${req.isBarber} shopId=${req.shopId} parentShopId=${req.parentShopId} realShopId=${shopId} date=${d}`);
 
   try {
+    await ensureQueueApptColumn();
     let result;
 
     if (req.isBarber) {
       // Barbero solo ve SUS turnos
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
-                b.name AS assigned_barber_name
+                b.name AS assigned_barber_name,
+                EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
          LEFT JOIN shops b ON b.id = a.barber_id
@@ -76,6 +88,7 @@ router.get('/', auth, async (req, res) => {
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
                 b.name AS assigned_barber_name,
+                EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue,
                 s.name AS branch_name
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
@@ -92,7 +105,8 @@ router.get('/', auth, async (req, res) => {
       // Dueño/sucursal ve todos sus turnos
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
-                b.name AS assigned_barber_name
+                b.name AS assigned_barber_name,
+                EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
          LEFT JOIN shops b ON b.id = a.barber_id
@@ -400,6 +414,18 @@ router.put('/:id/status', auth, async (req, res) => {
     const appt = result.rows[0];
     const wasCompleted = prevStatus === 'completed';
     const nowCompleted = status === 'completed';
+
+    // Si el turno venía de la fila virtual, cobrarlo / cancelarlo cierra también al cliente en la fila
+    // (así deja de aparecer "en el sillón" en la pantalla del barbero)
+    if (status === 'completed' || status === 'cancelled' || status === 'noshow') {
+      const closeSql = status === 'completed'
+        ? `UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW())
+            WHERE appointment_id=$1 AND status IN ('waiting','called')`
+        : `UPDATE queue_entries SET status='left'
+            WHERE appointment_id=$1 AND status IN ('waiting','called')`;
+      try { await pool.query(closeSql, [appt.id]); }
+      catch (e) { console.warn('[APPT] cerrar entrada de la fila:', e.message); }
+    }
 
     // SSE: broadcast cambio de status para refrescar agendas abiertas en vivo
     try {

@@ -5,6 +5,66 @@ const auth    = require('../middleware/auth');
 const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
 const { normalizeDebtMethod } = require('../services/cashMath');
 
+// El vínculo cliente de la fila → turno se crea solo si la columna todavía no existe (idempotente)
+let _queueApptCol = null;
+function ensureQueueApptColumn() {
+  if (!_queueApptCol) {
+    _queueApptCol = pool.query('ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS appointment_id INT REFERENCES appointments(id) ON DELETE SET NULL')
+      .catch(e => { _queueApptCol = null; console.warn('[QUEUE] appointment_id:', e.message); });
+  }
+  return _queueApptCol;
+}
+
+// Al llamar a un cliente de la fila se crea su turno (confirmado, "fila virtual") para que
+// aparezca en la agenda del dueño/cajera y se pueda cobrar desde ahí. El barbero puede
+// seguir cobrándolo desde su pantalla: /complete reutiliza este mismo turno.
+async function createQueueAppointment(shopId, entry, barberId) {
+  const tz = await getShopTz(shopId);
+  const localDate = shopDate(tz);
+  const localTime = shopTime(tz);
+  const finalBarberId = barberId || entry.barber_id || null;
+
+  let barberName = null, barberPct = null;
+  if (finalBarberId) {
+    const b = await pool.query('SELECT name, barber_commission_pct FROM shops WHERE id=$1', [finalBarberId]);
+    barberName = b.rows[0]?.name || null;
+    barberPct  = b.rows[0]?.barber_commission_pct != null ? parseInt(b.rows[0].barber_commission_pct) : null;
+  }
+
+  let svc = null;
+  if (entry.service_name) {
+    const r = await pool.query(
+      'SELECT id, cost, commission_pct, duration_minutes FROM services WHERE shop_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1',
+      [shopId, entry.service_name]
+    );
+    svc = r.rows[0] || null;
+  }
+  const pct = !finalBarberId ? 0
+    : (svc && svc.commission_pct !== null && svc.commission_pct !== undefined) ? parseInt(svc.commission_pct)
+    : (barberPct != null ? barberPct : 50);
+
+  const [h, m] = localTime.split(':').map(Number);
+  const end = new Date(2000, 0, 1, h, m + ((svc && svc.duration_minutes) || 30));
+  const timeEnd = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+
+  const ins = await pool.query(
+    `INSERT INTO appointments
+       (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end,
+        barber_id, barber_name, commission_pct, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'confirmed')
+     RETURNING id`,
+    [shopId, entry.client_id || null, entry.client_name, svc ? svc.id : null, entry.service_name || 'Fila virtual',
+     parseFloat(entry.price) || 0, svc ? (parseFloat(svc.cost) || 0) : 0, localDate, localTime, timeEnd,
+     finalBarberId, barberName, pct]
+  );
+  const apptId = ins.rows[0].id;
+  await pool.query('UPDATE queue_entries SET appointment_id=$1 WHERE id=$2', [apptId, entry.id]);
+  try {
+    require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'confirmed', date: localDate, time_start: localTime, barber_id: finalBarberId });
+  } catch (_) {}
+  return apptId;
+}
+
 // ─── PUBLIC: join queue ──────────────────────────────────────────────────────
 router.post('/:slug/join', async (req, res) => {
   try {
@@ -363,10 +423,10 @@ router.post('/next', auth, async (req, res) => {
     const isBarber = callerRes.rows[0]?.is_barber || false;
 
     const entryQuery = isBarber
-      ? `SELECT id, client_name, client_phone FROM queue_entries
+      ? `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
          WHERE shop_id=$1 AND status='waiting' AND (barber_id = $2 OR barber_id IS NULL)
          ORDER BY (barber_id IS NULL) ASC, created_at ASC LIMIT 1`
-      : `SELECT id, client_name, client_phone FROM queue_entries
+      : `SELECT id, client_name, client_phone, client_id, service_name, price, barber_id FROM queue_entries
          WHERE shop_id=$1 AND status='waiting'
          ORDER BY created_at ASC LIMIT 1`;
     const entryParams = isBarber ? [shopId, req.shopId] : [shopId];
@@ -378,10 +438,22 @@ router.post('/next', auth, async (req, res) => {
     const entry = entryRes.rows[0];
 
     const assignedBarberId = isBarber ? req.shopId : null;
-    await pool.query(
-      `UPDATE queue_entries SET status='called', called_at=NOW(), barber_id=COALESCE(barber_id,$1) WHERE id=$2`,
+    // UPDATE condicional: si dos personas llaman a la vez, solo una se queda con el cliente
+    const claimed = await pool.query(
+      `UPDATE queue_entries SET status='called', called_at=NOW(), barber_id=COALESCE(barber_id,$1)
+        WHERE id=$2 AND status='waiting' RETURNING id`,
       [assignedBarberId, entry.id]
     );
+    if (!claimed.rows.length) {
+      return res.json({ ok: false, message: 'Ese cliente ya fue llamado. Probá de nuevo.' });
+    }
+    // Turno "fila virtual" en la agenda para poder cobrarlo desde el panel principal
+    try {
+      await ensureQueueApptColumn();
+      await createQueueAppointment(shopId, entry, assignedBarberId);
+    } catch (apptErr) {
+      console.error('[QUEUE] no se pudo crear el turno de la fila (no frena el llamado):', apptErr.message);
+    }
 
     // Count remaining waiting
     const remainRes = await pool.query(
@@ -486,16 +558,44 @@ router.post('/complete/:id', auth, async (req, res) => {
     const localTime = shopTime(tz);
     const finalClientId   = entry.client_id || null;
     const finalClientName = client_name || entry.client_name;
-    const apptRes = await pool.query(
-      `INSERT INTO appointments
-         (shop_id, client_id, client_name, service_name, price, cost, date, time_start,
-          barber_id, barber_name, commission_pct, payment_method, tip, status)
-       VALUES ($1,$13,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
-       RETURNING id`,
-      [shopId, finalClientName, service_name || 'Walk-in', p, c,
-       finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime, finalClientId]
-    );
-    const apptId = apptRes.rows[0].id;
+
+    // Si al llamarlo ya se creó su turno ("fila virtual"), se cobra ESE turno en vez de crear otro.
+    // Si la cajera ya lo cobró desde la agenda, no se cobra dos veces.
+    let apptId = null;
+    if (entry.appointment_id) {
+      const ex = await pool.query('SELECT id, status FROM appointments WHERE id=$1 AND shop_id=$2', [entry.appointment_id, shopId]);
+      if (ex.rows.length) {
+        if (ex.rows[0].status === 'completed') {
+          await pool.query(`UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW()) WHERE id=$1`, [entry.id]);
+          return res.json({ ok: true, appointment_id: ex.rows[0].id, already_completed: true });
+        }
+        if (['pending', 'confirmed'].includes(ex.rows[0].status)) {
+          await pool.query(
+            `UPDATE appointments SET client_name=$1, service_id=COALESCE($2::int, service_id), service_name=$3, price=$4, cost=$5,
+                    barber_id=$6, barber_name=$7, commission_pct=$8, payment_method=$9, tip=$10, status='completed'
+              WHERE id=$11 AND shop_id=$12`,
+            [finalClientName, service_id ? parseInt(service_id) : null, service_name || 'Walk-in', p, c,
+             finalBarberId, barberName, pct, payment_method || 'cash', t, ex.rows[0].id, shopId]
+          );
+          apptId = ex.rows[0].id;
+        }
+      }
+    }
+    if (!apptId) {
+      const apptRes = await pool.query(
+        `INSERT INTO appointments
+           (shop_id, client_id, client_name, service_name, price, cost, date, time_start,
+            barber_id, barber_name, commission_pct, payment_method, tip, status)
+         VALUES ($1,$13,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
+         RETURNING id`,
+        [shopId, finalClientName, service_name || 'Walk-in', p, c,
+         finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime, finalClientId]
+      );
+      apptId = apptRes.rows[0].id;
+    }
+    try {
+      require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' });
+    } catch (_) {}
 
     if (t > 0 && req.body.tip_method) {
       await pool.query('UPDATE appointments SET tip_method=$1 WHERE id=$2', [String(req.body.tip_method).trim(), apptId])
@@ -583,6 +683,13 @@ router.post('/complete/:id', auth, async (req, res) => {
 router.post('/remove/:id', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
+    // Si ya tenía su turno de "fila virtual" sin cobrar, también se cancela para que no quede colgado en la agenda
+    await pool.query(
+      `UPDATE appointments SET status='cancelled'
+        WHERE shop_id=$2 AND status IN ('pending','confirmed')
+          AND id IN (SELECT appointment_id FROM queue_entries WHERE id=$1 AND shop_id=$2 AND appointment_id IS NOT NULL)`,
+      [req.params.id, shopId]
+    ).catch(() => {});
     await pool.query(
       `UPDATE queue_entries SET status='left' WHERE id=$1 AND shop_id=$2`,
       [req.params.id, shopId]
@@ -613,6 +720,12 @@ router.post('/pause', auth, async (req, res) => {
 router.delete('/', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
+    await pool.query(
+      `UPDATE appointments SET status='cancelled'
+        WHERE shop_id=$1 AND status IN ('pending','confirmed')
+          AND id IN (SELECT appointment_id FROM queue_entries WHERE shop_id=$1 AND status='called' AND appointment_id IS NOT NULL)`,
+      [shopId]
+    ).catch(() => {});
     await pool.query(
       `UPDATE queue_entries SET status='left'
        WHERE shop_id=$1 AND status IN ('waiting','called')`,

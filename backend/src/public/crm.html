@@ -7189,6 +7189,9 @@ function renderApptCard(a) {
   const senaBadge = senaAmt > 0 && (a.status === 'waiting_sena' || a.sena_status === 'confirmed')
     ? `<div style="font-size:11px;color:#c084fc;margin-top:3px;display:flex;align-items:center;gap:4px"><span>💸</span><span>${a.sena_status === 'confirmed' ? `Seña cobrada: $${senaAmt.toLocaleString('es-AR')}` : `Seña: $${senaAmt.toLocaleString('es-AR')}`}</span></div>`
     : '';
+  const queueBadge = a.from_queue
+    ? `<div style="font-size:11px;color:#7ab8ff;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="background:rgba(122,184,255,.12);border:1px solid rgba(122,184,255,.3);border-radius:20px;padding:1px 8px;font-weight:700">⚡ Fila virtual</span></div>`
+    : '';
   const branchBadge = a.branch_name && currentShop?.is_enterprise_owner
     ? `<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:3px;display:flex;align-items:center;gap:4px"><span>🏪</span><span>${a.branch_name}</span></div>`
     : '';
@@ -7205,6 +7208,7 @@ function renderApptCard(a) {
       ${redeemBadge}
       ${memberBadge}
       ${senaBadge}
+      ${queueBadge}
       ${branchBadge}
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">🏠 ${a.client_address}</div>` : ''}
     </div>
