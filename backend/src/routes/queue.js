@@ -606,59 +606,56 @@ router.post('/serve/:id', auth, async (req, res) => {
 });
 
 // ─── PROTECTED: complete walk-in with payment (hybrid) ──────────────────────
+// Todo el cobro va en UNA transacción: o queda registrado completo (turno cobrado, cliente
+// atendido, deuda, comisión, puntos) o no queda nada y el cliente se puede volver a cobrar.
+// Antes, si el servidor se cortaba a mitad de camino (p.ej. un deploy), el cliente podía
+// quedar "atendido" sin cobro registrado.
 router.post('/complete/:id', auth, async (req, res) => {
+  let db = null, began = false;
   try {
     const shopId = await resolveShopId(req.shopId);
     const { price, cost, service_name, service_id, payment_method: rawPaymentMethod, tip, barber_id, commission_pct, client_name } = req.body;
+
+    // ── Lecturas previas (fuera de la transacción) ──
     const payment_method = await normalizeDebtMethod([shopId], rawPaymentMethod);
-
-    const entryRes = await pool.query(
-      'SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2',
-      [req.params.id, shopId]
-    );
-    if (!entryRes.rows.length) return res.status(404).json({ error: 'No encontrado' });
-    const entry = entryRes.rows[0];
-    // Tomar la entrada de forma atómica: dos cobros simultáneos del mismo cliente → uno solo
-    const claimed = await pool.query(
-      `UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW())
-        WHERE id=$1 AND shop_id=$2 AND status <> 'served' RETURNING id`,
-      [entry.id, shopId]
-    );
-    if (!claimed.rows.length) {
-      return res.json({ ok: true, appointment_id: entry.appointment_id || null, already_completed: true });
-    }
-    let charged = false;
-    try {
-
     const p = parseFloat(price) || 0;
     const t = parseFloat(tip) || 0;
     let pct = parseInt(commission_pct) || 50;
     const c = parseFloat(cost) || 0;
-
-    // Override comisión con la custom del servicio si existe (prioridad: servicio > barbero)
-    if (service_id) {
-      const svcRes = await pool.query(
-        'SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2',
-        [parseInt(service_id), shopId]
-      );
+    const svcIdInt = service_id && !Number.isNaN(parseInt(service_id)) ? parseInt(service_id) : null;
+    if (svcIdInt) {
+      const svcRes = await pool.query('SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2', [svcIdInt, shopId]);
       if (svcRes.rows.length && svcRes.rows[0].commission_pct !== null && svcRes.rows[0].commission_pct !== undefined) {
         pct = parseInt(svcRes.rows[0].commission_pct);
       }
     }
-
-    // Get barber name if assigned
-    let barberName = null;
-    const finalBarberId = barber_id || entry.barber_id || null;
-    if (finalBarberId) {
-      const bRes = await pool.query('SELECT name FROM shops WHERE id=$1', [finalBarberId]);
-      barberName = bRes.rows[0]?.name || null;
-    }
-
-    // Create appointment record (for caja + reporting)
-    // Pre-compute date/time in shop's timezone to avoid UTC offset from Railway server
     const tz = await getShopTz(shopId);
     const localDate = shopDate(tz);
     const localTime = shopTime(tz);
+    const shopData = (await pool.query('SELECT points_per_peso, wpp_connected, booking_slug FROM shops WHERE id=$1', [shopId])).rows[0];
+    const ab = require('../services/anyBarberBonus');
+    const bonusCfg = await ab.getBonusConfig(shopId);
+    const tipMethod = (t > 0 && req.body.tip_method) ? String(req.body.tip_method).trim() : null;
+
+    // ── Transacción ──
+    db = await pool.connect();
+    await db.query('BEGIN'); began = true;
+
+    // Tomar al cliente de la fila con candado: dos cobros a la vez → uno solo
+    const entryRes = await db.query('SELECT * FROM queue_entries WHERE id=$1 AND shop_id=$2 FOR UPDATE', [req.params.id, shopId]);
+    if (!entryRes.rows.length) { await db.query('ROLLBACK'); began = false; return res.status(404).json({ error: 'No encontrado' }); }
+    const entry = entryRes.rows[0];
+    if (entry.status === 'served') {
+      await db.query('ROLLBACK'); began = false;
+      return res.json({ ok: true, appointment_id: entry.appointment_id || null, already_completed: true });
+    }
+
+    const finalBarberId = barber_id || entry.barber_id || null;
+    let barberName = null;
+    if (finalBarberId) {
+      const bRes = await db.query('SELECT name FROM shops WHERE id=$1', [finalBarberId]);
+      barberName = bRes.rows[0]?.name || null;
+    }
     const finalClientId   = entry.client_id || null;
     const finalClientName = client_name || entry.client_name;
 
@@ -666,31 +663,27 @@ router.post('/complete/:id', auth, async (req, res) => {
     // Si la cajera ya lo cobró desde la agenda, no se cobra dos veces.
     let apptId = null;
     if (entry.appointment_id) {
-      const ex = await pool.query('SELECT id, status FROM appointments WHERE id=$1 AND shop_id=$2', [entry.appointment_id, shopId]);
+      const ex = await db.query('SELECT id, status FROM appointments WHERE id=$1 AND shop_id=$2 FOR UPDATE', [entry.appointment_id, shopId]);
       if (ex.rows.length) {
         if (ex.rows[0].status === 'completed') {
-          await pool.query(`UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW()) WHERE id=$1`, [entry.id]);
+          await db.query(`UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW()) WHERE id=$1`, [entry.id]);
+          await db.query('COMMIT'); began = false;
           return res.json({ ok: true, appointment_id: ex.rows[0].id, already_completed: true });
         }
         if (['pending', 'confirmed'].includes(ex.rows[0].status)) {
-          // Condicional: si la cajera lo cobra justo al mismo tiempo, solo vale un cobro
-          const upd = await pool.query(
+          await db.query(
             `UPDATE appointments SET client_name=$1, service_id=COALESCE($2::int, service_id), service_name=$3, price=$4, cost=$5,
                     barber_id=$6, barber_name=$7, commission_pct=$8, payment_method=$9, tip=$10, status='completed'
-              WHERE id=$11 AND shop_id=$12 AND status IN ('pending','confirmed') RETURNING id`,
-            [finalClientName, service_id ? parseInt(service_id) : null, service_name || 'Walk-in', p, c,
+              WHERE id=$11 AND shop_id=$12`,
+            [finalClientName, svcIdInt, service_name || 'Walk-in', p, c,
              finalBarberId, barberName, pct, payment_method || 'cash', t, ex.rows[0].id, shopId]
           );
-          if (!upd.rows.length) {
-            await pool.query(`UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW()) WHERE id=$1`, [entry.id]);
-            return res.json({ ok: true, appointment_id: ex.rows[0].id, already_completed: true });
-          }
           apptId = ex.rows[0].id;
         }
       }
     }
     if (!apptId) {
-      const apptRes = await pool.query(
+      const apptRes = await db.query(
         `INSERT INTO appointments
            (shop_id, client_id, client_name, service_name, price, cost, date, time_start,
             barber_id, barber_name, commission_pct, payment_method, tip, status)
@@ -701,41 +694,36 @@ router.post('/complete/:id', auth, async (req, res) => {
       );
       apptId = apptRes.rows[0].id;
     }
-    charged = true;
-    try {
-      require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' });
-    } catch (_) {}
 
-    if (t > 0 && req.body.tip_method) {
-      await pool.query('UPDATE appointments SET tip_method=$1 WHERE id=$2', [String(req.body.tip_method).trim(), apptId])
-        .catch(() => {}); // tolerante si la migración 045 no corrió aún
+    if (tipMethod) {
+      await db.query('SAVEPOINT tm');
+      try { await db.query('UPDATE appointments SET tip_method=$1 WHERE id=$2', [tipMethod, apptId]); await db.query('RELEASE SAVEPOINT tm'); }
+      catch (_) { await db.query('ROLLBACK TO SAVEPOINT tm'); } // tolerante si la migración 045 no corrió aún
     }
 
-    // Mark queue entry as served
-    await pool.query(
+    // Cliente atendido
+    await db.query(
       `UPDATE queue_entries
        SET status='served', served_at=NOW(),
            service_name=$1, price=$2, payment_method=$3, tip=$4,
            barber_id=$5, appointment_id=$6
        WHERE id=$7`,
-      [service_name, p, payment_method, t, finalBarberId, apptId, req.params.id]
+      [service_name, p, payment_method, t, finalBarberId, apptId, entry.id]
     );
 
-    // Commission split if barber assigned + price > 0
+    // Comisión si hay barbero y precio
     if (finalBarberId && p > 0) {
-      const barberAmt = p * pct / 100;
-      const ownerAmt  = p * (100 - pct) / 100;
-      await pool.query(
+      await db.query(
         `INSERT INTO commission_splits
            (shop_id, barber_id, appointment_id, total_price, barber_pct, barber_amount, owner_amount)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [shopId, finalBarberId, apptId, p, pct, barberAmt, ownerAmt]
+        [shopId, finalBarberId, apptId, p, pct, p * pct / 100, p * (100 - pct) / 100]
       );
     }
 
-    // Register debt if fiado
+    // Fiado → deuda
     if (payment_method === 'debt') {
-      await pool.query(
+      await db.query(
         `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
          SELECT $1::int, $5::int, $2::text, $3::int, $4::numeric, 'Walk-in — fiado'
           WHERE NOT EXISTS (SELECT 1 FROM client_debts WHERE appointment_id=$3::int AND paid=FALSE)`,
@@ -743,64 +731,49 @@ router.post('/complete/:id', auth, async (req, res) => {
       );
     }
 
-    // Award points + update client stats if linked to a known client
+    // Puntos + estadísticas del cliente
+    let pointsEarned = 0, client = null;
     if (finalClientId && p > 0) {
+      const pointsPerPeso = parseFloat(shopData?.points_per_peso || 0.01);
+      const basePoints = Math.floor(p * pointsPerPeso);
+      // Bonus por "cualquier profesional" (la marca puede venir de la fila o del turno)
+      const bonus = entry.any_barber ? ab.bonusPoints(basePoints, bonusCfg) : 0;
+      if (bonus > 0) await db.query('UPDATE appointments SET bonus_points=$1, any_barber=TRUE WHERE id=$2', [bonus, apptId]);
+      pointsEarned = basePoints + bonus;
+      const updatedClient = await db.query(
+        `UPDATE clients SET
+           total_visits = total_visits + 1,
+           total_spent  = total_spent  + $1,
+           last_visit   = $2,
+           points       = points       + $3
+         WHERE id=$4
+         RETURNING id, name, phone, points`,
+        [p, localDate, pointsEarned, finalClientId]
+      );
+      client = updatedClient.rows[0] || null;
+    }
+
+    await db.query('COMMIT'); began = false;
+
+    // ── Después de registrar: avisos (no afectan el cobro) ──
+    try { require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' }); } catch (_) {}
+    if (client?.phone && shopData?.wpp_connected && pointsEarned > 0) {
       try {
-        const shopData = (await pool.query(
-          'SELECT points_per_peso, wpp_connected, booking_slug FROM shops WHERE id=$1',
-          [shopId]
-        )).rows[0];
-        const pointsPerPeso = parseFloat(shopData?.points_per_peso || 0.01);
-        const basePoints    = Math.floor(p * pointsPerPeso);
-        // Bonus por "cualquier profesional" (la marca puede venir de la fila o del turno)
-        let bonus = 0;
-        if (entry.any_barber) {
-          const ab = require('../services/anyBarberBonus');
-          bonus = ab.bonusPoints(basePoints, await ab.getBonusConfig(shopId));
-          if (bonus > 0) await pool.query('UPDATE appointments SET bonus_points=$1, any_barber=TRUE WHERE id=$2', [bonus, apptId]);
-        }
-        const pointsEarned  = basePoints + bonus;
-
-        const updatedClient = await pool.query(
-          `UPDATE clients SET
-             total_visits = total_visits + 1,
-             total_spent  = total_spent  + $1,
-             last_visit   = $2,
-             points       = points       + $3
-           WHERE id=$4
-           RETURNING id, name, phone, points`,
-          [p, localDate, pointsEarned, finalClientId]
-        );
-
-        // WhatsApp notification (non-blocking)
-        const client = updatedClient.rows[0];
-        if (client?.phone && shopData?.wpp_connected && pointsEarned > 0) {
-          try {
-            const wpp = require('../services/whatsapp');
-            const slug = shopData.booking_slug;
-            const tiendaLink = slug
-              ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
-              : null;
-            const msg = `✅ ¡Gracias ${client.name}! Sumaste *${pointsEarned} puntos* en tu visita de hoy.\n🎯 Total acumulado: *${client.points} puntos*${tiendaLink ? `\n🛍️ Canjealos en ${tiendaLink}` : ''}`;
-            wpp.sendText(shopId, client.phone, msg).catch(() => {});
-          } catch (_) {}
-        }
-      } catch (pointsErr) {
-        console.error('queue complete — points error (non-fatal):', pointsErr.message);
-      }
+        const wpp = require('../services/whatsapp');
+        const slug = shopData.booking_slug;
+        const tiendaLink = slug ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}` : null;
+        const msg = `✅ ¡Gracias ${client.name}! Sumaste *${pointsEarned} puntos* en tu visita de hoy.\n🎯 Total acumulado: *${client.points} puntos*${tiendaLink ? `\n🛍️ Canjealos en ${tiendaLink}` : ''}`;
+        wpp.sendText(shopId, client.phone, msg).catch(() => {});
+      } catch (_) {}
     }
 
     return res.json({ ok: true, appointment_id: apptId });
-    } catch (inner) {
-      // Si falló antes de registrar el cobro, el cliente vuelve a quedar para cobrar
-      if (!charged) {
-        await pool.query(`UPDATE queue_entries SET status=$1 WHERE id=$2`, [entry.status, entry.id]).catch(() => {});
-      }
-      throw inner;
-    }
   } catch (e) {
+    if (began && db) { try { await db.query('ROLLBACK'); } catch (_) {} }
     console.error('queue complete error:', e.message, e.stack);
-    return res.status(500).json({ error: 'Error interno' });
+    return res.status(500).json({ error: 'No se pudo registrar el cobro. Intentá de nuevo.' });
+  } finally {
+    if (db) db.release();
   }
 });
 

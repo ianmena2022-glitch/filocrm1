@@ -1099,15 +1099,21 @@ async function confirmPayment(apptId) {
   const method = window._selectedPayMethod;
   if (!method) { showToast('Seleccioná un método de pago'); return; }
   const tip = parseFloat(document.getElementById('tip-input')?.value) || 0;
-  document.getElementById('payment-popup')?.remove();
+  payPopupBusy('payment-popup', true);
   try {
     await api('PUT', `/appointments/${apptId}/status`, { status: 'completed', payment_method: method, tip });
+    document.getElementById('payment-popup')?.remove();
     showToast('✅ Turno completado' + (method === 'debt' ? ' · Deuda registrada' : ''));
     loadDashboard();
     if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
   } catch(e) {
-    showToast('❌ ' + e.message);
-    if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
+    if (/ya fue cobrado/i.test(e.message || '')) {
+      document.getElementById('payment-popup')?.remove();
+      showToast('ℹ️ ' + e.message);
+      if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
+    } else {
+      payPopupBusy('payment-popup', false, payErrorText(e));
+    }
   }
 }
 
@@ -1468,6 +1474,39 @@ function selectBarberWipMethod(method) {
   if (btn) { btn.style.borderColor = '#FFD100'; btn.style.background = 'rgba(255,209,0,.15)'; }
 }
 
+// Mientras se registra un cobro el cuadro queda abierto: si falla (sin conexión, servidor
+// reiniciándose) se ve claro y se puede reintentar sin volver a cargar todo.
+function payPopupBusy(popupId, busy, errMsg) {
+  const pop = document.getElementById(popupId);
+  if (!pop) return;
+  const btn = [...pop.querySelectorAll('button')].find(b => /confirm/i.test(b.getAttribute('onclick') || ''));
+  if (btn) {
+    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
+    btn.disabled = !!busy;
+    btn.style.opacity = busy ? '.6' : '';
+    btn.innerHTML = busy ? '⏳ Cobrando…' : btn.dataset.label;
+  }
+  let err = pop.querySelector('.pay-err');
+  if (errMsg) {
+    if (!err) {
+      err = document.createElement('div');
+      err.className = 'pay-err';
+      err.style.cssText = 'background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.35);color:#ff9a9a;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.4;margin-bottom:12px';
+      const box = pop.firstElementChild || pop;
+      box.insertBefore(err, box.firstChild);
+    }
+    err.textContent = errMsg;
+  } else if (err) err.remove();
+}
+function payErrorText(e) {
+  const m = String((e && e.message) || '');
+  // Respuesta que no es JSON (servidor reiniciándose) o sin conexión
+  if (!m || /Unexpected token|JSON|Failed to fetch|NetworkError|Load failed/i.test(m)) {
+    return '❌ No se registró el cobro: no hubo conexión con el servidor. Esperá unos segundos y tocá "Confirmar" de nuevo.';
+  }
+  return '❌ No se registró el cobro: ' + m + ' Tocá "Confirmar" para intentar de nuevo.';
+}
+
 async function confirmBarberWipPayment() {
   if (!_barberWipMethod) { showToast('Seleccioná un método de pago'); return; }
 
@@ -1486,7 +1525,7 @@ async function confirmBarberWipPayment() {
   const price = parseFloat(priceEl?.value) || 0;
   const tip   = parseFloat(tipEl?.value)   || 0;
 
-  document.getElementById('barber-wip-popup')?.remove();
+  payPopupBusy('barber-wip-popup', true);
 
   try {
     const done = await api('POST', `/queue/complete/${_barberWipEntryId}`, {
@@ -1495,12 +1534,13 @@ async function confirmBarberWipPayment() {
       commission_pct: me?.barber_commission_pct || 50,
       client_name: _barberWipClientName || undefined
     });
+    document.getElementById('barber-wip-popup')?.remove();
     showToast(done && done.already_completed ? 'ℹ️ Ya lo había cobrado la caja' : '✅ Walk-in registrado');
     _filaCalledId = null;
     await loadFila();
     if (document.getElementById('tab-dashboard')?.classList.contains('active')) loadDashboard();
   } catch(e) {
-    showToast('❌ ' + (e.message || 'Error'));
+    payPopupBusy('barber-wip-popup', false, payErrorText(e));
   }
 }
 

@@ -6662,6 +6662,39 @@ function onWalkInServiceChange() {
 }
 
 
+// Mientras se registra un cobro el cuadro queda abierto: si falla (sin conexión, servidor
+// reiniciándose) se ve claro y se puede reintentar sin volver a cargar todo.
+function payPopupBusy(popupId, busy, errMsg) {
+  const pop = document.getElementById(popupId);
+  if (!pop) return;
+  const btn = [...pop.querySelectorAll('button')].find(b => /confirm/i.test(b.getAttribute('onclick') || ''));
+  if (btn) {
+    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
+    btn.disabled = !!busy;
+    btn.style.opacity = busy ? '.6' : '';
+    btn.innerHTML = busy ? '⏳ Cobrando…' : btn.dataset.label;
+  }
+  let err = pop.querySelector('.pay-err');
+  if (errMsg) {
+    if (!err) {
+      err = document.createElement('div');
+      err.className = 'pay-err';
+      err.style.cssText = 'background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.35);color:#ff9a9a;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.4;margin-bottom:12px';
+      const box = pop.firstElementChild || pop;
+      box.insertBefore(err, box.firstChild);
+    }
+    err.textContent = errMsg;
+  } else if (err) err.remove();
+}
+function payErrorText(e) {
+  const m = String((e && e.message) || '');
+  // Respuesta que no es JSON (servidor reiniciándose) o sin conexión
+  if (!m || /Unexpected token|JSON|Failed to fetch|NetworkError|Load failed/i.test(m)) {
+    return '❌ No se registró el cobro: no hubo conexión con el servidor. Esperá unos segundos y tocá "Confirmar" de nuevo.';
+  }
+  return '❌ No se registró el cobro: ' + m + ' Tocá "Confirmar" para intentar de nuevo.';
+}
+
 async function confirmWalkInPayment() {
   if (!_walkInPayMethod) { showToast('Seleccioná un método de pago'); return; }
 
@@ -6695,7 +6728,7 @@ async function confirmWalkInPayment() {
     commissionPct = parseInt(opt.dataset?.pct || 50);
   }
 
-  document.getElementById('walkin-payment-popup')?.remove();
+  payPopupBusy('walkin-payment-popup', true);
 
   try {
     const done = await api('POST', `/queue/complete/${_walkInPayEntryId}`, {
@@ -6706,6 +6739,7 @@ async function confirmWalkInPayment() {
       tip_method: (tip > 0 && tipMethod) ? tipMethod : undefined,
       commission_pct: commissionPct
     });
+    document.getElementById('walkin-payment-popup')?.remove();
     if (done && done.already_completed) {
       showToast('ℹ️', 'Ya estaba cobrado', 'Este cliente ya se había cobrado (desde la agenda o el barbero).');
       loadQueue();
@@ -6716,7 +6750,7 @@ async function confirmWalkInPayment() {
     showSuccessPop({ title: 'Walk-in cobrado', sub: amt });
     loadQueue();
   } catch(e) {
-    showToast('❌ ' + (e.message || 'Error al cobrar'));
+    payPopupBusy('walkin-payment-popup', false, payErrorText(e));
   }
 }
 
@@ -7751,17 +7785,23 @@ async function confirmPayment(apptId) {
     if (_isDebtSel) successLabel = '💰 Deuda cargada en el cliente';
   }
 
-  document.getElementById('payment-popup')?.remove();
+  payPopupBusy('payment-popup', true);
   try {
     await api('PUT', `/appointments/${apptId}/status`, body);
+    document.getElementById('payment-popup')?.remove();
     showSuccessPop({ title: (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();
   } catch(e) {
-    showToast('❌', 'Error', e.message);
-    // Si ya lo había cobrado otro (p.ej. el barbero), refrescar para que se vea cobrado
-    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+    // Si ya lo había cobrado otro (p.ej. el barbero): cerrar y refrescar para que se vea cobrado
+    if (/ya fue cobrado/i.test(e.message || '')) {
+      document.getElementById('payment-popup')?.remove();
+      showToast('ℹ️', 'Ya estaba cobrado', e.message);
+      if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+    } else {
+      payPopupBusy('payment-popup', false, payErrorText(e));
+    }
   }
 }
 
