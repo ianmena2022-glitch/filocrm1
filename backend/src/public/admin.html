@@ -940,13 +940,24 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         </div>
         <div class="form-group">
           <label>Estado suscripción</label>
-          <select class="input filter" id="edit-status">
+          <select class="input filter" id="edit-status" onchange="updateActiveUntil()">
             <option value="trial">Trial</option>
             <option value="active">Activo</option>
             <option value="expired">Expirado</option>
             <option value="cancelled">Cancelado</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" id="edit-active-until-wrap" style="display:none">
+        <label>Activo hasta</label>
+        <select class="input filter" id="edit-active-until">
+          <option value="forever">Sin vencimiento (no paga)</option>
+          <option value="1">1 mes</option>
+          <option value="3">3 meses</option>
+          <option value="6">6 meses</option>
+          <option value="12">12 meses</option>
+        </select>
+        <div style="font-size:11px;color:var(--g);margin-top:4px">Sin esto la cuenta vuelve a expirar sola porque su fecha de vencimiento ya pasó.</div>
       </div>
       <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;margin-top:4px">
         <input type="checkbox" id="edit-exclude-kpis" style="margin-top:3px;width:auto">
@@ -1558,7 +1569,17 @@ function openEditModal(id) {
   document.getElementById('edit-status').value = a.subscription_status || 'trial';
   document.getElementById('edit-exclude-kpis').checked = !!a.exclude_from_kpis;
   document.getElementById('edit-err').style.display = 'none';
+  document.getElementById('edit-active-until').value = 'forever';
+  updateActiveUntil();
   document.getElementById('edit-modal').classList.add('open');
+}
+
+// "Activo hasta" aparece solo cuando se activa una cuenta que no está activa o cuyo vencimiento ya pasó
+function updateActiveUntil() {
+  const a = allAccounts.find(x => x.id === parseInt(document.getElementById('edit-id').value));
+  const status = document.getElementById('edit-status').value;
+  const stale = !!a && (a.subscription_status !== 'active' || !a.trial_ends_at || new Date(a.trial_ends_at) < new Date());
+  document.getElementById('edit-active-until-wrap').style.display = (status === 'active' && stale) ? 'block' : 'none';
 }
 
 async function saveEdit() {
@@ -1572,7 +1593,11 @@ async function saveEdit() {
     const res = await fetch(`/api/admin/accounts/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
-      body: JSON.stringify({ name, filo_plan: plan, subscription_status: status, exclude_from_kpis: document.getElementById('edit-exclude-kpis').checked })
+      body: JSON.stringify({
+        name, filo_plan: plan, subscription_status: status,
+        exclude_from_kpis: document.getElementById('edit-exclude-kpis').checked,
+        active_until: document.getElementById('edit-active-until-wrap').style.display === 'block' ? document.getElementById('edit-active-until').value : undefined
+      })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Error'; errEl.style.display = 'block'; return; }

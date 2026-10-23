@@ -470,7 +470,7 @@ router.post('/accounts', adminAuth, async (req, res) => {
 
 // PUT /api/admin/accounts/:id — editar plan/estado
 router.put('/accounts/:id', adminAuth, async (req, res) => {
-  const { name, filo_plan, subscription_status, exclude_from_kpis, archived } = req.body;
+  const { name, filo_plan, subscription_status, exclude_from_kpis, archived, active_until } = req.body;
   const validPlans   = ['starter','staff','enterprise'];
   const validStatus  = ['trial','active','expired','cancelled'];
 
@@ -508,6 +508,20 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
         updates.push(`mp_shop_status=$${i++}`);
         params.push('authorized');
         updates.push(`first_payment_at=COALESCE(first_payment_at, NOW())`);
+        // Una cuenta activa con la fecha de vencimiento ya pasada la vuelve a expirar el paywall
+        // y el scheduler al instante: al activar a mano hay que dejar una fecha vigente.
+        // active_until: 'forever' (sin vencimiento) o cantidad de meses (1-24).
+        const cur = (await pool.query('SELECT subscription_status, trial_ends_at FROM shops WHERE id=$1', [req.params.id])).rows[0];
+        const stale = !cur || cur.subscription_status !== 'active' || !cur.trial_ends_at || new Date(cur.trial_ends_at) < new Date();
+        const monthsN = parseInt(active_until);
+        if (Number.isFinite(monthsN) && monthsN >= 1 && monthsN <= 24) {
+          updates.push(`trial_ends_at=NOW() + ($${i++}::int || ' months')::interval`);
+          params.push(monthsN);
+          updates.push('expired_at=NULL');
+        } else if (active_until === 'forever' || (active_until === undefined && stale)) {
+          updates.push(`trial_ends_at='2099-12-31'`);
+          updates.push('expired_at=NULL');
+        }
       }
     }
 
