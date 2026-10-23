@@ -140,10 +140,30 @@ async function computeWaitInfo(shopId, entry) {
     }
     lane.free = Math.max(lane.free, calledMin + dur, now + 5);
   }
+  // Trabajo acumulado de cada barbero (turnos del día y de la semana, sin cancelados): un turno
+  // sin barbero asignado se le suma al que menos trabajo tiene, igual que "cualquier profesional"
+  const load = {};
+  if (ids.length) {
+    const lq = await pool.query(
+      `SELECT barber_id, COUNT(*) FILTER (WHERE date = $2::date) AS d, COUNT(*) AS w
+         FROM appointments
+        WHERE shop_id=$1 AND barber_id IS NOT NULL AND status NOT IN ('cancelled','noshow')
+          AND date BETWEEN $2::date - 6 AND $2::date
+        GROUP BY barber_id`, [shopId, today]).catch(() => ({ rows: [] }));
+    ids.forEach(id => { load[id] = { d: 0, w: 0 }; });
+    lq.rows.forEach(r => { if (load[r.barber_id]) load[r.barber_id] = { d: parseInt(r.d), w: parseInt(r.w) }; });
+  }
+  const leastLoaded = () => ids.slice().sort((x, y) => (load[x].d - load[y].d) || (load[x].w - load[y].w) || (x - y))[0];
+
   // Turnos agendados
   for (const a of apptQ.rows) {
-    const lane = lanes[keyOf(a.barber_id)];
-    if (!lane) continue; // turno sin barbero en un local con barberos: no se sabe quién lo toma
+    let lane = lanes[keyOf(a.barber_id)];
+    if (!lane && ids.length && !a.barber_id) {
+      const who = leastLoaded();
+      lane = lanes[who];
+      load[who].d++; load[who].w++;
+    }
+    if (!lane) continue;
     const s = toMin(a.ts), e = a.te ? toMin(a.te) : s + 30;
     if (e <= now) continue;                       // ya pasó (no vino / quedó sin cobrar)
     if (s <= now) { lane.free = Math.max(lane.free, e); continue; } // lo está atendiendo ahora
