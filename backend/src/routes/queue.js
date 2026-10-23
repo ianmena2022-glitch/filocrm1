@@ -253,16 +253,21 @@ async function resolveShopId(authShopId) {
 }
 
 // ─── PROTECTED: get queue ────────────────────────────────────────────────────
+// El dueño ve toda la fila. El barbero también ve toda la fila (con la marca de a quién espera
+// cada cliente), pero los turnos de hoy son los suyos + los sin asignar, y los teléfonos de los
+// clientes que eligieron a otro barbero no se muestran.
 router.get('/', auth, async (req, res) => {
   try {
     const shopId = await resolveShopId(req.shopId);
 
-    // paused + slug
-    const shopRes = await pool.query(
-      'SELECT queue_paused, booking_slug, name FROM shops WHERE id=$1',
-      [shopId]
-    );
+    // Consultas independientes en paralelo (antes eran 8 viajes a la base uno tras otro)
+    const [shopRes, callerRes, shopTz] = await Promise.all([
+      pool.query('SELECT queue_paused, booking_slug, name FROM shops WHERE id=$1', [shopId]),
+      pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]),
+      getShopTz(shopId),
+    ]);
     const shop = shopRes.rows[0] || {};
+    const callerIsBarber = callerRes.rows[0]?.is_barber || false;
 
     // Auto-generar booking_slug si no existe (así el QR de la fila siempre funciona)
     if (!shop.booking_slug) {
@@ -276,62 +281,64 @@ router.get('/', auth, async (req, res) => {
       shop.booking_slug = generated;
     }
 
-    // Si el que pide es un barbero, filtrar: solo ve sus entries + las sin asignar
-    const callerRes = await pool.query('SELECT is_barber FROM shops WHERE id=$1', [req.shopId]);
-    const callerIsBarber = callerRes.rows[0]?.is_barber || false;
+    const apptBarberFilter = callerIsBarber ? 'AND (barber_id = $3 OR barber_id IS NULL)' : '';
+    const apptParams = callerIsBarber ? [shopId, shopTz, req.shopId] : [shopId, shopTz];
+    // "Atendidos hoy": del barbero si es un barbero, del local si es el dueño; el día corta a medianoche del local
+    const servedBarberFilter = callerIsBarber ? 'AND barber_id = $3' : '';
+    const servedParams = callerIsBarber ? [shopId, shopTz, req.shopId] : [shopId, shopTz];
 
-    const barberFilter = callerIsBarber
-      ? 'AND (barber_id = $2 OR barber_id IS NULL)'
-      : '';
-    const params = callerIsBarber ? [shopId, req.shopId] : [shopId];
+    const [entriesRes, avgRes, servedRes, apptRes] = await Promise.all([
+      // entries (waiting + called)
+      pool.query(
+        `SELECT q.id, q.client_name, q.client_phone, q.status, q.created_at, q.called_at,
+                q.service_name, q.price, q.barber_id,
+                b.name AS barber_name,
+                EXTRACT(EPOCH FROM (NOW() - q.created_at))/60 AS minutes_waiting
+         FROM queue_entries q
+         LEFT JOIN shops b ON b.id = q.barber_id
+         WHERE q.shop_id=$1 AND q.status IN ('waiting','called')
+         ORDER BY q.created_at ASC`,
+        [shopId]
+      ),
+      // avg wait
+      pool.query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (served_at - called_at))/60) AS avg_min
+         FROM queue_entries
+         WHERE shop_id=$1 AND status='served' AND served_at > NOW() - INTERVAL '4 hours'`,
+        [shopId]
+      ),
+      // served today
+      pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM queue_entries
+         WHERE shop_id=$1 AND status='served'
+           AND (served_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date ${servedBarberFilter}`,
+        servedParams
+      ),
+      // Today's appointments (for hybrid view) — date in shop timezone
+      pool.query(
+        `SELECT id, client_name, service_name, price, time_start, barber_name, barber_id, status, commission_pct
+         FROM appointments
+         WHERE shop_id=$1
+           AND date = (NOW() AT TIME ZONE $2)::DATE
+           AND status IN ('pending','confirmed') ${apptBarberFilter}
+         ORDER BY time_start ASC`,
+        apptParams
+      ),
+    ]);
 
-    // entries (waiting + called)
-    const entriesRes = await pool.query(
-      `SELECT q.id, q.client_name, q.client_phone, q.status, q.created_at, q.called_at,
-              q.service_name, q.price, q.barber_id,
-              b.name AS barber_name,
-              EXTRACT(EPOCH FROM (NOW() - q.created_at))/60 AS minutes_waiting
-       FROM queue_entries q
-       LEFT JOIN shops b ON b.id = q.barber_id
-       WHERE q.shop_id=$1 AND q.status IN ('waiting','called') ${barberFilter}
-       ORDER BY q.created_at ASC`,
-      params
-    );
-
-    // avg wait
-    const avgRes = await pool.query(
-      `SELECT AVG(EXTRACT(EPOCH FROM (served_at - called_at))/60) AS avg_min
-       FROM queue_entries
-       WHERE shop_id=$1 AND status='served' AND served_at > NOW() - INTERVAL '4 hours'`,
-      [shopId]
-    );
     const avg_wait_min = avgRes.rows[0].avg_min != null
       ? parseFloat(avgRes.rows[0].avg_min)
       : null;
 
-    // served today
-    const servedRes = await pool.query(
-      `SELECT COUNT(*)::int AS cnt FROM queue_entries
-       WHERE shop_id=$1 AND status='served' AND served_at > NOW()::date`,
-      [shopId]
-    );
-
-    // Today's appointments (for hybrid view) — date in shop timezone
-    const shopTz = await getShopTz(shopId);
-    const apptRes = await pool.query(
-      `SELECT id, client_name, service_name, price, time_start, barber_name, barber_id, status, commission_pct
-       FROM appointments
-       WHERE shop_id=$1
-         AND date = (NOW() AT TIME ZONE $2)::DATE
-         AND status IN ('pending','confirmed')
-       ORDER BY time_start ASC`,
-      [shopId, shopTz]
-    );
+    // Un barbero no ve el teléfono de los clientes que eligieron a otro barbero
+    const entries = callerIsBarber
+      ? entriesRes.rows.map(e => (e.barber_id && e.barber_id !== req.shopId) ? { ...e, client_phone: null } : e)
+      : entriesRes.rows;
 
     return res.json({
       paused: shop.queue_paused || false,
       shop_slug: shop.booking_slug || '',
-      entries: entriesRes.rows,
+      entries,
       avg_wait_min,
       served_today: servedRes.rows[0].cnt,
       appointments_today: apptRes.rows

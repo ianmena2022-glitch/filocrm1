@@ -825,7 +825,7 @@ function startPolling() {
       if (!filaActive) {
         try {
           const qd = await api('GET', '/queue');
-          const total = qd.entries.filter(e => e.status === 'waiting' || e.status === 'called').length;
+          const total = qd.entries.filter(e => (e.status === 'waiting' || e.status === 'called') && (!e.barber_id || e.barber_id === (me && me.id))).length;
           updateFilaBadge(total);
         } catch(e) {}
       }
@@ -1220,19 +1220,25 @@ async function loadFila() {
   try {
     const data = await api('GET', '/queue');
 
+    // La fila completa se muestra, pero solo puedo llamar a los míos y a los "cualquiera"
+    const myId     = me && me.id;
+    const isMine   = (e) => !e.barber_id || e.barber_id === myId;
+    const allWaiting = data.entries.filter(e => e.status === 'waiting');
+    const callable   = allWaiting.filter(isMine).length;
+    const called     = data.entries.filter(e => e.status === 'called' && isMine(e));
+    const apptsToday = data.appointments_today || [];
+
     // Stats
-    const waiting = data.entries.filter(e => e.status === 'waiting').length;
-    const called  = data.entries.filter(e => e.status === 'called');
-    document.getElementById('fila-stat-waiting').textContent = waiting;
+    document.getElementById('fila-stat-waiting').textContent = allWaiting.length;
     document.getElementById('fila-stat-served').textContent  = data.served_today ?? 0;
     document.getElementById('fila-stat-avg').textContent     = data.avg_wait_min != null ? Math.round(data.avg_wait_min) : '—';
 
-    // Badge en nav
-    updateFilaBadge(waiting + called.length);
+    // Badge en nav (lo que me toca a mí)
+    updateFilaBadge(callable + called.length);
 
     // Botón "Llamar siguiente"
     const btn = document.getElementById('btn-call-next');
-    if (btn) btn.disabled = waiting === 0;
+    if (btn) btn.disabled = callable === 0;
 
     // Lista de clientes llamados (puede haber más de uno)
     const calledListEl = document.getElementById('fila-called-list');
@@ -1258,26 +1264,43 @@ async function loadFila() {
       calledListEl.innerHTML = '';
     }
 
-    // Lista de espera
+    // Lista: turnos de hoy (míos + sin asignar) y la fila completa en orden de llegada
     const listEl = document.getElementById('fila-queue-list');
-    const waitingEntries = data.entries.filter(e => e.status === 'waiting');
-    if (!waitingEntries.length) {
-      listEl.innerHTML = `<div class="queue-empty">🎉 No hay nadie esperando</div>`;
-    } else {
-      listEl.innerHTML = waitingEntries.map((e, i) => {
+    const waitingEntries = allWaiting;
+    let html = '';
+    if (apptsToday.length) {
+      html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#7ab8ff;margin:2px 4px 6px">🗓 Turnos de hoy</div>`;
+      html += apptsToday.map(a => `<div class="queue-item" style="border-color:rgba(122,184,255,.2)">
+          <div class="queue-pos" style="color:#7ab8ff;font-size:15px">${escHtml(String(a.time_start || '').slice(0, 5))}</div>
+          <div style="flex:1">
+            <div class="queue-name">${escHtml(a.client_name || 'Cliente')}</div>
+            <div class="queue-meta">${a.service_name ? `✂️ ${escHtml(a.service_name)} · ` : ''}${a.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}</div>
+          </div>
+        </div>`).join('');
+      html += '<div style="height:10px"></div>';
+    }
+    if (waitingEntries.length) {
+      html += `<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin:2px 4px 6px">👥 Fila — orden de llegada</div>`;
+      html += waitingEntries.map((e, i) => {
         const mins = Math.round(e.minutes_waiting || 0);
-        const barberTag = e.barber_id
+        const mine = e.barber_id && e.barber_id === myId;
+        const other = e.barber_id && e.barber_id !== myId;
+        const barberTag = mine
           ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,209,0,.12);color:var(--yellow);font-weight:700">PARA MÍ</span>`
-          : `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);font-weight:700">CUALQUIERA</span>`;
-        return `<div class="queue-item">
+          : other
+            ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(122,184,255,.1);color:#7ab8ff;font-weight:700">PARA ${escHtml((e.barber_name || 'OTRO BARBERO').toUpperCase())}</span>`
+            : `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);font-weight:700">CUALQUIERA</span>`;
+        return `<div class="queue-item"${other ? ' style="opacity:.6"' : ''}>
           <div class="queue-pos">${i + 1}°</div>
           <div style="flex:1">
-            <div class="queue-name" style="display:flex;align-items:center;gap:8px">${escHtml(e.client_name)} ${barberTag}</div>
+            <div class="queue-name" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${escHtml(e.client_name)} ${barberTag}</div>
             <div class="queue-meta">${e.client_phone ? `📞 ${escHtml(e.client_phone)} · ` : ''}${mins}min esperando${e.service_name ? ` · ✂️ ${escHtml(e.service_name)}` : ''}</div>
           </div>
         </div>`;
       }).join('');
     }
+    if (!html) html = `<div class="queue-empty">🎉 No hay nadie esperando</div>`;
+    listEl.innerHTML = html;
   } catch(e) {
     console.error('[fila]', e);
     document.getElementById('fila-queue-list').innerHTML =
