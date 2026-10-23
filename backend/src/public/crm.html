@@ -5611,9 +5611,10 @@ async function startApp() {
     } catch(e) { /* usar datos cacheados si falla */ }
   }
 
-  // Verificar acceso: trial activo, suscripción activa, test, barbero, enterprise o branch
+  // Verificar acceso: trial activo, suscripción activa o test. El dueño enterprise paga como
+  // cualquier cuenta; barberos y sucursales dependen de la cuenta que paga (el servidor responde 402).
   if (currentShop && !currentShop.is_test && currentShop.plan !== 'test'
-      && !currentShop.is_barber && !currentShop.is_enterprise_owner && !currentShop.is_branch) {
+      && !currentShop.is_barber && !currentShop.is_branch) {
     const status = currentShop.subscription_status;
     if (status !== 'trial' && status !== 'active') {
       openQRPaywall();
@@ -5632,8 +5633,7 @@ async function startApp() {
 
   // Trial / renovación badge en todos los topbars
   document.querySelectorAll('.trial-badge').forEach(el => el.remove());
-  const _isPayingShop = !currentShop?.is_test && !currentShop?.is_barber
-    && !currentShop?.is_enterprise_owner && !currentShop?.is_branch;
+  const _isPayingShop = !currentShop?.is_test && !currentShop?.is_barber && !currentShop?.is_branch;
   if (_isPayingShop) {
     const _status = currentShop?.subscription_status;
     // trial_days_left viene del token/status; si no, calcular desde trial_ends_at
@@ -5667,8 +5667,11 @@ async function startApp() {
 
     if (_badgeHTML) {
       document.querySelectorAll('.topbar-user-group').forEach(group => {
+        if (group.closest('#sec-enterprise')) return; // en el panel enterprise va al lado de los botones (visible también en el celular)
         group.insertAdjacentHTML('afterbegin', _badgeHTML);
       });
+      const entRight = document.querySelector('#sec-enterprise .topbar-right');
+      if (entRight) entRight.insertAdjacentHTML('afterbegin', _badgeHTML);
     }
   }
 
