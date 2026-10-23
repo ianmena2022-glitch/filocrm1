@@ -93,6 +93,112 @@ async function createQueueAppointment(shopId, entry, barberId) {
   return apptId;
 }
 
+// ─── Cálculo de la espera de un cliente de la fila ───────────────────────────
+// Simula a cada barbero con lo que ya tiene: el cliente que está atendiendo, sus turnos
+// agendados de hoy y la gente de la fila que le toca antes. Así, si elegí a un barbero que
+// está atendiendo y tiene un turno después, no me dice "sos el siguiente".
+const toMin = (hhmm) => { const [h, m] = String(hhmm || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
+
+async function computeWaitInfo(shopId, entry) {
+  const tz = await getShopTz(shopId);
+  const today = shopDate(tz);
+  const now = toMin(shopTime(tz));
+
+  const [barbersQ, aheadQ, calledQ, apptQ, avgQ] = await Promise.all([
+    pool.query('SELECT id FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [shopId]),
+    pool.query(`SELECT id, barber_id FROM queue_entries WHERE shop_id=$1 AND status='waiting' AND id < $2 ORDER BY id`, [shopId, entry.id]),
+    pool.query(`SELECT barber_id, called_at FROM queue_entries WHERE shop_id=$1 AND status='called'`, [shopId]),
+    // Turnos agendados de hoy sin cobrar (los de la fila ya están contados como "llamados")
+    pool.query(
+      `SELECT a.barber_id, a.time_start::text AS ts, a.time_end::text AS te FROM appointments a
+        WHERE a.shop_id=$1 AND a.date=$2::date AND a.status IN ('pending','confirmed')
+          AND NOT EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id)
+        ORDER BY a.time_start`, [shopId, today]).catch(() => ({ rows: [] })),
+    pool.query(
+      `SELECT AVG(EXTRACT(EPOCH FROM (served_at - called_at))/60) AS avg_min FROM queue_entries
+        WHERE shop_id=$1 AND status='served' AND called_at IS NOT NULL AND served_at > NOW() - INTERVAL '4 hours'`, [shopId]),
+  ]);
+
+  // Duración de cada atención: lo que vienen tardando hoy (entre 10 y 60 min); si no hay datos, 25
+  const obs = avgQ.rows[0]?.avg_min != null ? parseFloat(avgQ.rows[0].avg_min) : null;
+  const dur = obs && obs > 0 ? Math.min(Math.max(Math.round(obs), 10), 60) : 25;
+
+  // Un "carril" por barbero (sin barberos: uno solo, el del local)
+  const lanes = {};
+  const ids = barbersQ.rows.map(r => r.id);
+  const keyOf = (barberId) => (ids.length ? barberId : 'local');
+  (ids.length ? ids : ['local']).forEach(id => { lanes[id] = { free: now, appts: [] }; });
+
+  // Quien está en el sillón
+  for (const c of calledQ.rows) {
+    const lane = lanes[keyOf(c.barber_id)];
+    if (!lane) continue;
+    let calledMin = now;
+    if (c.called_at) {
+      const t = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(c.called_at));
+      calledMin = toMin(t);
+    }
+    lane.free = Math.max(lane.free, calledMin + dur, now + 5);
+  }
+  // Turnos agendados
+  for (const a of apptQ.rows) {
+    const lane = lanes[keyOf(a.barber_id)];
+    if (!lane) continue; // turno sin barbero en un local con barberos: no se sabe quién lo toma
+    const s = toMin(a.ts), e = a.te ? toMin(a.te) : s + 30;
+    if (e <= now) continue;                       // ya pasó (no vino / quedó sin cobrar)
+    if (s <= now) { lane.free = Math.max(lane.free, e); continue; } // lo está atendiendo ahora
+    lane.appts.push({ s, e, used: false });
+  }
+
+  // Ubicar una atención en un carril: los turnos agendados que se pisan van primero
+  const place = (lane, commit) => {
+    let start = lane.free, apptsBefore = 0;
+    const used = [];
+    for (const a of lane.appts) {
+      if (a.used) continue;
+      if (a.s < start + dur) { start = Math.max(start, a.s) + (a.e - a.s); apptsBefore++; used.push(a); }
+    }
+    if (commit) { used.forEach(a => { a.used = true; }); lane.free = start + dur; }
+    return { start, apptsBefore };
+  };
+  const bestLane = (barberId) => {
+    if (barberId && lanes[keyOf(barberId)]) return lanes[keyOf(barberId)];
+    let best = null, bestStart = Infinity;
+    for (const lane of Object.values(lanes)) {
+      const { start } = place(lane, false);
+      if (start < bestStart) { bestStart = start; best = lane; }
+    }
+    return best;
+  };
+
+  // Los que están antes en la fila. Si elegí a un barbero, solo me demoran los suyos
+  // (el barbero llama primero a los que lo eligieron a él).
+  const mine = entry.barber_id && lanes[keyOf(entry.barber_id)];
+  const relevant = mine ? aheadQ.rows.filter(r => r.barber_id === entry.barber_id) : aheadQ.rows;
+  const starts = [];
+  for (const r of relevant) {
+    const lane = bestLane(r.barber_id);
+    const res = place(lane, true);
+    lane.apptsServed = (lane.apptsServed || 0) + res.apptsBefore;
+    starts.push(res.start);
+  }
+  const finalLane = bestLane(mine ? entry.barber_id : null);
+  const me = place(finalLane, false);
+  // Turnos agendados que ese barbero atiende antes que yo
+  const apptsAhead = (finalLane.apptsServed || 0) + me.apptsBefore;
+
+  // Gente de la fila que se atiende antes que yo (con "cualquiera", los que esperan a otro
+  // barbero que se libera después no cuentan)
+  const queueAhead = starts.filter(t => t <= me.start).length;
+  return {
+    position: queueAhead + apptsAhead,
+    people_ahead: queueAhead + apptsAhead,
+    queue_ahead: queueAhead,
+    appointments_ahead: apptsAhead,
+    estimated_wait_min: Math.max(0, Math.round(me.start - now)),
+  };
+}
+
 // ─── PUBLIC: join queue ──────────────────────────────────────────────────────
 router.post('/:slug/join', joinLimiter, async (req, res) => {
   try {
@@ -197,33 +303,15 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
       } catch (e) { console.warn('[QUEUE] any_barber:', e.message); }
     }
 
-    // Calculate position (number of waiting entries with lower id = people ahead)
-    const posRes = await pool.query(
-      `SELECT COUNT(*)::int AS cnt FROM queue_entries
-       WHERE shop_id=$1 AND status='waiting' AND id < $2`,
-      [shop.id, entry_id]
-    );
-    const position = posRes.rows[0].cnt;
-
-    // Calculate avg wait
-    const avgRes = await pool.query(
-      `SELECT AVG(EXTRACT(EPOCH FROM (served_at - called_at))/60) AS avg_min
-       FROM queue_entries
-       WHERE shop_id=$1 AND status='served' AND served_at > NOW() - INTERVAL '4 hours'`,
-      [shop.id]
-    );
-    const avg_wait_min = avgRes.rows[0].avg_min != null
-      ? parseFloat(avgRes.rows[0].avg_min)
-      : 15;
-
-    const estimated_wait_min = Math.round(position * avg_wait_min);
+    // Posición y espera reales: tiene en cuenta el barbero elegido, a quién está atendiendo
+    // y sus turnos agendados (antes contaba solo la gente anotada antes en todo el local)
+    const info = await computeWaitInfo(shop.id, { id: entry_id, barber_id: validBarberId });
 
     return res.json({
       entry_id,
       token: publicToken,
       client_name: name.trim(),
-      position,
-      estimated_wait_min,
+      ...info,
       shop_name: shop.name
     });
   } catch (e) {
@@ -255,7 +343,7 @@ router.get('/:slug/status', async (req, res) => {
     // Get entry
     await ensureQueueTokenColumn();
     const entryRes = await pool.query(
-      `SELECT id, client_name, status, created_at, called_at, public_token
+      `SELECT id, client_name, status, created_at, called_at, public_token, barber_id
        FROM queue_entries WHERE id=$1 AND shop_id=$2`,
       [parseInt(entry_id) || 0, shop.id]
     );
@@ -278,33 +366,13 @@ router.get('/:slug/status', async (req, res) => {
       return res.json({ status: 'left' });
     }
 
-    // waiting — calculate position
-    const posRes = await pool.query(
-      `SELECT COUNT(*)::int AS cnt FROM queue_entries
-       WHERE shop_id=$1 AND status='waiting' AND id < $2`,
-      [shop.id, entry.id]
-    );
-    const position = posRes.rows[0].cnt;
-
-    // avg wait
-    const avgRes = await pool.query(
-      `SELECT AVG(EXTRACT(EPOCH FROM (served_at - called_at))/60) AS avg_min
-       FROM queue_entries
-       WHERE shop_id=$1 AND status='served' AND served_at > NOW() - INTERVAL '4 hours'`,
-      [shop.id]
-    );
-    const avg_wait_min = avgRes.rows[0].avg_min != null
-      ? parseFloat(avgRes.rows[0].avg_min)
-      : 15;
-
-    const estimated_wait_min = Math.round(position * avg_wait_min);
+    // waiting — posición y espera reales (barbero elegido, su cliente actual y sus turnos)
+    const info = await computeWaitInfo(shop.id, entry);
 
     return res.json({
       entry_id: entry.id,
       status: entry.status,
-      position,
-      people_ahead: position,
-      estimated_wait_min,
+      ...info,
       client_name: entry.client_name,
       shop_name: shop.name,
       queue_paused: shop.queue_paused
@@ -568,12 +636,8 @@ router.post('/next', auth, async (req, res) => {
 
     // Send WhatsApp non-blocking
     if (entry.client_phone) {
-      let msg;
-      if (remaining > 0) {
-        msg = `¡Hola ${entry.client_name}! Tu turno en *${shopName}* se acerca 💈\nQuedan ${remaining} persona${remaining > 1 ? 's' : ''} antes que vos.\nEstimado: ${remaining * avg}min aprox. ¡No te vayas muy lejos! ✂️`;
-      } else {
-        msg = `¡Hola ${entry.client_name}! *Es tu turno* en ${shopName} 💈\n¡Vení ahora, te estamos esperando! ✂️`;
-      }
+      // A quien se llama le toca ahora (antes, si quedaba gente en la fila, le decía "quedan N antes que vos")
+      const msg = `¡Hola ${entry.client_name}! *Es tu turno* en ${shopName} 💈\n¡Vení ahora, te estamos esperando! ✂️`;
       try {
         const wpp = require('../services/whatsapp');
         wpp.sendText(shopId, entry.client_phone, msg).catch(() => {});

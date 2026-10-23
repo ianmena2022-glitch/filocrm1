@@ -769,6 +769,9 @@
         if (ahead === 0)      lblEl.textContent = '¡Sos el siguiente!';
         else if (ahead === 1) lblEl.textContent = '1 persona adelante';
         else                  lblEl.textContent = `${ahead} personas adelante`;
+        // Turnos agendados del barbero que van antes (no son de la fila pero se atienden primero)
+        const appts = parseInt(data.appointments_ahead) || 0;
+        if (appts > 0) lblEl.textContent += ` (incluye ${appts} turno${appts > 1 ? 's' : ''} agendado${appts > 1 ? 's' : ''})`;
       }
 
       const mins = data.estimated_wait_min || 0;
