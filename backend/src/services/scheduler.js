@@ -4,7 +4,7 @@
  * Se arranca una vez desde index.js al iniciar el servidor.
  */
 const pool = require('../db/pool');
-const { computeDayClose, saveDayClose } = require('./cashMath');
+const { computeDayClose, saveDayClose, deleteEmptyDayClose } = require('./cashMath');
 
 // Devuelve {date, hours, minutes, mins, day} para la timezone dada (respeta DST).
 // Si tz es inválido o no se pasa, cae a America/Argentina/Buenos_Aires.
@@ -59,9 +59,11 @@ async function runCajaAutoClose() {
   let closed = 0;
 
   try {
+    // Cuentas canceladas no se procesan (no tienen actividad y solo cargan la base cada 30 min)
     const shops = await pool.query(
       `SELECT id, timezone FROM shops
-       WHERE (is_barber IS NULL OR is_barber = FALSE)`
+       WHERE (is_barber IS NULL OR is_barber = FALSE)
+         AND subscription_status IS DISTINCT FROM 'cancelled'`
     );
 
     for (const shop of shops.rows) {
@@ -71,6 +73,9 @@ async function runCajaAutoClose() {
 
         // Misma lógica que el cierre manual (splits, seña, liquidaciones sin doble descuento)
         const d = await computeDayClose(shop.id, date);
+        // Días sin movimientos (local cerrado, cuenta sin uso) no generan un cierre en $0:
+        // inflaban "días trabajados" y bajaban los promedios del resultado mensual
+        if (!d.has_activity) { await deleteEmptyDayClose(shop.id, date); continue; }
         await saveDayClose(shop.id, date, d);
         const net = d.net_total;
 
@@ -226,13 +231,20 @@ function _addTimeout(fn, ms) {
 // ── POLLING DE TRANSFERENCIAS ENTRANTES ──────────────────────────────────
 // MP no notifica depósitos CVU por webhook de forma confiable. Cada 10s
 // consultamos los pagos recientes y los matcheamos contra pending_transfers.
+let _pollTick = 0;
 async function runTransferPolling() {
   try {
     const pool = require('../db/pool');
+    _pollTick++;
+    // Con órdenes vigentes se revisa cada 10 s; con órdenes vencidas hace menos de 7 días
+    // (transferencias que pueden llegar tarde) alcanza con cada 2 minutos.
     const pendingQ = await pool.query(
-      `SELECT 1 FROM pending_transfers WHERE matched=FALSE AND expires_at > NOW() LIMIT 1`
+      `SELECT BOOL_OR(expires_at > NOW()) AS vigente FROM pending_transfers
+        WHERE matched=FALSE AND expires_at > NOW() - INTERVAL '7 days'`
     );
-    if (!pendingQ.rows.length) return;
+    const vigente = pendingQ.rows[0]?.vigente;
+    if (vigente == null) return;               // no hay nada que esperar
+    if (!vigente && _pollTick % 12 !== 0) return;
 
     const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
     if (!MP_TOKEN) return;
@@ -249,7 +261,7 @@ async function runTransferPolling() {
     if (!results.length) return;
 
     const internals = require('../routes/payments')._internals || {};
-    const { tryMatchIncomingTransfer, activateShopPlan } = internals;
+    const { tryMatchIncomingTransfer, activateShopPlan, recordUnmatchedPayment } = internals;
     if (!tryMatchIncomingTransfer || !activateShopPlan) {
       console.warn('[Poll Transfer] internals no disponibles en payments.js');
       return;
@@ -271,6 +283,13 @@ async function runTransferPolling() {
             paidAmount: parseFloat(p.transaction_amount) || 0,
             promotionId: match.promotionId || null
           });
+        } else if (!match.alreadyHandled && recordUnmatchedPayment) {
+          // Entró plata mientras alguien esperaba su transferencia y no coincide con ninguna orden
+          await recordUnmatchedPayment({
+            paymentId, amount: p.transaction_amount, reason: 'sin_orden',
+            payer: p.payer?.email || p.payer?.identification?.number || null,
+            detail: p.description || null,
+          });
         }
       } catch(e) { console.error('[Poll Transfer] item error:', e.message); }
     }
@@ -287,6 +306,11 @@ async function runTransferPolling() {
 // Apagar todo con WPP_REMINDERS=off; un local puede desactivarlos desde sus plantillas.
 let _remindersRunning = false;
 
+function fixMananaToHoy(msg) {
+  return String(msg).replace(/(^|[^\p{L}])(la |esta |de |pasado |por la )?(mañana)(?![\p{L}])/giu,
+    (all, pre, qual, word) => qual ? all : pre + (word[0] === 'M' ? 'Hoy' : 'hoy'));
+}
+
 function isQuietHour(tz, now = new Date()) {
   const h = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: tz || 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23' }).format(now));
   return h < 8 || h >= 22;
@@ -298,25 +322,38 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
   _remindersRunning = true;
   let sent = 0, skipped = 0;
   try {
-    const { rows } = await pool.query(
-      `SELECT a.id, a.shop_id, a.client_name, a.service_name, a.date::text AS date, a.time_start,
-              c.phone AS client_phone, c.name AS client_name_db,
-              s.name AS shop_name, s.msg_templates,
-              COALESCE(s.timezone, 'America/Argentina/Buenos_Aires') AS tz
-         FROM appointments a
-         JOIN shops s   ON s.id = a.shop_id
-         JOIN clients c ON c.id = a.client_id
-        WHERE a.status IN ('pending','confirmed')
-          AND a.reminder_sent_at IS NULL
-          AND a.created_at < NOW() - INTERVAL '3 hours'
-          AND c.phone IS NOT NULL AND c.phone <> ''
-          AND (s.wpp_connected = TRUE
-               OR EXISTS (SELECT 1 FROM shops o WHERE o.id = s.parent_enterprise_id AND o.wpp_connected = TRUE))
-          AND ((a.date + a.time_start)::timestamp AT TIME ZONE COALESCE(s.timezone, 'America/Argentina/Buenos_Aires'))
-              BETWEEN NOW() + INTERVAL '75 minutes' AND NOW() + INTERVAL '165 minutes'
-        ORDER BY a.date, a.time_start
-        LIMIT 200`
-    );
+    const TZ = `COALESCE(s.timezone, 'America/Argentina/Buenos_Aires')`;
+    const baseSelect = `
+      SELECT a.id, a.shop_id, a.client_name, a.service_name, a.date::text AS date, a.time_start,
+             c.phone AS client_phone, c.name AS client_name_db,
+             s.name AS shop_name, s.msg_templates,
+             ${TZ} AS tz
+        FROM appointments a
+        JOIN shops s   ON s.id = a.shop_id
+        JOIN clients c ON c.id = a.client_id
+       WHERE a.status IN ('pending','confirmed')
+         AND a.reminder_sent_at IS NULL
+         AND a.created_at < NOW() - INTERVAL '3 hours'
+         AND c.phone IS NOT NULL AND c.phone <> ''
+         AND (s.wpp_connected = TRUE
+              OR EXISTS (SELECT 1 FROM shops o WHERE o.id = s.parent_enterprise_id AND o.wpp_connected = TRUE))`;
+    // ~2 h antes del turno
+    const sameDay = (await pool.query(
+      `${baseSelect}
+         AND ((a.date + a.time_start)::timestamp AT TIME ZONE ${TZ})
+             BETWEEN NOW() + INTERVAL '75 minutes' AND NOW() + INTERVAL '165 minutes'
+       ORDER BY a.date, a.time_start LIMIT 200`
+    )).rows;
+    // Turnos temprano (antes de las 10:30): 2 h antes cae en el horario de silencio, así que el
+    // aviso sale la noche anterior, entre las 20 y las 22 del local.
+    const nightBefore = (await pool.query(
+      `${baseSelect}
+         AND a.time_start < '10:30'
+         AND a.date = ((NOW() AT TIME ZONE ${TZ})::date + 1)
+         AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE ${TZ})) BETWEEN 20 AND 21
+       ORDER BY a.date, a.time_start LIMIT 200`
+    )).rows.map(r => ({ ...r, _nightBefore: true }));
+    const rows = [...nightBefore, ...sameDay.filter(r => !nightBefore.some(n => n.id === r.id))];
     if (!rows.length) return { sent, skipped };
 
     const wpp = require('./whatsapp');
@@ -341,9 +378,11 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
           msg = await generateMessage(a.shop_id, 'recordatorio', { clientName: nombre, hora, fecha, shopName: a.shop_name || 'la barbería', serviceName: a.service_name || null });
         } catch (_) {}
       }
-      if (!msg) msg = require('./msgVariants').reminderText({ nombre, hora, shop: a.shop_name || 'la barbería' });
-      // El aviso sale ~2 h antes: plantillas viejas que dicen "mañana" se corrigen
-      msg = msg.replace(/\bmañana\b/gi, 'hoy');
+      if (!msg) msg = require('./msgVariants').reminderText({ nombre, hora, shop: a.shop_name || 'la barbería', manana: !!a._nightBefore });
+      // El aviso del mismo día sale ~2 h antes: plantillas viejas que dicen "mañana" (el día) se
+      // corrigen a "hoy", sin tocar "a la mañana" / "esta mañana" / "pasado mañana" (la hora del día).
+      if (!a._nightBefore) msg = fixMananaToHoy(msg);
+      else msg = String(msg).replace(/(^|[^\p{L}])(hoy)(?![\p{L}])/giu, (all, pre, w) => pre + (w[0] === 'H' ? 'Mañana' : 'mañana'));
 
       try {
         await wpp.sendText(a.shop_id, a.client_phone, msg);
@@ -400,4 +439,4 @@ function stopScheduler() {
   _schedulerHandles.length = 0;
 }
 
-module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina, runAppointmentReminders, isQuietHour };
+module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina, runAppointmentReminders, isQuietHour, fixMananaToHoy };

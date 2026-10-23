@@ -48,6 +48,87 @@ async function methodTotalsForDay(shopId, date) {
   }
 }
 
+// Saldo de cada cuenta (método de pago) en el día: lo que entró menos lo que salió por esa cuenta.
+// Ingresos: turnos (netos de seña; mixtos por split), ventas de productos, cobros de fiado,
+// señas y propinas. Egresos: gastos, compras, liquidaciones. Es lo que ve la cajera en la caja en
+// vivo y lo que se guarda en el cierre, así los dos números coinciden.
+// Devuelve { [method]: total }.
+async function methodFlowForDay(shopId, date) {
+  const map = {};
+  const add = (rows, sign = 1) => rows.forEach(r => {
+    if (r.key == null) return;
+    map[r.key] = (map[r.key] || 0) + sign * parseFloat(r.total || 0);
+  });
+
+  // Turnos: splits-aware y netos de la seña ya cobrada
+  const apptSql = (withSplits) => `
+    WITH by_appt AS (
+      SELECT id, GREATEST(price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END, 0) AS price, payment_method
+        FROM appointments
+       WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
+    )
+    ${withSplits ? `, splits_by_appt AS (
+      SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
+        FROM payment_splits ps JOIN by_appt ba ON ba.id = ps.appointment_id
+       GROUP BY ps.appointment_id, ps.method
+    )` : ''}
+    SELECT method AS key, SUM(amount) AS total FROM (
+      SELECT ba.payment_method AS method, SUM(ba.price) AS amount FROM by_appt ba
+       ${withSplits ? 'WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)' : ''}
+       GROUP BY ba.payment_method
+      ${withSplits ? 'UNION ALL SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method' : ''}
+    ) t GROUP BY method`;
+  try { add((await pool.query(apptSql(true), [shopId, date])).rows); }
+  catch (e) {
+    if (!/payment_splits/i.test(e.message)) throw e;
+    add((await pool.query(apptSql(false), [shopId, date])).rows);
+  }
+
+  // Ingresos registrados como movimientos: ventas de productos, cobros de fiado y señas
+  add((await pool.query(
+    `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+      WHERE shop_id=$1 AND date=$2 AND is_income=TRUE
+        AND source_type IN ('product_sale','debt_payment','sena') AND payment_method IS NOT NULL
+      GROUP BY payment_method`, [shopId, date])).rows);
+
+  // Propinas: por su método propio si lo tienen; si no, por el del turno (en mixtos, proporcional)
+  const tipSql = (withTipMethod, withSplits) => {
+    const noTm = withTipMethod ? 'AND a.tip_method IS NULL' : '';
+    const parts = [];
+    if (withTipMethod) parts.push(`SELECT a.tip_method AS method, a.tip AS amt FROM appointments a
+        WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 AND a.tip_method IS NOT NULL`);
+    parts.push(`SELECT a.payment_method AS method, a.tip AS amt FROM appointments a
+        WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 ${noTm}
+          AND a.payment_method IS NOT NULL AND a.payment_method NOT IN ('debt','mixed')
+          ${withSplits ? 'AND NOT EXISTS (SELECT 1 FROM payment_splits ps WHERE ps.appointment_id=a.id)' : ''}`);
+    if (withSplits) parts.push(`SELECT ps.method, a.tip * ps.amount / NULLIF(t.total,0)
+        FROM appointments a
+        JOIN payment_splits ps ON ps.appointment_id=a.id
+        JOIN (SELECT appointment_id, SUM(amount) AS total FROM payment_splits GROUP BY appointment_id) t ON t.appointment_id=a.id
+       WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 ${noTm} AND ps.method <> 'debt'`);
+    return `SELECT method AS key, SUM(amt) AS total FROM (${parts.join(' UNION ALL ')}) x GROUP BY method`;
+  };
+  let tmOk = true, spOk = true;
+  for (let i = 0; i < 4; i++) {
+    try { add((await pool.query(tipSql(tmOk, spOk), [shopId, date])).rows); break; }
+    catch (err) {
+      if (tmOk && /tip_method/i.test(err.message)) tmOk = false;
+      else if (spOk && /payment_splits/i.test(err.message)) spOk = false;
+      else throw err;
+    }
+  }
+
+  // Egresos por cuenta (gastos, compras de insumos, liquidaciones)
+  add((await pool.query(
+    `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+      WHERE shop_id=$1 AND date=$2 AND (is_income IS NULL OR is_income=FALSE) AND payment_method IS NOT NULL
+      GROUP BY payment_method`, [shopId, date])).rows, -1);
+
+  return map;
+}
+
 // Comisiones devengadas del día: turnos completados (todos, incluso fiados, porque se liquidan igual)
 // + comisiones de ventas de productos.
 async function dayCommissions(shopId, date) {
@@ -90,7 +171,12 @@ async function computeNet(shopId, date, { revenue, allIncome, expenses, apptComm
 
 // Cálculo completo de cierre de un día (lo usan cierre manual, auto-close y scheduler).
 async function computeDayClose(shopId, date) {
-  const m = await methodTotalsForDay(shopId, date);
+  // Los saldos por cuenta del cierre son los mismos que ve la cajera en la caja en vivo
+  const flow = await methodFlowForDay(shopId, date);
+  const m = {
+    cash_total: flow.cash || 0, debit_total: flow.debit || 0, credit_total: flow.credit || 0,
+    transfer_total: flow.transfer || 0, debt_total: flow.debt || 0,
+  };
   const ap = await pool.query(
     `SELECT
        COALESCE(SUM(tip),0) AS tips_total,
@@ -113,27 +199,47 @@ async function computeDayClose(shopId, date) {
     revenue, allIncome: parseFloat(ex.rows[0].all_income || 0), expenses,
     apptCommissions: c.appt, productCommissions: c.product,
   });
+  const allIncome = parseFloat(ex.rows[0].all_income || 0);
   return {
     cash_total: m.cash_total, debit_total: m.debit_total, credit_total: m.credit_total,
     transfer_total: m.transfer_total, debt_total: m.debt_total,
     tips_total: parseFloat(ap.rows[0].tips_total), expenses_total: expenses,
     revenue_total: revenue, net_total: net, cuts_count: parseInt(ap.rows[0].cuts_count),
+    method_breakdown: Object.entries(flow).map(([key, total]) => ({ key, total: String(total) })).sort((a, b) => a.key.localeCompare(b.key)),
+    // Día sin ningún movimiento (local cerrado): no se guarda un cierre en $0
+    has_activity: parseInt(ap.rows[0].cuts_count) > 0 || expenses > 0 || allIncome > 0 || Object.values(flow).some(v => Math.abs(v) > 0.005),
   };
 }
 
+let _breakdownCol = null;
+function ensureBreakdownColumn() {
+  if (!_breakdownCol) {
+    _breakdownCol = pool.query('ALTER TABLE cash_registers ADD COLUMN IF NOT EXISTS method_breakdown JSONB')
+      .catch(e => { _breakdownCol = null; console.warn('[caja] method_breakdown:', e.message); });
+  }
+  return _breakdownCol;
+}
+
 async function saveDayClose(shopId, date, d) {
+  await ensureBreakdownColumn();
   await pool.query(
     `INSERT INTO cash_registers
        (shop_id, date, cash_total, debit_total, credit_total, transfer_total,
-        debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        debt_total, tips_total, expenses_total, revenue_total, net_total, cuts_count, method_breakdown)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
      ON CONFLICT (shop_id, date) DO UPDATE SET
        cash_total=$3, debit_total=$4, credit_total=$5, transfer_total=$6,
        debt_total=$7, tips_total=$8, expenses_total=$9, revenue_total=$10,
-       net_total=$11, cuts_count=$12, closed_at=NOW()`,
+       net_total=$11, cuts_count=$12, method_breakdown=$13::jsonb, closed_at=NOW()`,
     [shopId, date, d.cash_total, d.debit_total, d.credit_total, d.transfer_total,
-     d.debt_total, d.tips_total, d.expenses_total, d.revenue_total, d.net_total, d.cuts_count]
+     d.debt_total, d.tips_total, d.expenses_total, d.revenue_total, d.net_total, d.cuts_count,
+     JSON.stringify(d.method_breakdown || [])]
   );
+}
+
+// Borra el cierre de un día que quedó sin movimientos (p.ej. se anuló el único turno)
+async function deleteEmptyDayClose(shopId, date) {
+  await pool.query('DELETE FROM cash_registers WHERE shop_id=$1 AND date=$2', [shopId, date]);
 }
 
 // El sistema reconoce el fiado por la clave 'debt'. Si el shop creó un método propio marcado
@@ -288,4 +394,4 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   }
 }
 
-module.exports = { normalizeDebtMethod, methodTotalsForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, methodMovementsForDay };
+module.exports = { normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };

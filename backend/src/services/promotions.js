@@ -47,9 +47,10 @@ async function getBestPromoForShop({ shopId, plan, code = null }) {
       );
       if (tot.rows[0].n >= p.max_total_uses) continue;
     }
-    // Per-shop uses
+    // Per-shop uses (los días de prueba al registrarse no gastan el uso del descuento)
     const perShop = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM promotion_uses WHERE promotion_id=$1 AND shop_id=$2',
+      `SELECT COUNT(*)::int AS n FROM promotion_uses
+        WHERE promotion_id=$1 AND shop_id=$2 AND NOT (COALESCE(payment_id,'trial-signup')='trial-signup' AND COALESCE(original_amount,0)=0)`,
       [p.id, shopId]
     );
     const used = perShop.rows[0].n;
@@ -172,7 +173,8 @@ async function forecastBilling(shops) {
           AND (starts_at IS NULL OR starts_at <= NOW())
           AND (ends_at   IS NULL OR ends_at   >  NOW())`)).rows;
     if (promos.length) {
-      (await pool.query('SELECT promotion_id, shop_id, COUNT(*)::int AS n FROM promotion_uses GROUP BY promotion_id, shop_id'))
+      (await pool.query(`SELECT promotion_id, shop_id, COUNT(*)::int AS n FROM promotion_uses
+                           WHERE NOT (COALESCE(payment_id,'trial-signup')='trial-signup' AND COALESCE(original_amount,0)=0) GROUP BY promotion_id, shop_id`))
         .rows.forEach(r => { uses[`${r.promotion_id}:${r.shop_id}`] = r.n; totals[r.promotion_id] = (totals[r.promotion_id] || 0) + r.n; });
     }
   } catch (e) {

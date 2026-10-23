@@ -313,8 +313,8 @@ router.post('/', auth, async (req, res) => {
 // PUT /api/appointments/:id/status
 // Helper: valida y persiste splits de pago para un appointment.
 // Si llegan splits válidos, pisa payment_method a 'mixed'.
-// Retorna { effectivePaymentMethod, totalPaid } o null si no se mandaron splits.
-async function _writeAppointmentSplits(client, shopId, apptId, price, splits) {
+// _validateSplits devuelve los splits limpios (o null si no vino ninguno) y tira si no suman.
+function _validateSplits(price, splits) {
   if (!Array.isArray(splits) || splits.length === 0) return null;
   const clean = splits
     .map(s => ({ method: String(s.method||'').trim(), amount: parseFloat(s.amount) || 0 }))
@@ -326,12 +326,28 @@ async function _writeAppointmentSplits(client, shopId, apptId, price, splits) {
   if (priceN > 0 && Math.abs(total - priceN) > 1) {
     throw new Error(`Los pagos ($${total.toFixed(2)}) no suman el precio del servicio ($${priceN.toFixed(2)})`);
   }
-  await client.query('DELETE FROM payment_splits WHERE appointment_id=$1', [apptId]);
-  for (const s of clean) {
-    await client.query(
-      `INSERT INTO payment_splits (shop_id, appointment_id, method, amount) VALUES ($1,$2,$3,$4)`,
-      [shopId, apptId, s.method, s.amount]
-    );
+  return clean;
+}
+
+// Retorna { effectivePaymentMethod, totalPaid }. Borrar + insertar van en una transacción.
+async function _writeAppointmentSplits(db, shopId, apptId, clean) {
+  const total = clean.reduce((n, s) => n + s.amount, 0);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM payment_splits WHERE appointment_id=$1', [apptId]);
+    for (const s of clean) {
+      await client.query(
+        `INSERT INTO payment_splits (shop_id, appointment_id, method, amount) VALUES ($1,$2,$3,$4)`,
+        [shopId, apptId, s.method, s.amount]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
   }
   return {
     effectivePaymentMethod: clean.length === 1 ? clean[0].method : 'mixed',
@@ -340,7 +356,7 @@ async function _writeAppointmentSplits(client, shopId, apptId, price, splits) {
 }
 
 router.put('/:id/status', auth, async (req, res) => {
-  const { status, payment_method, tip, payment_splits, tip_method } = req.body;
+  const { status, payment_method, tip, payment_splits, tip_method, edit_payment } = req.body;
   const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled','waiting_sena'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
@@ -367,8 +383,16 @@ router.put('/:id/status', auth, async (req, res) => {
     const prevStatus = prevQ.rows[0].status || null;
     const apptShopId = prevQ.rows[0].shop_id;
 
-    // Si vinieron splits, el payment_method efectivo lo determina el helper (puede ser 'mixed')
+    // Un turno ya cobrado no se vuelve a cobrar (p.ej. el barbero lo cobró desde su pantalla y
+    // la cajera tenía la agenda sin actualizar). Para corregir un cobro se manda edit_payment.
+    const isNewCharge = status === 'completed' && prevStatus !== 'completed';
+    if (status === 'completed' && prevStatus === 'completed' && !edit_payment) {
+      return res.status(409).json({ error: 'Este turno ya fue cobrado. Actualizá la agenda.', code: 'ALREADY_COMPLETED' });
+    }
+
+    // Validar los splits ANTES de tomar el turno (si están mal no se toca nada)
     let effectivePM = await normalizeDebtMethod([apptShopId, shopId], payment_method);
+    let splitsToWrite = null;
     if (Array.isArray(payment_splits) && payment_splits.length) {
       // Total a repartir = precio menos la seña ya cobrada (la seña entra a caja por su cuenta)
       const priceQ = await pool.query(
@@ -377,10 +401,50 @@ router.put('/:id/status', auth, async (req, res) => {
         [req.params.id, apptShopId]
       );
       const price = Math.max(parseFloat(priceQ.rows[0]?.price || 0) - parseFloat(priceQ.rows[0]?.sena || 0), 0);
+      try { splitsToWrite = _validateSplits(price, payment_splits); }
+      catch(spErr) { return res.status(400).json({ error: spErr.message }); }
+    }
+
+    // Si lo cobran dos personas a la vez, solo una se queda con el cobro
+    if (isNewCharge) {
+      const claim = await pool.query(
+        `UPDATE appointments SET status='completed' WHERE id=$1 AND shop_id=$2 AND status IS DISTINCT FROM 'completed' RETURNING id`,
+        [req.params.id, apptShopId]
+      );
+      if (!claim.rows.length) {
+        return res.status(409).json({ error: 'Este turno ya fue cobrado. Actualizá la agenda.', code: 'ALREADY_COMPLETED' });
+      }
+    }
+
+    // Un turno sin barbero (p.ej. de la fila, llamado desde la caja) se puede asignar al cobrarlo
+    if (status === 'completed' && !req.isBarber && req.body.barber_id) {
+      const bId = parseInt(req.body.barber_id);
+      const bQ = await pool.query(
+        'SELECT name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [bId, apptShopId]
+      );
+      if (bQ.rows.length) {
+        const svcQ = await pool.query(
+          `SELECT s.commission_pct FROM appointments a JOIN services s ON s.id=a.service_id WHERE a.id=$1`, [req.params.id]
+        );
+        const svcPct = svcQ.rows[0]?.commission_pct;
+        const pct = (svcPct !== null && svcPct !== undefined) ? parseInt(svcPct)
+          : (bQ.rows[0].barber_commission_pct ? parseInt(bQ.rows[0].barber_commission_pct) : 50);
+        await pool.query(
+          'UPDATE appointments SET barber_id=$1, barber_name=$2, commission_pct=$3 WHERE id=$4 AND shop_id=$5 AND barber_id IS NULL',
+          [bId, bQ.rows[0].name, pct, req.params.id, apptShopId]
+        );
+      }
+    }
+
+    if (splitsToWrite) {
       try {
-        const r = await _writeAppointmentSplits(pool, apptShopId, parseInt(req.params.id), price, payment_splits);
-        if (r) effectivePM = r.effectivePaymentMethod;
-      } catch(spErr) { return res.status(400).json({ error: spErr.message }); }
+        const r = await _writeAppointmentSplits(pool, apptShopId, parseInt(req.params.id), splitsToWrite);
+        effectivePM = r.effectivePaymentMethod;
+      } catch (spErr) {
+        if (isNewCharge) await pool.query('UPDATE appointments SET status=$1 WHERE id=$2', [prevStatus, req.params.id]).catch(() => {});
+        throw spErr;
+      }
     } else if (status !== 'completed' || payment_method) {
       // Reabrir el turno o cambiar a un método simple invalida los splits viejos.
       // (Si sigue 'completed' sin método nuevo, se conservan: p.ej. solo se edita la propina.)
@@ -446,17 +510,26 @@ router.put('/:id/status', auth, async (req, res) => {
         `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
          SELECT $1::int, $2::int, $3::text, $4::int, $5::numeric, $6::text
           WHERE NOT EXISTS (SELECT 1 FROM client_debts WHERE appointment_id=$4::int AND paid=FALSE)`,
-        [shopId, appt.client_id || null, appt.client_name, appt.id,
+        [appt.shop_id, appt.client_id || null, appt.client_name, appt.id,
          // La seña ya cobrada no es deuda
          Math.max(parseFloat(appt.price || 0) - (appt.sena_status === 'confirmed' ? parseFloat(appt.sena_amount || 0) : 0), 0),
          `Turno ${appt.service_name || ''} - ${appt.date}`]
       );
       console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${appt.price}`);
     }
+    // Si el turno deja de ser fiado (se reabre, se cancela o se corrige el método),
+    // la deuda pendiente que había generado ya no existe
+    const stillDebt = status === 'completed' && appt.payment_method === 'debt';
+    if (!stillDebt && (wasCompleted || prevStatus === 'completed')) {
+      await pool.query('DELETE FROM client_debts WHERE appointment_id=$1 AND paid=FALSE', [appt.id])
+        .catch(e => console.warn('[APPT] limpiar deuda:', e.message));
+    }
 
     // Notificar al cliente cuando el turno es confirmado
     // Fix #3: usar enterprise owner para WPP si la sucursal no tiene socket propio
-    if (status === 'confirmed' && appt.client_id) {
+    // En segundo plano: con el ritmo anti-baneo el envío puede tardar varios segundos y la
+    // pantalla no tiene que esperarlo.
+    if (status === 'confirmed' && appt.client_id) (async () => {
       try {
         const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug, parent_enterprise_id FROM shops WHERE id=$1', [shopId])).rows[0];
         const client = (await pool.query('SELECT name, phone FROM clients WHERE id=$1', [appt.client_id])).rows[0];
@@ -479,7 +552,7 @@ router.put('/:id/status', auth, async (req, res) => {
       } catch (wppErr) {
         console.error('[appointments] Error enviando WPP confirmado:', wppErr.message);
       }
-    }
+    })();
 
     // Si el turno pasa a cancelled/noshow, devolver el premio canjeado (si lo había)
     if (['cancelled','noshow'].includes(status) && prevStatus !== status) {
@@ -550,7 +623,8 @@ router.put('/:id/status', auth, async (req, res) => {
 
       const client = updatedClient.rows[0];
 
-      if (client && client.phone && shopData.wpp_connected) {
+      // El "gracias + puntos" sale en segundo plano: cobrar no espera a WhatsApp ni a la IA
+      if (client && client.phone && shopData.wpp_connected) (async () => {
         try {
           const wpp = require('../services/whatsapp');
           const { generateMessage } = require('../services/ai');
@@ -582,7 +656,7 @@ router.put('/:id/status', auth, async (req, res) => {
         } catch(wppErr) {
           console.error('Error enviando WPP puntos:', wppErr.message);
         }
-      }
+      })();
     }
 
     res.json(appt);
@@ -655,9 +729,21 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const priceBeforeQ = price !== undefined
-      ? await pool.query('SELECT price FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId])
+      ? await pool.query('SELECT price, commission_settled FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId])
       : { rows: [] };
     const priceBefore = priceBeforeQ.rows.length ? parseFloat(priceBeforeQ.rows[0].price || 0) : null;
+    // Con la comisión ya pagada al barbero, cambiar el precio (o el barbero) dejaría la liquidación mal
+    const settledQ = (price !== undefined || hasBarberField)
+      ? await pool.query('SELECT price, barber_id, commission_settled FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId])
+      : { rows: [] };
+    const settled = settledQ.rows[0];
+    if (settled && settled.commission_settled) {
+      const priceChanges  = price !== undefined && Math.abs(parseFloat(price) - parseFloat(settled.price || 0)) > 0.005;
+      const barberChanges = hasBarberField && (newBarberId || null) !== (settled.barber_id || null);
+      if (priceChanges || barberChanges) {
+        return res.status(409).json({ error: 'La comisión de este turno ya se liquidó al barbero: no se puede cambiar el precio ni el barbero.' });
+      }
+    }
 
     const result = await pool.query(
       `UPDATE appointments SET
@@ -807,12 +893,17 @@ router.delete('/:id', auth, async (req, res) => {
       ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
       : `shop_id = $2`;
     const apptQ = await pool.query(
-      `SELECT id, client_id, shop_id, price, status FROM appointments
+      `SELECT id, client_id, shop_id, price, status, commission_settled FROM appointments
        WHERE id=$1 AND ${shopCondDelSelect}${barberCondition}`,
       [req.params.id, shopId]
     );
     if (!apptQ.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
     const apptBefore = apptQ.rows[0];
+    if (apptBefore.commission_settled) {
+      return res.status(409).json({ error: 'La comisión de este turno ya se liquidó al barbero: no se puede borrar.' });
+    }
+    // La deuda pendiente de un fiado borrado deja de existir
+    await pool.query('DELETE FROM client_debts WHERE appointment_id=$1 AND paid=FALSE', [apptBefore.id]).catch(() => {});
 
     // Rollback de redemption asociado (devuelve puntos + stock + marca el canje como cancelado)
     try {

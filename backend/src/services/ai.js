@@ -210,7 +210,7 @@ async function getProspectResponse(shopId, phone, userMessage, apiKey) {
 - Enterprise ($130.000/mes): para cadenas o franquicias con varias sucursales. Todo lo de Staff más reportes avanzados, multi-sucursal y panel de vendedor.
 
 == VENTAJAS CLAVE ==
-- 7 días de prueba gratis, sin tarjeta de crédito
+- 15 días de prueba gratis, sin tarjeta de crédito
 - Se paga con QR, sin complicaciones
 - WhatsApp integrado para confirmar turnos y fidelizar clientes automáticamente
 - Reservas online con link propio que pueden compartir en Instagram o Google
@@ -228,12 +228,12 @@ async function getProspectResponse(shopId, phone, userMessage, apiKey) {
 - Dolor antes que solución: antes de hablar de FILO, hacé que el prospecto sienta el problema (turnos sin confirmar, clientes que no vuelven, no saber cuánto ganó el mes). Una pregunta bien hecha vale más que un argumento.
 - Pérdida > ganancia: "cada turno que no se confirma es plata que perdés" impacta más que "vas a ganar más".
 - Prueba social: si el contexto lo permite, mencioná que ya hay barberías usando FILO en su ciudad o en Argentina.
-- Escasez suave: la prueba gratuita es por tiempo limitado (7 días), usalo para generar urgencia sin presionar.
+- Escasez suave: la prueba gratuita es por tiempo limitado (15 días), usalo para generar urgencia sin presionar.
 - Micro-compromisos: hacé preguntas fáciles primero ("¿cuántos barberos tienen?", "¿usás algo para gestionar los turnos?"). Cada "sí" chico acerca al "sí" grande.
 - Espejo: si el prospecto dice "me interesa pero estoy ocupado", respondé validando ("entiendo, es un momento complicado") y dejá una puerta abierta sin presionar.
 - Objeciones comunes y cómo manejarlas:
   * "Ya uso Instagram/WhatsApp para los turnos" → "Está bien, pero ¿cuánto tiempo perdés confirmando cada uno? FILO lo hace solo."
-  * "Es caro" → "Son 7 días gratis para ver si te rinde. Si no recuperás lo que cuesta en turnos extras, no te cobro nada."
+  * "Es caro" → "Son 15 días gratis para ver si te rinde. Si no recuperás lo que cuesta en turnos extras, no te cobro nada."
   * "No tengo tiempo para aprenderlo" → "En 10 minutos ya está funcionando, no hace falta saber nada técnico."
   * "Lo veo después" → "Dale, te dejo el link para cuando quieras: filocrm.com.ar. ¿Querés que te mande un recordatorio?"
 

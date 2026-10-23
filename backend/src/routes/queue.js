@@ -4,6 +4,31 @@ const pool    = require('../db/pool');
 const auth    = require('../middleware/auth');
 const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
 const { normalizeDebtMethod } = require('../services/cashMath');
+const crypto  = require('crypto');
+const rateLimit = require('express-rate-limit');
+
+// La fila pública no tiene login: se limita cuántas veces se puede anotar una misma conexión
+// (evita que alguien llene la fila con nombres falsos y teléfonos ajenos).
+const joinLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de anotarse. Esperá unos minutos.' },
+});
+const MAX_WAITING_PER_SHOP = 80;
+
+// Cada lugar en la fila tiene una clave privada que solo conoce el celular que se anotó:
+// sin ella no se puede ver el nombre ni sacar a nadie de la fila.
+let _queueTokenCol = null;
+function ensureQueueTokenColumn() {
+  if (!_queueTokenCol) {
+    _queueTokenCol = pool.query('ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS public_token VARCHAR(40)')
+      .catch(e => { _queueTokenCol = null; console.warn('[QUEUE] public_token:', e.message); });
+  }
+  return _queueTokenCol;
+}
+const tokenOk = (entryToken, given) => !entryToken || (typeof given === 'string' && given === entryToken);
 
 // El vínculo cliente de la fila → turno se crea solo si la columna todavía no existe (idempotente)
 let _queueApptCol = null;
@@ -66,7 +91,7 @@ async function createQueueAppointment(shopId, entry, barberId) {
 }
 
 // ─── PUBLIC: join queue ──────────────────────────────────────────────────────
-router.post('/:slug/join', async (req, res) => {
+router.post('/:slug/join', joinLimiter, async (req, res) => {
   try {
     const { slug } = req.params;
     const { service_name, price, barber_id } = req.body;
@@ -92,6 +117,20 @@ router.post('/:slug/join', async (req, res) => {
     // Check paused
     if (shop.queue_paused) {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
+    }
+
+    // Topes: misma persona anotada dos veces, o fila llena
+    if (phone) {
+      const dup = await pool.query(
+        `SELECT 1 FROM queue_entries WHERE shop_id=$1 AND status IN ('waiting','called')
+           AND regexp_replace(client_phone, '[^0-9]', '', 'g') = regexp_replace($2, '[^0-9]', '', 'g') LIMIT 1`,
+        [shop.id, phone]
+      );
+      if (dup.rows.length) return res.status(409).json({ error: 'Ese teléfono ya está anotado en la fila.' });
+    }
+    const waitingCnt = await pool.query(`SELECT COUNT(*)::int AS n FROM queue_entries WHERE shop_id=$1 AND status='waiting'`, [shop.id]);
+    if (waitingCnt.rows[0].n >= MAX_WAITING_PER_SHOP) {
+      return res.status(429).json({ error: 'La fila está completa en este momento. Probá en un rato.' });
     }
 
     // Look up client by phone — link if already registered, auto-create si es nuevo
@@ -136,10 +175,12 @@ router.post('/:slug/join', async (req, res) => {
 
     // Insert entry (con servicio y barbero opcional). Precio no puede ser negativo.
     const safePrice = Math.max(0, parseFloat(price) || 0);
+    await ensureQueueTokenColumn();
+    const publicToken = crypto.randomBytes(16).toString('hex');
     const insertRes = await pool.query(
-      `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price, barber_id)
-       VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7) RETURNING id`,
-      [shop.id, resolvedName, phone || null, clientId, service_name || null, safePrice, validBarberId]
+      `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price, barber_id, public_token)
+       VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7, $8) RETURNING id`,
+      [shop.id, resolvedName, phone || null, clientId, cleanTxt(service_name, 120) || null, safePrice, validBarberId, publicToken]
     );
     const entry_id = insertRes.rows[0].id;
 
@@ -166,6 +207,7 @@ router.post('/:slug/join', async (req, res) => {
 
     return res.json({
       entry_id,
+      token: publicToken,
       client_name: name.trim(),
       position,
       estimated_wait_min,
@@ -181,7 +223,7 @@ router.post('/:slug/join', async (req, res) => {
 router.get('/:slug/status', async (req, res) => {
   try {
     const { slug } = req.params;
-    const { entry_id } = req.query;
+    const { entry_id, t } = req.query;
 
     // Find shop
     const shopRes = await pool.query(
@@ -198,12 +240,13 @@ router.get('/:slug/status', async (req, res) => {
     }
 
     // Get entry
+    await ensureQueueTokenColumn();
     const entryRes = await pool.query(
-      `SELECT id, client_name, client_phone, status, created_at, called_at
+      `SELECT id, client_name, status, created_at, called_at, public_token
        FROM queue_entries WHERE id=$1 AND shop_id=$2`,
-      [entry_id, shop.id]
+      [parseInt(entry_id) || 0, shop.id]
     );
-    if (!entryRes.rows.length) {
+    if (!entryRes.rows.length || !tokenOk(entryRes.rows[0].public_token, t)) {
       return res.status(404).json({ error: 'Entrada no encontrada' });
     }
     const entry = entryRes.rows[0];
@@ -294,14 +337,26 @@ router.get('/:slug/services', async (req, res) => {
 // ─── PUBLIC: leave queue ─────────────────────────────────────────────────────
 router.post('/:slug/leave', async (req, res) => {
   try {
-    const { entry_id } = req.body;
+    const { entry_id, token } = req.body;
     if (!entry_id) return res.status(400).json({ error: 'entry_id requerido' });
     const shopRes = await pool.query('SELECT id FROM shops WHERE booking_slug=$1', [req.params.slug]);
     if (!shopRes.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
-    await pool.query(
-      `UPDATE queue_entries SET status='left' WHERE id=$1 AND shop_id=$2 AND status IN ('waiting','called')`,
-      [entry_id, shopRes.rows[0].id]
+    await ensureQueueTokenColumn();
+    await ensureQueueApptColumn();
+    // Solo quien se anotó (tiene la clave) puede salir; las entradas viejas sin clave siguen funcionando
+    const left = await pool.query(
+      `UPDATE queue_entries SET status='left'
+        WHERE id=$1 AND shop_id=$2 AND status IN ('waiting','called')
+          AND (public_token IS NULL OR public_token = $3)
+        RETURNING appointment_id`,
+      [parseInt(entry_id) || 0, shopRes.rows[0].id, typeof token === 'string' ? token : '']
     );
+    if (!left.rows.length) return res.status(404).json({ error: 'Entrada no encontrada' });
+    // Si ya lo habían llamado, su turno "fila virtual" sin cobrar se cancela
+    if (left.rows[0].appointment_id) {
+      await pool.query(`UPDATE appointments SET status='cancelled' WHERE id=$1 AND status IN ('pending','confirmed')`,
+        [left.rows[0].appointment_id]).catch(() => {});
+    }
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Error interno' }); }
 });
@@ -526,6 +581,17 @@ router.post('/complete/:id', auth, async (req, res) => {
     );
     if (!entryRes.rows.length) return res.status(404).json({ error: 'No encontrado' });
     const entry = entryRes.rows[0];
+    // Tomar la entrada de forma atómica: dos cobros simultáneos del mismo cliente → uno solo
+    const claimed = await pool.query(
+      `UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW())
+        WHERE id=$1 AND shop_id=$2 AND status <> 'served' RETURNING id`,
+      [entry.id, shopId]
+    );
+    if (!claimed.rows.length) {
+      return res.json({ ok: true, appointment_id: entry.appointment_id || null, already_completed: true });
+    }
+    let charged = false;
+    try {
 
     const p = parseFloat(price) || 0;
     const t = parseFloat(tip) || 0;
@@ -570,13 +636,18 @@ router.post('/complete/:id', auth, async (req, res) => {
           return res.json({ ok: true, appointment_id: ex.rows[0].id, already_completed: true });
         }
         if (['pending', 'confirmed'].includes(ex.rows[0].status)) {
-          await pool.query(
+          // Condicional: si la cajera lo cobra justo al mismo tiempo, solo vale un cobro
+          const upd = await pool.query(
             `UPDATE appointments SET client_name=$1, service_id=COALESCE($2::int, service_id), service_name=$3, price=$4, cost=$5,
                     barber_id=$6, barber_name=$7, commission_pct=$8, payment_method=$9, tip=$10, status='completed'
-              WHERE id=$11 AND shop_id=$12`,
+              WHERE id=$11 AND shop_id=$12 AND status IN ('pending','confirmed') RETURNING id`,
             [finalClientName, service_id ? parseInt(service_id) : null, service_name || 'Walk-in', p, c,
              finalBarberId, barberName, pct, payment_method || 'cash', t, ex.rows[0].id, shopId]
           );
+          if (!upd.rows.length) {
+            await pool.query(`UPDATE queue_entries SET status='served', served_at=COALESCE(served_at, NOW()) WHERE id=$1`, [entry.id]);
+            return res.json({ ok: true, appointment_id: ex.rows[0].id, already_completed: true });
+          }
           apptId = ex.rows[0].id;
         }
       }
@@ -593,6 +664,7 @@ router.post('/complete/:id', auth, async (req, res) => {
       );
       apptId = apptRes.rows[0].id;
     }
+    charged = true;
     try {
       require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' });
     } catch (_) {}
@@ -627,9 +699,10 @@ router.post('/complete/:id', auth, async (req, res) => {
     // Register debt if fiado
     if (payment_method === 'debt') {
       await pool.query(
-        `INSERT INTO client_debts (shop_id, client_name, appointment_id, amount, description)
-         VALUES ($1,$2,$3,$4,'Walk-in — fiado')`,
-        [shopId, finalClientName, apptId, p]
+        `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
+         SELECT $1::int, $5::int, $2::text, $3::int, $4::numeric, 'Walk-in — fiado'
+          WHERE NOT EXISTS (SELECT 1 FROM client_debts WHERE appointment_id=$3::int AND paid=FALSE)`,
+        [shopId, finalClientName, apptId, p, finalClientId]
       );
     }
 
@@ -673,6 +746,13 @@ router.post('/complete/:id', auth, async (req, res) => {
     }
 
     return res.json({ ok: true, appointment_id: apptId });
+    } catch (inner) {
+      // Si falló antes de registrar el cobro, el cliente vuelve a quedar para cobrar
+      if (!charged) {
+        await pool.query(`UPDATE queue_entries SET status=$1 WHERE id=$2`, [entry.status, entry.id]).catch(() => {});
+      }
+      throw inner;
+    }
   } catch (e) {
     console.error('queue complete error:', e.message, e.stack);
     return res.status(500).json({ error: 'Error interno' });

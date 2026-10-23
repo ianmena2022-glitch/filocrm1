@@ -31,18 +31,33 @@ const _adminLoginCleanup = setInterval(() => {
 }, 15 * 60 * 1000);
 if (typeof _adminLoginCleanup.unref === 'function') _adminLoginCleanup.unref();
 
+// Versión de las sesiones admin: al subirla ("cerrar sesión en todos los dispositivos")
+// todos los tokens admin anteriores dejan de valer, sin tocar las sesiones de los clientes.
+let _adminTokenVersion = null, _adminTokenVersionAt = 0;
+async function getAdminTokenVersion() {
+  if (_adminTokenVersion !== null && Date.now() - _adminTokenVersionAt < 60000) return _adminTokenVersion;
+  try {
+    const r = await pool.query(`SELECT value FROM app_settings WHERE key='admin_token_version'`);
+    _adminTokenVersion = parseInt(r.rows[0]?.value) || 0;
+  } catch (_) { _adminTokenVersion = _adminTokenVersion || 0; }
+  _adminTokenVersionAt = Date.now();
+  return _adminTokenVersion;
+}
+
 // Middleware de autenticación admin
-function adminAuth(req, res, next) {
+async function adminAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Token requerido' });
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    if (!payload.isAdmin) return res.status(401).json({ error: 'No autorizado' });
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch(e) {
-    res.status(401).json({ error: 'Token inválido' });
+    return res.status(401).json({ error: 'Token inválido' });
   }
+  if (!payload.isAdmin) return res.status(401).json({ error: 'No autorizado' });
+  if ((payload.v || 0) !== await getAdminTokenVersion()) return res.status(401).json({ error: 'Sesión cerrada. Volvé a ingresar.' });
+  next();
 }
 
 // POST /api/admin/login
@@ -63,8 +78,77 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
   // "Recordar este dispositivo": sesión de 90 días (el celular de confianza no vuelve a pedir la contraseña)
-  const token = jwt.sign({ isAdmin: true }, process.env.JWT_SECRET, { expiresIn: remember === true ? '90d' : '8h' });
+  const v = await getAdminTokenVersion();
+  const token = jwt.sign({ isAdmin: true, v }, process.env.JWT_SECRET, { expiresIn: remember === true ? '90d' : '8h' });
   res.json({ token, remember: remember === true });
+});
+
+// POST /api/admin/logout-all — invalida todas las sesiones admin (p.ej. si perdiste el celular)
+router.post('/logout-all', adminAuth, async (req, res) => {
+  try {
+    const next = (await getAdminTokenVersion()) + 1;
+    await pool.query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ('admin_token_version', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [String(next)]
+    );
+    _adminTokenVersion = next; _adminTokenVersionAt = Date.now();
+    // Las suscripciones push de esos dispositivos también se dan de baja
+    await pool.query('DELETE FROM admin_push_subscriptions').catch(() => {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Pagos recibidos sin asignar ──────────────────────────────────────────────
+router.get('/unmatched-payments', adminAuth, async (req, res) => {
+  try {
+    const { ensureUnmatchedTable } = require('./payments')._internals;
+    await ensureUnmatchedTable();
+    const r = await pool.query(
+      `SELECT u.*, s.name AS shop_name FROM unmatched_payments u
+         LEFT JOIN shops s ON s.id = u.shop_id
+        WHERE u.resolved = FALSE ORDER BY u.created_at DESC LIMIT 100`
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/unmatched-payments/:id/assign { shop_id, plan } — acreditar el pago a una cuenta
+router.post('/unmatched-payments/:id/assign', adminAuth, async (req, res) => {
+  try {
+    const { activateShopPlan, QR_PLANS } = require('./payments')._internals;
+    const shopId = parseInt(req.body.shop_id);
+    const plan = req.body.plan;
+    if (!shopId || !QR_PLANS[plan]) return res.status(400).json({ error: 'Elegí la cuenta y el plan' });
+    const u = await pool.query('SELECT * FROM unmatched_payments WHERE payment_id=$1 AND resolved=FALSE', [req.params.id]);
+    if (!u.rows.length) return res.status(404).json({ error: 'Pago no encontrado o ya resuelto' });
+    await activateShopPlan({ shopId, plan, paymentId: req.params.id, paidAmount: parseFloat(u.rows[0].amount) || 0, force: true });
+    const done = await pool.query('SELECT 1 FROM mp_processed_payments WHERE payment_id=$1', [req.params.id]);
+    if (!done.rows.length) return res.status(409).json({ error: 'No se pudo acreditar (¿el pago ya se usó en otra cuenta?)' });
+    await pool.query('UPDATE unmatched_payments SET resolved=TRUE, resolved_at=NOW(), shop_id=$2, plan=$3 WHERE payment_id=$1', [req.params.id, shopId, plan]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/unmatched-payments/:id/dismiss — no corresponde a FILO / ya resuelto por fuera
+router.post('/unmatched-payments/:id/dismiss', adminAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE unmatched_payments SET resolved=TRUE, resolved_at=NOW() WHERE payment_id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/system — estado de las migraciones de la base
+router.get('/system', adminAuth, async (req, res) => {
+  try {
+    const fs = require('fs'), path = require('path');
+    const files = fs.readdirSync(path.join(__dirname, '..', 'db', 'migrations')).filter(f => f.endsWith('.sql')).sort();
+    const applied = new Set((await pool.query('SELECT filename FROM _migrations')).rows.map(r => r.filename));
+    res.json({
+      pending_migrations: files.filter(f => !applied.has(f)),
+      migration_error: global.__filoMigrationError || null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // La columna exclude_from_kpis se crea sola si la migración 048 todavía no corrió (idempotente)
@@ -288,6 +372,7 @@ router.put('/settings', adminAuth, async (req, res) => {
 
   try {
     for (const [key, value] of Object.entries(settings)) {
+      if (key === 'admin_token_version') continue; // solo se cambia con /logout-all
       await pool.query(
         `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
@@ -454,9 +539,9 @@ router.post('/accounts', adminAuth, async (req, res) => {
     // Servicios de ejemplo
     await pool.query(
       `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
-       ($1, 'Corte de cabello', 3500, 200, 30),
-       ($1, 'Corte + barba', 5000, 300, 45),
-       ($1, 'Barba', 2000, 150, 20)`,
+       ($1, 'Corte de cabello', 12000, 500, 30),
+       ($1, 'Corte + barba', 16000, 700, 45),
+       ($1, 'Barba', 8000, 400, 20)`,
       [result.rows[0].id]
     );
 

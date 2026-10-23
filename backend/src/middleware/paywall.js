@@ -39,27 +39,20 @@ module.exports = async function paywall(req, res, next) {
   try {
     const jwt = require('jsonwebtoken');
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const shopId = payload.parentShopId || payload.shopId;
-
-    const result = await pool.query(
-      'SELECT subscription_status, trial_ends_at, is_test, plan, is_branch, is_enterprise_owner FROM shops WHERE id=$1',
-      [shopId]
-    );
-
+    // Quién paga: el barbero hereda del local; la sucursal, del dueño enterprise.
+    // (Antes las cuentas enterprise y sus sucursales pasaban siempre, aunque no pagaran.)
+    const SQL = 'SELECT id, subscription_status, trial_ends_at, is_test, plan, is_branch, parent_enterprise_id FROM shops WHERE id=$1';
+    let result = await pool.query(SQL, [payload.parentShopId || payload.shopId]);
     if (!result.rows.length) return next();
-    const shop = result.rows[0];
+    let shop = result.rows[0];
+    if (shop.is_branch && shop.parent_enterprise_id) {
+      const owner = await pool.query(SQL, [shop.parent_enterprise_id]);
+      if (owner.rows.length) shop = owner.rows[0];
+    }
+    const shopId = shop.id;
 
     // Cuentas test siempre tienen acceso
     if (shop.is_test || shop.plan === 'test') return next();
-
-    // Barberos heredan el acceso del dueño: se valida la suscripción del local al
-    // que pertenecen (shopId = parentShopId). Si ese local es sucursal o cuenta
-    // enterprise, su suscripción se gestiona aparte y se deja pasar como antes.
-    if (payload.isBarber && (shop.is_branch || shop.is_enterprise_owner)) return next();
-
-    // Enterprise owners y branches: su suscripción se gestiona aparte
-    if (payload.isEnterpriseOwner) return next();
-    if (payload.isBranch) return next();
 
     // Gracia de 3 días: se suma al vencimiento antes de bloquear
     const GRACE_DAYS = 3;

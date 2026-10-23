@@ -90,6 +90,7 @@ const wppGuard = (() => {
     if (kind === 'marketing') inc('marketing');
     if (kind === 'cold') inc('cold');
     if (kind !== 'reply' && firstContact) inc('first');
+    if (onRecord) { try { onRecord(shopId, day); } catch (_) {} }
     const key = `${shopId}:${lastDigits(phone)}`;
     const list = (recipient.get(key) || []).filter(t => now - t < 3600000);
     list.push(now);
@@ -133,6 +134,20 @@ const wppGuard = (() => {
     return OPT_OUT_WHOLE.test(t) || OPT_OUT_PHRASES.some(r => r.test(t));
   }
 
+  // Persistencia (la conecta whatsapp.js): los topes del día sobreviven a un reinicio/deploy
+  let onRecord = null;
+  const setOnRecord = (fn) => { onRecord = fn; };
+  const snapshot = (shopId, day) => {
+    const out = {};
+    for (const b of ['total', 'marketing', 'cold', 'first']) out[b] = counters[`${shopId}:${day}:${b}`] || 0;
+    return out;
+  };
+  // Carga un contador guardado (nunca baja lo que ya se contó en memoria)
+  const seed = (shopId, day, bucket, n) => {
+    const k = `${shopId}:${day}:${bucket}`;
+    counters[k] = Math.max(counters[k] || 0, parseInt(n) || 0);
+  };
+
   function __reset() {
     for (const k of Object.keys(counters)) delete counters[k];
     for (const k of Object.keys(nextFree)) delete nextFree[k];
@@ -140,7 +155,7 @@ const wppGuard = (() => {
     recipient.clear();
   }
   return { KINDS, config, check, record, reserve, countToday, isOptOutIntent, lastDigits, dayKey, __reset,
-           failed, succeeded, pausedUntil };
+           failed, succeeded, pausedUntil, setOnRecord, snapshot, seed };
 })();
 const fs   = require('fs');
 const os   = require('os');
@@ -264,18 +279,6 @@ function renderTemplate(tpl, vars) {
   return out;
 }
 
-// Throttle de envío por shop: mínimo 1200ms entre sendText para evitar flags de WhatsApp.
-// WhatsApp detecta bots por ritmo robótico — gap más humano reduce riesgo de ban.
-const lastSendAt = {};
-async function throttleSend(shopId) {
-  const MIN_GAP = parseInt(process.env.WPP_MIN_GAP_MS) || 1200;
-  const now = Date.now();
-  const last = lastSendAt[shopId] || 0;
-  const wait = Math.max(0, (last + MIN_GAP) - now);
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  lastSendAt[shopId] = Date.now();
-}
-
 // Simula escritura humana antes de mandar: presence 'composing' + delay según largo del msg.
 // Reduce señales que WhatsApp usa para detectar bots.
 async function simulateTyping(sock, jid, messageLength = 100) {
@@ -295,36 +298,45 @@ async function simulateTyping(sock, jid, messageLength = 100) {
   }
 }
 
-// Cap diario de envíos salientes por shop para evitar runaway de bot.
-// Reset cada medianoche local del server. Si supera el cap, bloquea envíos
-// hasta el día siguiente (devuelve error controlado).
-const DAILY_CAP      = parseInt(process.env.WPP_DAILY_CAP) || 400;
-const DAILY_WARN     = Math.floor(DAILY_CAP * 0.8);
-const _dailySendCount = {}; // { 'shopId:YYYY-MM-DD': count }
-function _dayKey(shopId) {
-  return `${shopId}:${new Date().toISOString().slice(0,10)}`;
-}
-function _checkDailyCap(shopId) {
-  const key = _dayKey(shopId);
-  const n = (_dailySendCount[key] || 0);
-  if (n >= DAILY_CAP) {
-    throw new Error(`WhatsApp: alcanzado cap diario de ${DAILY_CAP} msgs para este shop — reset a las 00:00 UTC`);
+// Topes diarios guardados en la base: si el servidor se reinicia (deploy), el conteo del día
+// sigue donde estaba en vez de volver a cero.
+let _wppCountersReady = null;
+function _ensureWppCounters() {
+  if (!_wppCountersReady) {
+    _wppCountersReady = pool.query(`CREATE TABLE IF NOT EXISTS wpp_daily_counters (
+        shop_id INTEGER NOT NULL, day DATE NOT NULL, bucket VARCHAR(20) NOT NULL, n INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (shop_id, day, bucket))`)
+      .then(async () => {
+        const today = wppGuard.dayKey();
+        const r = await pool.query('SELECT shop_id, bucket, n FROM wpp_daily_counters WHERE day=$1', [today]);
+        r.rows.forEach(row => wppGuard.seed(row.shop_id, today, row.bucket, row.n));
+        pool.query(`DELETE FROM wpp_daily_counters WHERE day < CURRENT_DATE - 7`).catch(() => {});
+      })
+      .catch(e => { _wppCountersReady = null; console.warn('[WPP] contadores diarios:', e.message); });
   }
-  if (n === DAILY_WARN) {
-    console.warn(`[WPP] shop ${shopId} alcanzó ${DAILY_WARN}/${DAILY_CAP} msgs hoy — cerca del cap`);
-  }
+  return _wppCountersReady;
 }
-function _incrementDailyCount(shopId) {
-  const key = _dayKey(shopId);
-  _dailySendCount[key] = (_dailySendCount[key] || 0) + 1;
-  // Housekeeping: borrar keys de días anteriores
-  if (Math.random() < 0.01) {
-    const today = new Date().toISOString().slice(0,10);
-    for (const k of Object.keys(_dailySendCount)) {
-      if (!k.endsWith(today)) delete _dailySendCount[k];
-    }
-  }
-}
+const _wppFlushTimers = {};
+wppGuard.setOnRecord((shopId, day) => {
+  const key = `${shopId}:${day}`;
+  if (_wppFlushTimers[key]) return;
+  _wppFlushTimers[key] = setTimeout(async () => {
+    delete _wppFlushTimers[key];
+    try {
+      await _ensureWppCounters();
+      const snap = wppGuard.snapshot(shopId, day);
+      for (const [bucket, n] of Object.entries(snap)) {
+        if (!n) continue;
+        await pool.query(
+          `INSERT INTO wpp_daily_counters (shop_id, day, bucket, n) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (shop_id, day, bucket) DO UPDATE SET n = GREATEST(wpp_daily_counters.n, EXCLUDED.n)`,
+          [parseInt(shopId), day, bucket, n]);
+      }
+    } catch (e) { console.warn('[WPP] no se pudo guardar el contador:', e.message); }
+  }, 3000);
+  if (typeof _wppFlushTimers[key].unref === 'function') _wppFlushTimers[key].unref();
+});
+if (process.env.NODE_ENV !== 'test') setTimeout(() => { _ensureWppCounters(); }, 5000).unref?.();
 
 // Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
 const reconnectTimers = {};

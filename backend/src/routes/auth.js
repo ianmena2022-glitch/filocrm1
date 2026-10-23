@@ -452,7 +452,24 @@ router.delete('/delete-account', async (req, res) => {
 });
 
 // POST /api/auth/verify-email — verifica código y CREA la cuenta real
-router.post('/verify-email', async (req, res) => {
+// Código de 6 dígitos: se limita cuántas veces se puede probar por email (y por conexión)
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  keyGenerator: (req) => 'v:' + String(req.body?.email || '').toLowerCase().trim(),
+  message: { error: 'Demasiados intentos con ese email. Esperá 15 minutos o pedí un código nuevo.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+});
+const verifyIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+router.post('/verify-email', verifyIpLimiter, verifyLimiter, async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Email y código son requeridos' });
 
@@ -503,12 +520,15 @@ router.post('/verify-email', async (req, res) => {
     // Crear la cuenta real ahora que el email está verificado
     let shop;
     if (pending.is_enterprise) {
+      // Igual que cualquier alta: 15 días de prueba y después paga (antes quedaba activa hasta 2099)
+      const entTrialEnds = new Date();
+      entTrialEnds.setDate(entTrialEnds.getDate() + 15);
       const r = await pool.query(
         `INSERT INTO shops (name, email, password, phone, plan, filo_plan,
            subscription_status, trial_ends_at, is_enterprise_owner, email_verified)
-         VALUES ($1,$2,$3,$4,'staff','enterprise','active','2099-12-31',TRUE,TRUE)
+         VALUES ($1,$2,$3,$4,'staff','enterprise','trial',$5,TRUE,TRUE)
          RETURNING *`,
-        [pending.name, emailNorm, pending.password_hash, pending.phone]
+        [pending.name, emailNorm, pending.password_hash, pending.phone, entTrialEnds.toISOString()]
       );
       shop = r.rows[0];
     } else {
@@ -535,7 +555,7 @@ router.post('/verify-email', async (req, res) => {
 
       if (trialPromo) {
         await require('../services/promotions').recordUse({
-          promotionId: trialPromo.id, shopId: shop.id, plan: pending.filo_plan, originalAmount: 0, finalAmount: 0
+          promotionId: trialPromo.id, shopId: shop.id, paymentId: 'trial-signup', plan: pending.filo_plan, originalAmount: 0, finalAmount: 0
         });
         console.log(`[VERIFY] promo de trial "${trialPromo.code}" aplicada a shop ${shop.id}: ${trialDays} días`);
       }
@@ -543,10 +563,10 @@ router.post('/verify-email', async (req, res) => {
       if (!isEnterpriseOwner) {
         await pool.query(
           `INSERT INTO services (shop_id, name, price, cost, duration_minutes) VALUES
-           ($1,'Corte de cabello',3500,200,30),
-           ($1,'Corte + barba',5000,300,45),
-           ($1,'Barba',2000,150,20),
-           ($1,'Corte + lavado',4500,250,40)`,
+           ($1,'Corte de cabello',12000,500,30),
+           ($1,'Corte + barba',16000,700,45),
+           ($1,'Barba',8000,400,20),
+           ($1,'Corte + lavado',14000,600,40)`,
           [shop.id]
         );
       }
@@ -568,8 +588,9 @@ router.post('/verify-email', async (req, res) => {
       }).catch(()=>{});
     } catch(_) {}
 
-    // Enviar mensaje de bienvenida por WhatsApp desde el shop admin (no bloquea si falla)
-    try {
+    // Enviar mensaje de bienvenida por WhatsApp desde el shop admin, en segundo plano
+    // (con el ritmo anti-baneo puede tardar; la persona que se registra no lo espera)
+    (async () => { try {
       const settingsQ = await pool.query(
         `SELECT key, value FROM app_settings
          WHERE key IN ('welcome_wpp_enabled','welcome_wpp_shop_id','welcome_wpp_message')`
@@ -593,10 +614,17 @@ router.post('/verify-email', async (req, res) => {
       }
     } catch (e) {
       console.error(`[VERIFY] No se pudo enviar WhatsApp de bienvenida:`, e.message);
-    }
+    } })();
 
     res.json({ token: makeToken(shop), shop: shopPayload(shop) });
   } catch (e) {
+    // Doble toque en "Verificar": el primer pedido ya creó la cuenta → se entra a esa misma cuenta
+    if (e.code === '23505' && req.body?.email) {
+      try {
+        const ex = await pool.query('SELECT * FROM shops WHERE email=$1', [String(req.body.email).toLowerCase().trim()]);
+        if (ex.rows.length) return res.json({ token: makeToken(ex.rows[0]), shop: shopPayload(ex.rows[0]) });
+      } catch (_) {}
+    }
     console.error('Verify email error:', e.message);
     res.status(500).json({ error: 'Error al verificar' });
   }

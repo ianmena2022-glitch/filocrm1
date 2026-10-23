@@ -1107,6 +1107,7 @@ async function confirmPayment(apptId) {
     if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
   } catch(e) {
     showToast('❌ ' + e.message);
+    if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
   }
 }
 
@@ -1488,13 +1489,13 @@ async function confirmBarberWipPayment() {
   document.getElementById('barber-wip-popup')?.remove();
 
   try {
-    await api('POST', `/queue/complete/${_barberWipEntryId}`, {
+    const done = await api('POST', `/queue/complete/${_barberWipEntryId}`, {
       price, service_name: serviceName,
       payment_method: _barberWipMethod, tip,
       commission_pct: me?.barber_commission_pct || 50,
       client_name: _barberWipClientName || undefined
     });
-    showToast('✅ Walk-in registrado');
+    showToast(done && done.already_completed ? 'ℹ️ Ya lo había cobrado la caja' : '✅ Walk-in registrado');
     _filaCalledId = null;
     await loadFila();
     if (document.getElementById('tab-dashboard')?.classList.contains('active')) loadDashboard();

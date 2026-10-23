@@ -4764,6 +4764,13 @@ async function api(method, path, body) {
     }
     throw new Error(data.error || 'Suscripción inactiva');
   }
+  // Sesión vencida o cerrada (p.ej. la cuenta cambió de rol): volver al login en vez de mostrar errores
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+    ['filo_token','filo_shop'].forEach(k => localStorage.removeItem(k));
+    showToast('🔒', 'Sesión cerrada', data.error || 'Volvé a iniciar sesión');
+    setTimeout(() => window.location.reload(), 1500);
+    throw new Error(data.error || 'Sesión cerrada');
+  }
   if (!res.ok) throw new Error(data.error || 'Error del servidor');
   return data;
 }
@@ -5481,8 +5488,9 @@ async function paywallSubscribe() { openQRPaywall(); } // redirigir al nuevo flu
 function checkPaywall() {
   if (!currentShop) return;
   if (currentShop.is_test || currentShop.plan === 'test') return;
+  // Barberos y sucursales dependen de la cuenta que paga: si está vencida, el servidor
+  // responde 402 y ahí se muestra el paywall.
   if (currentShop.is_barber || currentShop.is_branch) return;
-  if (currentShop.is_enterprise_owner || currentShop.filo_plan === 'enterprise') return;
   const status = currentShop.subscription_status;
   if (status === 'expired' || status === 'cancelled') {
     document.getElementById('paywall-screen').classList.add('show');
@@ -6641,7 +6649,7 @@ async function confirmWalkInPayment() {
   document.getElementById('walkin-payment-popup')?.remove();
 
   try {
-    await api('POST', `/queue/complete/${_walkInPayEntryId}`, {
+    const done = await api('POST', `/queue/complete/${_walkInPayEntryId}`, {
       price, cost, service_name: serviceName,
       service_id: serviceId || undefined,
       payment_method: _walkInPayMethod,
@@ -6649,6 +6657,11 @@ async function confirmWalkInPayment() {
       tip_method: (tip > 0 && tipMethod) ? tipMethod : undefined,
       commission_pct: commissionPct
     });
+    if (done && done.already_completed) {
+      showToast('ℹ️', 'Ya estaba cobrado', 'Este cliente ya se había cobrado (desde la agenda o el barbero).');
+      loadQueue();
+      return;
+    }
     const methodLabel = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', debt: 'Fiado', mp: 'Mercado Pago' }[_walkInPayMethod] || _walkInPayMethod;
     const amt = (price > 0) ? `$${price.toLocaleString('es-AR')} · ${methodLabel}` : methodLabel;
     showSuccessPop({ title: 'Walk-in cobrado', sub: amt });
@@ -7482,6 +7495,14 @@ function showPaymentPopup(apptId) {
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo pagó el cliente?</div>
       <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">Elegí el método de pago para registrar en caja</div>
       ${senaNote}
+      ${(!appt.barber_id && (window._barbersList || []).length) ? `
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">¿Quién lo atendió? (para su comisión)</label>
+        <select id="pay-barber">
+          <option value="">Sin barbero / el dueño</option>
+          ${(window._barbersList || []).map(b => `<option value="${b.id}">${escHtml(b.name || 'Barbero')}</option>`).join('')}
+        </select>
+      </div>` : ''}
       <div id="pay-mode-single">
         <div id="complete-pay-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px"></div>
         <button onclick="togglePaySplitMode(true)" style="background:transparent;border:none;color:rgba(255,209,0,.75);font-size:12px;cursor:pointer;text-decoration:underline;padding:0 0 12px;font-family:'Barlow',sans-serif">✂️ Dividir en varios métodos</button>
@@ -7651,6 +7672,8 @@ async function confirmPayment(apptId) {
   let body = { status: 'completed', tip };
   const tipMethod = document.getElementById('tip-method')?.value;
   if (tip > 0 && tipMethod) body.tip_method = tipMethod;
+  const payBarber = document.getElementById('pay-barber')?.value;
+  if (payBarber) body.barber_id = parseInt(payBarber);
   let successLabel = '';
 
   if (window._paySplitMode) {
@@ -7688,6 +7711,8 @@ async function confirmPayment(apptId) {
     await loadCashSummary();
   } catch(e) {
     showToast('❌', 'Error', e.message);
+    // Si ya lo había cobrado otro (p.ej. el barbero), refrescar para que se vea cobrado
+    if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
   }
 }
 
@@ -12797,22 +12822,33 @@ function renderCajaDayDetail(data) {
   </div>`;
 
   // ── Métodos de pago ──
-  const methods = [
-    ['cash_total','💵 Efectivo','#4CAF50'],
-    ['debit_total','💳 Débito','#2196F3'],
-    ['credit_total','💳 Crédito','#9C27B0'],
-    ['transfer_total','📲 Transferencia','#FF9800'],
-    ['debt_total','🤝 Fiado pendiente','#FF4343'],
-    ['tips_total','🎁 Propinas','#4CAF50'],
-  ].filter(([k]) => parseFloat(r[k]||0) > 0);
+  // Cierres nuevos: saldo de cada cuenta igual que en la caja en vivo (ingresos − egresos).
+  // Cierres viejos: los totales que se guardaban antes.
+  let savedBreakdown = r.method_breakdown;
+  if (typeof savedBreakdown === 'string') { try { savedBreakdown = JSON.parse(savedBreakdown); } catch (_) { savedBreakdown = null; } }
+  const methods = Array.isArray(savedBreakdown) && savedBreakdown.length
+    ? savedBreakdown.filter(b => Math.abs(parseFloat(b.total || 0)) > 0.005).map(b => {
+        const pm = (window._paymentMethods || []).find(m => m.key === b.key);
+        const isDebt = b.key === 'debt' || pm?.is_debt;
+        const label = pm ? `${pm.icon || ''} ${pm.label}` : ({ cash:'💵 Efectivo', debit:'💳 Débito', credit:'💳 Crédito', transfer:'📲 Transferencia', debt:'🤝 Fiado' }[b.key] || b.key);
+        return [label, isDebt ? '#FF4343' : (parseFloat(b.total) < 0 ? '#FF4343' : '#4CAF50'), parseFloat(b.total)];
+      })
+    : [
+        ['cash_total','💵 Efectivo','#4CAF50'],
+        ['debit_total','💳 Débito','#2196F3'],
+        ['credit_total','💳 Crédito','#9C27B0'],
+        ['transfer_total','📲 Transferencia','#FF9800'],
+        ['debt_total','🤝 Fiado pendiente','#FF4343'],
+        ['tips_total','🎁 Propinas','#4CAF50'],
+      ].filter(([k]) => parseFloat(r[k]||0) > 0).map(([k, label, color]) => [label, color, r[k]]);
 
   if (methods.length) {
     html += `<div style="margin-bottom:18px">
       <div style="font-size:11px;color:var(--gray);letter-spacing:.5px;margin-bottom:8px">MÉTODOS DE PAGO</div>
-      ${methods.map(([k,label,color]) => `
+      ${methods.map(([label,color,val]) => `
         <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-          <span style="font-size:13px">${label}</span>
-          <span style="font-size:14px;font-weight:700;color:${color}">${fmt(r[k])}</span>
+          <span style="font-size:13px">${escHtml(label)}</span>
+          <span style="font-size:14px;font-weight:700;color:${color}">${fmt(val)}</span>
         </div>`).join('')}
     </div>`;
   }
@@ -14473,7 +14509,7 @@ async function bcmSave(id) {
   <div class="pw-logo">F</div>
   <div class="pw-badge">Período de prueba finalizado</div>
   <div class="pw-title">Seguí usando FILO</div>
-  <div class="pw-sub">Tu prueba gratuita de 15 días terminó. Elegí tu plan para continuar.</div>
+  <div class="pw-sub">Tu período de prueba terminó. Elegí tu plan para continuar.</div>
   <div id="pw-redeem-wrap" style="display:none;width:100%;max-width:320px;margin-bottom:12px">
     <button onclick="redeemFreeMonth()" style="width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
       🎁 Canjear mes gratis <span id="pw-free-months-badge" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:13px"></span>

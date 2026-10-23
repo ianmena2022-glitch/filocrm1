@@ -82,9 +82,9 @@ router.post('/branches', auth, enterpriseOnly, async (req, res) => {
     // Servicios por defecto para la sucursal
     await pool.query(
       `INSERT INTO services (shop_id, name, price, duration_minutes) VALUES
-         ($1,'Corte de cabello',3500,30),
-         ($1,'Corte + Barba',5500,45),
-         ($1,'Arreglo de barba',2500,20)`,
+         ($1,'Corte de cabello',12000,30),
+         ($1,'Corte + Barba',16000,45),
+         ($1,'Arreglo de barba',8000,20)`,
       [branch.id]
     );
 

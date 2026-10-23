@@ -428,7 +428,7 @@ app.get('/', (req, res) => {
   <h2>¿Por qué elegir FILO?</h2>
   <p>FILO fue creado específicamente para barberías argentinas. A diferencia de otros sistemas genéricos, FILO incluye fila digital, integración con WhatsApp, programa de puntos para fidelizar clientes y soporte en español.</p>
   <h2>Precios y planes</h2>
-  <p>FILO tiene 7 días de prueba gratis sin necesidad de tarjeta de crédito. Planes para barberías chicas (Starter), medianas (Staff) y cadenas con múltiples sucursales (Enterprise).</p>
+  <p>FILO tiene 15 días de prueba gratis sin necesidad de tarjeta de crédito. Planes para barberías chicas (Starter), medianas (Staff) y cadenas con múltiples sucursales (Enterprise).</p>
   <p>Software para barbería · Sistema de turnos barbería · App para barberos · Gestión de barbería Argentina · Turnos online barbería · CRM barbería</p>
 </div>
 <script>window.addEventListener('DOMContentLoaded',function(){var el=document.getElementById('seo-prerender');if(el)el.remove();})</script>`;
@@ -532,14 +532,31 @@ async function initDB() {
   for (const file of migrationFiles) {
     if (appliedSet.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    // Bloques DO $$ ... $$ tienen ';' adentro: esos archivos se mandan enteros (Postgres acepta
+    // varias sentencias en una consulta sin parámetros).
     // Se quitan las líneas de comentario ANTES de filtrar: antes, una sentencia que
     // venía precedida por un comentario se descartaba entera (ej: CREATE TABLE).
-    const statements = sql
-      .split(/;\s*\n/)
-      .map(s => s.split('\n').filter(l => !l.trim().startsWith('--')).join('\n').trim())
-      .filter(s => s.length > 0);
-    for (const stmt of statements) {
-      await pool.query(stmt);
+    const statements = sql.includes('$$')
+      ? [sql]
+      : sql
+        .split(/;\s*\n/)
+        .map(s => s.split('\n').filter(l => !l.trim().startsWith('--')).join('\n').trim())
+        .filter(s => s.length > 0);
+    try {
+      for (const stmt of statements) {
+        await pool.query(stmt);
+      }
+    } catch (e) {
+      // Se frena acá (las siguientes pueden depender de esta) y se avisa: queda visible en el panel admin
+      global.__filoMigrationError = { file, message: e.message };
+      try {
+        require('./services/push').sendToAdmins({
+          title: '⚠️ Falló una actualización de la base',
+          body: `${file}: ${e.message}`.slice(0, 180),
+          icon: '/favicon.ico', data: { url: '/admin', type: 'migration.failed' },
+        }).catch(() => {});
+      } catch (_) {}
+      throw e;
     }
     await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
     console.log(`  ✔ migración: ${file}`);

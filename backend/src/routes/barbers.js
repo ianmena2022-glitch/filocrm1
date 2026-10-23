@@ -379,35 +379,43 @@ router.put('/:id/bonus/:bonusId', auth, ownerOnly, async (req, res) => {
 // expense rows separados por método (así la caja aggrega bien por método).
 router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
   const { notes, payout_splits } = req.body;
+  // Todo en una transacción con candado por barbero: si se liquida desde dos lugares a la vez
+  // (o algo falla a mitad de camino) no quedan liquidaciones dobles ni turnos a medio marcar.
+  const expDate = shopDate(await getShopTz(req.shopId)); // antes de abrir la transacción
+  const db = await pool.connect();
+  let began = false;
+  const fail = async (code, body) => { if (began) { await db.query('ROLLBACK').catch(() => {}); began = false; } return res.status(code).json(body); };
   try {
-    const barberQ = await pool.query(
+    await db.query('BEGIN'); began = true;
+    await db.query('SELECT pg_advisory_xact_lock($1::int, hashtext($2))', [req.shopId, 'settle:' + req.params.id]);
+    const barberQ = await db.query(
       'SELECT id, name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
       [req.params.id, req.shopId]
     );
-    if (!barberQ.rows.length) return res.status(404).json({ error: 'Barbero no encontrado' });
+    if (!barberQ.rows.length) return fail(404, { error: 'Barbero no encontrado' });
     const barber = barberQ.rows[0];
 
-    const appts = await pool.query(
+    const appts = await db.query(
       `SELECT id, price, commission_pct, COALESCE(tip, 0) AS tip FROM appointments
        WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
          AND (commission_settled IS NULL OR commission_settled=FALSE)`,
       [req.shopId, barber.id]
     );
 
-    const productSalesQ = await pool.query(
+    const productSalesQ = await db.query(
       `SELECT id, barber_commission_amount FROM product_sales
        WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
       [barber.id, req.shopId]
     );
 
-    const bonusesQ = await pool.query(
+    const bonusesQ = await db.query(
       `SELECT id, amount FROM barber_bonuses
         WHERE barber_id=$1 AND shop_id=$2 AND commission_settled=FALSE`,
       [barber.id, req.shopId]
     );
 
     if (!appts.rows.length && !productSalesQ.rows.length && !bonusesQ.rows.length) {
-      return res.status(400).json({ error: 'No hay comisiones pendientes para liquidar' });
+      return fail(400, { error: 'No hay comisiones pendientes para liquidar' });
     }
 
     const totalPrice = appts.rows.reduce((s, a) => s + parseFloat(a.price || 0), 0);
@@ -431,7 +439,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       if (clean.length) {
         const total = clean.reduce((n, s) => n + s.amount, 0);
         if (Math.abs(total - commissionAmount) > 1) {
-          return res.status(400).json({ error: `Los pagos ($${total.toFixed(2)}) no coinciden con la comisión ($${commissionAmount.toFixed(2)})` });
+          return fail(400, { error: `Los pagos ($${total.toFixed(2)}) no coinciden con la comisión ($${commissionAmount.toFixed(2)})` });
         }
         effectiveSplits = clean;
       }
@@ -444,7 +452,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       bonusesQ.rows.length ? `${bonusesQ.rows.length} bonus ($${Math.round(bonusTotal).toLocaleString('es-AR')})` : null,
     ].filter(Boolean).join(' · ');
 
-    const settlement = await pool.query(
+    const settlement = await db.query(
       `INSERT INTO barber_settlements (shop_id, barber_id, barber_name, appointments_count, total_price, commission_pct_avg, commission_amount, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [req.shopId, barber.id, barber.name, appts.rows.length, totalPrice, barber.barber_commission_pct, commissionAmount,
@@ -453,7 +461,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
 
     if (appts.rows.length) {
       const apptIds = appts.rows.map(a => a.id);
-      await pool.query(
+      await db.query(
         `UPDATE appointments SET commission_settled=TRUE, commission_settled_at=NOW(), settlement_id=$1
          WHERE id = ANY($2::int[])`,
         [settlement.rows[0].id, apptIds]
@@ -461,7 +469,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     }
 
     if (productSalesQ.rows.length) {
-      await pool.query(
+      await db.query(
         `UPDATE product_sales SET commission_settled=TRUE, settlement_id=$1
          WHERE id = ANY($2::int[]) AND shop_id=$3`,
         [settlement.rows[0].id, productSalesQ.rows.map(r => r.id), req.shopId]
@@ -469,7 +477,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     }
 
     if (bonusesQ.rows.length) {
-      await pool.query(
+      await db.query(
         `UPDATE barber_bonuses SET commission_settled=TRUE, settlement_id=$1, settled_at=NOW()
          WHERE id = ANY($2::int[]) AND shop_id=$3`,
         [settlement.rows[0].id, bonusesQ.rows.map(r => r.id), req.shopId]
@@ -477,10 +485,9 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     }
 
     // Registrar egreso en caja: una fila por método si hay splits, o 1 sola si no.
-    const expDate = shopDate(await getShopTz(req.shopId));
     if (effectiveSplits && effectiveSplits.length > 1) {
       for (const s of effectiveSplits) {
-        const exp = await pool.query(
+        const exp = await db.query(
           `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
            VALUES ($1,$2,'comisiones',$3,$6,FALSE,'barber_settlement',$4,$5) RETURNING id`,
           [req.shopId, s.amount,
@@ -488,15 +495,15 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
            settlement.rows[0].id, s.method, expDate]
         );
         // Registrar split para auditoría
-        await pool.query(
+        await db.query(
           `INSERT INTO payment_splits (shop_id, settlement_id, expense_id, method, amount)
            VALUES ($1,$2,$3,$4,$5)`,
           [req.shopId, settlement.rows[0].id, exp.rows[0].id, s.method, s.amount]
-        ).catch(()=>{}); // tolerante si la tabla no existe aún
+        ); // dentro de la transacción: si falla, no se liquida nada
       }
     } else {
       const singleMethod = effectiveSplits?.[0]?.method || null;
-      await pool.query(
+      await db.query(
         `INSERT INTO expenses (shop_id, amount, category, description, date, is_income, source_type, source_id, payment_method)
          VALUES ($1,$2,'comisiones',$3,$6,FALSE,'barber_settlement',$4,$5)`,
         [req.shopId, commissionAmount,
@@ -505,8 +512,14 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
       );
     }
 
+    await db.query('COMMIT'); began = false;
     res.json({ ok: true, settlement: settlement.rows[0] });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    if (began) await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally {
+    db.release();
+  }
 });
 
 // GET /api/barbers/:id/settlements — historial de liquidaciones

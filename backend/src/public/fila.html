@@ -565,6 +565,11 @@
       }
     }
 
+    // Clave privada de mi lugar en la fila (sin ella nadie más puede ver ni sacar mi lugar)
+    function storedToken() {
+      try { return (JSON.parse(localStorage.getItem(LS_KEY) || '{}').token) || ''; } catch (_) { return ''; }
+    }
+
     async function apiPost(path, body) {
       const r = await fetch(path, {
         method: 'POST',
@@ -692,7 +697,7 @@
 
     async function pollStatus(entryId, isInit) {
       try {
-        const r = await apiGet(`/api/queue/${slug}/status?entry_id=${entryId}`);
+        const r = await apiGet(`/api/queue/${slug}/status?entry_id=${entryId}&t=${encodeURIComponent(storedToken())}`);
         if (!r.ok) {
           if (r.status === 404) {
             // Entrada no existe más en el servidor → limpiar y mostrar join
@@ -833,7 +838,7 @@
         }
 
         setShopName(data.shop_name);
-        localStorage.setItem(LS_KEY, JSON.stringify({ entry_id: data.entry_id, client_name: data.client_name, shop_name: data.shop_name }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ entry_id: data.entry_id, token: data.token || '', client_name: data.client_name, shop_name: data.shop_name }));
 
         renderWaiting({
           position: data.position,
@@ -865,8 +870,8 @@
       const stored = localStorage.getItem(LS_KEY);
       if (stored) {
         try {
-          const { entry_id } = JSON.parse(stored);
-          if (entry_id) await apiPost(`/api/queue/${slug}/leave`, { entry_id });
+          const { entry_id, token } = JSON.parse(stored);
+          if (entry_id) await apiPost(`/api/queue/${slug}/leave`, { entry_id, token: token || '' });
         } catch(e) { /* ignorar errores de red al salir */ }
       }
       localStorage.removeItem(LS_KEY);

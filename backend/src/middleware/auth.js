@@ -27,6 +27,21 @@ module.exports = async function auth(req, res, next) {
     }
   }
 
+  // Si la cuenta cambió de rol (p.ej. la sede del dueño pasó a ser sucursal), las sesiones
+  // abiertas con el rol viejo se cierran para que vuelvan a entrar con los permisos correctos.
+  if (payload.isEnterpriseOwner || payload.isBranch) {
+    try {
+      const r = await pool.query('SELECT is_enterprise_owner, is_branch FROM shops WHERE id=$1', [payload.shopId]);
+      const s = r.rows[0];
+      if (!s || !!s.is_enterprise_owner !== !!payload.isEnterpriseOwner || !!s.is_branch !== !!payload.isBranch) {
+        return res.status(401).json({ error: 'Tu sesión cambió. Volvé a iniciar sesión.' });
+      }
+    } catch (e) {
+      console.error('[auth] no se pudo verificar la cuenta enterprise:', e.message);
+      return res.status(503).json({ error: 'Error temporal, reintentá' });
+    }
+  }
+
   req.shopId             = payload.shopId;
   req.shopEmail          = payload.email;
   req.isBarber           = payload.isBarber           || false;

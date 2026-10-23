@@ -310,7 +310,18 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
       <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
       <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
+      <button class="tab" id="tab-btn-pagos" onclick="switchTab('pagos')">💸 Pagos sin asignar</button>
       <button class="tab" onclick="switchTab('config')">⚙️ Config</button>
+    </div>
+    <div id="system-alert" style="display:none;margin:0 0 14px;padding:12px 16px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:13px"></div>
+
+    <!-- TAB: PAGOS SIN ASIGNAR -->
+    <div id="tab-pagos" style="display:none">
+      <div style="font-size:13px;color:var(--g);margin-bottom:14px;line-height:1.5">
+        Pagos que entraron a Mercado Pago pero no se pudieron acreditar solos (monto menor al del plan, transferencia sin orden, etc.).
+        Acreditalos a la cuenta que corresponde o descartalos si no son de FILO.
+      </div>
+      <div id="pagos-list">Cargando...</div>
     </div>
 
     <!-- TAB: CUENTAS -->
@@ -449,6 +460,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 
     <!-- TAB: CONFIG -->
     <div id="tab-config" style="display:none">
+      <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px 24px;max-width:760px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--y);margin-bottom:8px">🔒 Seguridad del panel</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:12px;line-height:1.5">Si perdiste el celular o entraste desde un dispositivo que no es tuyo, cerrá la sesión en todos lados. No afecta a las cuentas de los clientes.</div>
+        <button onclick="adminLogoutAll()" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">Cerrar sesión en todos los dispositivos</button>
+      </div>
       <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:24px;max-width:760px">
         <div style="font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--y);margin-bottom:18px">📱 Mensaje de bienvenida por WhatsApp</div>
         <div style="font-size:13px;color:var(--g);margin-bottom:20px;line-height:1.5">Se envía automáticamente al teléfono del cliente cuando verifica su email y la cuenta queda creada. Si falla (WhatsApp desconectado, etc.), no bloquea el registro.</div>
@@ -1023,6 +1039,108 @@ function showPanel() {
   document.getElementById('panel').style.display = 'block';
   loadAll();
   setTimeout(() => { adminPushInit(); }, 1500);
+  loadUnmatchedPayments();
+  loadSystemStatus();
+}
+
+// ── Pagos sin asignar ─────────────────────────────────────────────────────────
+async function adminFetch(method, path, body) {
+  const res = await fetch('/api/admin' + path, {
+    method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { logout(); throw new Error(data.error || 'Sesión vencida'); }
+  if (!res.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+async function loadUnmatchedPayments() {
+  const el = document.getElementById('pagos-list');
+  try {
+    const rows = await adminFetch('GET', '/unmatched-payments');
+    const btn = document.getElementById('tab-btn-pagos');
+    if (btn) btn.textContent = rows.length ? `💸 Pagos sin asignar (${rows.length})` : '💸 Pagos sin asignar';
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--g);font-size:13px">✅ No hay pagos pendientes de asignar.</div>'; return; }
+    const reason = { monto_insuficiente: 'Monto menor al del plan', sin_orden: 'No coincide con ninguna orden' };
+    el.innerHTML = rows.map(r => `
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <strong style="font-size:16px">$${Math.round(parseFloat(r.amount||0)).toLocaleString('es-AR')}</strong>
+          <span style="font-size:12px;color:var(--g)">${new Date(r.created_at).toLocaleString('es-AR')}</span>
+        </div>
+        <div style="font-size:12.5px;color:var(--g);margin:6px 0 10px">
+          ${esc(reason[r.reason] || r.reason)} · pago MP #${esc(r.payment_id)}${r.payer ? ' · ' + esc(r.payer) : ''}${r.shop_name ? ' · cuenta: <strong>' + esc(r.shop_name) + '</strong>' : ''}${r.detail ? ' · ' + esc(r.detail) : ''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="up-q-${esc(r.payment_id)}" placeholder="Buscar cuenta (nombre o email)" oninput="searchUnmatchedShop('${esc(r.payment_id)}')" style="flex:1;min-width:180px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 10px;color:#fff;font-size:13px" value="">
+          <select id="up-shop-${esc(r.payment_id)}" data-no-filo-select style="min-width:160px;background:#0b1a2e;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px">
+            ${r.shop_id ? `<option value="${r.shop_id}">${esc(r.shop_name || ('Cuenta ' + r.shop_id))}</option>` : '<option value="">— elegí la cuenta —</option>'}
+          </select>
+          <select id="up-plan-${esc(r.payment_id)}" data-no-filo-select style="background:#0b1a2e;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px">
+            ${['starter','staff','enterprise'].map(p => `<option value="${p}" ${r.plan === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}
+          </select>
+          <button onclick="assignUnmatched('${esc(r.payment_id)}')" style="background:var(--y);color:#000;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer">Acreditar 30 días</button>
+          <button onclick="dismissUnmatched('${esc(r.payment_id)}')" style="background:transparent;color:var(--g);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:8px 12px;cursor:pointer">Descartar</button>
+        </div>
+      </div>`).join('');
+  } catch (e) { if (el) el.innerHTML = `<div style="color:var(--r)">Error: ${esc(e.message)}</div>`; }
+}
+
+let _upSearchTimer = null;
+function searchUnmatchedShop(pid) {
+  clearTimeout(_upSearchTimer);
+  _upSearchTimer = setTimeout(async () => {
+    const q = document.getElementById('up-q-' + pid)?.value || '';
+    if (q.trim().length < 2) return;
+    try {
+      const { shops } = await adminFetch('GET', '/shops-search?q=' + encodeURIComponent(q));
+      const sel = document.getElementById('up-shop-' + pid);
+      if (sel) sel.innerHTML = shops.length
+        ? shops.map(s => `<option value="${s.id}" data-plan="${esc(s.filo_plan||'')}">${esc(s.name)} · ${esc(s.email)}</option>`).join('')
+        : '<option value="">Sin resultados</option>';
+      const first = shops[0];
+      const planSel = document.getElementById('up-plan-' + pid);
+      if (first && first.filo_plan && planSel) planSel.value = first.filo_plan;
+    } catch (_) {}
+  }, 300);
+}
+
+async function assignUnmatched(pid) {
+  const shopId = document.getElementById('up-shop-' + pid)?.value;
+  const plan = document.getElementById('up-plan-' + pid)?.value;
+  if (!shopId) { alert('Elegí la cuenta a la que corresponde el pago'); return; }
+  if (!confirm('¿Acreditar este pago (30 días de ' + plan + ') a la cuenta elegida?')) return;
+  try {
+    await adminFetch('POST', `/unmatched-payments/${encodeURIComponent(pid)}/assign`, { shop_id: parseInt(shopId), plan });
+    loadUnmatchedPayments(); loadAll();
+  } catch (e) { alert(e.message); }
+}
+
+async function dismissUnmatched(pid) {
+  if (!confirm('¿Descartar este pago? (no se acredita a ninguna cuenta)')) return;
+  try { await adminFetch('POST', `/unmatched-payments/${encodeURIComponent(pid)}/dismiss`); loadUnmatchedPayments(); }
+  catch (e) { alert(e.message); }
+}
+
+async function loadSystemStatus() {
+  try {
+    const s = await adminFetch('GET', '/system');
+    const el = document.getElementById('system-alert');
+    if (!el) return;
+    const msgs = [];
+    if (s.migration_error) msgs.push(`⚠️ Falló una actualización de la base (${esc(s.migration_error.file)}): ${esc(s.migration_error.message)}`);
+    if (s.pending_migrations && s.pending_migrations.length) msgs.push(`⚠️ Actualizaciones de base pendientes: ${s.pending_migrations.map(esc).join(', ')}`);
+    el.innerHTML = msgs.join('<br>');
+    el.style.display = msgs.length ? 'block' : 'none';
+  } catch (_) {}
+}
+
+async function adminLogoutAll() {
+  if (!confirm('¿Cerrar la sesión del panel admin en TODOS los dispositivos (incluido este)? Las cuentas de los clientes no se tocan.')) return;
+  try { await adminFetch('POST', '/logout-all'); alert('Listo. Volvé a ingresar.'); logout(); }
+  catch (e) { alert(e.message); }
 }
 
 // ── Web Push admin ────────────────────────────────────────────────────────────
@@ -1646,6 +1764,8 @@ function switchTab(tab) {
   document.getElementById('tab-afiliados').style.display = tab === 'afiliados' ? 'block' : 'none';
   document.getElementById('tab-metrics').style.display   = tab === 'metrics'   ? 'block' : 'none';
   document.getElementById('tab-config').style.display    = tab === 'config'    ? 'block' : 'none';
+  document.getElementById('tab-pagos').style.display     = tab === 'pagos'     ? 'block' : 'none';
+  if (tab === 'pagos')     loadUnmatchedPayments();
   if (tab === 'metrics')   renderMetrics();
   if (tab === 'referidos') loadPeerReferrals();
   if (tab === 'afiliados') loadAfiliados();

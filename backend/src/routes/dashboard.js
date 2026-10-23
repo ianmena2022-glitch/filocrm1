@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay } = require("../services/cashMath");
+const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -440,153 +440,8 @@ router.get('/cash', auth, async (req, res) => {
     const dayComm = await dayCommissions(shopId, date);
     const commissions = dayComm.appt + dayComm.product;
 
-    // Breakdown de turnos por método de pago — SPLITS-AWARE:
-    //  - turnos sin split: cuentan por su payment_method directo
-    //  - turnos con split: cuentan por cada payment_splits.method con su amount
-    let apptBreakdownRows = [];
-    try {
-      const q = await pool.query(
-        `WITH
-           by_appt AS (
-             SELECT id, GREATEST(price - CASE WHEN sena_status='confirmed' THEN COALESCE(sena_amount,0) ELSE 0 END, 0) AS price, payment_method
-               FROM appointments
-               WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
-           ),
-           splits_by_appt AS (
-             SELECT ps.appointment_id, ps.method, SUM(ps.amount) AS amount
-               FROM payment_splits ps
-               JOIN by_appt ba ON ba.id = ps.appointment_id
-               GROUP BY ps.appointment_id, ps.method
-           )
-         SELECT method AS key, SUM(amount) AS total FROM (
-           SELECT ba.payment_method AS method, SUM(ba.price) AS amount
-             FROM by_appt ba
-             WHERE NOT EXISTS (SELECT 1 FROM splits_by_appt sa WHERE sa.appointment_id = ba.id)
-             GROUP BY ba.payment_method
-           UNION ALL
-           SELECT sa.method, SUM(sa.amount) FROM splits_by_appt sa GROUP BY sa.method
-         ) t
-         GROUP BY method`,
-        [shopId, date]
-      );
-      apptBreakdownRows = q.rows;
-    } catch(spErr) {
-      if (/payment_splits.*does not exist|relation "payment_splits"/i.test(spErr.message)) {
-        const q = await pool.query(
-          `SELECT payment_method AS key, COALESCE(SUM(price),0) AS total
-           FROM appointments
-           WHERE shop_id=$1 AND date=$2 AND status='completed' AND payment_method IS NOT NULL
-           GROUP BY payment_method`,
-          [shopId, date]
-        );
-        apptBreakdownRows = q.rows;
-      } else throw spErr;
-    }
-
-    // Breakdown de ventas de productos por método de pago
-    const prodBreakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='product_sale'
-         AND payment_method IS NOT NULL
-       GROUP BY payment_method`,
-      [shopId, date]
-    );
-
-    // Cobros de fiado por método (también cuentan como ingreso)
-    const debtBreakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='debt_payment'
-         AND payment_method IS NOT NULL
-       GROUP BY payment_method`,
-      [shopId, date]
-    );
-
-    // Propinas por método: entran físicamente por el mismo método que el turno
-    // (en mixtos, proporcional a cada split). Sin esto, al liquidar la propina al
-    // barbero la cuenta queda en déficit porque nunca se sumó.
-    // Si el turno tiene tip_method, la propina entra por ese método; si no, por el del turno.
-    const tipSql = (withTipMethod, withSplits) => {
-      const tm = withTipMethod ? 'a.tip_method' : 'NULL::text';
-      const noTm = withTipMethod ? 'AND a.tip_method IS NULL' : '';
-      const explicit = withTipMethod
-        ? `SELECT a.tip_method AS method, a.tip AS amt
-             FROM appointments a
-             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0
-               AND a.tip_method IS NOT NULL
-           UNION ALL`
-        : '';
-      const direct = `SELECT a.payment_method AS method, a.tip AS amt
-             FROM appointments a
-             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 ${noTm}
-               AND a.payment_method IS NOT NULL AND a.payment_method NOT IN ('debt','mixed')
-               ${withSplits ? 'AND NOT EXISTS (SELECT 1 FROM payment_splits ps WHERE ps.appointment_id=a.id)' : ''}`;
-      const split = withSplits
-        ? `UNION ALL
-           SELECT ps.method, a.tip * ps.amount / NULLIF(t.total,0)
-             FROM appointments a
-             JOIN payment_splits ps ON ps.appointment_id=a.id
-             JOIN (SELECT appointment_id, SUM(amount) AS total FROM payment_splits GROUP BY appointment_id) t
-               ON t.appointment_id=a.id
-             WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 ${noTm}
-               AND ps.method <> 'debt'`
-        : '';
-      return `SELECT method AS key, SUM(amt) AS total FROM (${explicit} ${direct} ${split}) x GROUP BY method`;
-    };
-    let tipRows = [];
-    let tmOk = true, spOk = true;
-    for (let i = 0; i < 4; i++) {
-      try {
-        tipRows = (await pool.query(tipSql(tmOk, spOk), [shopId, date])).rows;
-        break;
-      } catch(err) {
-        if (tmOk && /tip_method/i.test(err.message)) tmOk = false;
-        else if (spOk && /payment_splits/i.test(err.message)) spOk = false;
-        else throw err;
-      }
-    }
-
-    // Señas cobradas ese día, por su método (el turno ya descuenta la seña al completarse)
-    const senaBreakdownQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='sena'
-         AND payment_method IS NOT NULL
-       GROUP BY payment_method`,
-      [shopId, date]
-    );
-
-    // Egresos por método (liquidaciones, insumos, etc.) — se RESTAN del flujo por método
-    const expensesByMethodQ = await pool.query(
-      `SELECT payment_method AS key, COALESCE(SUM(amount),0) AS total
-       FROM expenses
-       WHERE shop_id=$1 AND date=$2 AND (is_income IS NULL OR is_income=FALSE)
-         AND payment_method IS NOT NULL
-       GROUP BY payment_method`,
-      [shopId, date]
-    );
-
-    // Merge todo en un único mapa — ingresos suman, egresos restan
-    const breakdownMap = {};
-    apptBreakdownRows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
-    });
-    prodBreakdownQ.rows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
-    });
-    debtBreakdownQ.rows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
-    });
-    senaBreakdownQ.rows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
-    });
-    tipRows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) + parseFloat(r.total);
-    });
-    expensesByMethodQ.rows.forEach(r => {
-      breakdownMap[r.key] = (breakdownMap[r.key] || 0) - parseFloat(r.total);
-    });
+    // Saldo de cada cuenta del día (misma cuenta que se guarda en el cierre)
+    const breakdownMap = await methodFlowForDay(shopId, date);
     const breakdownRows = Object.entries(breakdownMap)
       .map(([key, total]) => ({ key, total: String(total) }))
       .sort((a, b) => a.key.localeCompare(b.key));
@@ -649,7 +504,7 @@ router.get('/cash/monthly', auth, async (req, res) => {
          SUM(expenses_total)           AS expenses,
          SUM(net_total)                AS net,
          SUM(cuts_count)               AS cuts,
-         COUNT(*)                      AS days_worked
+         COUNT(*) FILTER (WHERE cuts_count > 0 OR revenue_total > 0 OR expenses_total > 0) AS days_worked
        FROM cash_registers
        WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2
        GROUP BY 1 ORDER BY 1`,
@@ -676,7 +531,7 @@ router.get('/cash/monthly', auth, async (req, res) => {
          SUM(expenses_total) AS expenses,
          SUM(net_total)     AS net,
          SUM(cuts_count)    AS cuts,
-         AVG(net_total)     AS avg_daily_net,
+         AVG(net_total) FILTER (WHERE cuts_count > 0 OR revenue_total > 0 OR expenses_total > 0) AS avg_daily_net,
          MAX(net_total)     AS best_day_net,
          MIN(net_total) FILTER (WHERE net_total > 0) AS worst_day_net
        FROM cash_registers
@@ -907,46 +762,6 @@ router.put('/debts/:id/pay', auth, async (req, res) => {
     );
 
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /api/dashboard/cash/auto-close — cerrar caja de todos los shops
-// Llamado por el scheduler a la hora de cierre + 3hs
-router.post('/cash/auto-close', async (req, res) => {
-  const secret = req.headers['x-scheduler-secret'];
-  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'No autorizado' });
-  try {
-    // Obtener todos los shops con horario configurado
-    const shops = await pool.query(
-      `SELECT id, schedule, timezone FROM shops WHERE is_barber=FALSE AND (is_barber IS NULL OR is_barber=FALSE) AND schedule IS NOT NULL`
-    );
-    const { DEFAULT_TZ } = require('../db/shopTz');
-    const dayNames = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
-    let closed = 0;
-
-    for (const shop of shops.rows) {
-      try {
-        const tz = shop.timezone || DEFAULT_TZ;
-        const today = shopDate(tz);
-        const nowLocal = new Date().toLocaleString('en-US', { timeZone: tz });
-        const nowDate = new Date(nowLocal);
-        const nowMins = nowDate.getHours() * 60 + nowDate.getMinutes();
-        const dayKey = dayNames[nowDate.getDay()];
-        const schedule = JSON.parse(shop.schedule);
-        const daySchedule = schedule[dayKey];
-        if (!daySchedule?.active || !daySchedule?.end) continue;
-        const [endH, endM] = daySchedule.end.split(':').map(Number);
-        const closeMins = endH * 60 + endM + 180; // cierre + 3hs
-        // Solo cerrar si estamos en la ventana ±30min del cierre + 3hs
-        if (Math.abs(nowMins - closeMins) <= 30) {
-          const d = await computeDayClose(shop.id, today);
-          await saveDayClose(shop.id, today, d);
-          closed++;
-          console.log(`[CAJA AUTO] Shop ${shop.id} cerrado · net=$${d.net_total}`);
-        }
-      } catch(e) { console.error(`[CAJA AUTO] Error shop ${shop.id}:`, e.message); }
-    }
-    res.json({ ok: true, closed });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

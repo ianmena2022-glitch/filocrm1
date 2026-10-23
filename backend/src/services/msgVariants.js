@@ -2,13 +2,16 @@
 // muchos clientes se parece a spam. Cada mensaje sale con una redacción distinta.
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-function reminderText({ nombre, hora, shop }) {
+// manana=true: el aviso sale la noche anterior (turnos temprano)
+function reminderText({ nombre, hora, shop, manana = false }) {
   const greet = pick([`¡Hola ${nombre}! 👋`, `Hola ${nombre} 👋`, `¡Buenas ${nombre}! 👋`, `Hola ${nombre}, ¿cómo andás? 👋`]);
+  const dia = manana ? 'mañana' : 'hoy';
+  const Dia = manana ? 'Mañana' : 'Hoy';
   const body  = pick([
-    `Te recordamos tu turno de hoy a las *${hora}* en ${shop}.`,
-    `Te escribimos para recordarte tu turno de hoy a las *${hora}* en ${shop}.`,
-    `Hoy a las *${hora}* tenés turno en ${shop}.`,
-    `Un recordatorio de tu turno de hoy a las *${hora}* en ${shop}.`,
+    `Te recordamos tu turno de ${dia} a las *${hora}* en ${shop}.`,
+    `Te escribimos para recordarte tu turno de ${dia} a las *${hora}* en ${shop}.`,
+    `${Dia} a las *${hora}* tenés turno en ${shop}.`,
+    `Un recordatorio de tu turno de ${dia} a las *${hora}* en ${shop}.`,
   ]);
   const close = pick(['¡Te esperamos! ✂️', '¡Nos vemos! ✂️', 'Te esperamos. 💈', '¡Los esperamos! ✂️']);
   return `${greet}\n\n${body} ${close}`;

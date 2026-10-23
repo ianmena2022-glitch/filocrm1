@@ -349,11 +349,8 @@ router.post('/transfer-order', auth, async (req, res) => {
   }
 
   try {
-    // Expirar órdenes viejas no matcheadas (housekeeping)
-    await pool.query(
-      `UPDATE pending_transfers SET matched=TRUE, matched_at=NOW()
-       WHERE matched=FALSE AND expires_at < NOW()`
-    );
+    // Las órdenes vencidas NO se marcan como usadas: si la transferencia llega tarde,
+    // igual se puede reconocer (ver tryMatchIncomingTransfer).
 
     // Aplicar promo si corresponde
     const promos  = require('../services/promotions');
@@ -439,31 +436,36 @@ router.get('/transfer-status/:id', auth, async (req, res) => {
 async function tryMatchIncomingTransfer(paymentId, amount) {
   const amountCents = Math.round(parseFloat(amount) * 100);
   if (!amountCents) return { matched: false };
+  // ¿Ya se usó este pago para otra orden? (webhook y polling pueden llegar juntos)
+  const prev = await pool.query('SELECT shop_id, plan FROM pending_transfers WHERE mp_payment_id=$1 LIMIT 1', [String(paymentId)]);
+  if (prev.rows.length) return { matched: false, alreadyHandled: true };
+  // Primero una orden vigente; si no hay, una vencida en los últimos 7 días (transferencia que llegó tarde)
+  const pick = (cols, vigente) => pool.query(
+    `SELECT ${cols} FROM pending_transfers
+      WHERE amount_cents=$1 AND matched=FALSE
+        AND ${vigente ? 'expires_at > NOW()' : "expires_at <= NOW() AND expires_at > NOW() - INTERVAL '7 days'"}
+      ORDER BY ${vigente ? 'created_at ASC' : 'created_at DESC'} LIMIT 1`,
+    [amountCents]
+  );
   let q;
   try {
-    q = await pool.query(
-      `SELECT id, shop_id, plan, promotion_id FROM pending_transfers
-       WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
-       ORDER BY created_at ASC LIMIT 1`,
-      [amountCents]
-    );
+    q = await pick('id, shop_id, plan, promotion_id', true);
+    if (!q.rows.length) q = await pick('id, shop_id, plan, promotion_id', false);
   } catch(e) {
     if (/promotion_id|column.*does not exist/i.test(e.message)) {
-      q = await pool.query(
-        `SELECT id, shop_id, plan FROM pending_transfers
-         WHERE amount_cents=$1 AND matched=FALSE AND expires_at > NOW()
-         ORDER BY created_at ASC LIMIT 1`,
-        [amountCents]
-      );
+      q = await pick('id, shop_id, plan', true);
+      if (!q.rows.length) q = await pick('id, shop_id, plan', false);
     } else throw e;
   }
   if (!q.rows.length) return { matched: false };
   const row = q.rows[0];
-  await pool.query(
+  // Condicional: si dos procesos encuentran la misma orden, solo uno se la queda
+  const took = await pool.query(
     `UPDATE pending_transfers SET matched=TRUE, matched_at=NOW(), mp_payment_id=$1
-     WHERE id=$2`,
+     WHERE id=$2 AND matched=FALSE RETURNING id`,
     [String(paymentId), row.id]
   );
+  if (!took.rows.length) return { matched: false, alreadyHandled: true };
   console.log(`[Transfer] ✓ MATCH payment ${paymentId} ($${amount}) → shop ${row.shop_id} · plan ${row.plan}`);
   try {
     const sse = require('../services/sse');
@@ -472,9 +474,55 @@ async function tryMatchIncomingTransfer(paymentId, amount) {
   return { matched: true, shopId: row.shop_id, plan: row.plan, promotionId: row.promotion_id };
 }
 
+// ── Pagos que entraron y no se pudieron asignar a una cuenta ───────────────
+// Quedan guardados y se avisa al admin (push) para resolverlos a mano desde el panel.
+let _unmatchedReady = null;
+function ensureUnmatchedTable() {
+  if (!_unmatchedReady) {
+    _unmatchedReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS unmatched_payments (
+        payment_id  TEXT PRIMARY KEY,
+        amount      NUMERIC(12,2),
+        reason      VARCHAR(40) NOT NULL,
+        shop_id     INTEGER,
+        plan        VARCHAR(20),
+        payer       TEXT,
+        detail      TEXT,
+        resolved    BOOLEAN NOT NULL DEFAULT FALSE,
+        resolved_at TIMESTAMPTZ,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`).catch(e => { _unmatchedReady = null; throw e; });
+  }
+  return _unmatchedReady;
+}
+
+async function recordUnmatchedPayment({ paymentId, amount, reason, shopId = null, plan = null, payer = null, detail = null }) {
+  try {
+    await ensureUnmatchedTable();
+    // Si después se procesó bien (otra notificación del mismo pago), no hace falta avisar
+    const done = await pool.query('SELECT 1 FROM mp_processed_payments WHERE payment_id=$1', [String(paymentId)]);
+    if (done.rows.length) return;
+    const ins = await pool.query(
+      `INSERT INTO unmatched_payments (payment_id, amount, reason, shop_id, plan, payer, detail)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (payment_id) DO NOTHING RETURNING payment_id`,
+      [String(paymentId), parseFloat(amount) || 0, reason, shopId, plan, payer, detail]
+    );
+    if (!ins.rows.length) return; // ya avisado
+    const label = { monto_insuficiente: 'monto menor al del plan', sin_orden: 'no coincide con ninguna orden' }[reason] || reason;
+    console.warn(`[Pagos] pago ${paymentId} ($${amount}) sin asignar: ${label}`);
+    require('../services/push').sendToAdmins({
+      title: '⚠️ Pago recibido sin asignar',
+      body:  `$${(parseFloat(amount) || 0).toLocaleString('es-AR')} · ${label}${payer ? ' · ' + payer : ''}`,
+      icon:  '/favicon.ico',
+      data:  { url: '/admin', type: 'payment.unmatched', paymentId: String(paymentId) }
+    }).catch(() => {});
+  } catch (e) { console.error('[Pagos] no se pudo registrar el pago sin asignar:', e.message); }
+}
+
 // Activa un plan mensual para una barbería. Centraliza la lógica (shops row,
 // idempotencia, referrals, afiliados, WhatsApp de confirmación). No tira; loguea errores.
-async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId = null }) {
+// force=true: lo asigna el admin a mano (no se valida el monto).
+async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId = null, force = false }) {
   // Si el pago quedó ligado a una sucursal (ej: una orden generada antes de separar la
   // sede del dueño enterprise), la suscripción se acredita al dueño, no a la sucursal.
   try {
@@ -501,13 +549,26 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotion
     }
   } catch(e) { console.warn('[Activate] promo lookup error:', e.message); }
 
-  if (expectedPrice && paidAmount < (expectedPrice - 1)) {
-    console.warn(`[Activate] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para ${plan} (esperado $${expectedPrice}). Ignorando.`);
+  if (!force && expectedPrice && paidAmount < (expectedPrice - 1)) {
+    console.warn(`[Activate] MONTO INSUFICIENTE — shop ${shopId} pagó $${paidAmount} para ${plan} (esperado $${expectedPrice}).`);
+    await recordUnmatchedPayment({
+      paymentId, amount: paidAmount, reason: 'monto_insuficiente', shopId, plan,
+      detail: `Esperado $${expectedPrice}`,
+    });
     return;
   }
 
   const shopRow = await pool.query('SELECT trial_ends_at FROM shops WHERE id=$1', [shopId]);
   if (!shopRow.rows.length) { console.warn(`[Activate] shop ${shopId} no existe`); return; }
+
+  // Idempotencia atómica: el primero que registra el pago lo activa; si el aviso de MP y el
+  // polling llegan juntos, el segundo no suma otros 30 días.
+  const claim = await pool.query(
+    `INSERT INTO mp_processed_payments (payment_id, shop_id, plan, amount)
+     VALUES ($1,$2,$3,$4) ON CONFLICT (payment_id) DO NOTHING RETURNING payment_id`,
+    [String(paymentId), shopId, plan, paidAmount]
+  );
+  if (!claim.rows.length) { console.log(`[Activate] pago ${paymentId} ya procesado`); return; }
   const currentExpiry = shopRow.rows[0].trial_ends_at;
   const accessUntil = (currentExpiry && new Date(currentExpiry) > new Date())
     ? new Date(currentExpiry)
@@ -515,7 +576,9 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotion
   accessUntil.setDate(accessUntil.getDate() + 30);
 
   const isEnterprise = plan === 'enterprise';
-  const updated = await pool.query(
+  let updated;
+  try {
+  updated = await pool.query(
     `UPDATE shops
      SET subscription_status='active', mp_shop_status='authorized',
          filo_plan=$1, trial_ends_at=$2, expired_at=NULL,
@@ -528,13 +591,14 @@ async function activateShopPlan({ shopId, plan, paymentId, paidAmount, promotion
      RETURNING name, phone, wpp_connected`,
     [plan, accessUntil.toISOString(), shopId, isEnterprise]
   );
+  } catch (e) {
+    // No quedó activado: liberar el pago para que el próximo aviso lo reintente
+    await pool.query('DELETE FROM mp_processed_payments WHERE payment_id=$1', [String(paymentId)]).catch(() => {});
+    throw e;
+  }
   if (!updated.rows.length) return;
-
-  await pool.query(
-    `INSERT INTO mp_processed_payments (payment_id, shop_id, plan, amount)
-     VALUES ($1,$2,$3,$4) ON CONFLICT (payment_id) DO NOTHING`,
-    [String(paymentId), shopId, plan, paidAmount]
-  );
+  // Si estaba como "sin asignar", queda resuelto
+  pool.query('UPDATE unmatched_payments SET resolved=TRUE, resolved_at=NOW() WHERE payment_id=$1', [String(paymentId)]).catch(() => {});
 
   const shop = updated.rows[0];
   const planLabel = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' }[plan] || plan;
@@ -646,9 +710,16 @@ router.post('/webhook-qr', async (req, res) => {
         // No tiene external_reference nuestro → intentar match con pending_transfers por monto exacto
         const match = await tryMatchIncomingTransfer(paymentId, transaction_amount);
         if (match.matched) { shopId = match.shopId; plan = match.plan; promotionId = match.promotionId; }
+        else if (!match.alreadyHandled) {
+          await recordUnmatchedPayment({
+            paymentId, amount: transaction_amount, reason: 'sin_orden',
+            payer: payment.payer?.email || payment.payer?.identification?.number || null,
+            detail: payment.description || null,
+          });
+        }
       }
 
-      if (shopId && plan) {
+      if (shopId && plan && QR_PLANS[plan]) {
         const paidAmount = parseFloat(transaction_amount) || 0;
         await activateShopPlan({ shopId, plan, paymentId, paidAmount, promotionId });
       }
@@ -741,4 +812,4 @@ router.post('/test-change-plan', auth, async (req, res) => {
 });
 
 // Exportar helpers para que scheduler.js pueda hacer polling de transferencias.
-router._internals = { tryMatchIncomingTransfer, activateShopPlan };
+router._internals = { tryMatchIncomingTransfer, activateShopPlan, recordUnmatchedPayment, ensureUnmatchedTable, QR_PLANS };
