@@ -105,6 +105,7 @@ async function runTrialExpiration() {
              trial_ends_at = COALESCE(trial_ends_at, created_at + INTERVAL '7 days')
        WHERE subscription_status = 'trial'
          AND (is_test IS NULL OR is_test = FALSE)
+         AND (is_barber IS NULL OR is_barber = FALSE)   -- los barberos no tienen prueba propia: dependen del local
          AND plan IS DISTINCT FROM 'test'
          AND (
            (trial_ends_at IS NOT NULL AND trial_ends_at < NOW() - ($1::int || ' days')::interval)
@@ -145,6 +146,7 @@ async function runActiveExpiration() {
              expired_at = COALESCE(expired_at, NOW())
        WHERE subscription_status = 'active'
          AND (is_test IS NULL OR is_test = FALSE)
+         AND (is_barber IS NULL OR is_barber = FALSE)
          AND plan IS DISTINCT FROM 'test'
          AND trial_ends_at IS NOT NULL
          AND trial_ends_at < NOW() - ($1::int || ' days')::interval
@@ -170,6 +172,7 @@ async function runExpiredCleanup() {
     const { rows } = await pool.query(
       `SELECT id, email FROM shops
        WHERE (is_test IS NULL OR is_test = FALSE)
+         AND (is_barber IS NULL OR is_barber = FALSE)
          AND (plan IS DISTINCT FROM 'test')
          AND (
            -- caso 1: ya marcado expired con fecha registrada

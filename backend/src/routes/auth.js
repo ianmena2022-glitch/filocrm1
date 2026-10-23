@@ -303,7 +303,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Verificar si el trial expiró y aún no tiene suscripción activa
-    if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
+    if (!shop.is_barber && shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
       await pool.query(
         "UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1",
         [shop.id]
@@ -357,7 +357,7 @@ router.get('/status', async (req, res) => {
     const shop = result.rows[0];
 
     // Auto-expirar trial si venció
-    if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
+    if (!shop.is_barber && shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
       await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [payload.shopId]);
       shop.subscription_status = 'expired';
     }
@@ -692,7 +692,7 @@ router.get('/me', async (req, res) => {
     const result = await pool.query('SELECT * FROM shops WHERE id=$1', [payload.shopId]);
     if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
     const shop = result.rows[0];
-    if (shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
+    if (!shop.is_barber && shop.subscription_status === 'trial' && shop.trial_ends_at && new Date(shop.trial_ends_at) < new Date()) {
       await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [payload.shopId]);
       shop.subscription_status = 'expired';
     }
