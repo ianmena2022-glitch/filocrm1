@@ -13424,7 +13424,9 @@ function openBranchDetail(encoded) {
   const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
   document.getElementById('modal-ent-branch-title').textContent = '🏪 ' + b.name;
   const body = document.getElementById('modal-ent-branch-body');
-  const profit = parseFloat(b.revenue_month||0) - parseFloat(b.commissions_month||0) - parseFloat(b.expenses_month||0);
+  // Ganancia neta calculada en el servidor con la misma cuenta que la caja de la sucursal
+  const profit = b.profit_month != null ? parseFloat(b.profit_month)
+    : parseFloat(b.revenue_month||0) - parseFloat(b.commissions_month||0) - parseFloat(b.expenses_month||0);
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
       ${[

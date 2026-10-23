@@ -220,6 +220,59 @@ function ensureBreakdownColumn() {
   return _breakdownCol;
 }
 
+// Resumen de un período (p.ej. el mes) con la MISMA cuenta que la caja diaria (computeNet),
+// sumada sobre el rango: lo que usa el panel enterprise para que coincida con cada barbería.
+async function periodSummary(shopId, from, to) {
+  const tz = await getShopTz(shopId);
+  const q = await pool.query(
+    `SELECT
+       (SELECT COALESCE(SUM(price),0) FROM appointments
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed'
+           AND payment_method IS DISTINCT FROM 'debt')                                         AS revenue,
+       (SELECT COUNT(*) FROM appointments
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed')       AS cuts,
+       (SELECT COALESCE(SUM(price * COALESCE(commission_pct,0) / 100.0),0) FROM appointments
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed')       AS appt_commissions,
+       (SELECT COALESCE(SUM(tip),0) FROM appointments
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed'
+           AND barber_id IS NULL)                                                               AS owner_tips,
+       (SELECT COALESCE(SUM(amount),0) FROM expenses
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND is_income=TRUE
+           AND source_type IS DISTINCT FROM 'sena')                                             AS all_income,
+       (SELECT COALESCE(SUM(amount),0) FROM expenses
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND is_income=TRUE
+           AND source_type='product_sale')                                                      AS product_income,
+       (SELECT COALESCE(SUM(amount),0) FROM expenses
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date
+           AND (is_income IS NULL OR is_income=FALSE))                                          AS expenses,
+       (SELECT COALESCE(SUM(amount),0) FROM expenses
+         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND source_type='barber_settlement'
+           AND (is_income IS NULL OR is_income=FALSE))                                          AS settlements,
+       (SELECT COALESCE(SUM(amount),0) FROM barber_bonuses
+         WHERE shop_id=$1 AND commission_settled=TRUE
+           AND (settled_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date)          AS bonuses`,
+    [shopId, from, to, tz]
+  );
+  const r = q.rows[0];
+  const productComm = await pool.query(
+    `SELECT COALESCE(SUM(barber_commission_amount),0) AS c FROM product_sales
+      WHERE shop_id=$1 AND (sold_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date`,
+    [shopId, from, to, tz]
+  ).then(x => parseFloat(x.rows[0].c)).catch(() => 0);
+  const n = (v) => parseFloat(v || 0);
+  // Gastos "propios" del local: sin las liquidaciones a barberos (esas ya están en comisiones)
+  const opExpenses  = n(r.expenses) - n(r.settlements);
+  const commissions = n(r.appt_commissions) + productComm + n(r.bonuses);
+  const net = n(r.revenue) + n(r.owner_tips) + n(r.all_income) - opExpenses - commissions;
+  return {
+    revenue: n(r.revenue) + n(r.product_income),   // facturado: turnos cobrados (sin fiado) + ventas de productos
+    cuts: parseInt(r.cuts) || 0,
+    commissions,
+    expenses: opExpenses,
+    net,
+  };
+}
+
 async function saveDayClose(shopId, date, d) {
   await ensureBreakdownColumn();
   await pool.query(
@@ -394,4 +447,4 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   }
 }
 
-module.exports = { normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };
+module.exports = { periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };
