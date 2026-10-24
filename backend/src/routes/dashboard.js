@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay } = require("../services/cashMath");
+const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay, dailySeries, monthReport } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -32,11 +32,12 @@ router.get('/today', auth, async (req, res) => {
          WHERE ${shopFilterPlain} AND date = $2`,
         [shopId, today]
       ),
+      // Ventas de productos del día (las mismas que entran a la caja, con la fecha del local)
       pool.query(
-        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue,
+        `SELECT COALESCE(SUM(amount),0) AS prod_revenue,
                 COUNT(*) AS prod_count
-         FROM product_sales
-         WHERE shop_id=$1 AND sold_at::date = $2`,
+         FROM expenses
+         WHERE shop_id=$1 AND date = $2::date AND is_income=TRUE AND source_type='product_sale'`,
         [shopId, today]
       ),
     ]);
@@ -133,12 +134,14 @@ router.get('/month', auth, async (req, res) => {
            AND date <= $3::date`,
         [shopId, monthStart, today]
       ),
+      // Ventas de productos del mes: las mismas que entran a la caja (igual que el panel enterprise)
       pool.query(
-        `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
-         FROM product_sales
+        `SELECT COALESCE(SUM(amount),0) AS prod_revenue
+         FROM expenses
          WHERE (shop_id=$1 OR (${isEnterpriseOwner ? `shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE)` : 'FALSE'}))
-           AND sold_at >= ($2::date::timestamp AT TIME ZONE $3::text)`,
-        [shopId, monthStart, await getShopTz(shopId)]
+           AND is_income=TRUE AND source_type='product_sale'
+           AND date >= $2::date AND date <= $3::date`,
+        [shopId, monthStart, today]
       ),
     ]);
     const prodRevMonth = parseFloat(prodRevMonthQ.rows[0].prod_revenue);
@@ -465,6 +468,8 @@ router.get('/cash', auth, async (req, res) => {
       expenses_total:    expenses,
       commissions_total: commissions,
       net_total:         await computeNet(shopId, date, { revenue, allIncome, expenses, apptCommissions: dayComm.appt, productCommissions: dayComm.product }),
+      // Cómo se llega al neto: ingresos − comisiones − gastos del local (las liquidaciones ya son comisiones)
+      net_parts:         (await dailySeries(shopId, date, date))[0] || null,
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
@@ -497,179 +502,101 @@ router.post("/cash/close", auth, async (req, res) => {
 });
 
 // GET /api/dashboard/cash/monthly?year=YYYY — P&L mensual del año
+// Se calcula EN VIVO desde los turnos y movimientos (antes sumaba los cierres de caja guardados:
+// los días sin cierre no aparecían y un cierre viejo no veía cobros posteriores).
 router.get('/cash/monthly', auth, async (req, res) => {
-  const year = parseInt(req.query.year) || new Date().getFullYear();
   try {
-    // Totales por mes del año pedido
-    const current = await pool.query(
-      `SELECT
-         EXTRACT(MONTH FROM date)::int AS month,
-         SUM(revenue_total)            AS revenue,
-         SUM(tips_total)               AS tips,
-         SUM(expenses_total)           AS expenses,
-         SUM(net_total)                AS net,
-         SUM(cuts_count)               AS cuts,
-         COUNT(*) FILTER (WHERE cuts_count > 0 OR revenue_total > 0 OR expenses_total > 0) AS days_worked
-       FROM cash_registers
-       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2
-       GROUP BY 1 ORDER BY 1`,
-      [req.shopId, year]
-    );
+    const tz = await getShopTz(req.shopId);
+    const today = shopDate(tz);
+    const year = parseInt(req.query.year) || parseInt(today.slice(0, 4));
+    const yearEnd = `${year}-12-31` < today ? `${year}-12-31` : today;
+    const prevEnd = `${year - 1}-12-31`;
 
-    // Mismo año anterior para delta %
-    const prev = await pool.query(
-      `SELECT
-         EXTRACT(MONTH FROM date)::int AS month,
-         SUM(revenue_total) AS revenue,
-         SUM(net_total)     AS net
-       FROM cash_registers
-       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2
-       GROUP BY 1`,
-      [req.shopId, year - 1]
-    );
+    const empty = () => ({ revenue: 0, tips: 0, expenses: 0, net: 0, cuts: 0, days_worked: 0 });
+    const byMonth = (days) => {
+      const m = {};
+      for (const d of days) {
+        const k = parseInt(d.date.slice(5, 7));
+        const x = m[k] || (m[k] = empty());
+        x.revenue += d.ingresos; x.tips += d.tips; x.expenses += d.gastos; x.net += d.net; x.cuts += d.cuts;
+        if (d.active) x.days_worked++;
+      }
+      return m;
+    };
 
-    // Totales anuales
-    const totals = await pool.query(
-      `SELECT
-         SUM(revenue_total) AS revenue,
-         SUM(tips_total)    AS tips,
-         SUM(expenses_total) AS expenses,
-         SUM(net_total)     AS net,
-         SUM(cuts_count)    AS cuts,
-         AVG(net_total) FILTER (WHERE cuts_count > 0 OR revenue_total > 0 OR expenses_total > 0) AS avg_daily_net,
-         MAX(net_total)     AS best_day_net,
-         MIN(net_total) FILTER (WHERE net_total > 0) AS worst_day_net
-       FROM cash_registers
-       WHERE shop_id=$1 AND EXTRACT(YEAR FROM date)=$2`,
-      [req.shopId, year]
-    );
+    const cur = `${year}-01-01` <= yearEnd ? await dailySeries(req.shopId, `${year}-01-01`, yearEnd) : [];
+    const prev = await dailySeries(req.shopId, `${year - 1}-01-01`, prevEnd);
+    const curM = byMonth(cur), prevM = byMonth(prev);
 
-    const prevByMonth = {};
-    prev.rows.forEach(r => { prevByMonth[r.month] = r; });
+    const months = Object.keys(curM).map(Number).sort((a, b) => a - b)
+      .filter(k => curM[k].days_worked > 0)
+      .map(k => {
+        const r = curM[k], p = prevM[k] && prevM[k].days_worked > 0 ? prevM[k] : null;
+        return {
+          month: k,
+          revenue: r.revenue, tips: r.tips, expenses: r.expenses, net: r.net, cuts: r.cuts, days_worked: r.days_worked,
+          prev_revenue: p ? p.revenue : null,
+          prev_net: p ? p.net : null,
+          delta_net_pct: p && p.net !== 0 ? Math.round(((r.net - p.net) / Math.abs(p.net)) * 100) : null,
+        };
+      });
 
-    const months = current.rows.map(r => {
-      const p = prevByMonth[r.month];
-      return {
-        month:       r.month,
-        revenue:     parseFloat(r.revenue   || 0),
-        tips:        parseFloat(r.tips      || 0),
-        expenses:    parseFloat(r.expenses  || 0),
-        net:         parseFloat(r.net       || 0),
-        cuts:        parseInt(r.cuts        || 0),
-        days_worked: parseInt(r.days_worked || 0),
-        prev_revenue: p ? parseFloat(p.revenue || 0) : null,
-        prev_net:     p ? parseFloat(p.net     || 0) : null,
-        delta_net_pct: p && parseFloat(p.net) !== 0
-          ? Math.round(((parseFloat(r.net) - parseFloat(p.net)) / Math.abs(parseFloat(p.net))) * 100)
-          : null
-      };
-    });
-
-    const t = totals.rows[0] || {};
+    const active = cur.filter(d => d.active);
+    const positive = active.filter(d => d.net > 0).map(d => d.net);
+    const tot = (k) => months.reduce((a, m) => a + m[k], 0);
     res.json({
       year,
       months,
       totals: {
-        revenue:       parseFloat(t.revenue       || 0),
-        tips:          parseFloat(t.tips          || 0),
-        expenses:      parseFloat(t.expenses      || 0),
-        net:           parseFloat(t.net           || 0),
-        cuts:          parseInt(t.cuts            || 0),
-        avg_daily_net: parseFloat(t.avg_daily_net || 0),
-        best_day_net:  parseFloat(t.best_day_net  || 0),
-        worst_day_net: parseFloat(t.worst_day_net || 0)
-      }
+        revenue:       tot('revenue'),
+        tips:          tot('tips'),
+        expenses:      tot('expenses'),
+        net:           tot('net'),
+        cuts:          tot('cuts'),
+        avg_daily_net: active.length ? tot('net') / active.length : 0,
+        best_day_net:  active.length ? Math.max(...active.map(d => d.net)) : 0,
+        worst_day_net: positive.length ? Math.min(...positive) : 0,
+      },
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/dashboard/cash/week-compare — esta semana vs semana pasada
+// GET /api/dashboard/cash/week-compare — esta semana vs semana pasada (en vivo, por día del local)
 router.get('/cash/week-compare', auth, async (req, res) => {
   try {
-    // Lunes de esta semana (Argentina UTC-3)
-    const now = new Date(Date.now() - 3 * 60 * 60 * 1000);
-    const dow = now.getUTCDay() === 0 ? 6 : now.getUTCDay() - 1; // 0=lun
-    const thisMonday = new Date(now);
-    thisMonday.setUTCDate(now.getUTCDate() - dow);
-    const thisMondayStr = thisMonday.toISOString().split('T')[0];
+    const tz = await getShopTz(req.shopId);
+    const today = shopDate(tz);
+    const addDays = (ymd, n) => new Date(new Date(ymd + 'T12:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10);
+    const dowToday = new Date(today + 'T12:00:00Z').getUTCDay();          // 0=domingo
+    const thisMondayStr = addDays(today, -(dowToday === 0 ? 6 : dowToday - 1));
+    const lastMondayStr = addDays(thisMondayStr, -7);
+    const lastSundayStr = addDays(thisMondayStr, -1);
 
-    const lastMonday = new Date(thisMonday);
-    lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
-    const lastMondayStr = lastMonday.toISOString().split('T')[0];
-
-    const lastSunday = new Date(thisMonday);
-    lastSunday.setUTCDate(thisMonday.getUTCDate() - 1);
-    const lastSundayStr = lastSunday.toISOString().split('T')[0];
-
-    // Esta semana (hasta hoy)
-    const thisWeek = await pool.query(
-      `SELECT
-         EXTRACT(DOW FROM date)::int  AS dow,
-         date::text                   AS date,
-         revenue_total, tips_total, expenses_total, net_total, cuts_count
-       FROM cash_registers
-       WHERE shop_id=$1 AND date >= $2
-       ORDER BY date`,
-      [req.shopId, thisMondayStr]
-    );
-
-    // Semana pasada (lunes a domingo)
-    const lastWeek = await pool.query(
-      `SELECT
-         EXTRACT(DOW FROM date)::int  AS dow,
-         date::text                   AS date,
-         revenue_total, tips_total, expenses_total, net_total, cuts_count
-       FROM cash_registers
-       WHERE shop_id=$1 AND date >= $2 AND date <= $3
-       ORDER BY date`,
-      [req.shopId, lastMondayStr, lastSundayStr]
-    );
-
+    const [thisDays, lastDays] = await Promise.all([
+      dailySeries(req.shopId, thisMondayStr, today),
+      dailySeries(req.shopId, lastMondayStr, lastSundayStr),
+    ]);
+    const thisWeek = thisDays.filter(d => d.active), lastWeek = lastDays.filter(d => d.active);
     const sumWeek = rows => ({
-      revenue:  rows.reduce((a,r) => a + parseFloat(r.revenue_total  || 0), 0),
-      tips:     rows.reduce((a,r) => a + parseFloat(r.tips_total     || 0), 0),
-      expenses: rows.reduce((a,r) => a + parseFloat(r.expenses_total || 0), 0),
-      net:      rows.reduce((a,r) => a + parseFloat(r.net_total      || 0), 0),
-      cuts:     rows.reduce((a,r) => a + parseInt(r.cuts_count       || 0), 0),
-      days:     rows.length
+      revenue:  rows.reduce((a, r) => a + r.ingresos, 0),
+      tips:     rows.reduce((a, r) => a + r.tips, 0),
+      expenses: rows.reduce((a, r) => a + r.gastos, 0),
+      net:      rows.reduce((a, r) => a + r.net, 0),
+      cuts:     rows.reduce((a, r) => a + r.cuts, 0),
+      days:     rows.length,
     });
-
-    const thisTotals = sumWeek(thisWeek.rows);
-    const lastTotals = sumWeek(lastWeek.rows);
-
-    const delta = (curr, prev) =>
-      prev !== 0 ? Math.round(((curr - prev) / Math.abs(prev)) * 100) : null;
+    const thisTotals = sumWeek(thisWeek), lastTotals = sumWeek(lastWeek);
+    const delta = (curr, prev) => prev !== 0 ? Math.round(((curr - prev) / Math.abs(prev)) * 100) : null;
+    const mapDay = d => ({ date: d.date, dow: d.dow, revenue: d.ingresos, tips: d.tips, expenses: d.gastos, net: d.net, cuts: d.cuts });
 
     res.json({
-      this_week: {
-        from:    thisMondayStr,
-        totals:  thisTotals,
-        days:    thisWeek.rows.map(r => ({
-          date:     r.date,
-          dow:      r.dow,
-          revenue:  parseFloat(r.revenue_total  || 0),
-          tips:     parseFloat(r.tips_total     || 0),
-          expenses: parseFloat(r.expenses_total || 0),
-          net:      parseFloat(r.net_total      || 0),
-          cuts:     parseInt(r.cuts_count       || 0)
-        }))
-      },
-      last_week: {
-        from:    lastMondayStr,
-        totals:  lastTotals,
-        days:    lastWeek.rows.map(r => ({
-          date:     r.date,
-          dow:      r.dow,
-          revenue:  parseFloat(r.revenue_total  || 0),
-          net:      parseFloat(r.net_total      || 0),
-          cuts:     parseInt(r.cuts_count       || 0)
-        }))
-      },
+      this_week: { from: thisMondayStr, totals: thisTotals, days: thisWeek.map(mapDay) },
+      last_week: { from: lastMondayStr, totals: lastTotals, days: lastWeek.map(mapDay) },
       delta: {
         revenue_pct: delta(thisTotals.revenue, lastTotals.revenue),
         net_pct:     delta(thisTotals.net,     lastTotals.net),
-        cuts_pct:    delta(thisTotals.cuts,    lastTotals.cuts)
-      }
+        cuts_pct:    delta(thisTotals.cuts,    lastTotals.cuts),
+      },
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -776,87 +703,10 @@ router.get('/month-report', auth, async (req, res) => {
   const year  = parseInt(req.query.year)  || new Date().getFullYear();
   const month = parseInt(req.query.month) || new Date().getMonth() + 1;
   const from  = `${year}-${String(month).padStart(2,'0')}-01`;
-  const to    = new Date(year, month, 0).toISOString().split('T')[0]; // último día del mes
-
+  const to    = new Date(Date.UTC(year, month, 0)).toISOString().split('T')[0]; // último día del mes
   try {
-    // Métricas generales
-    const metricsQ = await pool.query(
-      `SELECT
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue,
-         COALESCE(SUM(tip),0)                                                             AS tips_total,
-         COALESCE(SUM(price * commission_pct / 100.0),0)                                 AS commissions_total,
-         COUNT(*) FILTER (WHERE status='completed')                                       AS completed,
-         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0)      AS cash,
-         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0)      AS debit,
-         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0)      AS credit,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0)      AS transfer,
-         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0)      AS debt
-       FROM appointments
-       WHERE shop_id=$1 AND date >= $2 AND date <= $3 AND status='completed'`,
-      [shopId, from, to]
-    );
-
-    // Gastos del mes
-    const expensesQ = await pool.query(
-      `SELECT * FROM expenses WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
-      [shopId, from, to]
-    );
-
-    // Cierres diarios del mes
-    const cashQ = await pool.query(
-      `SELECT * FROM cash_registers WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
-      [shopId, from, to]
-    );
-
-    const m = metricsQ.rows[0];
-    // La tabla expenses mezcla egresos e ingresos (ventas, fiado, señas): separarlos.
-    const expTotal = expensesQ.rows.filter(e => !e.is_income).reduce((s,e) => s + parseFloat(e.amount), 0);
-    const incomeTotal = expensesQ.rows
-      .filter(e => e.is_income && e.source_type !== 'sena')
-      .reduce((s,e) => s + parseFloat(e.amount), 0);
-    const settlementsTotal = expensesQ.rows
-      .filter(e => e.source_type === 'barber_settlement' && !e.is_income)
-      .reduce((s,e) => s + parseFloat(e.amount), 0);
-    const tz = await getShopTz(shopId);
-    const extraQ = await pool.query(
-      `SELECT
-         COALESCE((SELECT SUM(amount) FROM barber_bonuses
-                    WHERE shop_id=$1 AND commission_settled=TRUE
-                      AND (settled_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date),0) AS bonuses,
-         COALESCE((SELECT SUM(tip) FROM appointments
-                    WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date
-                      AND status='completed' AND barber_id IS NULL),0) AS owner_tips`,
-      [shopId, from, to, tz]
-    );
-    const prodCommQ = await pool.query(
-      `SELECT COALESCE(SUM(barber_commission_amount),0) AS c FROM product_sales
-        WHERE shop_id=$1 AND (sold_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date`,
-      [shopId, from, to, tz]
-    ).catch(() => ({ rows: [{ c: 0 }] }));
-    const productCommissions = parseFloat(prodCommQ.rows[0].c);
-    const bonusesSettled = parseFloat(extraQ.rows[0].bonuses);
-    const ownerTips = parseFloat(extraQ.rows[0].owner_tips);
-    const revenue = parseFloat(m.revenue);
-    const tips = parseFloat(m.tips_total);
-    const commissions = parseFloat(m.commissions_total);
-
-    res.json({
-      revenue,
-      tips_total:        tips,
-      commissions_total: commissions,
-      expenses_total:    expTotal,
-      net_total:         revenue + ownerTips + incomeTotal - commissions - productCommissions - (expTotal - settlementsTotal) - bonusesSettled,
-      completed:         parseInt(m.completed),
-      by_payment: {
-        cash:     parseFloat(m.cash),
-        debit:    parseFloat(m.debit),
-        credit:   parseFloat(m.credit),
-        transfer: parseFloat(m.transfer),
-        debt:     parseFloat(m.debt),
-      },
-      expenses:       expensesQ.rows,
-      cash_registers: cashQ.rows,
-    });
+    // Mismos números que el P&L y el panel enterprise (cálculo en vivo, día por día)
+    res.json(await monthReport(shopId, from, to));
   } catch(e) {
     console.error('month-report error:', e.message);
     res.status(500).json({ error: e.message });

@@ -3282,7 +3282,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <div style="padding:0 20px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gray)">ESTE MES</div>
         <div class="ent-kpi-strip" style="margin-bottom:4px">
           <div class="ent-kpi-block">
-            <div class="ent-kpi-label">FACTURADO</div>
+            <div class="ent-kpi-label">INGRESOS</div>
             <div class="ent-kpi-value" id="ent-revenue-month">$0</div>
           </div>
           <div class="ent-kpi-block">
@@ -12719,7 +12719,9 @@ function renderCashSummary(c) {
   }
   if (netoSub) {
     const extraStr = parseFloat(c.extra_income||0) > 0 ? ` + ${fmt(c.extra_income)} extras` : '';
-    netoSub.textContent = `Servicios ${fmt(c.revenue_total)}${extraStr} · Gastos -${fmt(c.expenses_total)}`;
+    netoSub.textContent = c.net_parts
+      ? `Ingresos ${fmt(c.net_parts.ingresos)} · Comisiones -${fmt(c.net_parts.commissions)} · Gastos -${fmt(c.net_parts.op_expenses)}`
+      : `Servicios ${fmt(c.revenue_total)}${extraStr} · Gastos -${fmt(c.expenses_total)}`;
   }
 
   // ── Cards de resumen (visible solo en desktop) ──
@@ -12727,7 +12729,7 @@ function renderCashSummary(c) {
     <div class="stat-card"><div class="stat-label">💵 SERVICIOS</div><div class="stat-value" style="font-size:22px">${fmt(c.revenue_total)}</div></div>
     ${parseFloat(c.extra_income||0)>0?`<div class="stat-card"><div class="stat-label">➕ INGRESOS EXTRAS</div><div class="stat-value" style="font-size:22px;color:#4CAF50">${fmt(c.extra_income)}</div></div>`:''}
     <div class="stat-card"><div class="stat-label">💰 NETO</div><div class="stat-value" style="font-size:22px;color:${parseFloat(c.net_total||0)>=0?'var(--yellow)':'#FF4343'}">${fmt(c.net_total)}</div></div>
-    <div class="stat-card"><div class="stat-label">📋 GASTOS</div><div class="stat-value" style="font-size:22px;color:#FF4343">${fmt(c.expenses_total)}</div></div>
+    <div class="stat-card" title="Todo lo que salió de la caja: gastos, compras y liquidaciones a barberos"><div class="stat-label">📋 EGRESOS</div><div class="stat-value" style="font-size:22px;color:#FF4343">${fmt(c.expenses_total)}</div></div>
     <div class="stat-card"><div class="stat-label">🎁 PROPINAS</div><div class="stat-value" style="font-size:22px;color:#4CAF50">${fmt(c.tips_total)}</div></div>
     <div class="stat-card"><div class="stat-label">✂️ CORTES</div><div class="stat-value" style="font-size:22px">${c.cuts_count}</div></div>
   `;
@@ -13318,7 +13320,7 @@ async function loadEnterpriseDashboard() {
   try {
     const data = await api('GET', '/enterprise/stats');
     _entData = data;
-    const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+    const fmt = v => '$' + Math.round(parseFloat(v||0)).toLocaleString('es-AR');
     const t = data.totals;
 
     // Nombre en topbar
@@ -13336,12 +13338,12 @@ async function loadEnterpriseDashboard() {
     // KPIs MES — ent-cuts-month es cantidad, se muestra siempre
     document.getElementById('ent-cuts-month').textContent     = t.cuts_month;
     if (isRevenueUnlocked()) {
-      document.getElementById('ent-revenue-month').textContent  = fmt(t.revenue_month);
-      document.getElementById('ent-expenses-month').textContent = fmt(t.expenses_month);
+      document.getElementById('ent-revenue-month').textContent  = fmt(t.ingresos_month ?? t.revenue_month);
+      document.getElementById('ent-expenses-month').textContent = fmt(t.gastos_month ?? t.expenses_month);
       document.getElementById('ent-profit-month').textContent   = fmt(t.profit_month);
     } else {
-      applyRevenueMask('ent-revenue-month',  fmt(t.revenue_month));
-      applyRevenueMask('ent-expenses-month', fmt(t.expenses_month));
+      applyRevenueMask('ent-revenue-month',  fmt(t.ingresos_month ?? t.revenue_month));
+      applyRevenueMask('ent-expenses-month', fmt(t.gastos_month ?? t.expenses_month));
       applyRevenueMask('ent-profit-month',   fmt(t.profit_month));
     }
     // KPIs EQUIPO
@@ -13359,7 +13361,7 @@ async function loadEnterpriseDashboard() {
 }
 
 function renderEntBranches(branches) {
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const fmt = v => '$' + Math.round(parseFloat(v||0)).toLocaleString('es-AR');
   const grid = document.getElementById('ent-branches-grid');
   if (!branches.length) {
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--gray)">
@@ -13410,7 +13412,7 @@ function renderEntBranches(branches) {
 }
 
 function renderEntRanking(branches) {
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const fmt = v => '$' + Math.round(parseFloat(v||0)).toLocaleString('es-AR');
   const el = document.getElementById('ent-ranking-list');
   const sorted = [...branches].sort((a,b) => parseFloat(b.revenue_month||0) - parseFloat(a.revenue_month||0));
   const maxRev = parseFloat(sorted[0]?.revenue_month || 1);
@@ -13445,7 +13447,7 @@ function renderEntRanking(branches) {
 
 function openBranchDetail(encoded) {
   const b = JSON.parse(decodeURIComponent(encoded));
-  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
+  const fmt = v => '$' + Math.round(parseFloat(v||0)).toLocaleString('es-AR');
   document.getElementById('modal-ent-branch-title').textContent = '🏪 ' + b.name;
   const body = document.getElementById('modal-ent-branch-body');
   // Ganancia neta calculada en el servidor con la misma cuenta que la caja de la sucursal
@@ -13712,7 +13714,9 @@ function renderBranchCajaSummary(c) {
   }
   if (netoSub) {
     const extraStr = parseFloat(c.extra_income||0) > 0 ? ` + ${fmt(c.extra_income)} extras` : '';
-    netoSub.textContent = `Servicios ${fmt(c.revenue_total)}${extraStr} · Gastos -${fmt(c.expenses_total)}`;
+    netoSub.textContent = c.net_parts
+      ? `Ingresos ${fmt(c.net_parts.ingresos)} · Comisiones -${fmt(c.net_parts.commissions)} · Gastos -${fmt(c.net_parts.op_expenses)}`
+      : `Servicios ${fmt(c.revenue_total)}${extraStr} · Gastos -${fmt(c.expenses_total)}`;
   }
 
   // Métodos de pago expandibles
@@ -13939,8 +13943,8 @@ function generateBranchPDF(data, month, branchName) {
 
   <h2>📊 Resumen general</h2>
   <div class="grid">
-    <div class="card"><div class="card-label">Facturado</div><div class="card-value">${fmt(data.revenue)}</div></div>
-    <div class="card"><div class="card-label">Gastos</div><div class="card-value neg">${fmt(data.expenses_total)}</div></div>
+    <div class="card"><div class="card-label">Ingresos</div><div class="card-value">${fmt(data.ingresos ?? data.revenue)}</div></div>
+    <div class="card"><div class="card-label">Gastos + comisiones</div><div class="card-value neg">${fmt(data.gastos ?? data.expenses_total)}</div></div>
     <div class="card"><div class="card-label">Neto</div><div class="card-value ${data.net_total>=0?'pos':'neg'}">${fmt(data.net_total)}</div></div>
     <div class="card"><div class="card-label">Turnos completados</div><div class="card-value">${data.completed}</div></div>
     <div class="card"><div class="card-label">Propinas</div><div class="card-value pos">${fmt(data.tips_total)}</div></div>
@@ -13956,19 +13960,19 @@ function generateBranchPDF(data, month, branchName) {
   ${data.expenses?.length ? `
   <table><thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th></tr></thead><tbody>
     ${data.expenses.map(e=>`<tr><td>${new Date(String(e.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR')}</td><td>${catLabels[e.category]||e.category}</td><td>${e.description||'-'}</td><td class="neg">${fmt(e.amount)}</td></tr>`).join('')}
-    <tr class="total-row"><td colspan="3">TOTAL GASTOS</td><td class="neg">${fmt(data.expenses_total)}</td></tr>
+    <tr class="total-row"><td colspan="3">TOTAL EGRESOS</td><td class="neg">${fmt(data.egresos_total ?? data.expenses_total)}</td></tr>
   </tbody></table>` : '<p style="color:#999">Sin gastos registrados</p>'}
 
-  <h2>🗂 Cierres diarios</h2>
+  <h2>🗂 Día por día</h2>
   ${data.cash_registers?.length ? `
-  <table><thead><tr><th>Fecha</th><th>Cortes</th><th>Facturado</th><th>Gastos</th><th>Neto</th></tr></thead><tbody>
+  <table><thead><tr><th>Fecha</th><th>Cortes</th><th>Ingresos</th><th>Gastos + comisiones</th><th>Neto</th></tr></thead><tbody>
     ${data.cash_registers.map(c=>`<tr>
       <td>${new Date(String(c.date).substring(0,10)+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
       <td>${c.cuts_count}</td><td>${fmt(c.revenue_total)}</td>
       <td class="neg">${fmt(c.expenses_total)}</td>
       <td class="${c.net_total>=0?'pos':'neg'}">${fmt(c.net_total)}</td>
     </tr>`).join('')}
-  </tbody></table>` : '<p style="color:#999">Sin cierres registrados</p>'}
+  </tbody></table>` : '<p style="color:#999">Sin movimientos</p>'}
 
   <footer>Generado por FILO CRM · ${new Date().toLocaleDateString('es-AR')} · filocrm.com.ar</footer>
   </body></html>`;
@@ -14115,8 +14119,8 @@ function generatePDF(data, month) {
 
   <h2>📊 Resumen general</h2>
   <div class="grid">
-    <div class="card"><div class="card-label">Facturado</div><div class="card-value">${fmt(data.revenue)}</div></div>
-    <div class="card"><div class="card-label">Gastos</div><div class="card-value neg">${fmt(data.expenses_total)}</div></div>
+    <div class="card"><div class="card-label">Ingresos</div><div class="card-value">${fmt(data.ingresos ?? data.revenue)}</div></div>
+    <div class="card"><div class="card-label">Gastos + comisiones</div><div class="card-value neg">${fmt(data.gastos ?? data.expenses_total)}</div></div>
     <div class="card"><div class="card-label">Neto</div><div class="card-value ${data.net_total>=0?'pos':'neg'}">${fmt(data.net_total)}</div></div>
     <div class="card"><div class="card-label">Turnos completados</div><div class="card-value">${data.completed}</div></div>
     <div class="card"><div class="card-label">Propinas</div><div class="card-value pos">${fmt(data.tips_total)}</div></div>
@@ -14132,19 +14136,19 @@ function generatePDF(data, month) {
   ${data.expenses?.length ? `
   <table><thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th></tr></thead><tbody>
     ${data.expenses.map(e=>`<tr><td>${new Date(e.date+'T12:00:00').toLocaleDateString('es-AR')}</td><td>${catLabels[e.category]||e.category}</td><td>${e.description||'-'}</td><td class="neg">${fmt(e.amount)}</td></tr>`).join('')}
-    <tr class="total-row"><td colspan="3">TOTAL GASTOS</td><td class="neg">${fmt(data.expenses_total)}</td></tr>
+    <tr class="total-row"><td colspan="3">TOTAL EGRESOS</td><td class="neg">${fmt(data.egresos_total ?? data.expenses_total)}</td></tr>
   </tbody></table>` : '<p style="color:#999">Sin gastos registrados</p>'}
 
-  <h2>🗂 Cierres diarios</h2>
+  <h2>🗂 Día por día</h2>
   ${data.cash_registers?.length ? `
-  <table><thead><tr><th>Fecha</th><th>Cortes</th><th>Facturado</th><th>Gastos</th><th>Neto</th></tr></thead><tbody>
+  <table><thead><tr><th>Fecha</th><th>Cortes</th><th>Ingresos</th><th>Gastos + comisiones</th><th>Neto</th></tr></thead><tbody>
     ${data.cash_registers.map(c=>`<tr>
       <td>${new Date(c.date+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</td>
       <td>${c.cuts_count}</td><td>${fmt(c.revenue_total)}</td>
       <td class="neg">${fmt(c.expenses_total)}</td>
       <td class="${c.net_total>=0?'pos':'neg'}">${fmt(c.net_total)}</td>
     </tr>`).join('')}
-  </tbody></table>` : '<p style="color:#999">Sin cierres registrados</p>'}
+  </tbody></table>` : '<p style="color:#999">Sin movimientos</p>'}
 
   <footer>Generado por FILO CRM · ${new Date().toLocaleDateString('es-AR')} · filocrm.com.ar</footer>
   </body></html>`;

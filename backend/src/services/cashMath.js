@@ -220,56 +220,147 @@ function ensureBreakdownColumn() {
   return _breakdownCol;
 }
 
-// Resumen de un período (p.ej. el mes) con la MISMA cuenta que la caja diaria (computeNet),
-// sumada sobre el rango: lo que usa el panel enterprise para que coincida con cada barbería.
-async function periodSummary(shopId, from, to) {
+// ── Números del local día por día, calculados EN VIVO desde los turnos y movimientos ──
+// Es la única fórmula para P&L, comparación semanal y panel enterprise (no depende de que la
+// caja se haya cerrado ese día ni de una foto vieja del cierre).
+//   facturado   = turnos cobrados (sin fiado) + ventas de productos
+//   ingresos    = turnos cobrados (sin fiado) + propinas de los turnos del dueño + todo otro ingreso
+//                 (productos, cobros de fiado, ingresos extra; la seña ya está dentro del turno)
+//   gastos      = gastos del local (sin liquidaciones) + comisiones de los barberos
+//                 (turnos + productos + bonos). Las liquidaciones son el pago de esas comisiones:
+//                 restarlas otra vez las contaría dos veces.
+//   neto        = ingresos − gastos   (igual que la caja diaria)
+async function dailySeries(shopId, from, to) {
   const tz = await getShopTz(shopId);
-  const q = await pool.query(
-    `SELECT
-       (SELECT COALESCE(SUM(price),0) FROM appointments
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed'
-           AND payment_method IS DISTINCT FROM 'debt')                                         AS revenue,
-       (SELECT COUNT(*) FROM appointments
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed')       AS cuts,
-       (SELECT COALESCE(SUM(price * COALESCE(commission_pct,0) / 100.0),0) FROM appointments
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed')       AS appt_commissions,
-       (SELECT COALESCE(SUM(tip),0) FROM appointments
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND status='completed'
-           AND barber_id IS NULL)                                                               AS owner_tips,
-       (SELECT COALESCE(SUM(amount),0) FROM expenses
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND is_income=TRUE
-           AND source_type IS DISTINCT FROM 'sena')                                             AS all_income,
-       (SELECT COALESCE(SUM(amount),0) FROM expenses
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND is_income=TRUE
-           AND source_type='product_sale')                                                      AS product_income,
-       (SELECT COALESCE(SUM(amount),0) FROM expenses
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date
-           AND (is_income IS NULL OR is_income=FALSE))                                          AS expenses,
-       (SELECT COALESCE(SUM(amount),0) FROM expenses
-         WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date AND source_type='barber_settlement'
-           AND (is_income IS NULL OR is_income=FALSE))                                          AS settlements,
-       (SELECT COALESCE(SUM(amount),0) FROM barber_bonuses
-         WHERE shop_id=$1 AND commission_settled=TRUE
-           AND (settled_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date)          AS bonuses`,
+  const r = await pool.query(
+    `WITH d AS (SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS date),
+     ap AS (
+       SELECT date,
+              COALESCE(SUM(price) FILTER (WHERE payment_method IS DISTINCT FROM 'debt'),0) AS revenue,
+              COUNT(*) AS cuts,
+              COALESCE(SUM(price * COALESCE(commission_pct,0) / 100.0),0)               AS appt_comm,
+              COALESCE(SUM(tip) FILTER (WHERE barber_id IS NULL),0)                      AS owner_tips,
+              COALESCE(SUM(tip),0)                                                       AS tips,
+              COALESCE(SUM(price),0)                                                     AS price_all
+         FROM appointments
+        WHERE shop_id=$1 AND status='completed' AND date BETWEEN $2::date AND $3::date
+        GROUP BY date),
+     ex AS (
+       SELECT date,
+              COALESCE(SUM(amount) FILTER (WHERE is_income=TRUE AND source_type IS DISTINCT FROM 'sena'),0) AS all_income,
+              COALESCE(SUM(amount) FILTER (WHERE is_income=TRUE AND source_type='product_sale'),0)          AS product_income,
+              COALESCE(SUM(amount) FILTER (WHERE is_income IS NULL OR is_income=FALSE),0)                   AS expenses,
+              COALESCE(SUM(amount) FILTER (WHERE source_type='barber_settlement'
+                                              AND (is_income IS NULL OR is_income=FALSE)),0)                AS settlements
+         FROM expenses
+        WHERE shop_id=$1 AND date BETWEEN $2::date AND $3::date
+        GROUP BY date),
+     ps AS (
+       SELECT (sold_at AT TIME ZONE $4::text)::date AS date, COALESCE(SUM(barber_commission_amount),0) AS prod_comm
+         FROM product_sales
+        WHERE shop_id=$1 AND (sold_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date
+        GROUP BY 1),
+     bo AS (
+       SELECT (settled_at AT TIME ZONE $4::text)::date AS date, COALESCE(SUM(amount),0) AS bonuses
+         FROM barber_bonuses
+        WHERE shop_id=$1 AND commission_settled=TRUE
+          AND (settled_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date
+        GROUP BY 1)
+     SELECT d.date::text AS date, EXTRACT(DOW FROM d.date)::int AS dow,
+            COALESCE(ap.revenue,0) AS revenue, COALESCE(ap.cuts,0) AS cuts, COALESCE(ap.appt_comm,0) AS appt_comm,
+            COALESCE(ap.owner_tips,0) AS owner_tips, COALESCE(ap.tips,0) AS tips, COALESCE(ap.price_all,0) AS price_all,
+            COALESCE(ex.all_income,0) AS all_income, COALESCE(ex.product_income,0) AS product_income,
+            COALESCE(ex.expenses,0) AS expenses, COALESCE(ex.settlements,0) AS settlements,
+            COALESCE(ps.prod_comm,0) AS prod_comm, COALESCE(bo.bonuses,0) AS bonuses
+       FROM d
+       LEFT JOIN ap ON ap.date = d.date
+       LEFT JOIN ex ON ex.date = d.date
+       LEFT JOIN ps ON ps.date = d.date
+       LEFT JOIN bo ON bo.date = d.date
+      ORDER BY d.date`,
     [shopId, from, to, tz]
   );
-  const r = q.rows[0];
-  const productComm = await pool.query(
-    `SELECT COALESCE(SUM(barber_commission_amount),0) AS c FROM product_sales
-      WHERE shop_id=$1 AND (sold_at AT TIME ZONE $4::text)::date BETWEEN $2::date AND $3::date`,
-    [shopId, from, to, tz]
-  ).then(x => parseFloat(x.rows[0].c)).catch(() => 0);
   const n = (v) => parseFloat(v || 0);
-  // Gastos "propios" del local: sin las liquidaciones a barberos (esas ya están en comisiones)
-  const opExpenses  = n(r.expenses) - n(r.settlements);
-  const commissions = n(r.appt_commissions) + productComm + n(r.bonuses);
-  const net = n(r.revenue) + n(r.owner_tips) + n(r.all_income) - opExpenses - commissions;
+  return r.rows.map(x => {
+    const revenue = n(x.revenue), products = n(x.product_income);
+    const ingresos = revenue + n(x.owner_tips) + n(x.all_income);
+    const opExpenses = n(x.expenses) - n(x.settlements);
+    const commissions = n(x.appt_comm) + n(x.prod_comm) + n(x.bonuses);
+    const gastos = opExpenses + commissions;
+    const cuts = parseInt(x.cuts) || 0;
+    return {
+      date: x.date, dow: x.dow,
+      facturado: revenue + products,
+      ingresos, op_expenses: opExpenses, commissions, gastos,
+      net: ingresos - gastos,
+      cuts, tips: n(x.tips), price_all: n(x.price_all),
+      active: cuts > 0 || ingresos > 0 || n(x.expenses) > 0,
+    };
+  });
+}
+
+// Resumen de un período: suma de dailySeries (misma cuenta que la caja diaria)
+async function periodSummary(shopId, from, to) {
+  const days = await dailySeries(shopId, from, to);
+  const sum = (k) => days.reduce((a, d) => a + d[k], 0);
+  const cuts = sum('cuts');
   return {
-    revenue: n(r.revenue) + n(r.product_income),   // facturado: turnos cobrados (sin fiado) + ventas de productos
-    cuts: parseInt(r.cuts) || 0,
-    commissions,
-    expenses: opExpenses,
-    net,
+    revenue: sum('facturado'),        // facturado: turnos cobrados (sin fiado) + productos
+    ingresos: sum('ingresos'),
+    expenses: sum('op_expenses'),     // gastos del local sin liquidaciones
+    commissions: sum('commissions'),
+    gastos: sum('gastos'),            // gastos del local + comisiones
+    net: sum('ingresos') - sum('gastos'),
+    cuts,
+    avg_ticket: cuts > 0 ? sum('price_all') / cuts : 0,
+    tips: sum('tips'),
+    days_active: days.filter(d => d.active).length,
+  };
+}
+
+// Reporte mensual (exportable) de un local: mismos números que el P&L y el panel enterprise.
+async function monthReport(shopId, from, to) {
+  const [days, metricsQ, expensesQ] = await Promise.all([
+    dailySeries(shopId, from, to),
+    pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash,
+         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit,
+         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit,
+         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer,
+         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt
+       FROM appointments
+       WHERE shop_id=$1 AND date >= $2 AND date <= $3 AND status='completed'`,
+      [shopId, from, to]),
+    // Solo egresos (la tabla expenses también guarda ingresos: ventas, cobros de fiado, señas)
+    pool.query(
+      `SELECT * FROM expenses WHERE shop_id=$1 AND date >= $2 AND date <= $3
+         AND (is_income IS NULL OR is_income=FALSE) ORDER BY date`,
+      [shopId, from, to]),
+  ]);
+  const sum = (k) => days.reduce((a, d) => a + d[k], 0);
+  const m = metricsQ.rows[0];
+  const ingresos = sum('ingresos'), gastos = sum('gastos');
+  return {
+    ingresos,
+    gastos,                                   // gastos del local + comisiones (igual que el P&L)
+    revenue: ingresos,                        // compatibilidad: lo que el reporte muestra arriba
+    facturado: sum('facturado'),
+    commissions_total: sum('commissions'),
+    expenses_total: sum('op_expenses'),       // gastos del local (sin liquidaciones)
+    egresos_total: expensesQ.rows.reduce((s, e) => s + parseFloat(e.amount), 0), // total de la tabla de egresos
+    net_total: ingresos - gastos,
+    tips_total: sum('tips'),
+    completed: sum('cuts'),
+    by_payment: {
+      cash: parseFloat(m.cash), debit: parseFloat(m.debit), credit: parseFloat(m.credit),
+      transfer: parseFloat(m.transfer), debt: parseFloat(m.debt),
+    },
+    expenses: expensesQ.rows,
+    // Día por día, en vivo (antes: solo los días con caja cerrada)
+    cash_registers: days.filter(d => d.active).map(d => ({
+      date: d.date, cuts_count: d.cuts, revenue_total: d.ingresos, expenses_total: d.gastos, net_total: d.net,
+    })),
   };
 }
 
@@ -447,4 +538,4 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   }
 }
 
-module.exports = { periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };
+module.exports = { monthReport, dailySeries, periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };

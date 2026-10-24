@@ -4,7 +4,7 @@ const auth   = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { methodTotalsForDay, dayCommissions, computeNet, methodMovementsForDay, periodSummary } = require('../services/cashMath');
+const { methodTotalsForDay, dayCommissions, computeNet, methodMovementsForDay, periodSummary, monthReport } = require('../services/cashMath');
 
 // Solo enterprise owners pueden acceder
 // Verifica JWT primero; si el flag no está en el token (cuenta creada antes del fix),
@@ -366,8 +366,12 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
         revenue_month: month.revenue,
         commissions_month: month.commissions,
         expenses_month: month.expenses,
+        // Igual que el P&L de la sucursal: ingresos − gastos (gastos del local + comisiones) = ganancia
+        ingresos_month: month.ingresos,
+        gastos_month: month.gastos,
         profit_month: month.net,
-        avg_ticket_month: parseFloat(x.avg_ticket_month) || 0,
+        avg_ticket_month: month.avg_ticket,
+        avg_ticket_week: week.avg_ticket,
         barber_count: parseInt(x.barber_count) || 0,
         client_count: parseInt(x.client_count) || 0,
         new_clients_month: parseInt(x.new_clients_month) || 0,
@@ -390,14 +394,17 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
       new_clients_month: sum('new_clients_month'),
       commissions_month: sum('commissions_month'),
       expenses_month:    sum('expenses_month'),
+      ingresos_month:    sum('ingresos_month'),
+      gastos_month:      sum('gastos_month'),
       pending_today:     sum('pending_today'),
       // Suma de la ganancia neta de cada sucursal (igual que su caja)
       profit_month:      sum('profit_month'),
     };
-    // Ticket promedio igual que en cada barbería (precio promedio de los cortes), ponderado por cortes
-    totals.avg_ticket = totals.cuts_month > 0
-      ? branches.reduce((acc, b) => acc + b.avg_ticket_month * b.cuts_month, 0) / totals.cuts_month
-      : 0;
+    // Ticket promedio (precio promedio de los cortes, como en cada barbería), ponderado por cortes
+    totals.avg_ticket_month = totals.cuts_month > 0
+      ? branches.reduce((acc, b) => acc + b.avg_ticket_month * b.cuts_month, 0) / totals.cuts_month : 0;
+    totals.avg_ticket = totals.cuts_week > 0          // el panel lo muestra en "Últimos 7 días"
+      ? branches.reduce((acc, b) => acc + b.avg_ticket_week * b.cuts_week, 0) / totals.cuts_week : 0;
 
     res.json({ branches, totals });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -581,6 +588,7 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
       expenses_total:    expenses,
       commissions_total: commissions,
       net_total:         await computeNet(branchId, date, { revenue, allIncome, expenses, apptCommissions: dayComm.appt, productCommissions: dayComm.product }),
+      net_parts:         (await require('../services/cashMath').dailySeries(branchId, date, date))[0] || null,
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],
@@ -698,45 +706,10 @@ router.get('/branches/:id/month-report', auth, enterpriseOnly, async (req, res) 
   const year  = parseInt(req.query.year)  || new Date().getFullYear();
   const month = parseInt(req.query.month) || new Date().getMonth() + 1;
   const from  = `${year}-${String(month).padStart(2,'0')}-01`;
-  const to    = new Date(year, month, 0).toISOString().split('T')[0];
+  const to    = new Date(Date.UTC(year, month, 0)).toISOString().split('T')[0];
   try {
-    const metricsQ = await pool.query(
-      `SELECT
-         COALESCE(SUM(price),0)                                                     AS revenue,
-         COALESCE(SUM(tip),0)                                                        AS tips_total,
-         COALESCE(SUM(price * commission_pct / 100.0),0)                            AS commissions_total,
-         COUNT(*) FILTER (WHERE status='completed')                                  AS completed,
-         COALESCE(SUM(CASE WHEN payment_method='cash'     THEN price ELSE 0 END),0) AS cash,
-         COALESCE(SUM(CASE WHEN payment_method='debit'    THEN price ELSE 0 END),0) AS debit,
-         COALESCE(SUM(CASE WHEN payment_method='credit'   THEN price ELSE 0 END),0) AS credit,
-         COALESCE(SUM(CASE WHEN payment_method='transfer' THEN price ELSE 0 END),0) AS transfer,
-         COALESCE(SUM(CASE WHEN payment_method='debt'     THEN price ELSE 0 END),0) AS debt
-       FROM appointments
-       WHERE shop_id=$1 AND date >= $2 AND date <= $3 AND status='completed'`,
-      [branchId, from, to]
-    );
-    const expensesQ = await pool.query(
-      `SELECT * FROM expenses WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
-      [branchId, from, to]
-    );
-    const cashQ = await pool.query(
-      `SELECT * FROM cash_registers WHERE shop_id=$1 AND date >= $2 AND date <= $3 ORDER BY date`,
-      [branchId, from, to]
-    );
-    const m = metricsQ.rows[0];
-    const expTotal = expensesQ.rows.reduce((s,e) => s + parseFloat(e.amount), 0);
-    const revenue = parseFloat(m.revenue);
-    const tips = parseFloat(m.tips_total);
-    const commissions = parseFloat(m.commissions_total);
-    res.json({
-      revenue, tips_total: tips, commissions_total: commissions,
-      expenses_total: expTotal,
-      net_total: revenue + tips - commissions - expTotal,
-      completed: parseInt(m.completed),
-      by_payment: { cash: parseFloat(m.cash), debit: parseFloat(m.debit), credit: parseFloat(m.credit), transfer: parseFloat(m.transfer), debt: parseFloat(m.debt) },
-      expenses:       expensesQ.rows,
-      cash_registers: cashQ.rows,
-    });
+    // Antes este reporte sumaba los ingresos como gastos y restaba dos veces las comisiones
+    res.json(await monthReport(branchId, from, to));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
