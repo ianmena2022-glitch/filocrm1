@@ -294,6 +294,13 @@ button, .btn, [role="button"], [onclick] { touch-action: manipulation; }
     height: calc(64px + env(safe-area-inset-bottom, 0px));
     background: #030b14; border-top: 1px solid rgba(255,255,255,0.05); z-index: 20;
     align-items: flex-end; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    /* iPhone: con scroll rápido Safari tardaba en redibujar la barra y la mostraba en el medio de
+       la pantalla. Con su propia capa de dibujo queda pegada abajo. */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
   }
   .bottom-nav-item {
     flex: 1; display: flex; flex-direction: column; align-items: center;

@@ -1271,6 +1271,13 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
     flex-direction: row; padding-left: 4px; padding-right: 4px; padding-top: 0;
     border-right: none; border-top: 1px solid rgba(255,255,255,0.07);
     background: #060e1a; overflow: visible;
+    /* iPhone: con scroll rápido Safari tardaba en redibujar la barra y la mostraba en el medio de
+       la pantalla. Con su propia capa de dibujo queda pegada abajo. */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
   }
 
   .sidebar-logo { display: none; }
