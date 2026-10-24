@@ -2882,28 +2882,6 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             <input class="form-input" id="ent-cfg-city" placeholder="Buenos Aires" />
           </div>
 
-          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">PREFERENCIAS</div>
-          <div class="form-group">
-            <label class="form-label">Moneda</label>
-            <select class="form-input" id="ent-cfg-currency">
-              <option value="ARS">ARS — Peso argentino ($)</option>
-              <option value="USD">USD — Dólar (US$)</option>
-              <option value="CLP">CLP — Peso chileno</option>
-              <option value="UYU">UYU — Peso uruguayo</option>
-              <option value="MXN">MXN — Peso mexicano</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Zona horaria</label>
-            <select class="form-input" id="ent-cfg-timezone">
-              <option value="America/Argentina/Buenos_Aires">Argentina (UTC-3)</option>
-              <option value="America/Santiago">Chile (UTC-4/-3)</option>
-              <option value="America/Montevideo">Uruguay (UTC-3)</option>
-              <option value="America/Mexico_City">México Centro (UTC-6)</option>
-              <option value="America/Bogota">Colombia (UTC-5)</option>
-              <option value="America/Lima">Perú (UTC-5)</option>
-            </select>
-          </div>
 
           <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--gray);margin:20px 0 14px">WHATSAPP</div>
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px">
@@ -13620,10 +13598,6 @@ async function openEnterpriseConfig() {
     document.getElementById('ent-cfg-phone').value    = cfg.phone    || '';
     document.getElementById('ent-cfg-city').value     = cfg.city     || '';
     document.getElementById('ent-cfg-notes').value    = cfg.enterprise_notes    || '';
-    const cur = document.getElementById('ent-cfg-currency');
-    const tz  = document.getElementById('ent-cfg-timezone');
-    if (cfg.enterprise_currency) cur.value = cfg.enterprise_currency;
-    if (cfg.enterprise_timezone) tz.value  = cfg.enterprise_timezone;
     // WhatsApp compartido
     _entSharedWpp    = cfg.enterprise_shared_wpp || false;
     _entBookingSlug  = cfg.booking_slug || null;
@@ -13648,8 +13622,6 @@ async function saveEnterpriseConfig() {
     name:                  document.getElementById('ent-cfg-name').value.trim(),
     phone:                 document.getElementById('ent-cfg-phone').value.trim(),
     city:                  document.getElementById('ent-cfg-city').value.trim(),
-    enterprise_currency:   document.getElementById('ent-cfg-currency').value,
-    enterprise_timezone:   document.getElementById('ent-cfg-timezone').value,
     enterprise_notes:      document.getElementById('ent-cfg-notes').value.trim(),
     enterprise_shared_wpp: _entSharedWpp,
   };
