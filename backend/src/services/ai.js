@@ -11,6 +11,7 @@ const GROQ_MODEL_CHAT   = process.env.GROQ_MODEL_CHAT   || GROQ_MODEL;
 const conversations  = {};
 const lastActivity   = {};
 const CONVERSATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
+const NO_REPLY = '__NO_RESPONDER__'; // respuesta del modelo cuando el mensaje no es para la barbería
 
 // Lock por conversación: si llegan dos mensajes del mismo cliente mientras procesamos
 // el primero, el segundo espera a que termine para preservar el orden.
@@ -95,7 +96,7 @@ async function isBarberiaRelated(text, apiKey, strict = true) {
 
   try {
     const systemPrompt = strict
-      ? `Sos un clasificador ESTRICTO para una barbería. Respondé "true" SOLO si el mensaje tiene una intención EXPLÍCITA Y CLARA de: pedir o consultar turno, preguntar precios/servicios/horarios/ubicación, cancelar turno, consultar puntos/premios.
+      ? `Sos un clasificador ESTRICTO para una barbería. Respondé "true" SOLO si el mensaje tiene una intención EXPLÍCITA Y CLARA de: pedir o consultar turno o si hay lugar/disponibilidad para atenderse, preguntar precios/servicios/horarios/ubicación, cancelar turno, consultar puntos/premios.
 
 SIEMPRE respondé "false" para: saludos solos ("hola", "buenas", "hey", "buen día"), "ok", "gracias", "jaja", conversación casual, mensajes cortos sin contexto, preguntas o temas que no son de barbería, mensajes ambiguos.
 
@@ -187,7 +188,8 @@ ${clientSection}
 
 Sos amigable, cercano y usás emojis con criterio. Respondé en español, máximo 3 líneas, sin formalismos.
 Si quiere turno → mandá el link. Si pregunta puntos → informá saldo y mandá link tienda.
-Si no sabés algo → decí que consulte directo 📲. No inventes. Solo temas de la barbería.`.trim();
+Si no sabés algo de la barbería → decí que consulte directo 📲. No inventes. Solo temas de la barbería.
+Este número también recibe mensajes personales (amigos, familia, proveedores, trabajo). Si el mensaje NO es de un cliente consultando por la barbería (por ejemplo: encargos, temas personales, mensajes dirigidos a otra persona), respondé EXACTAMENTE: ${NO_REPLY}`.trim();
 }
 
 async function getProspectResponse(shopId, phone, userMessage, apiKey) {
@@ -273,26 +275,27 @@ Profesional y cercano. Usá "vos". Máximo 3 líneas por mensaje. Sin markdown, 
   }
 }
 
-// Heurística local rápida: palabras típicas de barbería / consultas de turno
-// Si matchea, respondemos sin llamar al clasificador (ahorra latencia y evita falsos negativos).
+// Heurística local rápida: SOLO palabras inequívocas de barbería. Un mensaje con alguna de
+// estas palabras se responde sin pasar por el clasificador. Palabras generales ("si", "ok",
+// "mañana", "hoy", "gracias", una pregunta cualquiera, una hora) NO alcanzan: el número de la
+// barbería suele ser el personal del dueño y recibe mensajes de amigos y familia. Esos van al
+// clasificador (y en una conversación ya activa no hace falta: se responde igual).
+// Se compara por palabra completa y sin tildes ("si" no matchea "siempre").
 const BARBER_KEYWORDS = [
-  'turno','turnos','hora','horario','horarios','reservar','reserva','sacar','agendar',
-  'precio','precios','cuánto','cuanto','vale','sale','cobran','cobras',
-  'corte','corten','fade','barba','afeitada','color','tinte','cejas',
-  'cancelar','cancelo','mover','cambiar','posponer','reagendar',
-  'puntos','premio','premios','canjear',
-  'abierto','abren','cierran','ubicacion','ubicación','donde','dónde','direccion','dirección',
-  'cuando','cuándo','disponible','libre','mañana','hoy','pasado',
-  'barbero','barberos','disponibilidad','consulta','consultar',
-  'confirmar','confirmo','listo','perfecto','gracias',
-  'ok','dale','si','sí','bueno','buenas','buenisimo','buenísimo'
+  'turno','turnos','reservar','reserva','reservo','agendar','agendo','reagendar','sacar turno',
+  'precio','precios','cuanto sale','cuanto cuesta','cuanto esta','cuanto cobran','cobran',
+  'corte','cortes','cortarme','cortar el pelo','fade','degrade','barba','afeitada','perfilado',
+  'tinte','cejas','claritos','platinado','mechas','alisado','barbero','barberos','barberia',
+  'peluqueria','puntos','premio','premios','canjear','horario','horarios','disponibilidad',
+  'abren','cierran','atienden','hay lugar','tienen lugar','tenes lugar','tenes un lugar',
+  'tienen un lugar','hay un lugar','cupo','hay turno','me atendes','me podes atender','atenderme','me atienden',
 ];
+const _stripAccents = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const _KW_RE = new RegExp('\\b(' + BARBER_KEYWORDS.map(k => _stripAccents(k).replace(/ /g, '\\s+')).join('|') + ')\\b');
 function looksLikeBarberia(text) {
-  const t = String(text || '').toLowerCase();
+  const t = _stripAccents(text);
   if (t.length < 2) return false;
-  if (t.includes('?')) return true; // cualquier pregunta cuenta
-  if (/\d{1,2}[:h]\d{0,2}/.test(t)) return true; // hora tipo "15:30" o "15h"
-  return BARBER_KEYWORDS.some(k => t.includes(k));
+  return _KW_RE.test(t);
 }
 
 async function getAIResponse(shopId, phone, userMessage) {
@@ -384,6 +387,13 @@ async function _getAIResponseImpl(shopId, phone, userMessage) {
 
     const data  = await response.json();
     const reply = data.choices?.[0]?.message?.content?.trim();
+    // El modelo indica que el mensaje no es para la barbería: no se responde nada
+    if (reply && reply.includes(NO_REPLY)) {
+      conversations[key].pop();
+      if (!conversations[key].length) { delete conversations[key]; delete lastActivity[key]; }
+      console.log(`[AI] Mensaje personal / no es de la barbería, sin respuesta: "${userMessage}"`);
+      return null;
+    }
     if (reply) conversations[key].push({ role: 'assistant', content: reply });
     console.log(`[AI] ${client ? client.name : phone} → "${reply}"`);
     return reply || null;

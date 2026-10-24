@@ -71,24 +71,25 @@ test('normalizePhoneAR — string vacío o null', () => {
 
 // ─── looksLikeBarberia ─────────────────────────────────────────────────────
 test('looksLikeBarberia — keywords de turno', () => {
-  for (const t of ['quiero un turno', 'cuánto sale el corte', 'tienen hora libre?', 'reservar para mañana']) {
+  for (const t of ['quiero un turno', 'cuánto sale el corte', 'tienen horarios libres?', 'reservar para mañana', 'me hacen la barba?']) {
     assert.ok(ai.looksLikeBarberia(t), `debería matchear: "${t}"`);
   }
 });
 
-test('looksLikeBarberia — pregunta genérica (contiene ?)', () => {
-  assert.ok(ai.looksLikeBarberia('tienen estacionamiento?'));
+// Palabras generales ya no saltean el clasificador (el número suele ser el personal del dueño)
+test('looksLikeBarberia — mensajes personales no matchean', () => {
+  for (const t of [
+    'Hola amigo quedó la bolsa de siempre ya en enfermería para cargar mañana porfa',
+    'a qué hora llegás?', 'ok', 'dale', 'gracias', 'mañana te veo', 'nos vemos a las 18h',
+    'ahora salgo', 'sale asado el sábado?', 'tienen estacionamiento?',
+  ]) assert.equal(ai.looksLikeBarberia(t), false, `no debería matchear: "${t}"`);
 });
 
-test('looksLikeBarberia — hora detectada', () => {
-  assert.ok(ai.looksLikeBarberia('15:30?'));
-  assert.ok(ai.looksLikeBarberia('a las 18h'));
-});
-
-test('looksLikeBarberia — confirmaciones cortas comunes', () => {
-  assert.ok(ai.looksLikeBarberia('ok'));
-  assert.ok(ai.looksLikeBarberia('dale'));
-  assert.ok(ai.looksLikeBarberia('gracias'));
+test('looksLikeBarberia — palabra completa y sin tildes', () => {
+  assert.ok(ai.looksLikeBarberia('Cuánto SALE el CORTE'));
+  assert.ok(ai.looksLikeBarberia('quiero sacar   turno'));
+  assert.ok(ai.looksLikeBarberia('a que hora abren'));
+  assert.equal(ai.looksLikeBarberia('recortes de presupuesto'), false);
 });
 
 test('looksLikeBarberia — chatarra no matchea', () => {
