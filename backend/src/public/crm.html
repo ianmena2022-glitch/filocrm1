@@ -11444,14 +11444,24 @@ async function openSettlementModal(barberId, barberName) {
       document.getElementById('settlement-preview').innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray)">✅ No hay comisiones pendientes para este barbero.</div>';
       return;
     }
-    const rows = data.appointments.slice(0, 8).map(a =>
-      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${a.date} ${a.time_start || ''}</td><td style="padding:6px 4px;font-size:12px">${escHtml(a.service_name || 'Servicio')}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
+    // Fecha "2026-10-24T00:00:00.000Z" + "12:00:00" → "24/10 12:00"
+    const apptWhen = (a) => {
+      const d = String(a.date || '').slice(0, 10).split('-');
+      return `${d.length === 3 ? `${d[2]}/${d[1]}` : ''} ${String(a.time_start || '').slice(0, 5)}`.trim();
+    };
+    // Los primeros N visibles; el resto oculto y se despliega tocando "...y X más"
+    const moreRow = (group, n, label) => n > 0
+      ? `<tr class="stl-more" data-group="${group}" onclick="toggleSettlementRows('${group}', this)" style="cursor:pointer"><td colspan="3" style="text-align:center;padding:8px 6px;font-size:12px;color:var(--yellow);font-weight:600">▾ Ver ${n} ${label} más</td></tr>`
+      : '';
+    const rows = data.appointments.map((a, i) =>
+      `<tr${i >= 8 ? ' class="stl-hidden" data-group="appts" style="display:none"' : ''}><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px;white-space:nowrap">${apptWhen(a)}</td><td style="padding:6px 4px;font-size:12px">${escHtml(a.service_name || 'Servicio')}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
     ).join('');
-    const extra = data.count > 8 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.count - 8} turno${data.count-8!==1?'s':''} más</td></tr>` : '';
-    const prodRows = (data.product_sales || []).slice(0, 5).map(ps =>
-      `<tr><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${new Date(ps.sold_at).toLocaleDateString('es-AR')}</td><td style="padding:6px 4px;font-size:12px">${escHtml(ps.product_name||'Producto')}</td><td style="padding:6px 4px;font-size:12px;color:#c084fc">$${parseFloat(ps.barber_commission_amount||0).toLocaleString('es-AR')}</td></tr>`
+    const extra = moreRow('appts', data.appointments.length - 8, data.appointments.length - 8 === 1 ? 'turno' : 'turnos');
+    const prodList = data.product_sales || [];
+    const prodRows = prodList.map((ps, i) =>
+      `<tr${i >= 5 ? ' class="stl-hidden" data-group="prods" style="display:none"' : ''}><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px">${new Date(ps.sold_at).toLocaleDateString('es-AR')}</td><td style="padding:6px 4px;font-size:12px">${escHtml(ps.product_name||'Producto')}</td><td style="padding:6px 4px;font-size:12px;color:#c084fc">$${parseFloat(ps.barber_commission_amount||0).toLocaleString('es-AR')}</td></tr>`
     ).join('');
-    const prodExtra = (data.product_sales||[]).length > 5 ? `<tr><td colspan="3" style="text-align:center;padding:6px;font-size:11px;color:rgba(255,255,255,0.4)">...y ${data.product_sales.length - 5} venta${data.product_sales.length-5!==1?'s':''} más</td></tr>` : '';
+    const prodExtra = moreRow('prods', prodList.length - 5, prodList.length - 5 === 1 ? 'venta' : 'ventas');
     const apptComm = parseFloat(data.appt_commission || 0);
     const prodComm = parseFloat(data.product_commission || 0);
     const tipsTotal = parseFloat(data.tips_total || 0);
@@ -11565,6 +11575,18 @@ async function openSettlementModal(barberId, barberName) {
   } catch(e) {
     document.getElementById('settlement-preview').innerHTML = `<div style="color:var(--danger);padding:16px">${e.message}</div>`;
   }
+}
+
+// Despliega / pliega las filas ocultas de la vista previa de liquidación (turnos o productos)
+function toggleSettlementRows(group, btn) {
+  const rows = document.querySelectorAll(`#settlement-preview tr.stl-hidden[data-group="${group}"]`);
+  const open = btn.dataset.open !== '1';
+  rows.forEach(r => { r.style.display = open ? '' : 'none'; });
+  btn.dataset.open = open ? '1' : '';
+  if (!btn.dataset.label) btn.dataset.label = btn.cells[0].textContent;
+  btn.cells[0].textContent = open ? '▴ Ver menos' : btn.dataset.label;
+  // Las filas ocultas van antes que el botón: moverlo al final para que quede debajo de la lista
+  btn.parentNode.appendChild(btn);
 }
 
 function closeSettlementModal() {
