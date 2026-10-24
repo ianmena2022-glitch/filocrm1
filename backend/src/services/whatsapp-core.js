@@ -827,6 +827,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       if (jid === 'status@broadcast') return true;
       if (jid.endsWith('@newsletter')) return true;
       if (jid.endsWith('@broadcast')) return true;
+      // Grupos: el bot no los usa y descifrarlos genera "Bad MAC" + pedidos de reenvío
+      // (tráfico raro para el número) y llena la sesión de claves de grupo.
+      if (jid.endsWith('@g.us')) return true;
       return false;
     },
     cachedGroupMetadata: async () => null,
