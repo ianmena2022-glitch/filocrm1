@@ -93,11 +93,11 @@ async function runCajaAutoClose() {
 }
 
 // ── Auto-expiración de trials vencidos ────────────────────────────────────────
-// Pasa a 'expired' las cuentas con trial vencido + 3 días de gracia (coincide
-// con el paywall) para que el estado en admin refleje el bloqueo real.
+// Pasa a 'expired' las cuentas con trial vencido (sin gracia, coincide con el paywall)
+// para que el estado en admin refleje el bloqueo real.
 async function runTrialExpiration() {
   try {
-    const GRACE = 3;
+    const GRACE = 0;
     const r = await pool.query(`
       UPDATE shops
          SET subscription_status = 'expired',
@@ -167,7 +167,7 @@ async function runExpiredCleanup() {
     // Buscar shops que deben cancelarse. Dos casos:
     //   1. Ya marcados como 'expired' con expired_at registrado hace >30 días
     //   2. Nunca volvieron a entrar (status sigue en trial/active) pero
-    //      trial_ends_at + 3 días de gracia + 30 días ya pasaron
+    //      trial_ends_at (+ 3 días de gracia si era paga) + 30 días ya pasaron
     const GRACE = 3;
     const { rows } = await pool.query(
       `SELECT id, email FROM shops
@@ -183,7 +183,7 @@ async function runExpiredCleanup() {
            -- caso 2: trial/active pero hace mucho que venció y nunca entró
            (subscription_status IN ('trial','active')
             AND trial_ends_at IS NOT NULL
-            AND trial_ends_at < NOW() - ($2::int || ' days')::interval)
+            AND trial_ends_at < NOW() - ((CASE WHEN subscription_status = 'trial' THEN $1::int ELSE $2::int END) || ' days')::interval)
          )`,
       [CANCEL_AFTER_DAYS, GRACE + CANCEL_AFTER_DAYS]
     );

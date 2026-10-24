@@ -54,16 +54,15 @@ module.exports = async function paywall(req, res, next) {
     // Cuentas test siempre tienen acceso
     if (shop.is_test || shop.plan === 'test') return next();
 
-    // Gracia de 3 días: se suma al vencimiento antes de bloquear
+    // Gracia de 3 días solo para suscripciones pagas (dar tiempo a renovar). El trial no tiene
+    // gracia: termina el día que dice.
     const GRACE_DAYS = 3;
 
     // Verificar trial
     if (shop.subscription_status === 'trial') {
       if (shop.trial_ends_at) {
-        const graceLine = new Date(shop.trial_ends_at);
-        graceLine.setDate(graceLine.getDate() + GRACE_DAYS);
-        if (graceLine < new Date()) {
-          // Trial expirado + gracia agotada
+        if (new Date(shop.trial_ends_at) < new Date()) {
+          // Trial terminado
           await pool.query("UPDATE shops SET subscription_status='expired', expired_at=COALESCE(expired_at, NOW()) WHERE id=$1", [shopId]);
           return res.status(402).json({
             error: 'Tu período de prueba ha vencido',
@@ -72,7 +71,7 @@ module.exports = async function paywall(req, res, next) {
           });
         }
       }
-      return next(); // Trial activo (o dentro de los 3 días de gracia)
+      return next(); // Trial activo
     }
 
     // Suscripción activa — verificar que no venció (QR paga 30 días)

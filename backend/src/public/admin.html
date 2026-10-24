@@ -2435,7 +2435,7 @@ function labelStatus(s) { return {trial:'Trial',active:'Activo',expired:'Expirad
 function daysSince(d) { if(!d) return 0; const diff = new Date() - new Date(d); return Math.max(0, Math.floor(diff/(1000*60*60*24))); }
 
 // Estado efectivo para el badge: expired días 4-29, cancelled día 30+
-// Refleja la misma lógica del scheduler del backend (GRACE=3, CANCEL=30)
+// Refleja la misma lógica del scheduler del backend (GRACE=3 solo para pagas, CANCEL=30)
 const GRACE_DAYS   = 3;
 const CANCEL_DAYS  = 30;
 function effectiveStatus(a) {
@@ -2447,8 +2447,9 @@ function effectiveStatus(a) {
   const refDate = a.expired_at || a.trial_ends_at;
   if (!refDate) return s;
 
-  const graceEnd  = new Date(refDate); graceEnd.setDate(graceEnd.getDate() + GRACE_DAYS);
-  const cancelEnd = new Date(refDate); cancelEnd.setDate(cancelEnd.getDate() + GRACE_DAYS + CANCEL_DAYS);
+  const grace     = s === 'trial' ? 0 : GRACE_DAYS; // el trial no tiene gracia
+  const graceEnd  = new Date(refDate); graceEnd.setDate(graceEnd.getDate() + grace);
+  const cancelEnd = new Date(refDate); cancelEnd.setDate(cancelEnd.getDate() + grace + CANCEL_DAYS);
   const now = new Date();
 
   if (now < graceEnd) return s;           // dentro de la gracia → status real
