@@ -3495,6 +3495,14 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <div style="font-size:11px;color:var(--gray);margin-top:4px">Formato IANA (ej: America/Mexico_City, Europe/Madrid, America/Bogota)</div>
             </div>
           </div>
+          <!-- Instalar FILO como app en este dispositivo (siempre disponible, aunque se haya cerrado el aviso) -->
+          <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:rgba(255,209,0,0.05);border:1px solid rgba(255,209,0,0.18);border-radius:12px">
+            <div>
+              <div style="font-size:13px;font-weight:700">📲 Instalar FILO en este dispositivo</div>
+              <div style="font-size:11px;color:var(--gray);margin-top:3px">Se abre como app, más rápido y con notificaciones.</div>
+            </div>
+            <button type="button" onclick="window.showFiloInstall ? window.showFiloInstall() : showToast('⚠️','Recargá la página','')" class="btn-add" style="white-space:nowrap;flex-shrink:0">Instalar</button>
+          </div>
           <!-- Preferencias de notificaciones -->
           <div style="margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="font-size:13px;font-weight:700">🔕 Notificaciones y avisos</div></div>
@@ -15497,7 +15505,7 @@ function openSecurePrompt({ title, label, type='text', pattern, placeholder }) {
 }
 </script>
 
-<script src="/pwa-install.js?v=3" defer></script>
+<script src="/pwa-install.js?v=4" defer></script>
 <script src="/filo-select.js?v=2" defer></script>
 </body>
 </html>

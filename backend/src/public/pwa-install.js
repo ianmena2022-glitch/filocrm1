@@ -9,51 +9,83 @@
     window.matchMedia('(display-mode: standalone)').matches ||
     window.navigator.standalone === true;
 
-  if (isStandalone()) return; // ya instalada
+  const installed = isStandalone(); // ya instalada (abierta como app)
 
   const ua = navigator.userAgent;
   const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
   const isAndroid = /Android/.test(ua);
   const isDesktop = !isIOS && !isAndroid;
 
-  // Forzar reaparición: URL ?install=1 o window.showFiloInstall()
+  // El aviso de Android/Chrome se captura SIEMPRE (aunque el banner esté oculto), así el
+  // botón "Instalar FILO" de Configuración puede usarlo cuando el usuario lo pida.
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (autoShow) maybeShow();
+  });
+
+  // Forzar reaparición: URL ?install=1 o el botón de Configuración (window.showFiloInstall())
   const forced = new URLSearchParams(location.search).has('install');
   if (forced) {
     try { localStorage.removeItem(DISMISS_KEY); } catch(_) {}
   }
 
-  // Respetar dismiss previo (salvo que esté forzado)
-  if (!forced) {
+  // Respetar el cierre previo para el banner automático (salvo que esté forzado)
+  let autoShow = !installed;
+  if (!forced && autoShow) {
     try {
       const d = localStorage.getItem(DISMISS_KEY);
-      if (d && (Date.now() - Number(d)) < DISMISS_DAYS * 86400000) {
-        // Igual exponer el disparador manual
-        window.showFiloInstall = () => { try{localStorage.removeItem(DISMISS_KEY);}catch(_){} shown=false; maybeShow(); };
-        return;
-      }
+      if (d && (Date.now() - Number(d)) < DISMISS_DAYS * 86400000) autoShow = false;
     } catch(_) {}
   }
 
-  let deferredPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    maybeShow();
-  });
-
   // iOS Safari no dispara beforeinstallprompt. Lo mostramos de todas formas.
   // Desktop sin prompt capturado: no mostramos (no suma).
-  setTimeout(() => maybeShow(), forced ? 0 : SHOW_AFTER_MS);
+  if (autoShow) setTimeout(() => maybeShow(), forced ? 0 : SHOW_AFTER_MS);
 
-  // Disparador manual desde consola: window.showFiloInstall()
-  window.showFiloInstall = () => { try{localStorage.removeItem(DISMISS_KEY);}catch(_){} shown=false; maybeShow(); };
+  // Disparador manual (botón de Configuración / consola)
+  window.showFiloInstall = () => {
+    try { localStorage.removeItem(DISMISS_KEY); } catch(_) {}
+    document.getElementById('pwa-install-banner')?.remove();
+    if (isStandalone()) { showInfoModal('FILO ya está instalada', 'Ya la estás usando como app en este dispositivo. 👌'); return; }
+    if (deferredPrompt || isIOS) { shown = false; maybeShow(true); return; }
+    // Chrome todavía no ofreció instalar (o ya está instalada en este navegador): pasos a mano
+    showInfoModal('Instalar FILO', isAndroid
+      ? 'En Chrome tocá el menú <strong>⋮</strong> (arriba a la derecha) y elegí <strong>“Instalar app”</strong> o <strong>“Agregar a pantalla de inicio”</strong>. Si no aparece, puede que ya esté instalada: buscá el ícono de FILO en tu celular.'
+      : 'En Chrome o Edge buscá el ícono <strong>⊕ Instalar</strong> a la derecha de la barra de direcciones, o abrí el menú <strong>⋮</strong> y elegí <strong>“Instalar FILO”</strong>. Si no aparece, puede que ya esté instalada en esta computadora.');
+  };
 
   let shown = false;
-  function maybeShow() {
+  function maybeShow(manual) {
     if (shown || isStandalone()) return;
     if (!isIOS && !deferredPrompt) return; // Android sin prompt / desktop: skip
     shown = true;
     renderBanner();
+  }
+
+  function showInfoModal(title, html) {
+    document.getElementById('pwa-install-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'pwa-install-modal';
+    m.innerHTML = `
+      <div style="background:rgba(10,20,36,.98);max-width:380px;width:100%;border-radius:18px;padding:22px 20px;border:1px solid rgba(255,255,255,.08);box-shadow:0 30px 80px rgba(0,0,0,.7)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:44px;height:44px;background:#050d18;border:1px solid rgba(255,255,255,.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#FFD100;font-size:24px;font-family:'Barlow',sans-serif">F</div>
+          <div style="flex:1;font-size:16px;font-weight:800;color:#fff">${title}</div>
+          <button id="pwa-info-x" style="background:transparent;border:none;color:rgba(255,255,255,.45);font-size:26px;cursor:pointer;line-height:1;padding:0 4px">×</button>
+        </div>
+        <div style="color:rgba(255,255,255,.85);font-size:14px;line-height:1.6">${html}</div>
+      </div>`;
+    Object.assign(m.style, {
+      position:'fixed', inset:'0', background:'rgba(0,0,0,.65)',
+      display:'flex', alignItems:'flex-end', justifyContent:'center',
+      padding:'20px', zIndex:'10001'
+    });
+    document.body.appendChild(m);
+    const close = () => m.remove();
+    document.getElementById('pwa-info-x').onclick = close;
+    m.addEventListener('click', (e) => { if (e.target === m) close(); });
   }
 
   function dismiss() {
