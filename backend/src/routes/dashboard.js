@@ -114,6 +114,11 @@ router.get('/month', auth, async (req, res) => {
     : `shop_id = $1`;
 
   try {
+    // Fechas del local (no del servidor, que está en UTC): el último día del mes después de las
+    // 21 h el servidor ya está en el mes siguiente
+    const today = shopDate(await getShopTz(shopId));
+    const monthStart = today.slice(0, 8) + '01';
+    const prevMonthStart = (() => { const d = new Date(monthStart + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
     const [monthQ, prodRevMonthQ] = await Promise.all([
       pool.query(
         `SELECT
@@ -124,16 +129,16 @@ router.get('/month', auth, async (req, res) => {
            COUNT(*)                                                                      AS total
          FROM appointments
          WHERE ${shopFilterMonth}
-           AND date >= date_trunc('month', CURRENT_DATE)
-           AND date <= CURRENT_DATE`,
-        [shopId]
+           AND date >= $2::date
+           AND date <= $3::date`,
+        [shopId, monthStart, today]
       ),
       pool.query(
         `SELECT COALESCE(SUM(total_price),0) AS prod_revenue
          FROM product_sales
          WHERE (shop_id=$1 OR (${isEnterpriseOwner ? `shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE)` : 'FALSE'}))
-           AND sold_at >= date_trunc('month', CURRENT_DATE)`,
-        [shopId]
+           AND sold_at >= ($2::date::timestamp AT TIME ZONE $3::text)`,
+        [shopId, monthStart, await getShopTz(shopId)]
       ),
     ]);
     const prodRevMonth = parseFloat(prodRevMonthQ.rows[0].prod_revenue);
@@ -143,9 +148,9 @@ router.get('/month', auth, async (req, res) => {
       `SELECT COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END), 0) AS revenue
        FROM appointments
        WHERE ${shopFilterMonth}
-         AND date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
-         AND date < date_trunc('month', CURRENT_DATE)`,
-      [shopId]
+         AND date >= $2::date
+         AND date < $3::date`,
+      [shopId, prevMonthStart, monthStart]
     );
 
     // Ticket promedio
@@ -153,16 +158,16 @@ router.get('/month', auth, async (req, res) => {
       `SELECT COALESCE(AVG(price), 0) AS avg_ticket
        FROM appointments
        WHERE ${shopFilterMonth} AND status='completed'
-         AND date >= date_trunc('month', CURRENT_DATE)`,
-      [shopId]
+         AND date >= $2::date`,
+      [shopId, monthStart]
     );
 
     // Clientes nuevos este mes (solo del shop propio, no sucursales)
     const newClientsQ = await pool.query(
       `SELECT COUNT(*) AS new_clients
        FROM clients
-       WHERE shop_id=$1 AND created_at >= date_trunc('month', CURRENT_DATE)`,
-      [shopId]
+       WHERE shop_id=$1 AND created_at >= ($2::date::timestamp AT TIME ZONE $3::text)`,
+      [shopId, monthStart, await getShopTz(shopId)]
     );
 
     // Clientes recurrentes (más de 1 visita este mes)
@@ -170,15 +175,15 @@ router.get('/month', auth, async (req, res) => {
       `SELECT COUNT(DISTINCT client_id) AS recurring
        FROM appointments
        WHERE ${shopFilterMonth} AND status='completed'
-         AND date >= date_trunc('month', CURRENT_DATE)
+         AND date >= $2::date
          AND client_id IS NOT NULL
          AND client_id IN (
            SELECT client_id FROM appointments
            WHERE ${shopFilterMonth} AND status='completed'
-             AND date >= date_trunc('month', CURRENT_DATE)
+             AND date >= $2::date
            GROUP BY client_id HAVING COUNT(*) > 1
          )`,
-      [shopId]
+      [shopId, monthStart]
     );
 
     const m = monthQ.rows[0];

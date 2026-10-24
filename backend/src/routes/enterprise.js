@@ -309,7 +309,7 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
              (SELECT COUNT(*) FROM clients c WHERE c.shop_id=$1
                AND (c.created_at AT TIME ZONE $4::text)::date >= $3::date)                               AS new_clients_month,
              (SELECT COUNT(*) FROM appointments a2 WHERE a2.shop_id=$1 AND a2.date=$2::date
-               AND a2.status IN ('pending','confirmed'))                                                  AS pending_today,
+               AND a2.status IN ('pending','confirmed','waiting_sena'))                                   AS pending_today,
              (SELECT MIN(a2.time_start::text) FROM appointments a2
                WHERE a2.shop_id=$1 AND a2.date=$2::date AND a2.status IN ('pending','confirmed'))         AS next_appt`,
           [s.id, today, monthStart, tz]
@@ -354,7 +354,10 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
       // Suma de la ganancia neta de cada sucursal (igual que su caja)
       profit_month:      sum('profit_month'),
     };
-    totals.avg_ticket = totals.cuts_month > 0 ? totals.revenue_month / totals.cuts_month : 0;
+    // Ticket promedio igual que en cada barbería (precio promedio de los cortes), ponderado por cortes
+    totals.avg_ticket = totals.cuts_month > 0
+      ? branches.reduce((acc, b) => acc + b.avg_ticket_month * b.cuts_month, 0) / totals.cuts_month
+      : 0;
 
     res.json({ branches, totals });
   } catch(e) { res.status(500).json({ error: e.message }); }
