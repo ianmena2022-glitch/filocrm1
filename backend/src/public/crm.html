@@ -5897,8 +5897,11 @@ function startSSE() {
 
   _sse.addEventListener('hello', () => {
     _sseRetryMs = 1500;
+    const wasReconnect = !!_sseLastHello;
     _sseLastHello = Date.now();
     console.log('[sse] conectado');
+    // Si se había cortado, traer lo que pasó mientras tanto (reservas, cobros, notificaciones)
+    if (wasReconnect) { try { refreshActiveSection(); notifResync(); } catch(_) {} }
     // Marcar indicador de "en vivo"
     document.querySelectorAll('.last-refresh').forEach(el => {
       el.textContent = '● En vivo';
@@ -5910,14 +5913,16 @@ function startSSE() {
     try {
       const d = JSON.parse(ev.data);
       refreshActiveSection();
-      if (typeof showToast === 'function') {
-        showToast('📅', 'Nueva reserva', `${d.client_name || ''} · ${d.date || ''} ${d.time_start || ''}`);
-      }
+      // El aviso lo muestra la notificación de la misma reserva (antes salían dos avisos iguales)
       window.dispatchEvent(new CustomEvent('filo:appointment.created', { detail: d }));
     } catch(_) {}
   });
 
   _sse.addEventListener('appointment.updated', () => refreshActiveSection());
+
+  // Latido del servidor cada 20 s: la conexión sigue viva (antes, al minuto de estar conectado,
+  // el CRM creía que se había caído y la cortaba y reabría en loop, perdiendo eventos)
+  _sse.addEventListener('ping', () => { _sseLastHello = Date.now(); });
 
   _sse.addEventListener('membership.verified', (ev) => {
     try {

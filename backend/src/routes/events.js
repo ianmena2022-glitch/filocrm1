@@ -26,8 +26,9 @@ router.get('/stream', (req, res) => {
 
   // Heartbeat cada 20s para que proxies (Railway/Cloudflare) no cierren la
   // conexión por idle. Es un comment line, no dispara onmessage en el client.
+  // Es un evento ("ping") y no un comentario: así el navegador sabe que la conexión sigue viva.
   const heartbeat = setInterval(() => {
-    try { res.write(`: ping ${Date.now()}\n\n`); }
+    try { res.write(`event: ping\ndata: ${Date.now()}\n\n`); }
     catch(_) { /* el close handler se encarga */ }
   }, 20000);
 

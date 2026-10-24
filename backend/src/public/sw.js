@@ -17,7 +17,9 @@ self.addEventListener('push', (event) => {
     body:    payload.body || '',
     icon:    payload.icon || '/favicon.ico',
     badge:   payload.badge || '/favicon.ico',
-    tag:     payload.tag || payload.data?.type || 'filo-notif',
+    // Etiqueta única por aviso: si llegan dos reservas seguidas, se ven las dos
+    // (antes compartían la etiqueta del tipo y la segunda reemplazaba a la primera)
+    tag:     payload.tag || ('filo-' + (payload.data?.id || Date.now())),
     renotify: true,
     data:    payload.data || {},
     requireInteraction: false,

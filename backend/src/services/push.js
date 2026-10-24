@@ -6,6 +6,11 @@ const pool = require('../db/pool');
 let _webpush = null;
 let _vapidReady = false;
 
+// urgency 'high': Android/iOS la entregan al instante aunque el teléfono esté en ahorro de energía
+// (con 'normal', el valor por defecto, la pueden demorar minutos). TTL: si el celular está apagado,
+// el aviso se descarta a las 6 h en vez de llegar días después.
+const PUSH_OPTS = { urgency: 'high', TTL: 6 * 3600 };
+
 function init() {
   if (_webpush) return _webpush;
   try {
@@ -54,7 +59,7 @@ async function sendToRecipient(shopId, payload) {
     _webpush.sendNotification({
       endpoint: row.endpoint,
       keys: { p256dh: row.p256dh, auth: row.auth }
-    }, data).then(() => {
+    }, data, PUSH_OPTS).then(() => {
       pool.query(`UPDATE push_subscriptions SET last_used_at=NOW() WHERE id=$1`, [row.id]).catch(()=>{});
       return { ok: true, row };
     }, err => {
@@ -94,7 +99,7 @@ async function sendToAdmins(payload) {
     _webpush.sendNotification({
       endpoint: row.endpoint,
       keys: { p256dh: row.p256dh, auth: row.auth }
-    }, data).then(() => {
+    }, data, PUSH_OPTS).then(() => {
       pool.query(`UPDATE admin_push_subscriptions SET last_used_at=NOW() WHERE id=$1`, [row.id]).catch(()=>{});
       return true;
     }, err => {

@@ -859,7 +859,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         shopId: shopData.id,
         type: 'appointment.created',
         title: 'Nueva reserva online',
-        body:  `${client_name} · ${svcName} · ${date} ${timeStr}`,
+        body:  [client_name, svcName, `${date} ${timeStr}`].filter(Boolean).join(' · '),
         icon:  '📅',
         link:  '/app#agenda',
       });
