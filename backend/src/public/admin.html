@@ -1445,6 +1445,7 @@ function renderTreeRow(a, depth, parentId) {
         ? `<button class="action-btn" onclick="setArchived(${a.id}, false)" title="Volver a la lista principal">📤 Desarchivar</button>`
         : `<button class="action-btn" onclick="setArchived(${a.id}, true)" title="Mover a Archivadas (no se borra)">📦 Archivar</button>`) : ''}
       <button class="action-btn" onclick="resetWpp(${a.id},'${esc(a.name)}')" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
+      ${(() => { const on = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date(); return `<button class="action-btn" onclick="toggleWppCareful(${a.id}, ${on})" style="background:rgba(251,191,36,${on ? '.18' : '.06'});border-color:rgba(251,191,36,.3);color:#fbbf24" title="Modo cuidado de WhatsApp">🛡 ${on ? 'Cuidado ON' : 'Cuidado'}</button>`; })()}
       <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
     </td>
   </tr>`;
@@ -1518,7 +1519,19 @@ function appInfoHtml(a) {
   const notif = pushN
     ? `<div style="color:#fbbf24">🔔 Notificaciones · ${pushN} disp.</div>`
     : `<div style="color:var(--g)">🔕 Sin notificaciones</div>`;
-  return app + notif;
+  const banned = a.wpp_banned_at
+    ? `<div style="color:#f87171;font-weight:700">⛔ Bloqueado por WhatsApp · ${new Date(a.wpp_banned_at).toLocaleDateString('es-AR')}</div>` : '';
+  const careful = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date()
+    ? `<div style="color:#fbbf24">🛡 Modo cuidado hasta ${new Date(a.wpp_careful_until).toLocaleDateString('es-AR')}</div>` : '';
+  return banned + careful + app + notif;
+}
+
+// Modo cuidado de WhatsApp: pocos mensajes, solo a clientes conocidos (para números que fueron bloqueados)
+async function toggleWppCareful(id, active) {
+  const days = active ? 0 : 21;
+  if (!confirm(active ? '¿Apagar el modo cuidado de WhatsApp de esta cuenta?' : '¿Activar el modo cuidado por 21 días? (máx. 40 mensajes por día, solo a clientes conocidos, sin "gracias + puntos" ni avisos de fila)')) return;
+  try { await adminFetch('POST', `/accounts/${id}/wpp-careful`, { days }); loadAll(); }
+  catch (e) { alert(e.message); }
 }
 
 function renderAccountsTable(treeRoots, tbodyId = 'accounts-tbody', emptyMsg = 'Sin resultados') {

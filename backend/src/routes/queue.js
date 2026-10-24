@@ -660,7 +660,7 @@ router.post('/next', auth, async (req, res) => {
       const msg = `¡Hola ${entry.client_name}! *Es tu turno* en ${shopName} 💈\n¡Vení ahora, te estamos esperando! ✂️`;
       try {
         const wpp = require('../services/whatsapp');
-        wpp.sendText(shopId, entry.client_phone, msg).catch(() => {});
+        wpp.sendText(shopId, entry.client_phone, msg, { category: 'queue_call' }).catch(() => {});
       } catch (e) {
         // non-blocking, ignore
       }
@@ -844,10 +844,9 @@ router.post('/complete/:id', auth, async (req, res) => {
     if (client?.phone && shopData?.wpp_connected && pointsEarned > 0) {
       try {
         const wpp = require('../services/whatsapp');
-        const slug = shopData.booking_slug;
-        const tiendaLink = slug ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}` : null;
-        const msg = `✅ ¡Gracias ${client.name}! Sumaste *${pointsEarned} puntos* en tu visita de hoy.\n🎯 Total acumulado: *${client.points} puntos*${tiendaLink ? `\n🛍️ Canjealos en ${tiendaLink}` : ''}`;
-        wpp.sendText(shopId, client.phone, msg).catch(() => {});
+        // Sin link (menos riesgo de que WhatsApp lo tome como spam)
+        const msg = `✅ ¡Gracias ${client.name}! Sumaste *${pointsEarned} puntos* en tu visita de hoy.\n🎯 Total acumulado: *${client.points} puntos*`;
+        wpp.sendText(shopId, client.phone, msg, { category: 'thanks' }).catch(() => {});
       } catch (_) {}
     }
 

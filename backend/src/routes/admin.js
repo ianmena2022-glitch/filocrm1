@@ -83,6 +83,15 @@ router.post('/login', async (req, res) => {
   res.json({ token, remember: remember === true });
 });
 
+// POST /api/admin/accounts/:id/wpp-careful { days } — modo cuidado de WhatsApp (0 = apagar)
+router.post('/accounts/:id/wpp-careful', adminAuth, async (req, res) => {
+  try {
+    const days = Math.max(0, Math.min(parseInt(req.body?.days) || 0, 90));
+    await require('../services/whatsapp').setCareful(parseInt(req.params.id), days);
+    res.json({ ok: true, days });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/admin/logout-all — invalida todas las sesiones admin (p.ej. si perdiste el celular)
 router.post('/logout-all', adminAuth, async (req, res) => {
   try {
@@ -186,6 +195,9 @@ router.get('/accounts', adminAuth, async (req, res) => {
         (SELECT MAX(p.last_seen) FROM pwa_devices p WHERE p.shop_id = s.id)            AS pwa_last_seen,
         (SELECT string_agg(DISTINCT p.platform, ',') FROM pwa_devices p WHERE p.shop_id = s.id) AS pwa_platforms,
         (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.shop_id = s.id)           AS push_count,
+        -- WhatsApp: bloqueado por WhatsApp / modo cuidado (to_jsonb: sirve aunque la columna no exista)
+        to_jsonb(s)->>'wpp_banned_at'     AS wpp_banned_at,
+        to_jsonb(s)->>'wpp_careful_until' AS wpp_careful_until,
         COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
         COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s

@@ -903,7 +903,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       // Notificar al barbero
       if (shopData.phone) {
         const msg = `🔔 *Nueva reserva online*\n\n👤 ${client_name}${client_phone ? '\n📱 ' + client_phone : ''}\n✂️ ${svcName || 'Sin servicio'}\n📅 ${dateFormatted} a las *${time_start}*`;
-        try { await wpp.sendText(wppShopId, shopData.phone, msg); } catch(e) { console.error('Error notificando al barbero:', e.message); }
+        // Apagado por defecto: suele ser el mismo número conectado (mensaje a sí mismo) y la reserva
+        // ya llega como notificación en FILO. Se puede activar en Configuración → WhatsApp.
+        try { await wpp.sendText(wppShopId, shopData.phone, msg, { category: 'owner_notice' }); } catch(e) { if (e.code !== 'AUTO_DISABLED') console.error('Error notificando al barbero:', e.message); }
       }
       // Notificar al cliente que su reserva fue recibida
       if (client_phone) {
@@ -917,9 +919,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             serviceName: svcName || null,
           });
           if (!msg) msg = require('../services/msgVariants').bookingText({ nombre: client_name, shop: shopData.name, fecha: dateFormatted, hora: time_start, servicio: svcName || null });
-          await wpp.sendText(wppShopId, client_phone, msg);
+          await wpp.sendText(wppShopId, client_phone, msg, { category: 'booking_confirm' });
         } catch (e) {
-          console.error('Error notificando al cliente:', e.message);
+          if (e.code !== 'AUTO_DISABLED') console.error('Error notificando al cliente:', e.message);
         }
       }
       })().catch(() => {});

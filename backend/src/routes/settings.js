@@ -9,6 +9,20 @@ function ownerOnly(req, res, next) {
   next();
 }
 
+// GET/PUT /api/settings/wpp-auto — mensajes automáticos de WhatsApp que manda el local
+router.get('/wpp-auto', auth, ownerOnly, async (req, res) => {
+  try {
+    const prefs = await wpp.getAutoPrefs(req.shopId);
+    const r = await pool.query(`SELECT to_jsonb(s)->>'wpp_banned_at' AS banned_at, to_jsonb(s)->>'wpp_careful_until' AS careful_until FROM shops s WHERE id=$1`, [req.shopId]);
+    const careful = r.rows[0]?.careful_until && new Date(r.rows[0].careful_until) > new Date() ? r.rows[0].careful_until : null;
+    res.json({ prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.put('/wpp-auto', auth, ownerOnly, async (req, res) => {
+  try { res.json({ prefs: await wpp.setAutoPrefs(req.shopId, req.body?.prefs || {}) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET/PUT /api/settings/any-barber-bonus — bonus de puntos por elegir "cualquier profesional"
 router.get('/any-barber-bonus', auth, ownerOnly, async (req, res) => {
   try {

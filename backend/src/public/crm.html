@@ -3827,7 +3827,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <div style="font-size:12px;color:var(--gray)" id="wpp-phone-display"></div>
             </div>
           </div>
+          <!-- WhatsApp bloqueó el número / modo cuidado -->
+          <div id="wpp-banned-info" style="display:none;padding:14px 16px;background:rgba(255,67,67,0.08);border:1px solid rgba(255,67,67,0.3);border-radius:12px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:#ff6b6b;margin-bottom:6px">⛔ WhatsApp bloqueó este número</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.6">FILO dejó de usarlo para no empeorar el bloqueo. Recuperalo desde la app de WhatsApp en el celular y <strong style="color:rgba(255,255,255,.8)">usalo unos días a mano</strong> antes de volver a conectarlo. Al reconectarlo, FILO arranca en modo cuidado (pocos mensajes y solo a clientes que ya vinieron o te escribieron) durante 3 semanas.</div>
+          </div>
+          <div id="wpp-careful-info" style="display:none;padding:12px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:12px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:4px">🛡 Modo cuidado activo</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.6" id="wpp-careful-text"></div>
+          </div>
           <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
+          <!-- Mensajes automáticos -->
+          <div style="margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
+            <div style="font-size:13px;font-weight:700;margin-bottom:4px">✉️ Mensajes automáticos</div>
+            <div style="font-size:11px;color:var(--gray);margin-bottom:10px;line-height:1.5">Elegí qué manda FILO solo. Menos mensajes = menos riesgo de que WhatsApp bloquee el número. Las respuestas del bot a quien te escribe siempre funcionan.</div>
+            <div id="wpp-auto-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
           <div id="wpp-qr-container" style="margin-top:16px;display:none">
             <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
             <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
@@ -5625,6 +5640,12 @@ async function checkWppStatus() {
     } catch(e) { /* no bloquear si falla */ }
 
   } else {
+    // WhatsApp bloqueó el número: avisar en vez de pedir que lo reconecten ya
+    if (currentShop.wpp_banned) {
+      showWppBanner(`<span>WhatsApp bloqueó el número de la barbería. Recuperalo desde el celular y esperá unos días antes de reconectarlo.</span> <a onclick="goToWhatsAppConfig()">Ver qué hacer →</a>`,
+        { title: 'Número bloqueado por WhatsApp', icon: '⛔' });
+      return;
+    }
     // Cuenta normal (starter/staff) o sucursal con WPP propio
     if (!currentShop.wpp_connected) {
       // Verificar si es sucursal usando WPP compartido (no mostrar en ese caso)
@@ -8932,7 +8953,10 @@ async function loadSettings() {
     document.getElementById('tpl-rescate').value = tpls.rescate || '¡Hola {nombre}! 👋\n\nHace un tiempo que no te vemos por {barberia} y te extrañamos. ✂️\n\n¿Cuándo querés pasar a renovar el corte? Te reservamos el turno ahora.';
     document.getElementById('tpl-recordatorio').value = tpls.recordatorio || '¡Hola {nombre}! 👋\n\nTe recordamos tu turno de hoy a las *{hora}* en {barberia}. ¡Te esperamos! ✂️';
     const _ra = document.getElementById('tpl-recordatorio-auto'); if (_ra) _ra.checked = tpls.recordatorio_auto !== false;
-    document.getElementById('tpl-completado').value = tpls.completado || '✂️ *¡Servicio completado!* Gracias {nombre}.\n⭐ Puntos acumulados: +{puntos} (total: {total})\n🎁 Ver premios: {link}\n¡Hasta la próxima! 💈';
+    document.getElementById('tpl-completado').value = tpls.completado || '✂️ *¡Gracias {nombre}!*\n⭐ Sumaste +{puntos} puntos (total: {total}).\n¡Hasta la próxima! 💈';
+
+    // Mensajes automáticos + aviso de bloqueo / modo cuidado
+    loadWppAuto();
 
     // WhatsApp status
     const dot = document.getElementById('wpp-dot');
@@ -9192,6 +9216,42 @@ async function saveAnyBonus() {
     renderAnyBonusUI(d.enabled, d.pct);
     showToast('🎁', enabled ? `Bonus activado: +${d.pct}% de puntos` : 'Bonus desactivado', enabled ? 'Para quien elija "cualquier profesional"' : '');
   } catch (e) { showToast('❌', 'Error', e.message); }
+}
+
+// ── Mensajes automáticos de WhatsApp ──
+const WPP_AUTO_ITEMS = [
+  ['reminders',       '⏰ Recordatorio antes del turno',          'Recomendado: es lo que más reduce las ausencias'],
+  ['booking_confirm', '✅ Confirmación de reserva online',         'Al cliente que reservó desde tu link'],
+  ['confirm',         '👍 Aviso al confirmar un turno',            'Cuando confirmás un turno desde la agenda'],
+  ['thanks',          '⭐ "Gracias + puntos" después de cobrar',   'Uno por cada cobro: en locales con mucho movimiento son muchos mensajes'],
+  ['queue_call',      '📣 "Es tu turno" en la fila virtual',       'Al llamar a un cliente de la fila'],
+  ['owner_notice',    '🔔 Aviso de nueva reserva a tu teléfono',   'Ya te llega como notificación en FILO'],
+];
+async function loadWppAuto() {
+  const el = document.getElementById('wpp-auto-list');
+  if (!el) return;
+  try {
+    const d = await api('GET', '/settings/wpp-auto');
+    el.innerHTML = WPP_AUTO_ITEMS.map(([k, label, sub]) => `
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
+        <span><span style="font-size:13px;font-weight:600">${label}</span><br><span style="font-size:11px;color:var(--gray)">${sub}</span></span>
+        <input type="checkbox" ${d.prefs[k] ? 'checked' : ''} onchange="saveWppAuto('${k}', this.checked)" style="width:20px;height:20px;flex-shrink:0;accent-color:#FFD100">
+      </label>`).join('');
+    const banned = document.getElementById('wpp-banned-info');
+    if (banned) banned.style.display = d.banned_at ? 'block' : 'none';
+    const careful = document.getElementById('wpp-careful-info');
+    if (careful) {
+      careful.style.display = d.careful_until ? 'block' : 'none';
+      const t = document.getElementById('wpp-careful-text');
+      if (t && d.careful_until) t.textContent = `Hasta el ${new Date(d.careful_until).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}: como máximo 40 mensajes por día, solo a clientes que ya vinieron o te escribieron, y sin "gracias + puntos", avisos de fila ni promociones. Así el número recupera la confianza de WhatsApp.`;
+    }
+  } catch (_) { el.innerHTML = '<div style="font-size:12px;color:var(--gray)">No se pudo cargar</div>'; }
+}
+async function saveWppAuto(key, value) {
+  try {
+    await api('PUT', '/settings/wpp-auto', { prefs: { [key]: value } });
+    showToast(value ? '✅' : '🔕', value ? 'Mensaje activado' : 'Mensaje desactivado', '');
+  } catch (e) { showToast('❌', 'Error', e.message); loadWppAuto(); }
 }
 
 async function toggleBarberChoice() {

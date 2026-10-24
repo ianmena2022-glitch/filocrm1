@@ -367,6 +367,7 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
       let tpls = {};
       try { tpls = a.msg_templates ? JSON.parse(a.msg_templates) : {}; } catch (_) {}
       if (tpls.recordatorio_auto === false) { skipped++; continue; }   // el local los desactivó
+      if (!(await wpp.autoEnabled(a.shop_id, 'reminders'))) { await markDone(a.id).catch(() => {}); skipped++; continue; } // apagado en Configuración → WhatsApp
 
       const nombre = a.client_name_db || a.client_name || 'Cliente';
       const hora   = String(a.time_start).slice(0, 5);
@@ -388,11 +389,11 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
       else msg = String(msg).replace(/(^|[^\p{L}])(hoy)(?![\p{L}])/giu, (all, pre, w) => pre + (w[0] === 'H' ? 'Mañana' : 'mañana'));
 
       try {
-        await wpp.sendText(a.shop_id, a.client_phone, msg);
+        await wpp.sendText(a.shop_id, a.client_phone, msg, { category: 'reminders' });
         await markDone(a.id);
         sent++;
       } catch (e) {
-        if (e.code === 'OPTED_OUT' || e.code === 'NOT_ON_WHATSAPP') {
+        if (e.code === 'OPTED_OUT' || e.code === 'NOT_ON_WHATSAPP' || e.code === 'AUTO_DISABLED' || e.code === 'CAREFUL_MODE') {
           await markDone(a.id).catch(() => {});   // no reintentar nunca
           skipped++;
         } else if (e.code === 'DAILY_CAP' || e.code === 'FIRST_CONTACT_CAP' || e.code === 'CIRCUIT_OPEN') {

@@ -903,6 +903,15 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       delete qrCooldownUntil[shopId];
       delete statuses[`${shopId}_reconnect`];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
+      // Si este número había sido bloqueado, arranca en modo cuidado (21 días)
+      try {
+        await ensureWppSafetyCols();
+        await pool.query(
+          `UPDATE shops SET wpp_careful_until = GREATEST(COALESCE(wpp_careful_until, NOW()), NOW() + INTERVAL '21 days'),
+                            wpp_banned_at = NULL
+            WHERE id=$1 AND wpp_banned_at IS NOT NULL`, [shopId]);
+        _safetyCache.delete(String(shopId));
+      } catch (_) {}
       await saveSessionToDB(shopId);
       startHealthCheck(shopId);
       if (onConnected) onConnected();
@@ -913,8 +922,14 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       console.log(`Baileys desconectado para shop ${shopId}, código: ${code}`);
       statuses[shopId] = 'disconnected';
 
+      // 403 = WhatsApp bloqueó el número. Insistir con la sesión bloqueada (antes: 10 reintentos
+      // y una restauración por cada mensaje) se ve como un bot y puede alargar la sanción.
+      // Se frena todo, se borra la sesión y se avisa al local y al admin.
+      if (code === 403 || code === DisconnectReason.forbidden) {
+        await markBanned(shopId);
+        if (onDisconnected) onDisconnected();
       // 401 = sesión inválida/revocada por WhatsApp → limpiar sesión y pedir nuevo QR
-      if (code === DisconnectReason.loggedOut || code === 401) {
+      } else if (code === DisconnectReason.loggedOut || code === 401) {
         console.log(`[WPP] Shop ${shopId}: sesión inválida (${code}), limpiando sesión guardada`);
         await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL WHERE id=$1', [shopId]);
         delete sockets[shopId];
@@ -1261,6 +1276,96 @@ async function hasWhatsApp(shopId) {
   } catch (_) { return false; }
 }
 
+// ─── Seguridad del número: bloqueo, modo cuidado y mensajes automáticos por local ───
+let _safetyCols = null;
+function ensureWppSafetyCols() {
+  if (!_safetyCols) {
+    _safetyCols = (async () => {
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_banned_at TIMESTAMPTZ');
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_careful_until TIMESTAMPTZ');
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_auto_prefs JSONB');
+    })().catch(e => { _safetyCols = null; console.warn('[WPP] columnas de seguridad:', e.message); });
+  }
+  return _safetyCols;
+}
+
+// Qué mensajes automáticos manda cada local (se apagan desde Configuración → WhatsApp)
+const AUTO_DEFAULTS = {
+  reminders: true,        // recordatorio antes del turno
+  booking_confirm: true,  // "tu reserva quedó confirmada" (reserva online)
+  confirm: true,          // aviso al confirmar un turno desde la agenda
+  thanks: true,           // "gracias + puntos" después de cobrar
+  queue_call: true,       // "es tu turno" al llamar de la fila
+  owner_notice: false,    // aviso de nueva reserva al teléfono del local (ya llega como notificación en FILO)
+};
+const _safetyCache = new Map(); // shopId → { at, prefs, carefulUntil }
+async function _safety(shopId) {
+  const k = String(shopId);
+  const c = _safetyCache.get(k);
+  if (c && Date.now() - c.at < 60000) return c;
+  await ensureWppSafetyCols();
+  let row = {};
+  try { row = (await pool.query('SELECT wpp_auto_prefs, wpp_careful_until FROM shops WHERE id=$1', [shopId])).rows[0] || {}; } catch (_) {}
+  const v = { at: Date.now(), prefs: { ...AUTO_DEFAULTS, ...(row.wpp_auto_prefs || {}) }, carefulUntil: row.wpp_careful_until ? new Date(row.wpp_careful_until) : null };
+  _safetyCache.set(k, v);
+  return v;
+}
+async function autoEnabled(shopId, key) {
+  try { return !!(await _safety(shopId)).prefs[key]; } catch (_) { return AUTO_DEFAULTS[key] !== false; }
+}
+async function getAutoPrefs(shopId) { return { ...(await _safety(shopId)).prefs }; }
+async function setAutoPrefs(shopId, prefs) {
+  await ensureWppSafetyCols();
+  const clean = {};
+  for (const key of Object.keys(AUTO_DEFAULTS)) if (key in (prefs || {})) clean[key] = !!prefs[key];
+  await pool.query(`UPDATE shops SET wpp_auto_prefs = COALESCE(wpp_auto_prefs, '{}'::jsonb) || $1::jsonb WHERE id=$2`, [JSON.stringify(clean), shopId]);
+  _safetyCache.delete(String(shopId));
+  return getAutoPrefs(shopId);
+}
+async function setCareful(shopId, days) {
+  await ensureWppSafetyCols();
+  await pool.query(`UPDATE shops SET wpp_careful_until = ${days > 0 ? `NOW() + ($2::int || ' days')::interval` : 'NULL'} WHERE id=$1`,
+    days > 0 ? [shopId, parseInt(days)] : [shopId]);
+  _safetyCache.delete(String(shopId));
+}
+// En modo cuidado solo sale lo que el cliente espera, a quien ya habló con el número, y poco
+const CAREFUL_DAILY_CAP = 40;
+const CAREFUL_BLOCKED = new Set(['thanks', 'queue_call', 'owner_notice']);
+
+// WhatsApp bloqueó el número: frenar todo y avisar (sin reintentos ni restauraciones)
+async function markBanned(shopId) {
+  console.warn(`[WPP] Shop ${shopId}: ⛔ WhatsApp BLOQUEÓ el número (403). Sin reintentos; se borra la sesión.`);
+  try { sockets[shopId]?.end?.(new Error('banned')); } catch (_) {}
+  delete sockets[shopId];
+  statuses[shopId] = 'disconnected';
+  delete statuses[`${shopId}_reconnect`];
+  delete statuses[`${shopId}_440_count`];
+  delete statuses[`${shopId}_440_firstAt`];
+  try { if (reconnectTimers[shopId]) { clearTimeout(reconnectTimers[shopId]); delete reconnectTimers[shopId]; } } catch (_) {}
+  try { fs.rmSync(authDir(shopId), { recursive: true, force: true }); } catch (_) {}
+  await ensureWppSafetyCols();
+  await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL, wpp_banned_at=NOW() WHERE id=$1', [shopId]).catch(() => {});
+  await notifyBanned(shopId).catch(() => {});
+}
+
+async function notifyBanned(shopId) {
+  try {
+    await require('./notifications').create({
+      shopId, recipientShopId: shopId, type: 'wpp.banned', icon: '⛔',
+      title: 'WhatsApp bloqueó el número de la barbería',
+      body: 'FILO dejó de usarlo para no empeorar el bloqueo. Recuperalo desde la app de WhatsApp y esperá unos días antes de volver a conectarlo.',
+      link: '/app#configuracion',
+    });
+  } catch (_) {}
+  try {
+    const r = await pool.query('SELECT name FROM shops WHERE id=$1', [shopId]);
+    require('./push').sendToAdmins({
+      title: '⛔ WhatsApp bloqueado', body: `${r.rows[0]?.name || 'Shop ' + shopId}: WhatsApp bloqueó el número`,
+      icon: '/favicon.ico', data: { url: '/admin', type: 'wpp.banned', shopId },
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 // ─── Bajas (opt-out) ─────────────────────────────────────────────────────────
 // Un cliente que pide que no le escriban más NO recibe más mensajes proactivos.
 // Es la principal defensa contra reportes ("spam") que terminan en baneo.
@@ -1396,6 +1501,11 @@ async function _say(shopId, sock, jid, phone, text) {
 // Enviar mensaje de texto.  opts.kind: 'notify' (default) | 'marketing' | 'cold'
 async function sendText(shopId, phone, message, opts = {}) {
   const kind = ['notify', 'marketing', 'cold', 'reply'].includes(opts.kind) ? opts.kind : 'notify';
+  // opts.category: qué mensaje automático es (reminders, booking_confirm, confirm, thanks, queue_call,
+  // owner_notice). Si el local lo apagó, no sale.
+  if (opts.category && !(await autoEnabled(shopId, opts.category))) {
+    const e = new Error(`Mensaje automático "${opts.category}" desactivado por el local`); e.code = 'AUTO_DISABLED'; throw e;
+  }
   // Auto-resolver enterprise owner si la sucursal no tiene socket activo
   const wppShopId = await resolveWppShopId(shopId);
   let sock = sockets[wppShopId];
@@ -1427,6 +1537,16 @@ async function sendText(shopId, phone, message, opts = {}) {
     const e = new Error('El cliente pidió no recibir más mensajes'); e.code = 'OPTED_OUT'; throw e;
   }
   const firstContact = kind === 'reply' ? false : !(await _isKnownContact(wppShopId, phoneClean));
+  // Modo cuidado (número que fue bloqueado hace poco): solo respuestas y avisos esperados a
+  // clientes que ya hablaron con el número, como máximo CAREFUL_DAILY_CAP por día.
+  const safety = await _safety(wppShopId).catch(() => null);
+  if (safety?.carefulUntil && safety.carefulUntil > new Date() && kind !== 'reply') {
+    const why = (kind === 'marketing' || kind === 'cold') ? 'promociones'
+      : CAREFUL_BLOCKED.has(opts.category) ? `"${opts.category}"`
+      : firstContact ? 'contactos nuevos'
+      : wppGuard.countToday(wppShopId) >= CAREFUL_DAILY_CAP ? `más de ${CAREFUL_DAILY_CAP} por día` : null;
+    if (why) { const e = new Error(`WhatsApp en modo cuidado: no se envían ${why}`); e.code = 'CAREFUL_MODE'; throw e; }
+  }
   if (kind === 'marketing' && await _marketingCooldownHit(wppShopId, phoneClean)) {
     const e = new Error('Ya se le envió una promoción hace poco'); e.code = 'MARKETING_COOLDOWN'; throw e;
   }
@@ -1469,6 +1589,7 @@ async function reconnectAllShops() {
     const result = await pool.query(
       `SELECT id FROM shops
          WHERE wpp_connected=TRUE AND wpp_session IS NOT NULL
+           AND (to_jsonb(shops)->>'wpp_banned_at') IS NULL
          ORDER BY id DESC
          LIMIT $1`,
       [WPP_MAX_SESSIONS]
@@ -1578,4 +1699,4 @@ function wppStats() {
   };
 }
 
-module.exports = { __test: { sockets, statuses, guard: wppGuard }, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned }, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };

@@ -535,7 +535,7 @@ router.put('/:id/status', auth, async (req, res) => {
         const client = (await pool.query('SELECT name, phone FROM clients WHERE id=$1', [appt.client_id])).rows[0];
         const wpp = require('../services/whatsapp');
         // Sale del WhatsApp del local del turno (o del enterprise si corresponde: lo decide sendText)
-        if (client?.phone && await wpp.hasWhatsApp(appt.shop_id)) {
+        if (client?.phone && await wpp.autoEnabled(appt.shop_id, 'confirm') && await wpp.hasWhatsApp(appt.shop_id)) {
           const { generateMessage } = require('../services/ai');
           const wppShopId = appt.shop_id;
           const fecha = appt.date ? new Date(appt.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
@@ -548,7 +548,7 @@ router.put('/:id/status', auth, async (req, res) => {
             serviceName: appt.service_name || null,
           });
           if (!msg) msg = `✅ ¡Turno confirmado, ${client.name}! Te esperamos el ${fecha} a las ${hora}${appt.service_name ? ` para ${appt.service_name}` : ''}. Cualquier cambio avisanos. 💈`;
-          await wpp.sendText(wppShopId, client.phone, msg);
+          await wpp.sendText(wppShopId, client.phone, msg, { category: 'confirm' });
         }
       } catch (wppErr) {
         console.error('[appointments] Error enviando WPP confirmado:', wppErr.message);
@@ -641,13 +641,12 @@ router.put('/:id/status', auth, async (req, res) => {
       if (client && client.phone) (async () => {
         try {
           const wpp = require('../services/whatsapp');
-          if (!(await wpp.hasWhatsApp(appt.shop_id))) return;
+          if (!(await wpp.autoEnabled(appt.shop_id, 'thanks')) || !(await wpp.hasWhatsApp(appt.shop_id))) return;
           const { generateMessage } = require('../services/ai');
           const wppShopId = appt.shop_id;
-          const slug = shopData.booking_slug;
-          const tiendaLink = slug
-            ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
-            : null;
+          // Sin link: un link en un mensaje que el cliente no pidió aumenta el riesgo de que
+          // WhatsApp lo tome como spam
+          const tiendaLink = null;
 
           let msg = await generateMessage(shopId, 'turno_completado', {
             clientName: client.name,
@@ -658,7 +657,7 @@ router.put('/:id/status', auth, async (req, res) => {
 
           if (!msg) {
             const tpls = shopData.msg_templates ? JSON.parse(shopData.msg_templates) : {};
-            const tplBase = tpls.completado || '✂️ *¡Servicio completado!* Gracias {nombre}.\n⭐ Puntos acumulados: +{puntos} (total: {total})\n🎁 Ver premios: {link}\n¡Hasta la próxima! 💈';
+            const tplBase = tpls.completado || '✂️ *¡Gracias {nombre}!*\n⭐ Sumaste +{puntos} puntos (total: {total}).\n¡Hasta la próxima! 💈';
             msg = wpp.renderTemplate(tplBase, {
               nombre: client.name,
               puntos: pointsEarned,
@@ -667,7 +666,8 @@ router.put('/:id/status', auth, async (req, res) => {
             });
           }
 
-          await wpp.sendText(wppShopId, client.phone, msg);
+          msg = String(msg).replace(/https?:\/\/\S+/g, '').replace(/[ \t]+\n/g, '\n').trim();
+          await wpp.sendText(wppShopId, client.phone, msg, { category: 'thanks' });
         } catch(wppErr) {
           console.error('Error enviando WPP puntos:', wppErr.message);
         }
