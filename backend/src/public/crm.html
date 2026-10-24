@@ -3101,6 +3101,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             <label class="form-label">Dirección</label>
             <input class="form-input" id="edit-branch-address" />
           </div>
+          <!-- Acceso de la sucursal (con lo que entra la sucursal a FILO) -->
+          <div style="margin-top:6px;padding:12px 14px;background:rgba(255,209,0,.05);border:1px solid rgba(255,209,0,.18);border-radius:10px">
+            <div style="font-size:12px;font-weight:700;color:var(--yellow);margin-bottom:8px">🔑 Acceso de la sucursal</div>
+            <div class="form-group">
+              <label class="form-label">Email de ingreso</label>
+              <input class="form-input" id="edit-branch-email" type="email" autocomplete="off" />
+            </div>
+            <div class="form-group" style="margin-bottom:4px">
+              <label class="form-label">Nueva contraseña</label>
+              <div style="display:flex;gap:6px">
+                <input class="form-input" id="edit-branch-password" type="password" autocomplete="new-password" placeholder="Dejala vacía para no cambiarla" style="flex:1" />
+                <button type="button" onclick="const i=document.getElementById('edit-branch-password');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;padding:0 12px;cursor:pointer">👁</button>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--gray);line-height:1.4">Mínimo 6 caracteres. Al cambiarla, quien esté conectado con la contraseña anterior tiene que volver a entrar.</div>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="document.getElementById('modal-edit-branch').style.display='none'">Cancelar</button>
@@ -13592,7 +13608,19 @@ function openEditBranchModal(input) {
   document.getElementById('edit-branch-label').value   = b.branch_label || '';
   document.getElementById('edit-branch-city').value    = b.city         || '';
   document.getElementById('edit-branch-address').value = b.address      || '';
+  const emailEl = document.getElementById('edit-branch-email');
+  emailEl.value = b.email || '';
+  emailEl.dataset.original = b.email || '';
+  const pwEl = document.getElementById('edit-branch-password');
+  pwEl.value = ''; pwEl.type = 'password';
   document.getElementById('modal-edit-branch').style.display = 'flex';
+  // Si el panel no trajo el email, se busca en la lista de sucursales
+  if (!b.email) {
+    api('GET', '/enterprise/branches').then(list => {
+      const found = (list || []).find(x => String(x.id) === String(b.id));
+      if (found && found.email && !emailEl.value) { emailEl.value = found.email; emailEl.dataset.original = found.email; }
+    }).catch(() => {});
+  }
 }
 
 async function saveBranchEdit() {
@@ -13601,10 +13629,27 @@ async function saveBranchEdit() {
   const label   = document.getElementById('edit-branch-label').value.trim();
   const city    = document.getElementById('edit-branch-city').value.trim();
   const address = document.getElementById('edit-branch-address').value.trim();
+  const emailEl  = document.getElementById('edit-branch-email');
+  const email    = emailEl.value.trim().toLowerCase();
+  const password = document.getElementById('edit-branch-password').value;
+  const emailChanged = email && email !== (emailEl.dataset.original || '').toLowerCase();
+  if (password && password.length < 6) return showToast('⚠️', 'Contraseña muy corta', 'Mínimo 6 caracteres');
+  if (emailChanged && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) return showToast('⚠️', 'Email inválido', '');
+  if ((emailChanged || password) && !(await confirmModal(
+    `¿Cambiar el acceso de "${escHtml(name)}"?`,
+    [emailChanged ? `Nuevo email: ${escHtml(email)}` : '', password ? 'La sucursal va a tener que volver a entrar con la nueva contraseña.' : ''].filter(Boolean).join('<br>')
+  ))) return;
+  const body = { name, branch_label: label, city, address };
+  if (emailChanged) body.email = email;
+  if (password) body.password = password;
   try {
-    await api('PUT', `/enterprise/branches/${id}`, { name, branch_label: label, city, address });
+    const r = await api('PUT', `/enterprise/branches/${id}`, body);
     document.getElementById('modal-edit-branch').style.display = 'none';
-    showToast('✅', 'Sucursal actualizada', '');
+    if (r && r.credentials_changed) {
+      showToast('🔑', 'Acceso de la sucursal actualizado', `Email: ${r.email}` + (password ? ` · Contraseña: ${password}` : ''));
+    } else {
+      showToast('✅', 'Sucursal actualizada', '');
+    }
     loadEnterpriseDashboard();
   } catch(e) { showToast('❌', 'Error', e.message); }
 }

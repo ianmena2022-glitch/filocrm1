@@ -247,21 +247,61 @@ router.post('/split-main-site', auth, enterpriseOnly, async (req, res) => {
 // ── PUT /api/enterprise/branches/:id — editar sucursal ───────────────────────
 router.put('/branches/:id', auth, enterpriseOnly, async (req, res) => {
   const { name, branch_label, city, address } = req.body;
+  // Credenciales de acceso de la sucursal (opcionales: solo se cambian si vienen)
+  const newEmail = req.body.email != null && String(req.body.email).trim() !== ''
+    ? String(req.body.email).toLowerCase().trim() : null;
+  const newPassword = typeof req.body.password === 'string' && req.body.password !== '' ? req.body.password : null;
   try {
+    const cur = await pool.query('SELECT id, email FROM shops WHERE id=$1 AND parent_enterprise_id=$2 AND is_branch=TRUE', [req.params.id, req.shopId]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'Sucursal no encontrada' });
+
+    let emailToSet = null;
+    if (newEmail && newEmail !== cur.rows[0].email) {
+      if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(newEmail)) return res.status(400).json({ error: 'Ingresá un email válido' });
+      const dupe = await pool.query('SELECT 1 FROM shops WHERE email=$1 AND id<>$2', [newEmail, req.params.id]);
+      if (dupe.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
+      const pend = await pool.query('SELECT 1 FROM pending_registrations WHERE email=$1', [newEmail]);
+      if (pend.rows.length) return res.status(400).json({ error: 'Hay un registro pendiente de verificación con ese email' });
+      emailToSet = newEmail;
+    }
+    let hash = null;
+    if (newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      hash = await bcrypt.hash(newPassword, 12);
+      await ensurePasswordChangedCol();
+    }
+
     const result = await pool.query(
       `UPDATE shops SET
          name         = COALESCE($1, name),
          branch_label = COALESCE($2, branch_label),
          city         = COALESCE($3, city),
-         address      = COALESCE($4, address)
+         address      = COALESCE($4, address),
+         email        = COALESCE($7, email)
+         ${hash ? ", password = $8, password_changed_at = NOW()" : ''}
        WHERE id=$5 AND parent_enterprise_id=$6 AND is_branch=TRUE
-       RETURNING id, name, branch_label, city, address`,
-      [name||null, branch_label||null, city||null, address||null, req.params.id, req.shopId]
+       RETURNING id, name, email, branch_label, city, address`,
+      hash
+        ? [name||null, branch_label||null, city||null, address||null, req.params.id, req.shopId, emailToSet, hash]
+        : [name||null, branch_label||null, city||null, address||null, req.params.id, req.shopId, emailToSet]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Sucursal no encontrada' });
-    res.json(result.rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    res.json({ ...result.rows[0], credentials_changed: !!(hash || emailToSet), password_changed: !!hash });
+  } catch(e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
+    res.status(500).json({ error: e.message });
+  }
 });
+
+// Fecha del último cambio de contraseña: las sesiones abiertas antes quedan cerradas
+let _pwdChangedCol = null;
+function ensurePasswordChangedCol() {
+  if (!_pwdChangedCol) {
+    _pwdChangedCol = pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ')
+      .catch(e => { _pwdChangedCol = null; throw e; });
+  }
+  return _pwdChangedCol;
+}
 
 // ── DELETE /api/enterprise/branches/:id — desactivar sucursal ────────────────
 router.delete('/branches/:id', auth, enterpriseOnly, async (req, res) => {
@@ -280,7 +320,7 @@ router.get('/stats', auth, enterpriseOnly, async (req, res) => {
   try {
     // Sucursales (y la sede del dueño si tiene datos propios)
     const list = await pool.query(
-      `SELECT s.id, s.name, s.branch_label, s.wpp_connected, s.subscription_status,
+      `SELECT s.id, s.name, s.email, s.branch_label, s.wpp_connected, s.subscription_status,
               s.city, s.address, s.created_at
          FROM shops s
         WHERE (s.id=$1 AND ${OWNER_HAS_SITE_DATA_SQL}) OR (s.parent_enterprise_id=$1 AND s.is_branch=TRUE)`,

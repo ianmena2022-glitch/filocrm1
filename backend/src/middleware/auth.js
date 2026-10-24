@@ -31,10 +31,18 @@ module.exports = async function auth(req, res, next) {
   // abiertas con el rol viejo se cierran para que vuelvan a entrar con los permisos correctos.
   if (payload.isEnterpriseOwner || payload.isBranch) {
     try {
-      const r = await pool.query('SELECT is_enterprise_owner, is_branch FROM shops WHERE id=$1', [payload.shopId]);
+      // to_jsonb: funciona aunque la columna password_changed_at todavía no exista
+      const r = await pool.query(
+        `SELECT is_enterprise_owner, is_branch, to_jsonb(s)->>'password_changed_at' AS pca FROM shops s WHERE id=$1`,
+        [payload.shopId]
+      );
       const s = r.rows[0];
       if (!s || !!s.is_enterprise_owner !== !!payload.isEnterpriseOwner || !!s.is_branch !== !!payload.isBranch) {
         return res.status(401).json({ error: 'Tu sesión cambió. Volvé a iniciar sesión.' });
+      }
+      // El dueño enterprise le cambió la contraseña a la sucursal: las sesiones abiertas antes se cierran
+      if (payload.isBranch && s.pca && payload.iat && payload.iat * 1000 < new Date(s.pca).getTime() - 1000) {
+        return res.status(401).json({ error: 'La contraseña de la sucursal cambió. Volvé a iniciar sesión.' });
       }
     } catch (e) {
       console.error('[auth] no se pudo verificar la cuenta enterprise:', e.message);
