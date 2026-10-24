@@ -6,6 +6,14 @@ const path      = require('path');
 const fs        = require('fs');
 const pool      = require('./db/pool');
 
+// ── Servicio de WhatsApp aparte ──────────────────────────────────────────────
+// En Railway hay dos servicios del mismo repositorio: la app (este archivo) y WhatsApp
+// (WPP_IS_WORKER=1, src/wpp-worker.js). Así los deploys de la app no reconectan los WhatsApp.
+if (process.env.WPP_IS_WORKER === '1') {
+  require('./wpp-worker');
+  return;
+}
+
 // ── Prevenir crash de Node.js 20 por unhandledRejection ────────────────────
 // Baileys / WhatsApp emite rechazos en segundo plano. Sin este handler,
 // Node.js 20 crashea el proceso y Railway devuelve su propia página HTML 502.
@@ -133,6 +141,17 @@ app.use('/api/payments/filo-cancel',  require('./routes/payments'));
 app.use('/api/payments',              require('./routes/payments'));
 const recurringRouter = require('./routes/recurring');
 app.use('/api/recurring', recurringRouter);
+
+// El servicio de WhatsApp avisa eventos en vivo (p.ej. membresía verificada por el bot) para que
+// lleguen a los CRM abiertos, que están conectados a este servidor.
+app.post('/api/internal/sse', (req, res) => {
+  const secret = process.env.WPP_WORKER_SECRET;
+  if (!secret || req.headers['x-wpp-secret'] !== secret) return res.status(401).json({ error: 'No autorizado' });
+  const { shopId, event, payload } = req.body || {};
+  if (!shopId || !event) return res.status(400).json({ error: 'Datos incompletos' });
+  require('./services/sse').emit(shopId, String(event), payload || {});
+  res.json({ ok: true });
+});
 
 // Test WhatsApp bot
 app.get('/test', (req, res) => {
@@ -584,13 +603,18 @@ async function start() {
       console.error('❌ Error en initDB:', e.message);
     }
 
-    try {
-      const wpp = require('./services/whatsapp');
-      await wpp.reconnectAllShops();
-      console.log('📱 WhatsApp: reconexión iniciada');
-    } catch(e) {
-      console.error('WhatsApp reconnect error:', e.message);
-    }
+    // WhatsApp dentro de este servidor (sin servicio aparte): esperar antes de reconectar para que
+    // el servidor anterior del deploy cierre sus sesiones (nunca dos conexiones del mismo número).
+    // Con WPP_WORKER_URL esto no conecta nada: lo hace el servicio de WhatsApp.
+    setTimeout(async () => {
+      try {
+        const wpp = require('./services/whatsapp');
+        await wpp.reconnectAllShops();
+        console.log('📱 WhatsApp: reconexión iniciada');
+      } catch(e) {
+        console.error('WhatsApp reconnect error:', e.message);
+      }
+    }, process.env.WPP_WORKER_URL ? 0 : (parseInt(process.env.WPP_START_DELAY_MS) || 30000));
     try {
       const { runDailyGeneration } = require('./routes/recurring');
       runDailyGeneration();
@@ -609,3 +633,19 @@ async function start() {
 }
 
 start();
+
+// Railway avisa con SIGTERM antes de apagar: si WhatsApp corre en este servidor, guardar y cerrar
+// las sesiones prolijamente para que el servidor nuevo las retome sin conexiones duplicadas.
+let _stopping = false;
+async function gracefulStop(sig) {
+  if (_stopping) return;
+  _stopping = true;
+  console.log(`🛑 ${sig}: cerrando...`);
+  try {
+    const wpp = require('./services/whatsapp');
+    if (!wpp.REMOTE && wpp.shutdownAll) await Promise.race([wpp.shutdownAll(), new Promise(r => setTimeout(r, 15000))]);
+  } catch (_) {}
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulStop('SIGTERM'));
+process.on('SIGINT', () => gracefulStop('SIGINT'));

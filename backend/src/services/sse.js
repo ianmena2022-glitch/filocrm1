@@ -22,6 +22,19 @@ function leave(shopId, res) {
 }
 
 function emit(shopId, event, payload) {
+  // En el servicio de WhatsApp no hay navegadores conectados: el evento se reenvía a la app
+  // principal, que es la que tiene abiertas las conexiones en vivo del CRM.
+  if (process.env.WPP_IS_WORKER === '1') {
+    const main = process.env.MAIN_APP_URL;
+    if (main) {
+      fetch(String(main).replace(/\/+$/, '') + '/api/internal/sse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-wpp-secret': process.env.WPP_WORKER_SECRET || '' },
+        body: JSON.stringify({ shopId, event, payload }),
+      }).catch(() => {});
+    }
+    return;
+  }
   const sid = Number(shopId);
   const set = _rooms.get(sid);
   if (!set || !set.size) return;
