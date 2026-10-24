@@ -870,9 +870,10 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
 
     // Notificar por WhatsApp — fire-and-forget para no bloquear la respuesta HTTP
-    // Determinar shopId para WPP: usar enterprise owner si la sucursal no tiene WPP propio
+    // Sale del WhatsApp del local; si es una sucursal sin WhatsApp propio (o con WhatsApp
+    // compartido), sendText usa el del dueño enterprise
     const wpp = require('../services/whatsapp');
-    const wppShopId = shopData.parent_enterprise_id || shopData.id;
+    const wppShopId = shopData.id;
     console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppShopId=${wppShopId} client_phone=${client_phone||'null'}`);
 
     if (requiresSena) {

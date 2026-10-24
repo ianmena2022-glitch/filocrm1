@@ -1222,17 +1222,43 @@ async function getStatus(shopId) {
 }
 
 // Fix #7: resolver shopId real para WPP — si la sucursal no tiene socket, usar enterprise owner
+// Desde qué WhatsApp sale un mensaje de una sucursal:
+//   1) el suyo, si está conectado;
+//   2) el del dueño enterprise, si el dueño eligió "WhatsApp compartido" o si la sucursal no tiene
+//      uno propio (y el del dueño está conectado o tiene sesión guardada);
+//   3) si no, el suyo (se intenta restaurar su sesión guardada).
+// Antes, cuando la sucursal no estaba conectada en ese instante, se mandaba siempre desde el del
+// dueño, aunque el dueño no tuviera WhatsApp (pasa al pasar de Staff a Enterprise: la sede
+// principal se queda con su WhatsApp y la cuenta nueva del dueño no tiene ninguno).
 async function resolveWppShopId(shopId) {
   if (sockets[shopId] && statuses[shopId] === 'connected') return shopId;
   try {
-    const r = await pool.query('SELECT parent_enterprise_id FROM shops WHERE id=$1', [shopId]);
-    const parentId = r.rows[0]?.parent_enterprise_id;
+    const r = await pool.query(
+      `SELECT s.parent_enterprise_id, (s.wpp_session IS NOT NULL) AS own_session,
+              p.enterprise_shared_wpp AS shared, (p.wpp_session IS NOT NULL) AS parent_session
+         FROM shops s LEFT JOIN shops p ON p.id = s.parent_enterprise_id
+        WHERE s.id=$1`, [shopId]);
+    const x = r.rows[0];
+    const parentId = x?.parent_enterprise_id;
     if (parentId) {
-      console.log(`[WPP] resolveWppShopId: shop ${shopId} → usando enterprise owner ${parentId}`);
-      return parentId;
+      const parentUsable = (sockets[parentId] && statuses[parentId] === 'connected') || x.parent_session;
+      if (parentUsable && (x.shared || !x.own_session)) {
+        console.log(`[WPP] resolveWppShopId: shop ${shopId} → usando el WhatsApp del enterprise ${parentId}`);
+        return parentId;
+      }
     }
   } catch(e) { /* fallback al shopId original */ }
   return shopId;
+}
+
+// ¿Este local tiene algún WhatsApp desde el que mandar (propio o el del enterprise)?
+async function hasWhatsApp(shopId) {
+  const id = await resolveWppShopId(shopId);
+  if (sockets[id] && statuses[id] === 'connected') return true;
+  try {
+    const r = await pool.query('SELECT wpp_connected, (wpp_session IS NOT NULL) AS has_session FROM shops WHERE id=$1', [id]);
+    return !!(r.rows[0]?.wpp_connected || r.rows[0]?.has_session);
+  } catch (_) { return false; }
 }
 
 // ─── Bajas (opt-out) ─────────────────────────────────────────────────────────
@@ -1552,4 +1578,4 @@ function wppStats() {
   };
 }
 
-module.exports = { __test: { sockets, statuses, guard: wppGuard }, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard }, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };

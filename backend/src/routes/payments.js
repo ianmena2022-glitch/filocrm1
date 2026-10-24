@@ -126,7 +126,7 @@ router.post('/subscription', auth, async (req, res) => {
       const row = membData.rows[0];
       if (row?.phone) {
         const wpp = require('../services/whatsapp');
-        const wppShopId = row.parent_enterprise_id || req.shopId;
+        const wppShopId = req.shopId; // sendText usa el del enterprise si esta sucursal no tiene WhatsApp propio
         const msg = `✂️ *${row.shop_name}* — Membresía\n\nHola ${row.name}! 👋\n\nTu membresía está lista. Para activarla hacé clic en el siguiente link y completá el pago:\n\n🔗 ${paymentUrl}\n\n💳 Podés pagar con tarjeta de crédito o débito a través de Mercado Pago.\n\n¡Gracias! 🙌`;
         await wpp.sendText(wppShopId, row.phone, msg);
         console.log(`[MP] WhatsApp enviado a ${row.phone} desde shop ${wppShopId}`);

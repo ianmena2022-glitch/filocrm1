@@ -531,12 +531,13 @@ router.put('/:id/status', auth, async (req, res) => {
     // pantalla no tiene que esperarlo.
     if (status === 'confirmed' && appt.client_id) (async () => {
       try {
-        const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug, parent_enterprise_id FROM shops WHERE id=$1', [shopId])).rows[0];
+        const shopData = (await pool.query('SELECT name, wpp_connected, booking_slug, parent_enterprise_id FROM shops WHERE id=$1', [appt.shop_id])).rows[0];
         const client = (await pool.query('SELECT name, phone FROM clients WHERE id=$1', [appt.client_id])).rows[0];
-        if (shopData?.wpp_connected && client?.phone) {
+        const wpp = require('../services/whatsapp');
+        // Sale del WhatsApp del local del turno (o del enterprise si corresponde: lo decide sendText)
+        if (client?.phone && await wpp.hasWhatsApp(appt.shop_id)) {
           const { generateMessage } = require('../services/ai');
-          const wpp = require('../services/whatsapp');
-          const wppShopId = shopData.parent_enterprise_id || shopId;
+          const wppShopId = appt.shop_id;
           const fecha = appt.date ? new Date(appt.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
           const hora = appt.time_start ? appt.time_start.slice(0,5) : '';
           let msg = await generateMessage(shopId, 'turno_confirmado', {
@@ -637,11 +638,12 @@ router.put('/:id/status', auth, async (req, res) => {
       const client = updatedClient.rows[0];
 
       // El "gracias + puntos" sale en segundo plano: cobrar no espera a WhatsApp ni a la IA
-      if (client && client.phone && shopData.wpp_connected) (async () => {
+      if (client && client.phone) (async () => {
         try {
           const wpp = require('../services/whatsapp');
+          if (!(await wpp.hasWhatsApp(appt.shop_id))) return;
           const { generateMessage } = require('../services/ai');
-          const wppShopId = shopData.parent_enterprise_id || shopId;
+          const wppShopId = appt.shop_id;
           const slug = shopData.booking_slug;
           const tiendaLink = slug
             ? `${process.env.APP_URL || 'https://filocrm1-production.up.railway.app'}/tienda/${slug}`
