@@ -28,4 +28,24 @@ function renderTemplate(tpl, vars) {
   return out;
 }
 
-module.exports = { normalizePhoneAR, renderTemplate };
+// Varía el saludo de un mensaje automático ("¡Hola Juan!" → "Hola Juan 👋", "¡Buenas Juan!", …).
+// Mandar el mismo texto idéntico a muchos clientes es una huella de spam para WhatsApp; con el
+// saludo cambiado cada mensaje sale distinto sin tocar el contenido. Solo toca saludos de la
+// forma "Hola <nombre>!" al principio; cualquier otro texto queda igual.
+const GREETINGS = [
+  (n) => `¡Hola ${n}!`,
+  (n) => `Hola ${n}!`,
+  (n) => `¡Hola ${n}! 👋`,
+  (n) => `Hola ${n} 👋`,
+  (n) => `¡Buenas ${n}!`,
+];
+function varyGreeting(text, rnd = Math.random) {
+  const s = String(text || '');
+  const m = s.match(/^¡?Hola\s+([^\n!,.?¿¡]{1,30}?)!( ?👋)?/);
+  if (!m) return s;
+  const name = m[1].trim();
+  if (!name) return s;
+  return GREETINGS[Math.floor(rnd() * GREETINGS.length)](name) + s.slice(m[0].length);
+}
+
+module.exports = { normalizePhoneAR, renderTemplate, varyGreeting };

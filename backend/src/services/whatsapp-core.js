@@ -183,6 +183,7 @@ const qrCodes  = {};
 const statuses = {};
 const decryptErrors = {};
 const ciphertextLastWarning = {}; // debounce: última vez que se avisó por JID
+const _cipherResetAt = new Map();  // `${shopId}:${jid}` → último reset de sesión Signal
 
 // Backoff de QR — evita rate-limit de WhatsApp por demasiados intentos de vinculación
 const qrAttempts     = {}; // shopId -> cantidad de QRs generados en la sesión actual
@@ -209,25 +210,41 @@ const _ciphertextCleanupInterval = setInterval(() => {
 }, 10 * 60 * 1000);
 if (typeof _ciphertextCleanupInterval.unref === 'function') _ciphertextCleanupInterval.unref();
 
-// Health check: cada 2 min verifica que el socket siga vivo con sendPresenceUpdate.
+// Health check: cada 2 min verifica que el socket siga vivo con el mismo ping que usa
+// WhatsApp Web. Antes se mandaba presencia 'available', lo que dejaba el número "en línea"
+// las 24 hs (señal fuerte de bot y el celular del dueño deja de recibir notificaciones).
 // Si falla 2 veces consecutivas, marcamos wpp_connected=FALSE y lanzamos reconexión.
 // Esto detecta sockets zombies (WS muerto sin disparar connection.close) que normalmente
 // hacían que sendText se cuelgue 30s.
+// De paso, cada 10 min guarda la sesión en la DB: si el servicio se cae de golpe, al volver
+// restaura claves recientes y no una copia vieja (que provoca "Bad MAC" con los contactos).
 const healthIntervals = {};
 const healthFailures = {};
+const healthTicks = {};
+function _pingWA(sock) {
+  if (!sock.ws?.isOpen) return Promise.reject(new Error('ws_closed'));
+  return sock.query({
+    tag: 'iq',
+    attrs: { id: sock.generateMessageTag(), to: 's.whatsapp.net', type: 'get', xmlns: 'w:p' },
+    content: [{ tag: 'ping', attrs: {} }],
+  });
+}
 function startHealthCheck(shopId) {
   stopHealthCheck(shopId);
   healthFailures[shopId] = 0;
+  healthTicks[shopId] = 0;
   const h = setInterval(async () => {
     const sock = sockets[shopId];
     if (!sock || statuses[shopId] !== 'connected') { stopHealthCheck(shopId); return; }
     try {
       // Timeout agresivo para detectar zombies
       await Promise.race([
-        sock.sendPresenceUpdate('available'),
+        _pingWA(sock),
         new Promise((_, rej) => setTimeout(() => rej(new Error('health_timeout')), 10000))
       ]);
       healthFailures[shopId] = 0;
+      healthTicks[shopId] = (healthTicks[shopId] || 0) + 1;
+      if (healthTicks[shopId] % 5 === 0) await saveSessionToDB(shopId);
     } catch (e) {
       healthFailures[shopId] = (healthFailures[shopId] || 0) + 1;
       console.warn(`[WPP health] shop ${shopId} fallo ${healthFailures[shopId]}/2: ${e.message}`);
@@ -247,12 +264,13 @@ function startHealthCheck(shopId) {
 function stopHealthCheck(shopId) {
   if (healthIntervals[shopId]) { clearInterval(healthIntervals[shopId]); delete healthIntervals[shopId]; }
   delete healthFailures[shopId];
+  delete healthTicks[shopId];
 }
 
 // Dedup de mensajes entrantes por shopId:msgId
 const processedMsgIds = new Set();
 
-const { normalizePhoneAR, renderTemplate } = require('./wppText');
+const { normalizePhoneAR, renderTemplate, varyGreeting } = require('./wppText');
 
 // Simula escritura humana antes de mandar: presence 'composing' + delay según largo del msg.
 // Reduce señales que WhatsApp usa para detectar bots.
@@ -802,27 +820,18 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
     browser: Browsers.ubuntu('Chrome'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 30000,
-    keepAliveIntervalMs: 15000,
+    keepAliveIntervalMs: 30000, // igual que WhatsApp Web (antes 15 s: el doble de pings que un cliente oficial)
     syncFullHistory: false,
     markOnlineOnConnect: false,
     retryRequestDelayMs: 500,
     maxMsgRetryCount: 3,
     fireInitQueries: true,
     logger: { level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {}, child: () => ({ level: 'silent', log: () => {}, info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, trace: () => {} }) },
-    getMessage: async (key) => {
-      // Devolver el último texto del cliente desde ai.conversations si lo tenemos,
-      // para que Baileys pueda re-descifrar en retries.
-      try {
-        const { getLastUserMessage } = require('./ai');
-        if (typeof getLastUserMessage === 'function') {
-          const jid = key?.remoteJid || '';
-          const phone = jid.split('@')[0];
-          const text = getLastUserMessage(shopId, phone);
-          if (text) return { conversation: text };
-        }
-      } catch(_) {}
-      return { conversation: '' };
-    },
+    // Cuando un contacto no pudo descifrar un mensaje NUESTRO, su WhatsApp pide que se lo
+    // reenviemos: hay que devolver exactamente ese mensaje. Antes se devolvía el último texto
+    // del cliente o uno vacío (inconsistencia que un cliente oficial nunca tiene). Si ya no lo
+    // tenemos, undefined: no se reenvía nada.
+    getMessage: async (key) => _getSent(shopId, key?.id),
     shouldIgnoreJid: (jid) => {
       if (jid === 'status@broadcast') return true;
       if (jid.endsWith('@newsletter')) return true;
@@ -1036,16 +1045,25 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
 
         // messageStubType 2 = CIPHERTEXT — descifrado fallido
         if (msg.messageStubType === 2) {
-          console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
-          // 1) Limpiar archivo de sesión
-          await clearJidSession(shopId, jid, phone);
-          // 2) assertSessions solo con el JID original (para no mezclar con phone JID que puede ser incorrecto)
           const phoneJid = phone && phone.length >= 10 ? `${phone}@s.whatsapp.net` : null;
-          try {
-            await sock.assertSessions([jid], true);
-            console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${jid}`);
-          } catch(e) {
-            console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
+          // Resetear la sesión Signal como mucho 1 vez cada 10 min por contacto: pedir claves
+          // nuevas a la fuerza por cada mensaje que falla es tráfico raro para WhatsApp.
+          const resetKey = `${shopId}:${jid}`;
+          if (Date.now() - (_cipherResetAt.get(resetKey) || 0) >= 10 * 60 * 1000) {
+            _cipherResetAt.set(resetKey, Date.now());
+            if (_cipherResetAt.size > 2000) _cipherResetAt.clear();
+            console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — reseteando sesión Signal`);
+            // 1) Limpiar archivo de sesión
+            await clearJidSession(shopId, jid, phone);
+            // 2) assertSessions solo con el JID original (para no mezclar con phone JID que puede ser incorrecto)
+            try {
+              await sock.assertSessions([jid], true);
+              console.log(`[WPP] CIPHERTEXT: assertSessions OK para ${jid}`);
+            } catch(e) {
+              console.log(`[WPP] CIPHERTEXT: assertSessions error: ${e.message}`);
+            }
+          } else {
+            console.log(`[WPP] CIPHERTEXT (stub=2) de ${phoneRaw} — sesión ya reseteada hace poco, no se repite`);
           }
           // 3) Enviar aviso SOLO si el contacto tiene un pago pendiente (seña o membresía)
           // Si no tiene pago pendiente, no tiene sentido avisarle — era un mensaje normal que falló al descifrar
@@ -1067,7 +1085,7 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           const sendJid = jid.endsWith('@lid') ? jid : (phoneJid || null);
           if (sendJid) {
             try {
-              await sock.sendMessage(sendJid, { text: warning });
+              _rememberSent(shopId, await sock.sendMessage(sendJid, { text: warning }));
               console.log(`[WPP] CIPHERTEXT: aviso enviado a ${sendJid}`);
             } catch(e) {
               console.error('[WPP] CIPHERTEXT sock.sendMessage error:', e.message);
@@ -1401,10 +1419,30 @@ async function _isKnownContact(shopId, phone) {
   return false;
 }
 
+// Mensajes enviados recientes, para poder reenviarlos idénticos si el destinatario lo pide
+// (ver getMessage en makeWASocket). Solo memoria: 24 hs, hasta 3000 mensajes.
+const _sentMsgs = new Map();               // `${shopId}:${msgId}` → { message, at }
+const SENT_TTL_MS = 24 * 3600 * 1000;
+function _rememberSent(shopId, result) {
+  const id = result?.key?.id;
+  if (!id || !result.message) return;
+  _sentMsgs.set(`${shopId}:${id}`, { message: result.message, at: Date.now() });
+  if (_sentMsgs.size > 3000) {
+    for (const k of Array.from(_sentMsgs.keys()).slice(0, 1000)) _sentMsgs.delete(k);
+  }
+}
+function _getSent(shopId, id) {
+  if (!id) return undefined;
+  const hit = _sentMsgs.get(`${shopId}:${id}`);
+  if (!hit || Date.now() - hit.at > SENT_TTL_MS) return undefined;
+  return hit.message;
+}
+
 const _waExists = new Map();               // jid → { exists, at }
 async function _ensureOnWhatsApp(sock, jid) {
   const hit = _waExists.get(jid);
-  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) {
+  // 7 días: cada consulta de "¿este número tiene WhatsApp?" es tráfico que WhatsApp mira
+  if (hit && Date.now() - hit.at < 7 * 24 * 3600 * 1000) {
     if (hit.exists === false) { const e = new Error('El número no tiene WhatsApp'); e.code = 'NOT_ON_WHATSAPP'; throw e; }
     return;
   }
@@ -1462,6 +1500,7 @@ async function _deliver(wppShopId, sock, jid, phone, text, kind, opts = {}) {
     wppGuard.failed(wppShopId);
     throw err;
   });
+  _rememberSent(wppShopId, result);
   wppGuard.succeeded(wppShopId);
   wppGuard.record(wppShopId, phone, kind, { firstContact });
   return result;
@@ -1534,6 +1573,8 @@ async function sendText(shopId, phone, message, opts = {}) {
   console.log(`Baileys sendText → ${jid} (shop ${wppShopId}, ${kind}${firstContact ? ', contacto nuevo' : ''})`);
   _touch(wppShopId);
 
+  // Mensajes automáticos: saludo variado para que no salgan todos idénticos
+  if (kind !== 'reply') message = varyGreeting(message);
   const result = await _deliver(wppShopId, sock, jid, phoneClean, message, kind, { firstContact });
   console.log(`Baileys sendText OK → ${result?.key?.id}`);
   return result;
