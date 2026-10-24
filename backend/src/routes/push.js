@@ -37,6 +37,41 @@ router.post('/subscribe', auth, async (req, res) => {
   }
 });
 
+// ── App instalada (PWA) ──────────────────────────────────────────────────────
+// El navegador no avisa cuando alguien instala la app, pero sí se puede saber cuándo la abren
+// como app instalada: cada dispositivo se registra (sin datos personales, solo un id al azar).
+let _pwaTable = null;
+function ensurePwaTable() {
+  if (!_pwaTable) {
+    _pwaTable = pool.query(`CREATE TABLE IF NOT EXISTS pwa_devices (
+        shop_id    INTEGER NOT NULL,
+        device_id  VARCHAR(64) NOT NULL,
+        platform   VARCHAR(20),
+        first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (shop_id, device_id))`)
+      .catch(e => { _pwaTable = null; throw e; });
+  }
+  return _pwaTable;
+}
+
+// POST /api/push/device { device_id, platform } — solo lo llama la app instalada
+router.post('/device', auth, async (req, res) => {
+  const deviceId = String(req.body?.device_id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+  const platform = ['ios', 'android', 'windows', 'mac', 'linux', 'otro'].includes(req.body?.platform) ? req.body.platform : 'otro';
+  if (!deviceId) return res.status(400).json({ error: 'device_id requerido' });
+  try {
+    await ensurePwaTable();
+    await pool.query(
+      `INSERT INTO pwa_devices (shop_id, device_id, platform) VALUES ($1,$2,$3)
+       ON CONFLICT (shop_id, device_id) DO UPDATE SET last_seen = NOW(), platform = EXCLUDED.platform`,
+      [req.shopId, deviceId, platform]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error' }); }
+});
+router._ensurePwaTable = ensurePwaTable;
+
 // POST /api/push/unsubscribe — borra una suscripción (al revocar permisos)
 router.post('/unsubscribe', auth, async (req, res) => {
   const { endpoint } = req.body || {};

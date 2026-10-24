@@ -785,7 +785,22 @@ function logout() {
   location.reload();
 }
 
+// Si FILO está abierto como app instalada (PWA), registrar este dispositivo para que el
+// admin vea quién la tiene instalada. Un id al azar por dispositivo, sin datos personales.
+function reportPwaDevice() {
+  try {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (!standalone || !token) return;
+    let id = localStorage.getItem('filo_device_id');
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9-]/g, ''); localStorage.setItem('filo_device_id', id); }
+    const ua = navigator.userAgent;
+    const platform = /iPad|iPhone|iPod/.test(ua) ? 'ios' : /Android/.test(ua) ? 'android' : /Windows/.test(ua) ? 'windows' : /Mac/.test(ua) ? 'mac' : /Linux/.test(ua) ? 'linux' : 'otro';
+    fetch('/api/push/device', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ device_id: id, platform }) }).catch(() => {});
+  } catch (_) {}
+}
+
 function startApp() {
+  reportPwaDevice();
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
 

@@ -355,7 +355,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Trial / Desde</th>
               <th>Barberos</th>
               <th>🎁 Meses</th>
-              <th>WhatsApp</th>
+              <th>WhatsApp / App</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -380,7 +380,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
               <th>Trial / Desde</th>
               <th>Barberos</th>
               <th>🎁 Meses</th>
-              <th>WhatsApp</th>
+              <th>WhatsApp / App</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -1402,9 +1402,9 @@ function renderTreeRow(a, depth, parentId) {
       : `<span style="color:var(--g);font-size:12px">0</span>`;
 
   // WPP
-  const wppDot = a.wpp_connected
+  const wppDot = (a.wpp_connected
     ? `<span style="color:var(--gr)">● Conectado</span>`
-    : `<span style="color:var(--g)">○ Sin conectar</span>`;
+    : `<span style="color:var(--g)">○ Sin conectar</span>`) + appInfoHtml(a);
 
   // Nombre con indentación
   const toggleEl = hasKids
@@ -1501,6 +1501,24 @@ function isArchivedAccount(a) {
   const ref = a.expired_at || a.trial_ends_at;
   if (!ref) return false;
   return daysSince(ref) > ARCHIVE_AFTER_DAYS;
+}
+
+// App instalada (PWA) y notificaciones: se registra cuando abren FILO desde la app instalada
+function appInfoHtml(a) {
+  const n = parseInt(a.pwa_count) || 0, pushN = parseInt(a.push_count) || 0;
+  const plat = { ios: 'iPhone', android: 'Android', windows: 'PC', mac: 'Mac', linux: 'PC', otro: 'otro' };
+  const ago = (iso) => {
+    if (!iso) return '';
+    const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    return m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
+  };
+  const app = n
+    ? `<div style="margin-top:3px;color:#a78bfa" title="Último uso: ${a.pwa_last_seen ? new Date(a.pwa_last_seen).toLocaleString('es-AR') : ''}">📲 App instalada · ${n} disp.${a.pwa_platforms ? ' (' + String(a.pwa_platforms).split(',').map(p => plat[p] || p).join(', ') + ')' : ''} · ${ago(a.pwa_last_seen)}</div>`
+    : `<div style="margin-top:3px;color:var(--g)">📲 Sin app</div>`;
+  const notif = pushN
+    ? `<div style="color:#fbbf24">🔔 Notificaciones · ${pushN} disp.</div>`
+    : `<div style="color:var(--g)">🔕 Sin notificaciones</div>`;
+  return app + notif;
 }
 
 function renderAccountsTable(treeRoots, tbodyId = 'accounts-tbody', emptyMsg = 'Sin resultados') {

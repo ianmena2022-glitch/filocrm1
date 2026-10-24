@@ -166,6 +166,7 @@ function ensureKpiColumn() {
 router.get('/accounts', adminAuth, async (req, res) => {
   try {
     await ensureKpiColumn();
+    await require('./push')._ensurePwaTable().catch(() => {});
     const result = await pool.query(`
       SELECT
         s.id, s.name, s.email, s.phone, s.city,
@@ -180,6 +181,11 @@ router.get('/accounts', adminAuth, async (req, res) => {
         s.parent_shop_id, s.parent_enterprise_id,
         s.barber_commission_pct,
         COALESCE(s.free_months, 0) AS free_months,
+        -- App instalada (PWA) y notificaciones activadas
+        (SELECT COUNT(*) FROM pwa_devices p WHERE p.shop_id = s.id)                    AS pwa_count,
+        (SELECT MAX(p.last_seen) FROM pwa_devices p WHERE p.shop_id = s.id)            AS pwa_last_seen,
+        (SELECT string_agg(DISTINCT p.platform, ',') FROM pwa_devices p WHERE p.shop_id = s.id) AS pwa_platforms,
+        (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.shop_id = s.id)           AS push_count,
         COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
         COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s
