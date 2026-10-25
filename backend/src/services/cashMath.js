@@ -503,7 +503,7 @@ async function methodMovementsForDay(shopId, date, method, tz) {
     const num = (v) => parseFloat(v || 0);
     const movements = [];
     appts.rows.forEach(a => movements.push({
-      kind: 'appointment', time: hhmm(a.time_start), sign: 1, amount: num(a.price),
+      kind: 'appointment', id: a.id, time: hhmm(a.time_start), sign: 1, amount: num(a.price),
       title: a.client_name || 'Sin nombre', subtitle: a.service_name || '', barber_name: a.barber_name || null,
       profit: num(a.profit), commission_amount: num(a.commission_amount), sena_applied: num(a.sena_applied), is_split: !!a.is_split,
     }));

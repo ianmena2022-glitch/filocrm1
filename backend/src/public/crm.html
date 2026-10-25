@@ -7920,6 +7920,8 @@ async function confirmPayment(apptId) {
   try {
     await api('PUT', `/appointments/${apptId}/status`, body);
     document.getElementById('payment-popup')?.remove();
+    // Si se corrigió desde Caja, refrescar el detalle abierto de las cuentas
+    if (window._payEdit) document.querySelectorAll('[id^="method-detail-"]').forEach(d => { if (d.style.display !== 'none') { const k = d.id.replace('method-detail-', ''); d.style.display = 'none'; toggleMethodDetail(k); } });
     showSuccessPop({ title: window._payEdit ? 'Cobro corregido' : (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
@@ -13374,6 +13376,7 @@ function renderMethodDetail(el, data) {
           <div style="text-align:right;flex-shrink:0;margin-left:10px">
             <div style="font-size:13px;font-weight:700;color:${isAppt ? 'inherit' : color}">${out ? '−' : (isAppt ? '' : '+')}${fmt(m.amount)}</div>
             ${isAppt ? `<div style="font-size:10px;color:#4CAF50">Gan. ${fmt(m.profit)}</div>${m.commission_amount > 0 ? `<div style="font-size:10px;color:#FF9800">Com. ${fmt(m.commission_amount)}</div>` : ''}` : ''}
+            ${isAppt && m.id && !currentShop?.is_barber ? `<button onclick="editPaymentById(${m.id})" title="Corregir cómo se pagó" style="margin-top:4px;background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);color:#FFD100;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:600;cursor:pointer">✏️ Corregir</button>` : ''}
           </div>
         </div>`);
     });
