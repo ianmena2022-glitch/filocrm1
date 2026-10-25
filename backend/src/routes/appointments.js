@@ -355,11 +355,44 @@ async function _writeAppointmentSplits(db, shopId, apptId, clean) {
   };
 }
 
+// GET /api/appointments/:id/payment — cómo se cobró un turno (para corregir el cobro)
+router.get('/:id/payment', auth, async (req, res) => {
+  if (req.isBarber) return res.status(403).json({ error: 'Solo el dueño puede corregir cobros' });
+  const shopId = realShopId(req);
+  const shopCond = req.isEnterpriseOwner
+    ? `(shop_id = $2 OR shop_id IN (SELECT id FROM shops WHERE parent_enterprise_id = $2 AND is_branch = TRUE))`
+    : `shop_id = $2`;
+  try {
+    const q = await pool.query(
+      `SELECT * FROM appointments WHERE id=$1 AND ${shopCond}`, [req.params.id, shopId]
+    );
+    if (!q.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
+    const a = q.rows[0];
+    let splits = [];
+    try {
+      splits = (await pool.query(
+        'SELECT method, amount FROM payment_splits WHERE appointment_id=$1 ORDER BY id', [a.id]
+      )).rows.map(s => ({ method: s.method, amount: parseFloat(s.amount) }));
+    } catch (_) { /* sin tabla de splits */ }
+    res.json({
+      id: a.id, status: a.status, client_name: a.client_name, service_name: a.service_name,
+      price: parseFloat(a.price || 0),
+      sena_amount: a.sena_status === 'confirmed' ? parseFloat(a.sena_amount || 0) : 0,
+      payment_method: a.payment_method, tip: parseFloat(a.tip || 0), tip_method: a.tip_method || null,
+      splits,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.put('/:id/status', auth, async (req, res) => {
   const { status, payment_method, tip, payment_splits, tip_method, edit_payment } = req.body;
   const shopId = realShopId(req);
   const validStatuses = ['pending','confirmed','completed','noshow','cancelled','waiting_sena'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
+  // Corregir un cobro ya hecho: solo el dueño, y solo sobre un turno cobrado
+  if (edit_payment && (req.isBarber || status !== 'completed')) {
+    return res.status(403).json({ error: 'Solo el dueño puede corregir un cobro' });
+  }
 
   try {
     const shopConditionStatus = req.isEnterpriseOwner
@@ -388,6 +421,9 @@ router.put('/:id/status', auth, async (req, res) => {
     const isNewCharge = status === 'completed' && prevStatus !== 'completed';
     if (status === 'completed' && prevStatus === 'completed' && !edit_payment) {
       return res.status(409).json({ error: 'Este turno ya fue cobrado. Actualizá la agenda.', code: 'ALREADY_COMPLETED' });
+    }
+    if (edit_payment && prevStatus !== 'completed') {
+      return res.status(400).json({ error: 'Este turno todavía no fue cobrado' });
     }
 
     // Validar los splits ANTES de tomar el turno (si están mal no se toca nada)
@@ -478,6 +514,19 @@ router.put('/:id/status', auth, async (req, res) => {
     const appt = result.rows[0];
     const wasCompleted = prevStatus === 'completed';
     const nowCompleted = status === 'completed';
+
+    // Corrección de un cobro de un día que ya tiene cierre de caja: rehacer ese cierre para que
+    // los totales por método (efectivo, transferencia, …) queden con lo corregido
+    if (edit_payment) {
+      try {
+        const day = (await pool.query('SELECT date::text AS d FROM appointments WHERE id=$1', [appt.id])).rows[0].d;
+        const has = await pool.query('SELECT 1 FROM cash_registers WHERE shop_id=$1 AND date=$2', [appt.shop_id, day]);
+        if (has.rows.length) {
+          const { computeDayClose, saveDayClose } = require('../services/cashMath');
+          await saveDayClose(appt.shop_id, day, await computeDayClose(appt.shop_id, day));
+        }
+      } catch (e) { console.warn('[APPT] recalcular cierre tras corregir cobro:', e.message); }
+    }
 
     // Si el turno venía de la fila virtual, cobrarlo / cancelarlo cierra también al cliente en la fila
     // (así deja de aparecer "en el sillón" en la pantalla del barbero)

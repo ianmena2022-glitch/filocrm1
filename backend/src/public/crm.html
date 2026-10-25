@@ -6655,7 +6655,7 @@ async function openWalkInPayment(entryId, clientName, preServiceName='', prePric
 
   const popup = document.createElement('div');
   popup.id = 'walkin-payment-popup';
-  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px';
   popup.innerHTML = `
     <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto">
       <div style="font-size:16px;font-weight:700;margin-bottom:4px">💈 Walk-in: ${escHtml(clientName)}</div>
@@ -7371,6 +7371,7 @@ function renderApptCard(a) {
            ${a.member_booking && a.membership_id && a.status !== 'completed'
              ? `<button class="appt-btn" style="color:var(--yellow);border-color:rgba(255,209,0,.3)" onclick="memberCheckin(${a.id},${a.membership_id})" title="Check-in membresía">👑</button>`
              : (a.status !== 'completed' ? `<button class="appt-btn complete" onclick="updateApptStatus(${a.id},'completed')" title="Completar">✓</button>` : '')}
+           ${a.status === 'completed' && !currentShop?.is_barber ? `<button class="appt-btn" onclick="editPaymentById(${a.id})" title="Corregir cobro">💳</button>` : ''}
            ${a.status === 'pending' ? `<button class="appt-btn noshow" onclick="updateApptStatus(${a.id},'noshow')" title="No vino">✗</button>` : ''}
            <button class="appt-btn" onclick="deleteAppt(${a.id})" title="Eliminar">🗑</button>`}
     </div>
@@ -7604,12 +7605,22 @@ async function cancelSena(id) {
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
-// Popup método de pago al completar turno
-function showPaymentPopup(apptId) {
+// Corregir el cobro de un turno ya cobrado (método, pago dividido o propina)
+async function editPaymentById(apptId) {
+  try {
+    const pay = await api('GET', `/appointments/${apptId}/payment`);
+    showPaymentPopup(apptId, pay);
+  } catch (e) { showToast('❌', 'No se pudo abrir el cobro', e.message); }
+}
+
+// Popup método de pago al completar turno. Con `edit` (datos de /payment) corrige un cobro ya hecho.
+function showPaymentPopup(apptId, edit = null) {
   const existing = document.getElementById('payment-popup');
   if (existing) existing.remove();
 
-  const appt = _editApptCache[apptId] || {};
+  const appt = edit
+    ? { ...(_editApptCache[apptId] || {}), price: edit.price, sena_amount: edit.sena_amount, sena_status: edit.sena_amount > 0 ? 'confirmed' : null, barber_id: -1 }
+    : (_editApptCache[apptId] || {});
   const senaAmt = parseFloat(appt.sena_amount || 0);
   const hasSena = senaAmt > 0 && appt.sena_status === 'confirmed';
   const remaining = parseFloat(appt.price || 0) - senaAmt;
@@ -7622,11 +7633,13 @@ function showPaymentPopup(apptId) {
 
   const popup = document.createElement('div');
   popup.id = 'payment-popup';
-  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px';
   popup.innerHTML = `
-    <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:360px">
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo pagó el cliente?</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">Elegí el método de pago para registrar en caja</div>
+    <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:clamp(16px,5vw,28px);width:100%;max-width:380px;max-height:92dvh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">${edit ? '✏️ Corregir cobro' : '💳 ¿Cómo pagó el cliente?'}</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:${hasSena ? '12px' : '20px'}">${edit
+        ? `${escHtml(edit.client_name || 'Cliente')} · ${escHtml(edit.service_name || 'Sin servicio')} · $${parseFloat(edit.price || 0).toLocaleString('es-AR')}`
+        : 'Elegí el método de pago para registrar en caja'}</div>
       ${senaNote}
       ${(!appt.barber_id && (window._barbersList || []).length) ? `
       <div style="margin-bottom:14px">
@@ -7650,6 +7663,7 @@ function showPaymentPopup(apptId) {
           <button onclick="addPaySplitRow()" style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);color:#FFD100;padding:7px 12px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer">+ Método</button>
           <div id="pay-split-remaining" style="font-size:12.5px;color:rgba(255,255,255,.75)"></div>
         </div>
+        <div id="pay-split-review"></div>
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">Propina (opcional)</label>
@@ -7662,8 +7676,8 @@ function showPaymentPopup(apptId) {
           </select>
         </div>
       </div>
-      <button onclick="confirmPayment(${apptId})" style="width:100%;background:var(--yellow);color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">
-        ✅ Confirmar pago
+      <button id="pay-confirm-btn" onclick="confirmPayment(${apptId})" style="width:100%;background:var(--yellow);color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">
+        ${edit ? '💾 Guardar corrección' : '✅ Confirmar pago'}
       </button>
       <button onclick="document.getElementById('payment-popup').remove()" style="width:100%;background:transparent;border:none;color:var(--gray);padding:10px;cursor:pointer;font-size:13px;margin-top:6px">
         Cancelar
@@ -7675,11 +7689,33 @@ function showPaymentPopup(apptId) {
   window._paySplitTotal = hasSena ? remaining : parseFloat(appt.price || 0);
   window._paySplitMode = false;
   window._paySplitRows = [];
+  window._payEdit = !!edit;
+  window._payReviewed = false;
+  window._payBtnLabel = edit ? '💾 Guardar corrección' : '✅ Confirmar pago';
   renderPayMethodButtons('complete-pay-buttons', 'selectPayMethod');
+
+  // Corrección: arrancar con lo que se cargó en el cobro original
+  if (edit) {
+    if (edit.splits && edit.splits.length > 1) {
+      window._paySplitRows = edit.splits.map(s => ({ method: s.method, amount: String(s.amount) }));
+      togglePaySplitMode(true);
+      renderPaySplitRows();
+    } else if (edit.payment_method && edit.payment_method !== 'mixed') {
+      selectPayMethod(edit.payment_method);
+    }
+    const tipIn = document.getElementById('tip-input');
+    if (tipIn && edit.tip > 0) {
+      tipIn.value = edit.tip;
+      document.getElementById('tip-method-wrap').style.display = 'block';
+      const tm = document.getElementById('tip-method');
+      if (tm) tm.value = edit.tip_method || '';
+    }
+  }
 }
 
 function togglePaySplitMode(on) {
   window._paySplitMode = !!on;
+  _resetPayReview();
   document.getElementById('pay-mode-single').style.display = on ? 'none' : 'block';
   document.getElementById('pay-mode-split').style.display  = on ? 'block' : 'none';
   if (on && window._paySplitRows.length === 0) {
@@ -7702,18 +7738,43 @@ function _availablePayMethods() {
 
 function addPaySplitRow(method = '', amount = '') {
   window._paySplitRows.push({ method, amount });
+  _resetPayReview();
   renderPaySplitRows();
 }
 
 function removePaySplitRow(idx) {
   window._paySplitRows.splice(idx, 1);
+  _resetPayReview();
   renderPaySplitRows();
 }
 
 function updatePaySplitRow(idx, field, value) {
   if (!window._paySplitRows[idx]) return;
   window._paySplitRows[idx][field] = field === 'amount' ? value : value;
+  _resetPayReview();
   updatePaySplitRemaining();
+}
+
+// Pone en esa fila lo que falta para llegar al total
+function fillPaySplitRest(idx) {
+  const row = window._paySplitRows[idx];
+  if (!row) return;
+  const total = window._paySplitTotal || 0;
+  const others = window._paySplitRows.reduce((n, r, i) => i === idx ? n : n + (parseFloat(r.amount) || 0), 0);
+  const rest = Math.round((total - others) * 100) / 100;
+  if (rest <= 0) { showToast('ℹ️', 'No falta nada', 'Los otros métodos ya suman el total'); return; }
+  row.amount = String(rest);
+  _resetPayReview();
+  renderPaySplitRows();
+}
+
+// Cualquier cambio en el pago dividido obliga a revisar el resumen de nuevo
+function _resetPayReview() {
+  window._payReviewed = false;
+  const rv = document.getElementById('pay-split-review');
+  if (rv) rv.innerHTML = '';
+  const btn = document.getElementById('pay-confirm-btn');
+  if (btn && window._payBtnLabel && !btn.disabled) btn.innerHTML = window._payBtnLabel;
 }
 
 function renderPaySplitRows() {
@@ -7728,11 +7789,12 @@ function renderPaySplitRows() {
         <option value="">— elegir —</option>
         ${options.replace(`value="${row.method}"`, `value="${row.method}" selected`)}
       </select>
-      <div style="position:relative;flex:0 0 110px">
+      <div style="position:relative;flex:0 0 84px">
         <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:12.5px">$</span>
         <input type="number" min="0" step="0.01" value="${row.amount}" oninput="updatePaySplitRow(${i},'amount',this.value)" placeholder="0" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px 9px 20px;color:#fff;font-size:12.5px;outline:none;box-sizing:border-box;text-align:right">
       </div>
-      <button onclick="removePaySplitRow(${i})" ${window._paySplitRows.length <= 1 ? 'disabled style="opacity:.3;cursor:not-allowed"' : 'style="cursor:pointer"'} title="Quitar" style="background:transparent;border:1px solid rgba(255,67,67,.3);color:#f87171;width:30px;height:30px;border-radius:7px;font-size:14px;line-height:1;flex-shrink:0">×</button>
+      <button onclick="fillPaySplitRest(${i})" title="Completar con lo que falta" style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);color:#FFD100;height:30px;padding:0 7px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Resto</button>
+      <button onclick="removePaySplitRow(${i})" ${window._paySplitRows.length <= 1 ? 'disabled' : ''} title="Quitar" style="background:transparent;border:1px solid rgba(255,67,67,.3);color:#f87171;width:30px;height:30px;border-radius:7px;font-size:14px;line-height:1;flex-shrink:0;${window._paySplitRows.length <= 1 ? 'opacity:.3;cursor:not-allowed' : 'cursor:pointer'}">×</button>
     </div>
   `).join('');
   updatePaySplitRemaining();
@@ -7825,6 +7887,24 @@ async function confirmPayment(apptId) {
       const m = (window._paymentMethods||[]).find(x=>x.key===s.method);
       return `${m?.icon || ''} $${s.amount.toLocaleString('es-AR')}`;
     }).join(' · ');
+    // Antes de guardar, mostrar cómo queda cada método para revisarlo (segundo toque confirma)
+    if (!window._payReviewed) {
+      const methods = _availablePayMethods();
+      const rv = document.getElementById('pay-split-review');
+      if (rv) rv.innerHTML = `
+        <div style="background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:#FFD100;margin-bottom:6px">REVISÁ ANTES DE ${window._payEdit ? 'GUARDAR' : 'COBRAR'}</div>
+          ${splits.map(s => {
+            const m = methods.find(x => x.key === s.method);
+            return `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${m?.icon || ''} ${escHtml(m?.label || s.method)}</span><strong>$${s.amount.toLocaleString('es-AR')}</strong></div>`;
+          }).join('')}
+          <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.1);margin-top:6px;padding-top:6px;color:var(--gray)"><span>Total</span><span>$${sum.toLocaleString('es-AR')}</span></div>
+        </div>`;
+      window._payReviewed = true;
+      const btn = document.getElementById('pay-confirm-btn');
+      if (btn) btn.innerHTML = window._payEdit ? '✅ Está bien, guardar' : '✅ Está bien, cobrar';
+      return;
+    }
   } else {
     const method = window._selectedPayMethod;
     if (!method) { showToast('⚠️', 'Seleccioná un método de pago', ''); return; }
@@ -7835,11 +7915,12 @@ async function confirmPayment(apptId) {
     if (_isDebtSel) successLabel = '💰 Deuda cargada en el cliente';
   }
 
+  if (window._payEdit) { body.edit_payment = true; delete body.barber_id; }
   payPopupBusy('payment-popup', true);
   try {
     await api('PUT', `/appointments/${apptId}/status`, body);
     document.getElementById('payment-popup')?.remove();
-    showSuccessPop({ title: (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
+    showSuccessPop({ title: window._payEdit ? 'Cobro corregido' : (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();
@@ -13363,7 +13444,7 @@ function payDebt(id) {
 
   const popup = document.createElement('div');
   popup.id = 'debt-pay-popup';
-  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px';
   popup.innerHTML = `
     <div style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:100%;max-width:360px">
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">💳 ¿Cómo cobró la deuda?</div>
