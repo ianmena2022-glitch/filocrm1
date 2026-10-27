@@ -371,6 +371,7 @@ app.get('/sitemap.xml', async (req, res) => {
   const staticPages = [
     { url: '/',          priority: '1.0', changefreq: 'weekly'  },
     { url: '/funciones', priority: '0.8', changefreq: 'monthly' },
+    { url: '/legal',     priority: '0.3', changefreq: 'yearly'  },
   ];
 
   // Páginas dinámicas de reservas y tiendas (barberías activas con booking_slug)
@@ -475,6 +476,14 @@ app.get('/gracias', (req, res) => {
 app.get('/funciones', (req, res) => {
   res.sendFile(path.join(publicDir, 'funciones.html'));
 });
+
+// Legal: términos de uso, privacidad y datos, seguridad, cumplimiento y propiedad intelectual
+app.get('/legal', (req, res) => {
+  res.sendFile(path.join(publicDir, 'legal.html'));
+});
+app.get(['/terminos', '/terminos-y-condiciones'], (req, res) => res.redirect(301, '/legal#terminos'));
+app.get(['/privacidad', '/politica-de-privacidad'], (req, res) => res.redirect(301, '/legal#privacidad'));
+app.get('/seguridad', (req, res) => res.redirect(301, '/legal#seguridad'));
 
 // API 404 explícito: evita que /api/foo inexistente caiga en el catch-all y devuelva HTML
 app.use('/api', (req, res) => {
