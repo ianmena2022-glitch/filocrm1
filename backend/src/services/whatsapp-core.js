@@ -1,3 +1,6 @@
+// Antes de cargar Baileys: que libsignal no imprima sesiones con claves privadas en los logs
+require('./quietSignalLogs').install();
+
 // Baileys v7 — ESM-only, lazy dynamic import desde CJS
 let _baileys = null;
 async function getBaileys() {
