@@ -132,6 +132,25 @@
       <button onclick="document.getElementById('aff-bar').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:18px;cursor:pointer;padding:0 4px;line-height:1" title="Cerrar">×</button>
     </div>
     <div id="root"></div>
+    <!-- Botón de arrepentimiento (Res. SCI 424/2020): visible desde la primera pantalla, discreto -->
+    <a href="/arrepentimiento" id="filo-arrep" style="position:fixed;left:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:40;font-family:'Barlow',sans-serif;font-size:11px;color:rgba(255,255,255,.38);text-decoration:none;background:rgba(5,13,24,.55);padding:3px 8px;border-radius:6px;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,.8)'" onmouseout="this.style.color='rgba(255,255,255,.38)'">Botón de arrepentimiento</a>
+    <script>
+    // Que la barra de afiliados (fija abajo) no tape el enlace: se ubica justo arriba mientras esté visible
+    (function () {
+      function place() {
+        var a = document.getElementById('filo-arrep'), bar = document.getElementById('aff-bar');
+        if (!a) return;
+        var h = 0;
+        if (bar && getComputedStyle(bar).display !== 'none' && getComputedStyle(bar).position === 'fixed') h = bar.getBoundingClientRect().height;
+        a.style.bottom = 'calc(' + (h + 10) + 'px + ' + (h ? '0px' : 'env(safe-area-inset-bottom,0px)') + ')';
+      }
+      window.addEventListener('load', place);
+      window.addEventListener('resize', place);
+      var bar = document.getElementById('aff-bar');
+      if (bar && window.MutationObserver) new MutationObserver(place).observe(bar, { attributes: true, attributeFilter: ['style', 'class'] });
+      place();
+    })();
+    </script>
     <footer style="border-top:1px solid rgba(255,255,255,.06);padding:24px 6% 32px;display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:space-between;align-items:center;font-family:'Barlow',sans-serif;font-size:13px;color:#7a8fa8;background:#050d18">
       <span>© 2026 FILO CRM</span>
       <span style="display:flex;flex-wrap:wrap;gap:8px 18px">
@@ -139,6 +158,7 @@
         <a href="/legal#terminos" style="color:#7a8fa8;text-decoration:none">Términos de uso</a>
         <a href="/legal#privacidad" style="color:#7a8fa8;text-decoration:none">Privacidad</a>
         <a href="/legal#seguridad" style="color:#7a8fa8;text-decoration:none">Seguridad</a>
+        <a href="/arrepentimiento" style="color:#7a8fa8;text-decoration:none">Botón de arrepentimiento</a>
         <a href="/app" style="color:#7a8fa8;text-decoration:none">Ingresar</a>
       </span>
     </footer>

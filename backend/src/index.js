@@ -134,6 +134,7 @@ app.use('/api/copilot',       require('./routes/copilot'));
 app.use('/api/events',        require('./routes/events'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/push',          require('./routes/push'));
+app.use('/api/legal',         require('./routes/legal'));
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));
@@ -484,6 +485,9 @@ app.get('/legal', (req, res) => {
 app.get(['/terminos', '/terminos-y-condiciones'], (req, res) => res.redirect(301, '/legal#terminos'));
 app.get(['/privacidad', '/politica-de-privacidad'], (req, res) => res.redirect(301, '/legal#privacidad'));
 app.get('/seguridad', (req, res) => res.redirect(301, '/legal#seguridad'));
+app.get(['/arrepentimiento', '/boton-de-arrepentimiento'], (req, res) => {
+  res.sendFile(path.join(publicDir, 'arrepentimiento.html'));
+});
 
 // API 404 explícito: evita que /api/foo inexistente caiga en el catch-all y devuelva HTML
 app.use('/api', (req, res) => {

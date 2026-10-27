@@ -115,4 +115,33 @@ async function sendPasswordResetEmail(email, name, code) {
   console.log(`[EMAIL] Código de recuperación enviado a ${email}`);
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+// Botón de arrepentimiento: constancia para quien lo pidió + aviso al equipo de FILO
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'soporte@filocrm.com.ar';
+const esc = (s) => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function sendRevocationEmails({ code, name, email, phone, reason, shopId, createdAt }) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn(`[EMAIL] RESEND_API_KEY no configurada — constancia ${code} no enviada`);
+    return;
+  }
+  const when = new Date(createdAt || Date.now()).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+  await resend().emails.send({
+    from: FROM, to: email,
+    subject: `Recibimos tu pedido de arrepentimiento · ${code}`,
+    html: verificationHtml(esc(name), esc(code), {
+      title:  'Pedido de arrepentimiento recibido',
+      intro:  `Recibimos tu pedido para revocar la contratación de FILO (${esc(when)}). Este es tu código de constancia. Te vamos a contactar a este email para completar la devolución.`,
+      label:  'Código de constancia',
+      footer: 'Si no hiciste este pedido, respondé este email y lo anulamos.',
+    }),
+  });
+  await resend().emails.send({
+    from: FROM, to: SUPPORT_EMAIL, replyTo: email,
+    subject: `↩️ Arrepentimiento ${code} — ${name}`,
+    html: `<p><strong>Pedido de arrepentimiento</strong> ${esc(code)} · ${esc(when)}</p>
+      <p>Nombre: ${esc(name)}<br>Email: ${esc(email)}<br>Teléfono: ${esc(phone) || '—'}<br>Cuenta FILO: ${shopId ? '#' + shopId : 'no encontrada con ese email'}</p>
+      <p>Motivo: ${esc(reason) || '—'}</p>
+      <p>Plazo legal: revocar y devolver lo pagado si el pedido está dentro de los 10 días corridos desde el pago.</p>`,
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendRevocationEmails };
