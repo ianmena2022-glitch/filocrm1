@@ -630,6 +630,106 @@ router.post('/verify-email', verifyIpLimiter, verifyLimiter, async (req, res) =>
   }
 });
 
+// ── Recuperar contraseña: mail + código = contraseña nueva ──────────────────────
+// Sirve para cualquier cuenta (dueños de todos los planes, sucursales y barberos).
+// El código (6 dígitos) se guarda hasheado, vence en 15 min, admite 5 intentos y se usa una vez.
+// La respuesta de /forgot-password es siempre la misma, exista o no la cuenta (no revela mails).
+const RESET_TTL_MIN = 15;
+const RESET_MAX_ATTEMPTS = 5;
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Demasiados pedidos. Esperá unos minutos y volvé a intentar.' },
+});
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: 'Demasiados intentos. Esperá unos minutos y volvé a intentar.' },
+});
+
+// POST /api/auth/forgot-password { email } — manda el código por mail
+router.post('/forgot-password', forgotLimiter, async (req, res) => {
+  const emailNorm = String(req.body?.email || '').toLowerCase().trim();
+  if (!emailNorm || !emailNorm.includes('@')) return res.status(400).json({ error: 'Ingresá tu email' });
+  const generic = { ok: true, message: 'Si hay una cuenta con ese email, te mandamos un código. Revisá también Spam.' };
+  try {
+    const q = await pool.query(
+      'SELECT id, name, email FROM shops WHERE LOWER(email) = $1 ORDER BY id LIMIT 1', [emailNorm]
+    );
+    if (!q.rows.length) return res.json(generic);
+    const shop = q.rows[0];
+
+    // Máximo 5 códigos por cuenta por hora (además del límite por IP)
+    const recent = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM password_resets WHERE shop_id=$1 AND created_at > NOW() - INTERVAL '1 hour'`,
+      [shop.id]
+    );
+    if (recent.rows[0].n >= 5) return res.json(generic);
+
+    const code = generateCode();
+    const codeHash = await bcrypt.hash(code, 10);
+    // Un código nuevo anula los anteriores sin usar
+    await pool.query('UPDATE password_resets SET used_at=NOW() WHERE shop_id=$1 AND used_at IS NULL', [shop.id]);
+    await pool.query(
+      `INSERT INTO password_resets (shop_id, code_hash, expires_at) VALUES ($1, $2, NOW() + ($3 || ' minutes')::interval)`,
+      [shop.id, codeHash, String(RESET_TTL_MIN)]
+    );
+    try {
+      await require('../services/email').sendPasswordResetEmail(shop.email, shop.name || 'hola', code);
+    } catch (e) {
+      console.error('[RESET] no se pudo mandar el mail:', e.message);
+      return res.status(502).json({ error: 'No pudimos enviar el email. Probá de nuevo en un rato.' });
+    }
+    console.log(`[RESET] Código de recuperación pedido para la cuenta ${shop.id}`);
+    res.json(generic);
+  } catch (e) {
+    console.error('[RESET] forgot-password:', e.message);
+    res.status(500).json({ error: 'Error del servidor. Probá de nuevo.' });
+  }
+});
+
+// POST /api/auth/reset-password { email, code, password } — cambia la contraseña
+router.post('/reset-password', resetLimiter, async (req, res) => {
+  const emailNorm = String(req.body?.email || '').toLowerCase().trim();
+  const code = String(req.body?.code || '').replace(/\D/g, '');
+  const password = String(req.body?.password || '');
+  if (!emailNorm || code.length !== 6) return res.status(400).json({ error: 'Ingresá el código de 6 dígitos que te llegó por mail' });
+  if (password.length < 6) return res.status(400).json({ error: 'La contraseña nueva tiene que tener al menos 6 caracteres' });
+  const invalid = () => res.status(400).json({ error: 'El código no es válido o ya venció. Pedí uno nuevo.' });
+  try {
+    const q = await pool.query(
+      `SELECT r.id, r.code_hash, r.attempts, s.id AS shop_id
+         FROM password_resets r JOIN shops s ON s.id = r.shop_id
+        WHERE LOWER(s.email) = $1 AND r.used_at IS NULL AND r.expires_at > NOW()
+        ORDER BY r.created_at DESC LIMIT 1`,
+      [emailNorm]
+    );
+    if (!q.rows.length) return invalid();
+    const r = q.rows[0];
+    if (r.attempts >= RESET_MAX_ATTEMPTS) {
+      return res.status(400).json({ error: 'Demasiados intentos con este código. Pedí uno nuevo.' });
+    }
+    const ok = await bcrypt.compare(code, r.code_hash);
+    if (!ok) {
+      await pool.query('UPDATE password_resets SET attempts = attempts + 1 WHERE id=$1', [r.id]);
+      const left = RESET_MAX_ATTEMPTS - r.attempts - 1;
+      return res.status(400).json({ error: left > 0 ? `Código incorrecto. Te quedan ${left} intento${left === 1 ? '' : 's'}.` : 'Código incorrecto. Pedí uno nuevo.' });
+    }
+    // Marcar usado primero: si llegan dos pedidos a la vez con el mismo código, solo uno sigue
+    const claim = await pool.query('UPDATE password_resets SET used_at=NOW() WHERE id=$1 AND used_at IS NULL RETURNING id', [r.id]);
+    if (!claim.rows.length) return invalid();
+    const hash = await bcrypt.hash(password, 10);
+    // Recibir el código prueba que el mail es suyo: la cuenta queda verificada
+    await pool.query('UPDATE shops SET password=$1, email_verified=TRUE WHERE id=$2', [hash, r.shop_id]);
+    await pool.query('UPDATE shops SET password_changed_at=NOW() WHERE id=$1', [r.shop_id]).catch(() => {});
+    console.log(`[RESET] Contraseña cambiada para la cuenta ${r.shop_id}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[RESET] reset-password:', e.message);
+    res.status(500).json({ error: 'Error del servidor. Probá de nuevo.' });
+  }
+});
+
 // POST /api/auth/resend-verification — reenviar código
 const resendLimiter = rateLimit({
   windowMs: 60 * 1000,

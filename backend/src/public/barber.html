@@ -448,6 +448,7 @@ button, .btn, [role="button"], [onclick] { touch-action: manipulation; }
       <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="btn-primary" onclick="login()">Entrar</button>
+    <button type="button" onclick="openForgotPassword()" style="display:block;width:100%;background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;cursor:pointer;padding:12px 0 0;text-decoration:underline;font-family:inherit">¿Olvidaste tu contraseña?</button>
   </div>
 </div>
 
@@ -2096,5 +2097,6 @@ if (token && me?.is_barber) {
   </div>
 </div>
 <script src="/pwa-install.js?v=4" defer></script><script src="/filo-select.js?v=2" defer></script>
+<script src="/forgot-password.js"></script>
 </body>
 </html>

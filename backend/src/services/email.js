@@ -15,13 +15,19 @@ function resend() {
 // Mientras no esté verificado filocrm.com.ar, usar onboarding@resend.dev (funciona sin verificación).
 const FROM   = process.env.RESEND_FROM || 'onboarding@resend.dev';
 
-function verificationHtml(name, code) {
+// Mail con un código de 6 dígitos. Por defecto es el de verificación de cuenta; `opts` cambia
+// los textos (p.ej. recuperación de contraseña).
+function verificationHtml(name, code, opts = {}) {
+  const title  = opts.title  || 'Verificá tu cuenta FILO';
+  const intro  = opts.intro  || 'Tu cuenta FILO fue creada. Para activarla ingresá el siguiente código de verificación:';
+  const label  = opts.label  || 'Código de verificación';
+  const footer = opts.footer || 'Si no creaste esta cuenta podés ignorar este email.';
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Verificá tu cuenta FILO</title>
+<title>${title}</title>
 </head>
 <body style="margin:0;padding:0;background:#050d18;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#050d18;padding:40px 20px;">
@@ -41,18 +47,18 @@ function verificationHtml(name, code) {
         <td style="padding:40px 40px 32px;">
           <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f0f6ff;">Hola, ${name} 👋</p>
           <p style="margin:0 0 32px;font-size:15px;color:#6a8aa8;line-height:1.6;">
-            Tu cuenta FILO fue creada. Para activarla ingresá el siguiente código de verificación:
+            ${intro}
           </p>
 
           <!-- Code box -->
           <div style="background:#050d18;border:1px solid rgba(255,209,0,.25);border-radius:12px;padding:28px;text-align:center;margin-bottom:32px;">
-            <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#5a7090;margin-bottom:12px;">Código de verificación</div>
+            <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#5a7090;margin-bottom:12px;">${label}</div>
             <div style="font-family:'Courier New',monospace;font-size:48px;font-weight:900;letter-spacing:10px;color:#FFD100;">${code}</div>
             <div style="font-size:12px;color:#3a5070;margin-top:12px;">Válido por 15 minutos</div>
           </div>
 
           <p style="margin:0;font-size:13px;color:#3a5070;line-height:1.6;">
-            Si no creaste esta cuenta podés ignorar este email.
+            ${footer}
           </p>
         </td>
       </tr>
@@ -90,4 +96,23 @@ async function sendVerificationEmail(email, name, code) {
   }
 }
 
-module.exports = { sendVerificationEmail };
+async function sendPasswordResetEmail(email, name, code) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn(`[EMAIL] RESEND_API_KEY no configurada — código de recuperación para ${email} no enviado`);
+    return;
+  }
+  await resend().emails.send({
+    from:    FROM,
+    to:      email,
+    subject: `${code} — Código para cambiar tu contraseña de FILO`,
+    html:    verificationHtml(name, code, {
+      title:  'Cambiá tu contraseña de FILO',
+      intro:  'Pediste cambiar la contraseña de tu cuenta FILO. Ingresá este código en la pantalla de recuperación y elegí una contraseña nueva:',
+      label:  'Código para cambiar la contraseña',
+      footer: 'Si no lo pediste vos, ignorá este email: tu contraseña sigue siendo la misma.',
+    }),
+  });
+  console.log(`[EMAIL] Código de recuperación enviado a ${email}`);
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail };

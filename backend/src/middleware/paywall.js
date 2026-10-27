@@ -3,6 +3,8 @@ const pool = require('../db/pool');
 // Rutas que NO requieren suscripción activa (siempre accesibles)
 const PUBLIC_PATHS = [
   '/api/auth/login',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
   '/api/auth/register',
   '/api/auth/register-barber',
   '/api/auth/register-enterprise',
