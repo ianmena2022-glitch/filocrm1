@@ -1361,6 +1361,15 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   }
   .modal[style*="max-height"] { max-height: 85dvh !important; }
   #walkin-payment-popup > div { max-height: 85dvh !important; }
+  /* Horarios de atención: en celular las franjas van debajo del nombre del día y las horas
+     se reparten el ancho (iOS dibuja los input time más anchos de lo pedido) */
+  .sch-time { -webkit-appearance: none; appearance: none; width: 110px; min-width: 0; box-sizing: border-box; }
+  @media (max-width: 600px) {
+    .sch-day { flex-wrap: wrap; row-gap: 10px !important; }
+    .sch-label { width: auto !important; flex: 1 1 auto !important; }
+    .sch-ranges { flex: 1 1 100% !important; }
+    .sch-time { flex: 1 1 0; width: auto !important; font-size: 16px !important; padding: 8px 10px !important; text-align: center; }
+  }
   .modal-overlay { align-items: flex-end; padding: 0; }
   .modal-overlay.open { display: flex; }
   .form-grid { grid-template-columns: 1fr; }
@@ -8770,12 +8779,12 @@ function normalizeDaySchedule(day) {
 }
 
 function _rangeRowHtml(key, r) {
-  const timeStyle = `background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none;width:100px`;
+  const timeStyle = `background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;color:var(--white);font-size:13px;outline:none;width:110px;box-sizing:border-box`;
   return `
     <div class="sch-range-row" style="display:flex;align-items:center;gap:8px">
-      <input type="time" class="sch-start" value="${r.start}" style="${timeStyle}">
+      <input type="time" class="sch-start sch-time" value="${r.start}" style="${timeStyle}">
       <span style="color:var(--gray);font-size:12px">a</span>
-      <input type="time" class="sch-end" value="${r.end}" style="${timeStyle}">
+      <input type="time" class="sch-end sch-time" value="${r.end}" style="${timeStyle}">
       <button onclick="removeRange(this,'${key}')" title="Eliminar franja"
         style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,67,67,.4);background:rgba(255,67,67,.08);color:#ff8080;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0">−</button>
     </div>`;
@@ -8789,15 +8798,15 @@ function renderSchedule(schedule) {
     const day = normalizeDaySchedule(s[key]);
     const rangesHtml = day.ranges.map(r => _rangeRowHtml(key, r)).join('');
     return `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px">
+    <div class="sch-day" style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px">
       <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;cursor:pointer;margin-top:2px">
         <input type="checkbox" id="sch-active-${key}" ${day.active ? 'checked' : ''} onchange="toggleDaySchedule('${key}')" style="opacity:0;width:0;height:0;position:absolute">
         <span id="sch-slider-${key}" style="position:absolute;inset:0;background:${day.active ? 'var(--yellow)' : 'rgba(255,255,255,0.12)'};border-radius:22px;transition:.2s">
           <span style="position:absolute;top:3px;left:${day.active ? '21px' : '3px'};width:16px;height:16px;background:${day.active ? '#000d1f' : '#8a9ab5'};border-radius:50%;transition:.2s" id="sch-thumb-${key}"></span>
         </span>
       </label>
-      <span style="width:90px;font-size:13px;font-weight:600;padding-top:4px;flex-shrink:0">${label}</span>
-      <div id="sch-ranges-${key}" style="display:${day.active ? 'flex' : 'none'};flex-direction:column;gap:6px;flex:1">
+      <span class="sch-label" style="width:90px;font-size:13px;font-weight:600;padding-top:4px;flex-shrink:0">${label}</span>
+      <div id="sch-ranges-${key}" class="sch-ranges" style="display:${day.active ? 'flex' : 'none'};flex-direction:column;gap:6px;flex:1;min-width:0">
         ${rangesHtml}
         <button onclick="addRange('${key}')"
           style="align-self:flex-start;margin-top:2px;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.06);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px">+ Franja</button>
