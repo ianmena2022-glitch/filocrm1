@@ -17,7 +17,7 @@ function init() {
     _webpush = require('web-push');
     const pub  = process.env.VAPID_PUBLIC_KEY;
     const priv = process.env.VAPID_PRIVATE_KEY;
-    const sub  = process.env.VAPID_SUBJECT || 'mailto:soporte@filocrm.com.ar';
+    const sub  = process.env.VAPID_SUBJECT || 'mailto:serviciosfilocrm@gmail.com';
     if (pub && priv) {
       _webpush.setVapidDetails(sub, pub, priv);
       _vapidReady = true;

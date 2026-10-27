@@ -9,7 +9,7 @@ const pool      = require('../db/pool');
 const limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  message: { error: 'Ya recibimos varios pedidos desde esta conexión. Probá de nuevo en un rato o escribinos a soporte@filocrm.com.ar.' },
+  message: { error: 'Ya recibimos varios pedidos desde esta conexión. Probá de nuevo en un rato o escribinos a serviciosfilocrm@gmail.com.' },
 });
 
 const clean = (v, max) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
@@ -52,7 +52,7 @@ router.post('/arrepentimiento', limiter, async (req, res) => {
     res.json({ ok: true, code });
   } catch (e) {
     console.error('[ARREPENTIMIENTO]', e.message);
-    res.status(500).json({ error: 'No pudimos registrar el pedido. Escribinos a soporte@filocrm.com.ar.' });
+    res.status(500).json({ error: 'No pudimos registrar el pedido. Escribinos a serviciosfilocrm@gmail.com.' });
   }
 });
 

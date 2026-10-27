@@ -116,7 +116,7 @@ async function sendPasswordResetEmail(email, name, code) {
 }
 
 // Botón de arrepentimiento: constancia para quien lo pidió + aviso al equipo de FILO
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'soporte@filocrm.com.ar';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'serviciosfilocrm@gmail.com';
 const esc = (s) => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function sendRevocationEmails({ code, name, email, phone, reason, shopId, createdAt }) {
   if (!process.env.RESEND_API_KEY) {
