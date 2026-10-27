@@ -3,6 +3,16 @@ const rateLimit = require('express-rate-limit');
 const pool      = require('../db/pool');
 const wpp       = require('../services/whatsapp');
 
+// De qué cuenta salen los barberos de una página de reservas. Los barberos de una sucursal
+// están cargados en la sucursal; solo si la sucursal no tiene ninguno se usan los del dueño
+// enterprise. (Antes las sucursales siempre buscaban en el enterprise, que no tiene barberos:
+// la página no mostraba el equipo, no se podía elegir barbero ni se asignaba ninguno.)
+async function barberOwnerId(db, shop) {
+  if (!(shop.is_branch && shop.parent_enterprise_id)) return shop.id;
+  const own = await db.query('SELECT 1 FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE LIMIT 1', [shop.id]);
+  return own.rows.length ? shop.id : shop.parent_enterprise_id;
+}
+
 // Rate limits para endpoints públicos sin auth (bots scraping / abuso)
 const publicGetLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -60,9 +70,7 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
 
     // Si tiene eleccion de barbero activa, incluir lista de barberos con sus horarios
     // Para sucursales, heredar allow_barber_choice y barberos del enterprise owner
-    const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
-      ? shopData.parent_enterprise_id
-      : shopData.id;
+    const barberShopId = await barberOwnerId(pool, shopData);
     if (!shopData.allow_barber_choice && shopData.is_branch && shopData.parent_enterprise_id) {
       const ownerChoice = await pool.query(
         'SELECT allow_barber_choice FROM shops WHERE id=$1', [shopData.parent_enterprise_id]
@@ -114,9 +122,7 @@ router.get('/:slug/team', publicGetLimiter, async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
-    const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
-      ? shopData.parent_enterprise_id
-      : shopData.id;
+    const barberShopId = await barberOwnerId(pool, shopData);
     const q = await pool.query(
       `SELECT id, name, barber_color, profile_photo_url, work_photos
          FROM shops
@@ -234,8 +240,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     // Cargar barberos (para cálculo de disponibilidad por barbero)
     const shopRow = shopFull.rows[0];
     let allowBarberChoice = shopRow.allow_barber_choice;
-    const barberShopId = (shopRow.is_branch && shopRow.parent_enterprise_id)
-      ? shopRow.parent_enterprise_id : shopId;
+    const barberShopId = await barberOwnerId(pool, { id: shopId, is_branch: shopRow.is_branch, parent_enterprise_id: shopRow.parent_enterprise_id });
     if (!allowBarberChoice && shopRow.is_branch && shopRow.parent_enterprise_id) {
       const ownerChoice = await pool.query('SELECT allow_barber_choice FROM shops WHERE id=$1', [shopRow.parent_enterprise_id]);
       allowBarberChoice = ownerChoice.rows[0]?.allow_barber_choice || false;
@@ -615,7 +620,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       const wantsAny = !chosen_barber_id || anyBarber;
       let skipGlobalConflict = false;
       if (wantsAny) {
-        const bsId = (shopData.is_branch && shopData.parent_enterprise_id) ? shopData.parent_enterprise_id : shopData.id;
+        const bsId = await barberOwnerId(pgClient, shopData);
         const nb = await pgClient.query('SELECT COUNT(*)::int AS n FROM shops WHERE parent_shop_id=$1 AND is_barber=TRUE', [bsId]);
         skipGlobalConflict = nb.rows[0].n > 0;
       }
@@ -686,10 +691,8 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       let assignedBarberId = null;
       let assignedBarberCommission = 0;
       try {
-        // Para sucursales, buscar barberos bajo el enterprise owner
-        const barberShopId = (shopData.is_branch && shopData.parent_enterprise_id)
-          ? shopData.parent_enterprise_id
-          : shopData.id;
+        // Barberos de la sucursal (o del enterprise si la sucursal no tiene propios)
+        const barberShopId = await barberOwnerId(pgClient, shopData);
 
         if (chosen_barber_id && shopData.allow_barber_choice && !anyBarber) {
           // Elección manual: validar que el barbero trabaja en esa fecha/hora
