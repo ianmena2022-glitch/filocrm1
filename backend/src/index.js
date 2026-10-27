@@ -377,7 +377,9 @@ app.get('/sitemap.xml', async (req, res) => {
   let dynamicPages = [];
   try {
     const result = await pool.query(
-      `SELECT booking_slug, created_at, points_enabled FROM shops
+      `SELECT booking_slug, created_at,
+              EXISTS (SELECT 1 FROM points_store ps WHERE ps.shop_id = shops.id AND ps.active = TRUE) AS points_enabled
+         FROM shops
        WHERE booking_slug IS NOT NULL AND booking_slug != ''
          AND subscription_status IN ('active','trial')
        ORDER BY created_at DESC LIMIT 500`
@@ -390,7 +392,7 @@ app.get('/sitemap.xml', async (req, res) => {
         changefreq: 'weekly',
         lastmod
       });
-      // Solo incluir tienda si el local tiene el sistema de puntos activo
+      // Solo incluir tienda si el local tiene premios cargados
       if (r.points_enabled) {
         dynamicPages.push({
           url: `/tienda/${r.booking_slug}`,

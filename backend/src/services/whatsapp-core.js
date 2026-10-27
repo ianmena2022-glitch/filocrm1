@@ -444,6 +444,7 @@ async function restoreSessionFromDB(shopId) {
     const parsed = JSON.parse(sessionData);
 
     for (const [filename, content] of Object.entries(parsed)) {
+      if (isGroupKeyFile(filename)) continue;   // claves de grupos: no se usan (grupos ignorados)
       fs.writeFileSync(path.join(dir, filename), JSON.stringify(content));
     }
     console.log(`Baileys: sesion restaurada para shop ${shopId} (${Object.keys(parsed).length} archivos)`);
@@ -455,7 +456,31 @@ async function restoreSessionFromDB(shopId) {
 }
 
 // Guardar sesión en PostgreSQL — todos los archivos de auth
-async function saveSessionToDB(shopId) {
+// Guardar la sesión en la DB. La sesión de un número con mucho movimiento pesa varios MB y los
+// avisos de cambio llegan en ráfagas: antes se lanzaban varios UPDATE de 10 MB a la vez sobre la
+// misma fila, que se bloqueaban entre sí y vencían por tiempo. Ahora: uno por vez por local (si
+// llega otro pedido mientras guarda, se hace uno más al terminar), no se reescribe si no cambió
+// nada, y no se guardan las claves de grupos (se ignoran desde shouldIgnoreJid: no sirven).
+const _saveState = {};   // shopId → { running: Promise|null, again: bool, hash: string }
+const isGroupKeyFile = (f) => f.includes('@g.us');
+
+function saveSessionToDB(shopId) {
+  const st = _saveState[shopId] || (_saveState[shopId] = { running: null, again: false, hash: null });
+  if (st.running) { st.again = true; return st.running; }
+  st.running = (async () => {
+    try {
+      do {
+        st.again = false;
+        await _saveSessionOnce(shopId, st);
+      } while (st.again);
+    } finally {
+      st.running = null;
+    }
+  })();
+  return st.running;
+}
+
+async function _saveSessionOnce(shopId, st) {
   try {
     const dir = authDir(shopId);
     if (!fs.existsSync(dir)) return;
@@ -466,6 +491,10 @@ async function saveSessionToDB(shopId) {
     const sessionData = {};
     const files = fs.readdirSync(dir);
     for (const file of files) {
+      if (isGroupKeyFile(file)) {
+        try { fs.unlinkSync(path.join(dir, file)); } catch (_) {}
+        continue;
+      }
       try {
         const raw = fs.readFileSync(path.join(dir, file), 'utf8');
         sessionData[file] = JSON.parse(raw);
@@ -474,11 +503,12 @@ async function saveSessionToDB(shopId) {
       }
     }
 
-    await pool.query(
-      'UPDATE shops SET wpp_session=$1 WHERE id=$2',
-      [JSON.stringify(sessionData), shopId]
-    );
-    console.log(`Baileys: sesion guardada en DB para shop ${shopId} (${Object.keys(sessionData).length} archivos)`);
+    const json = JSON.stringify(sessionData);
+    const hash = require('crypto').createHash('sha1').update(json).digest('hex');
+    if (hash === st.hash) return;   // nada cambió desde el último guardado
+    await pool.query('UPDATE shops SET wpp_session=$1 WHERE id=$2', [json, shopId]);
+    st.hash = hash;
+    console.log(`Baileys: sesion guardada en DB para shop ${shopId} (${Object.keys(sessionData).length} archivos, ${Math.round(json.length / 1024)} kB)`);
   } catch (e) {
     console.error('Error guardando sesion:', e.message);
   }
@@ -1736,4 +1766,4 @@ function wppStats() {
   };
 }
 
-module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned }, shutdownAll, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned, saveSessionToDB, restoreSessionFromDB }, shutdownAll, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
