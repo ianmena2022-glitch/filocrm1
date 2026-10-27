@@ -135,8 +135,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Algunos browsers devuelven 'America/Buenos_Aires' (alias viejo no reconocido por PG)
-    const tz = (timezone === 'America/Buenos_Aires' ? 'America/Argentina/Buenos_Aires' : timezone)
-      || 'America/Argentina/Buenos_Aires';
+    const tz = require('../db/shopTz').normalizeTz(timezone) || 'America/Argentina/Buenos_Aires';
     const verifyCode    = generateCode();
     const verifyExpires = new Date(Date.now() + 15 * 60 * 1000);
 

@@ -167,7 +167,7 @@ router.put('/', auth, async (req, res) => {
        sena_pct !== undefined ? parseInt(sena_pct) : null,
        sena_alias !== undefined ? (sena_alias || null) : null,
        sena_payment_method !== undefined ? (sena_payment_method || null) : null,
-       timezone || null,
+       require('../db/shopTz').normalizeTz(timezone),
        slot_interval_minutes !== undefined && slot_interval_minutes !== null ? Math.min(200, Math.max(5, parseInt(slot_interval_minutes) || 30)) : null,
        socialJson,
        notifPrefsJson]
