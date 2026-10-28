@@ -301,7 +301,8 @@ async function runTransferPolling() {
   }
 }
 
-// ── Recordatorios de turno por WhatsApp (~2 h antes) ──────────────────────────
+// ── Recordatorios de turno por WhatsApp (X horas antes, 2 h por defecto) ────────
+// Cada local elige cuántas horas antes (shops.reminder_hours: 1, 2, 3, 4, 6, 12 o 24).
 // Reactivado: antes vivía en un scheduler que dejó de cargarse y nadie los recibía.
 // Reglas: zona horaria del local, solo entre 08:00 y 22:00 locales, una sola vez por turno
 // (reminder_sent_at), sin avisar a turnos recién reservados (ya recibieron confirmación),
@@ -326,11 +327,14 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
   let sent = 0, skipped = 0;
   try {
     const TZ = `COALESCE(s.timezone, 'America/Argentina/Buenos_Aires')`;
+    // Horas antes del turno elegidas por el local (to_jsonb: funciona aunque falte la columna)
+    const HRS = `COALESCE(NULLIF(to_jsonb(s)->>'reminder_hours', '')::numeric, 2)`;
     const baseSelect = `
       SELECT a.id, a.shop_id, a.client_name, a.service_name, a.date::text AS date, a.time_start,
              c.phone AS client_phone, c.name AS client_name_db,
              s.name AS shop_name, s.msg_templates,
-             ${TZ} AS tz
+             ${TZ} AS tz,
+             a.date > (NOW() AT TIME ZONE ${TZ})::date AS is_tomorrow
         FROM appointments a
         JOIN shops s   ON s.id = a.shop_id
         JOIN clients c ON c.id = a.client_id
@@ -340,18 +344,21 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
          AND c.phone IS NOT NULL AND c.phone <> ''
          AND (s.wpp_connected = TRUE
               OR EXISTS (SELECT 1 FROM shops o WHERE o.id = s.parent_enterprise_id AND o.wpp_connected = TRUE))`;
-    // ~2 h antes del turno
+    // X horas antes del turno: sale en la primera vuelta (cada 10 min) en que faltan X horas o
+    // un poco más; si alguna vuelta se pierde, hay margen de 45 min para no saltearlo.
     const sameDay = (await pool.query(
       `${baseSelect}
          AND ((a.date + a.time_start)::timestamp AT TIME ZONE ${TZ})
-             BETWEEN NOW() + INTERVAL '75 minutes' AND NOW() + INTERVAL '165 minutes'
+             BETWEEN NOW() + make_interval(mins => (${HRS} * 60 - 45)::int)
+                 AND NOW() + make_interval(mins => (${HRS} * 60 + 10)::int)
        ORDER BY a.date, a.time_start LIMIT 200`
     )).rows;
-    // Turnos temprano (antes de las 10:30): 2 h antes cae en el horario de silencio, así que el
-    // aviso sale la noche anterior, entre las 20 y las 22 del local.
+    // Turnos temprano (antes de las 08:30 + X horas, con X menor a 12): X horas antes cae en el
+    // horario de silencio, así que el aviso sale la noche anterior, entre las 20 y las 22 del local.
     const nightBefore = (await pool.query(
       `${baseSelect}
-         AND a.time_start < '10:30'
+         AND ${HRS} < 12
+         AND a.time_start < ('08:30'::time + make_interval(mins => (${HRS} * 60)::int))
          AND a.date = ((NOW() AT TIME ZONE ${TZ})::date + 1)
          AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE ${TZ})) BETWEEN 20 AND 21
        ORDER BY a.date, a.time_start LIMIT 200`
@@ -382,10 +389,12 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
           msg = await generateMessage(a.shop_id, 'recordatorio', { clientName: nombre, hora, fecha, shopName: a.shop_name || 'la barbería', serviceName: a.service_name || null });
         } catch (_) {}
       }
-      if (!msg) msg = require('./msgVariants').reminderText({ nombre, hora, shop: a.shop_name || 'la barbería', manana: !!a._nightBefore });
-      // El aviso del mismo día sale ~2 h antes: plantillas viejas que dicen "mañana" (el día) se
-      // corrigen a "hoy", sin tocar "a la mañana" / "esta mañana" / "pasado mañana" (la hora del día).
-      if (!a._nightBefore) msg = fixMananaToHoy(msg);
+      // ¿El turno es mañana? (aviso de la noche anterior, o 12/24 h antes que cae el día previo)
+      const tomorrow = !!a._nightBefore || a.is_tomorrow === true;
+      if (!msg) msg = require('./msgVariants').reminderText({ nombre, hora, shop: a.shop_name || 'la barbería', manana: tomorrow });
+      // Si el turno es hoy, plantillas viejas que dicen "mañana" (el día) se corrigen a "hoy", sin
+      // tocar "a la mañana" / "esta mañana" / "pasado mañana" (la hora del día).
+      if (!tomorrow) msg = fixMananaToHoy(msg);
       else msg = String(msg).replace(/(^|[^\p{L}])(hoy)(?![\p{L}])/giu, (all, pre, w) => pre + (w[0] === 'H' ? 'Mañana' : 'mañana'));
 
       try {

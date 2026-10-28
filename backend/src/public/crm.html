@@ -9304,11 +9304,23 @@ async function loadWppAuto() {
   if (!el) return;
   try {
     const d = await api('GET', '/settings/wpp-auto');
+    const rh = Number(d.reminder_hours) || 2;
+    const rhOpts = [[1, '1 hora'], [2, '2 horas'], [3, '3 horas'], [4, '4 horas'], [6, '6 horas'], [12, '12 horas'], [24, '1 día (24 h)']];
     el.innerHTML = WPP_AUTO_ITEMS.map(([k, label, sub]) => `
+      <div>
       <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
         <span><span style="font-size:13px;font-weight:600">${label}</span><br><span style="font-size:11px;color:var(--gray)">${sub}</span></span>
         <input type="checkbox" ${d.prefs[k] ? 'checked' : ''} onchange="saveWppAuto('${k}', this.checked)" style="width:20px;height:20px;flex-shrink:0;accent-color:#FFD100">
-      </label>`).join('');
+      </label>
+      ${k === 'reminders' ? `
+      <div id="wpp-reminder-hours-row" style="display:${d.prefs[k] ? 'flex' : 'none'};align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--gray)">
+        <span>Enviarlo</span>
+        <select onchange="saveReminderHours(this.value)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 8px;color:#fff;font-size:12px">
+          ${rhOpts.map(([v, t]) => `<option value="${v}" ${v === rh ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+        <span>antes del turno</span>
+      </div>` : ''}
+      </div>`).join('');
     const banned = document.getElementById('wpp-banned-info');
     if (banned) banned.style.display = d.banned_at ? 'block' : 'none';
     const careful = document.getElementById('wpp-careful-info');
@@ -9319,7 +9331,15 @@ async function loadWppAuto() {
     }
   } catch (_) { el.innerHTML = '<div style="font-size:12px;color:var(--gray)">No se pudo cargar</div>'; }
 }
+async function saveReminderHours(hours) {
+  try {
+    await api('PUT', '/settings/reminder-hours', { hours: Number(hours) });
+    const n = Number(hours);
+    showToast('⏰', 'Recordatorio actualizado', n === 24 ? 'Sale 1 día antes del turno' : `Sale ${n} hora${n === 1 ? '' : 's'} antes del turno`);
+  } catch (e) { showToast('❌', 'Error', e.message); loadWppAuto(); }
+}
 async function saveWppAuto(key, value) {
+  if (key === 'reminders') { const row = document.getElementById('wpp-reminder-hours-row'); if (row) row.style.display = value ? 'flex' : 'none'; }
   try {
     await api('PUT', '/settings/wpp-auto', { prefs: { [key]: value } });
     showToast(value ? '✅' : '🔕', value ? 'Mensaje activado' : 'Mensaje desactivado', '');
