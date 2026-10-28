@@ -301,8 +301,8 @@ async function runTransferPolling() {
   }
 }
 
-// ── Recordatorios de turno por WhatsApp (X horas antes, 2 h por defecto) ────────
-// Cada local elige cuántas horas antes (shops.reminder_hours: 1, 2, 3, 4, 6, 12 o 24).
+// ── Recordatorios de turno por WhatsApp (X minutos antes, 2 h por defecto) ──────
+// Cada local elige cuánto antes (shops.reminder_minutes: de 20 minutos a 1 día).
 // Reactivado: antes vivía en un scheduler que dejó de cargarse y nadie los recibía.
 // Reglas: zona horaria del local, solo entre 08:00 y 22:00 locales, una sola vez por turno
 // (reminder_sent_at), sin avisar a turnos recién reservados (ya recibieron confirmación),
@@ -327,8 +327,8 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
   let sent = 0, skipped = 0;
   try {
     const TZ = `COALESCE(s.timezone, 'America/Argentina/Buenos_Aires')`;
-    // Horas antes del turno elegidas por el local (to_jsonb: funciona aunque falte la columna)
-    const HRS = `COALESCE(NULLIF(to_jsonb(s)->>'reminder_hours', '')::numeric, 2)`;
+    // Minutos antes del turno elegidos por el local (to_jsonb: funciona aunque falte la columna)
+    const MIN = `LEAST(1440, GREATEST(20, COALESCE(NULLIF(to_jsonb(s)->>'reminder_minutes', '')::int, 120)))`;
     const baseSelect = `
       SELECT a.id, a.shop_id, a.client_name, a.service_name, a.date::text AS date, a.time_start,
              c.phone AS client_phone, c.name AS client_name_db,
@@ -344,21 +344,22 @@ async function runAppointmentReminders({ ignoreQuietHours = false } = {}) {
          AND c.phone IS NOT NULL AND c.phone <> ''
          AND (s.wpp_connected = TRUE
               OR EXISTS (SELECT 1 FROM shops o WHERE o.id = s.parent_enterprise_id AND o.wpp_connected = TRUE))`;
-    // X horas antes del turno: sale en la primera vuelta (cada 10 min) en que faltan X horas o
-    // un poco más; si alguna vuelta se pierde, hay margen de 45 min para no saltearlo.
+    // X minutos antes del turno: sale en la primera vuelta (cada 10 min) en que faltan X minutos
+    // o un poco más; si alguna vuelta se pierde hay margen (45 min, o la mitad de X si X es corto)
+    // para no saltearlo, sin avisar nunca un turno que ya empezó.
     const sameDay = (await pool.query(
       `${baseSelect}
          AND ((a.date + a.time_start)::timestamp AT TIME ZONE ${TZ})
-             BETWEEN NOW() + make_interval(mins => (${HRS} * 60 - 45)::int)
-                 AND NOW() + make_interval(mins => (${HRS} * 60 + 10)::int)
+             BETWEEN NOW() + make_interval(mins => GREATEST(${MIN} - 45, ${MIN} / 2))
+                 AND NOW() + make_interval(mins => ${MIN} + 10)
        ORDER BY a.date, a.time_start LIMIT 200`
     )).rows;
-    // Turnos temprano (antes de las 08:30 + X horas, con X menor a 12): X horas antes cae en el
-    // horario de silencio, así que el aviso sale la noche anterior, entre las 20 y las 22 del local.
+    // Turnos temprano (antes de las 08:30 + X, con X menor a 12 h): X antes cae en el horario de
+    // silencio, así que el aviso sale la noche anterior, entre las 20 y las 22 del local.
     const nightBefore = (await pool.query(
       `${baseSelect}
-         AND ${HRS} < 12
-         AND a.time_start < ('08:30'::time + make_interval(mins => (${HRS} * 60)::int))
+         AND ${MIN} < 720
+         AND a.time_start < ('08:30'::time + make_interval(mins => ${MIN}))
          AND a.date = ((NOW() AT TIME ZONE ${TZ})::date + 1)
          AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE ${TZ})) BETWEEN 20 AND 21
        ORDER BY a.date, a.time_start LIMIT 200`

@@ -9304,8 +9304,8 @@ async function loadWppAuto() {
   if (!el) return;
   try {
     const d = await api('GET', '/settings/wpp-auto');
-    const rh = Number(d.reminder_hours) || 2;
-    const rhOpts = [[1, '1 hora'], [2, '2 horas'], [3, '3 horas'], [4, '4 horas'], [6, '6 horas'], [12, '12 horas'], [24, '1 día (24 h)']];
+    const rm = Number(d.reminder_minutes) || 120;
+    const numStyle = 'width:56px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 8px;color:#fff;font-size:13px;text-align:center';
     el.innerHTML = WPP_AUTO_ITEMS.map(([k, label, sub]) => `
       <div>
       <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
@@ -9313,12 +9313,13 @@ async function loadWppAuto() {
         <input type="checkbox" ${d.prefs[k] ? 'checked' : ''} onchange="saveWppAuto('${k}', this.checked)" style="width:20px;height:20px;flex-shrink:0;accent-color:#FFD100">
       </label>
       ${k === 'reminders' ? `
-      <div id="wpp-reminder-hours-row" style="display:${d.prefs[k] ? 'flex' : 'none'};align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--gray)">
+      <div id="wpp-reminder-hours-row" style="display:${d.prefs[k] ? 'flex' : 'none'};align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--gray)">
         <span>Enviarlo</span>
-        <select onchange="saveReminderHours(this.value)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 8px;color:#fff;font-size:12px">
-          ${rhOpts.map(([v, t]) => `<option value="${v}" ${v === rh ? 'selected' : ''}>${t}</option>`).join('')}
-        </select>
-        <span>antes del turno</span>
+        <input type="number" id="rm-hours" min="0" max="24" step="1" inputmode="numeric" value="${Math.floor(rm / 60)}" onchange="saveReminderMinutes()" style="${numStyle}">
+        <span>h</span>
+        <input type="number" id="rm-mins" min="0" max="59" step="5" inputmode="numeric" value="${rm % 60}" onchange="saveReminderMinutes()" style="${numStyle}">
+        <span>min antes del turno</span>
+        <span style="flex-basis:100%;font-size:11px;color:rgba(255,255,255,.35)">Entre 20 minutos y 1 día (24 h).</span>
       </div>` : ''}
       </div>`).join('');
     const banned = document.getElementById('wpp-banned-info');
@@ -9331,11 +9332,27 @@ async function loadWppAuto() {
     }
   } catch (_) { el.innerHTML = '<div style="font-size:12px;color:var(--gray)">No se pudo cargar</div>'; }
 }
-async function saveReminderHours(hours) {
+// "1 h 30 min", "45 min", "1 día"
+function fmtReminderMinutes(m) {
+  if (m === 1440) return '1 día';
+  const h = Math.floor(m / 60), mm = m % 60;
+  return [h ? `${h} h` : '', mm ? `${mm} min` : ''].filter(Boolean).join(' ');
+}
+async function saveReminderMinutes() {
+  const hEl = document.getElementById('rm-hours'), mEl = document.getElementById('rm-mins');
+  if (!hEl || !mEl) return;
+  let minutes = (parseInt(hEl.value) || 0) * 60 + (parseInt(mEl.value) || 0);
+  // Fuera de rango: se ajusta al límite más cercano y se avisa
+  const clamped = Math.min(1440, Math.max(20, minutes));
+  if (clamped !== minutes) {
+    showToast('ℹ️', 'Fuera de rango', 'El recordatorio puede salir entre 20 minutos y 1 día antes del turno');
+    minutes = clamped;
+  }
+  hEl.value = Math.floor(minutes / 60);
+  mEl.value = minutes % 60;
   try {
-    await api('PUT', '/settings/reminder-hours', { hours: Number(hours) });
-    const n = Number(hours);
-    showToast('⏰', 'Recordatorio actualizado', n === 24 ? 'Sale 1 día antes del turno' : `Sale ${n} hora${n === 1 ? '' : 's'} antes del turno`);
+    await api('PUT', '/settings/reminder-minutes', { minutes });
+    showToast('⏰', 'Recordatorio actualizado', `Sale ${fmtReminderMinutes(minutes)} antes del turno`);
   } catch (e) { showToast('❌', 'Error', e.message); loadWppAuto(); }
 }
 async function saveWppAuto(key, value) {

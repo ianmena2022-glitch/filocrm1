@@ -13,9 +13,9 @@ function ownerOnly(req, res, next) {
 router.get('/wpp-auto', auth, ownerOnly, async (req, res) => {
   try {
     const prefs = await wpp.getAutoPrefs(req.shopId);
-    const r = await pool.query(`SELECT to_jsonb(s)->>'wpp_banned_at' AS banned_at, to_jsonb(s)->>'wpp_careful_until' AS careful_until, to_jsonb(s)->>'reminder_hours' AS reminder_hours FROM shops s WHERE id=$1`, [req.shopId]);
+    const r = await pool.query(`SELECT to_jsonb(s)->>'wpp_banned_at' AS banned_at, to_jsonb(s)->>'wpp_careful_until' AS careful_until, to_jsonb(s)->>'reminder_minutes' AS reminder_minutes FROM shops s WHERE id=$1`, [req.shopId]);
     const careful = r.rows[0]?.careful_until && new Date(r.rows[0].careful_until) > new Date() ? r.rows[0].careful_until : null;
-    res.json({ prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful, reminder_hours: parseFloat(r.rows[0]?.reminder_hours) || 2 });
+    res.json({ prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful, reminder_minutes: parseInt(r.rows[0]?.reminder_minutes) || 120 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/wpp-auto', auth, ownerOnly, async (req, res) => {
@@ -23,14 +23,16 @@ router.put('/wpp-auto', auth, ownerOnly, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /api/settings/reminder-hours { hours } — cuántas horas antes del turno sale el recordatorio
-const REMINDER_HOURS = [1, 2, 3, 4, 6, 12, 24];
-router.put('/reminder-hours', auth, ownerOnly, async (req, res) => {
-  const hours = Number(req.body?.hours);
-  if (!REMINDER_HOURS.includes(hours)) return res.status(400).json({ error: 'Elegí una de las opciones' });
+// PUT /api/settings/reminder-minutes { minutes } — cuánto antes del turno sale el recordatorio
+// (de 20 minutos a 1 día)
+router.put('/reminder-minutes', auth, ownerOnly, async (req, res) => {
+  const minutes = Math.round(Number(req.body?.minutes));
+  if (!Number.isFinite(minutes) || minutes < 20 || minutes > 1440) {
+    return res.status(400).json({ error: 'Elegí entre 20 minutos y 1 día (24 horas) antes del turno' });
+  }
   try {
-    await pool.query('UPDATE shops SET reminder_hours=$1 WHERE id=$2', [hours, req.shopId]);
-    res.json({ ok: true, hours });
+    await pool.query('UPDATE shops SET reminder_minutes=$1 WHERE id=$2', [minutes, req.shopId]);
+    res.json({ ok: true, minutes });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
