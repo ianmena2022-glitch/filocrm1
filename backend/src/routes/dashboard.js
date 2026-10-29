@@ -311,22 +311,36 @@ router.get('/expenses', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /api/dashboard/expenses/:id — asignar o cambiar con qué cuenta (método) se pagó un gasto.
-// Solo egresos cargados a mano o compras de insumos; los automáticos (liquidaciones, fiado, señas) no se tocan.
+// PUT /api/dashboard/expenses/:id — asignar o cambiar con qué cuenta (método) se pagó o cobró un
+// movimiento de caja: gastos, ingresos y también los automáticos (liquidaciones, fiado, señas, ventas).
+// Solo cambia la cuenta; el monto no se toca. Si el día ya tiene cierre de caja, se rehace.
 router.put('/expenses/:id', auth, async (req, res) => {
+  if (req.isBarber) return res.status(403).json({ error: 'Solo el dueño puede modificar la caja' });
   const pm = req.body && req.body.payment_method != null ? String(req.body.payment_method).trim() : '';
-  if (!pm || pm.length > 40) return res.status(400).json({ error: 'Elegí una cuenta válida' });
+  if (!pm || pm.length > 40 || pm === 'debt' || pm === 'mixed') return res.status(400).json({ error: 'Elegí una cuenta válida' });
+  const db = await pool.connect();
+  let began = false;
   try {
-    const r = await pool.query(
-      `UPDATE expenses SET payment_method=$1
-        WHERE id=$2 AND shop_id=$3 AND (is_income IS NULL OR is_income=FALSE)
-          AND (source_type IS NULL OR source_type IN ('manual','stock_compra'))
-        RETURNING id, payment_method`,
+    await db.query('BEGIN'); began = true;
+    const r = await db.query(
+      `UPDATE expenses SET payment_method=$1 WHERE id=$2 AND shop_id=$3
+        RETURNING id, payment_method, date::text AS date`,
       [pm, req.params.id, req.shopId]
     );
-    if (!r.rows.length) return res.status(404).json({ error: 'Este gasto no se puede modificar' });
-    res.json({ ok: true, expense: r.rows[0] });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    if (!r.rows.length) { await db.query('ROLLBACK'); began = false; return res.status(404).json({ error: 'Movimiento no encontrado' }); }
+    // Liquidaciones divididas: el detalle por método (payment_splits) acompaña al egreso
+    await db.query('UPDATE payment_splits SET method=$1 WHERE expense_id=$2 AND shop_id=$3', [pm, req.params.id, req.shopId]);
+    await db.query('COMMIT'); began = false;
+    const day = r.rows[0].date;
+    try {
+      const has = await pool.query('SELECT 1 FROM cash_registers WHERE shop_id=$1 AND date=$2', [req.shopId, day]);
+      if (has.rows.length) await saveDayClose(req.shopId, day, await computeDayClose(req.shopId, day));
+    } catch (e) { console.warn('[CAJA] recalcular cierre tras cambiar cuenta:', e.message); }
+    res.json({ ok: true, expense: { id: r.rows[0].id, payment_method: r.rows[0].payment_method } });
+  } catch(e) {
+    if (began) await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { db.release(); }
 });
 
 // DELETE /api/dashboard/expenses/:id — eliminar gasto

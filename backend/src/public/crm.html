@@ -13020,7 +13020,7 @@ function renderCashSummary(c) {
             <div style="font-size:13px;font-weight:600">${catLabel[e.category]||e.category}</div>
             ${e.description ? `<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>` : ''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>`:''}
-            ${expenseAccountHtml(e)}
+            ${expenseAccountHtml(e, !!currentShop?.is_barber)}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:14px;font-weight:700;color:#FF4343">-${fmt(e.amount)}</span>
@@ -13053,6 +13053,7 @@ function renderCashSummary(c) {
                 <div style="font-size:13px;font-weight:600">${iLabel}</div>
                 ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
                 <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>
+                ${expenseAccountHtml(e, !!currentShop?.is_barber, true)}
               </div>
               <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
             </div>`;}).join('')}
@@ -13168,15 +13169,17 @@ async function openCajaDayDetail(date) {
   title.textContent = '📅 ' + dLabel.charAt(0).toUpperCase() + dLabel.slice(1);
   body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--gray)">Cargando...</div>';
   modal.style.display = 'flex';
+  window._cajaDayDetailDate = date;
   try {
     const data = await api('GET', `/dashboard/cash/day-detail?date=${date}`);
-    body.innerHTML = renderCajaDayDetail(data);
+    body.innerHTML = renderCajaDayDetail(data, !currentShop?.is_barber);
   } catch(e) {
     body.innerHTML = `<div style="color:#FF4343;padding:20px">${e.message}</div>`;
   }
 }
 
-function renderCajaDayDetail(data) {
+// editable: el dueño puede cambiar la cuenta de gastos e ingresos (las sucursales se ven en solo lectura)
+function renderCajaDayDetail(data, editable) {
   const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR');
   const r = data.register || {};
   const appts = data.appointments || [];
@@ -13273,6 +13276,7 @@ function renderCajaDayDetail(data) {
             <div style="font-size:12px;font-weight:600">${catLabel[e.category]||e.category}</div>
             ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
             ${e.source_type&&e.source_type!=='manual'?`<div style="font-size:10px;color:rgba(255,255,255,.25)">${srcLabel[e.source_type]||e.source_type}</div>`:''}
+            ${expenseAccountHtml(e, !editable)}
           </div>
           <span style="font-size:13px;font-weight:700;color:#FF4343;flex-shrink:0;margin-left:12px">-${fmt(e.amount)}</span>
         </div>`).join('')}
@@ -13291,6 +13295,7 @@ function renderCajaDayDetail(data) {
           <div>
             <div style="font-size:12px;font-weight:600">${lbl}</div>
             ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
+            ${expenseAccountHtml(e, !editable, true)}
           </div>
           <span style="font-size:13px;font-weight:700;color:#4CAF50;flex-shrink:0;margin-left:12px">+${fmt(e.amount)}</span>
         </div>`;}).join('')}
@@ -13340,30 +13345,38 @@ async function saveExpense() {
   } catch(e) { showToast('❌','Error',e.message); }
 }
 
-// Cuenta con la que se pagó un gasto: se muestra siempre, y si falta se puede asignar
-function expenseAccountHtml(e, readOnly) {
+// Cuenta con la que se pagó un gasto (o se cobró un ingreso): se muestra siempre y, salvo en
+// modo solo lectura, se puede asignar si falta o cambiar si se cargó mal (incluye liquidaciones)
+function expenseAccountHtml(e, readOnly, isIncome) {
   const methods = (window._paymentMethods || []).filter(m => !m.is_debt);
   const m = methods.find(x => x.key === e.payment_method);
-  if (e.payment_method) {
-    return `<div style="font-size:11px;color:var(--gray);margin-top:2px">Pagado con: ${escHtml(m ? ((m.icon || '') + ' ' + m.label) : e.payment_method)}</div>`;
+  const verb = isIncome ? 'Cobrado con' : 'Pagado con';
+  if (readOnly) {
+    return e.payment_method
+      ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">${verb}: ${escHtml(m ? ((m.icon || '') + ' ' + m.label) : e.payment_method)}</div>`
+      : `<div style="font-size:11px;color:#FF9800;margin-top:2px">⚠️ Sin cuenta asignada</div>`;
   }
-  // Los movimientos automáticos sin método (ej. liquidaciones viejas) no se editan
-  const editable = !readOnly && (!e.source_type || e.source_type === 'manual' || e.source_type === 'stock_compra');
-  if (!editable) return `<div style="font-size:11px;color:#FF9800;margin-top:2px">⚠️ Sin cuenta asignada</div>`;
-  return `<div style="margin-top:4px"><span style="font-size:11px;color:#FF9800">⚠️ No resta de ninguna cuenta</span>
-    <select onchange="setExpenseMethod(${e.id}, this.value)" style="margin-left:6px;font-size:11px;background:#050d18;color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:3px 6px">
-      <option value="">Asignar cuenta…</option>
-      ${methods.map(x => `<option value="${escHtml(x.key)}">${escHtml(x.icon || '')} ${escHtml(x.label)}</option>`).join('')}
-    </select></div>`;
+  // Un método que ya no está en la lista (ej. se desactivó) se sigue mostrando como opción actual
+  const opts = [...methods];
+  if (e.payment_method && !m) opts.unshift({ key: e.payment_method, label: e.payment_method, icon: '' });
+  const sel = `<select onchange="setExpenseMethod(${e.id}, this.value, ${isIncome ? 'true' : 'false'})" title="Cambiar cuenta" style="font-size:11px;background:#050d18;color:${e.payment_method ? 'var(--gray)' : '#fff'};border:1px solid rgba(255,255,255,${e.payment_method ? '.1' : '.2'});border-radius:6px;padding:2px 6px;max-width:170px">
+      ${e.payment_method ? '' : '<option value="">Asignar cuenta…</option>'}
+      ${opts.map(x => `<option value="${escHtml(x.key)}" ${x.key === e.payment_method ? 'selected' : ''}>${escHtml(x.icon || '')} ${escHtml(x.label)}</option>`).join('')}
+    </select>`;
+  if (e.payment_method) return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--gray);margin-top:3px">${verb}: ${sel}</div>`;
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px"><span style="font-size:11px;color:#FF9800">⚠️ ${isIncome ? 'No suma a ninguna cuenta' : 'No resta de ninguna cuenta'}</span>${sel}</div>`;
 }
 
-async function setExpenseMethod(id, method) {
+async function setExpenseMethod(id, method, isIncome) {
   if (!method) return;
   try {
     await api('PUT', `/dashboard/expenses/${id}`, { payment_method: method });
-    showToast('✅', 'Cuenta asignada', 'El gasto ya se descuenta de esa cuenta');
-    loadCashSummary();
+    showToast('✅', 'Cuenta actualizada', isIncome ? 'El ingreso ya suma a esa cuenta' : 'El gasto ya se descuenta de esa cuenta');
   } catch(e) { showToast('❌', 'Error', e.message); }
+  loadCashSummary();
+  // Si se cambió desde el detalle de un día cerrado, se recarga ese detalle (el cierre ya se rehízo)
+  const dayModal = document.getElementById('modal-caja-day');
+  if (window._cajaDayDetailDate && dayModal && dayModal.style.display !== 'none') openCajaDayDetail(window._cajaDayDetailDate);
 }
 
 async function deleteExpense(id) {
@@ -14098,6 +14111,7 @@ async function openBranchCajaDayDetail(date) {
   title.textContent = `📅 ${dLabel.charAt(0).toUpperCase() + dLabel.slice(1)} · ${_entCajaBranchName}`;
   body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--gray)">Cargando...</div>';
   modal.style.display = 'flex';
+  window._cajaDayDetailDate = null; // sucursal: solo lectura
   try {
     const data = await api('GET', `/enterprise/branches/${_entCajaBranchId}/cash/day-detail?date=${date}`);
     body.innerHTML = renderCajaDayDetail(data);
