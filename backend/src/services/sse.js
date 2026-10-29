@@ -55,10 +55,29 @@ function emitWithParent(shopId, parentId, event, payload) {
   if (parentId && Number(parentId) !== Number(shopId)) emit(parentId, event, payload);
 }
 
+// Igual que emitWithParent, pero busca solo la cuenta Enterprise del local (si es sucursal).
+// Así la agenda abierta del dueño Enterprise se actualiza cuando cobra o cambia un turno la sucursal
+// o un barbero. El padre se guarda 10 min en memoria para no consultar la base en cada evento.
+const _parentCache = new Map(); // shopId → { parent, at }
+async function emitShop(shopId, event, payload) {
+  emit(shopId, event, payload);
+  const sid = Number(shopId);
+  if (!sid) return;
+  let c = _parentCache.get(sid);
+  if (!c || Date.now() - c.at > 10 * 60 * 1000) {
+    try {
+      const r = await require('../db/pool').query('SELECT parent_enterprise_id FROM shops WHERE id=$1', [sid]);
+      c = { parent: r.rows[0]?.parent_enterprise_id || null, at: Date.now() };
+      _parentCache.set(sid, c);
+    } catch (_) { return; }
+  }
+  if (c.parent && Number(c.parent) !== sid) emit(c.parent, event, payload);
+}
+
 function stats() {
   let total = 0;
   for (const s of _rooms.values()) total += s.size;
   return { rooms: _rooms.size, connections: total };
 }
 
-module.exports = { join, leave, emit, emitWithParent, stats };
+module.exports = { join, leave, emit, emitWithParent, emitShop, stats };

@@ -88,7 +88,7 @@ async function createQueueAppointment(shopId, entry, barberId) {
     await pool.query('UPDATE appointments SET any_barber=TRUE WHERE id=$1', [apptId]).catch(() => {});
   }
   try {
-    require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'confirmed', date: localDate, time_start: localTime, barber_id: finalBarberId });
+    require('../services/sse').emitShop(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'confirmed', date: localDate, time_start: localTime, barber_id: finalBarberId }).catch(() => {});
   } catch (_) {}
   return apptId;
 }
@@ -840,7 +840,7 @@ router.post('/complete/:id', auth, async (req, res) => {
     await db.query('COMMIT'); began = false;
 
     // ── Después de registrar: avisos (no afectan el cobro) ──
-    try { require('../services/sse').emit(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' }); } catch (_) {}
+    try { require('../services/sse').emitShop(shopId, 'appointment.updated', { id: apptId, shop_id: shopId, status: 'completed' }).catch(() => {}); } catch (_) {}
     if (client?.phone && shopData?.wpp_connected && pointsEarned > 0) {
       try {
         const wpp = require('../services/whatsapp');

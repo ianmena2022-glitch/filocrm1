@@ -6343,10 +6343,18 @@ async function notifResync() {
     }
   } catch(_) {}
 }
+// Al volver a la app (celular bloqueado, otra pestaña) se recarga lo que se está viendo: mientras
+// estuvo en segundo plano la conexión en vivo pudo cortarse y perder cobros o turnos nuevos.
+let _lastResumeRefresh = Date.now();
+function refreshOnResume() {
+  if (Date.now() - _lastResumeRefresh < 15000) return;
+  _lastResumeRefresh = Date.now();
+  refreshActiveSection();
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') notifResync();
+  if (document.visibilityState === 'visible') { notifResync(); refreshOnResume(); }
 });
-window.addEventListener('focus', notifResync);
+window.addEventListener('focus', () => { notifResync(); refreshOnResume(); });
 setInterval(() => { if (document.visibilityState === 'visible') notifResync(); }, 45000);
 
 // ─── NAVIGATION ───
@@ -7531,6 +7539,12 @@ async function memberCheckin(apptId, membershipId) {
 }
 
 async function updateApptStatus(id, status) {
+  // Completar: primero se elige cómo pagó; la tarjeta se marca cuando el cobro queda guardado
+  // (si se cierra el popup sin cobrar, el turno sigue pendiente también en pantalla)
+  if (status === 'completed') {
+    showPaymentPopup(id);
+    return;
+  }
   // Actualizar DOM al instante sin esperar el servidor
   const card = document.querySelector(`.appointment-card [onclick*="updateApptStatus(${id},"]`)?.closest('.appointment-card');
   if (card) {
@@ -7579,12 +7593,6 @@ async function updateApptStatus(id, status) {
       const count = summary.textContent.split(' ')[0];
       summary.textContent = `${count} turnos · $${total.toLocaleString('es-AR')} facturado`;
     }
-  }
-
-  if (status === 'completed') {
-    // Mostrar popup de método de pago antes de completar
-    showPaymentPopup(id);
-    return;
   }
 
   try {
