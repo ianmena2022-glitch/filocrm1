@@ -441,11 +441,16 @@ router.put('/:id/status', auth, async (req, res) => {
       catch(spErr) { return res.status(400).json({ error: spErr.message }); }
     }
 
-    // Si lo cobran dos personas a la vez, solo una se queda con el cobro
+    // Si lo cobran dos personas a la vez, solo una se queda con el cobro. Estado y método de pago se
+    // guardan en el mismo UPDATE: antes se marcaba "completado" primero y el método después, y si el
+    // pedido se cortaba en el medio el turno quedaba cobrado sin método (y sin sumar la visita al cliente).
     if (isNewCharge) {
+      const claimPM = splitsToWrite ? (splitsToWrite.length === 1 ? splitsToWrite[0].method : 'mixed') : (effectivePM || null);
       const claim = await pool.query(
-        `UPDATE appointments SET status='completed' WHERE id=$1 AND shop_id=$2 AND status IS DISTINCT FROM 'completed' RETURNING id`,
-        [req.params.id, apptShopId]
+        `UPDATE appointments SET status='completed',
+           payment_method = COALESCE($3::text, payment_method)
+         WHERE id=$1 AND shop_id=$2 AND status IS DISTINCT FROM 'completed' RETURNING id`,
+        [req.params.id, apptShopId, claimPM]
       );
       if (!claim.rows.length) {
         return res.status(409).json({ error: 'Este turno ya fue cobrado. Actualizá la agenda.', code: 'ALREADY_COMPLETED' });
@@ -478,7 +483,7 @@ router.put('/:id/status', auth, async (req, res) => {
         const r = await _writeAppointmentSplits(pool, apptShopId, parseInt(req.params.id), splitsToWrite);
         effectivePM = r.effectivePaymentMethod;
       } catch (spErr) {
-        if (isNewCharge) await pool.query('UPDATE appointments SET status=$1 WHERE id=$2', [prevStatus, req.params.id]).catch(() => {});
+        if (isNewCharge) await pool.query('UPDATE appointments SET status=$1, payment_method=NULL WHERE id=$2', [prevStatus, req.params.id]).catch(() => {});
         throw spErr;
       }
     } else if (status !== 'completed' || payment_method) {
@@ -490,6 +495,7 @@ router.put('/:id/status', auth, async (req, res) => {
     const tipVal = tip !== undefined ? parseFloat(tip) : null;
     const tipMethodVal = (tipVal && tip_method) ? String(tip_method).trim() : null;
     let result;
+    try {
     try {
       result = await pool.query(
         `UPDATE appointments SET status=$1,
@@ -508,6 +514,14 @@ router.put('/:id/status', auth, async (req, res) => {
          WHERE id=$4 AND ${shopConditionStatus}${barberCondition} RETURNING *`,
         [status, effectivePM || null, tipVal, req.params.id, shopId]
       );
+    }
+    } catch (upErr) {
+      // El cobro no terminó de guardarse: el turno vuelve a como estaba (se puede volver a cobrar)
+      if (isNewCharge) {
+        await pool.query('UPDATE appointments SET status=$1, payment_method=NULL WHERE id=$2', [prevStatus, req.params.id]).catch(() => {});
+        await pool.query('DELETE FROM payment_splits WHERE appointment_id=$1', [req.params.id]).catch(() => {});
+      }
+      throw upErr;
     }
     if (!result.rows.length) return res.status(404).json({ error: 'Turno no encontrado' });
 
@@ -651,8 +665,9 @@ router.put('/:id/status', auth, async (req, res) => {
 
     // Actualizar stats del cliente al completar (SOLO si no estaba ya completado — evita doble award)
     // Fix #3: usar enterprise owner para WPP si la sucursal no tiene socket propio
-    if (status === 'completed' && !wasCompleted && appt.client_id) {
-      const shop = await pool.query('SELECT * FROM shops WHERE id=$1', [shopId]);
+    if (status === 'completed' && !wasCompleted && appt.client_id) try {
+      // Solo las columnas que se usan (SELECT * traía también la sesión de WhatsApp, que pesa)
+      const shop = await pool.query('SELECT points_per_peso, msg_templates FROM shops WHERE id=$1', [shopId]);
       const shopData = shop.rows[0];
       const rawPpp = shopData.points_per_peso;
       const pointsPerPeso = (rawPpp === null || rawPpp === undefined || rawPpp === '') ? 0.01 : parseFloat(rawPpp);
@@ -719,6 +734,9 @@ router.put('/:id/status', auth, async (req, res) => {
           console.error('Error enviando WPP puntos:', wppErr.message);
         }
       })();
+    } catch (stErr) {
+      // El cobro ya quedó guardado: no se responde error (la pantalla creería que no se cobró)
+      console.error(`[APPT ${appt.id}] cobrado, pero no se pudo sumar la visita/puntos al cliente ${appt.client_id}:`, stErr.message);
     }
 
     res.json(appt);

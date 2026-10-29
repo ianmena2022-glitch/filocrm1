@@ -7953,6 +7953,9 @@ async function confirmPayment(apptId) {
       if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     } else {
       payPopupBusy('payment-popup', false, payErrorText(e));
+      // Que la agenda y la caja muestren cómo quedó realmente el turno
+      if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
+      loadCashSummary();
     }
   }
 }
