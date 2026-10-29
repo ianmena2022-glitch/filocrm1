@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay, dailySeries, monthReport } = require("../services/cashMath");
+const { paidPriceSql, computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay, dailySeries, monthReport } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -23,8 +23,8 @@ router.get('/today', auth, async (req, res) => {
     const [metricsQ, prodRevenueQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0) AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - COALESCE(cost,0) - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} - COALESCE(cost,0) - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                                 AS completed,
            COUNT(CASE WHEN status='pending' OR status='confirmed' OR status='waiting_sena' THEN 1 END) AS pending,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                    AS noshows
@@ -123,8 +123,8 @@ router.get('/month', auth, async (req, res) => {
     const [monthQ, prodRevMonthQ] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END), 0)        AS revenue,
-           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN price - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} ELSE 0 END), 0)        AS revenue,
+           COALESCE(SUM(CASE WHEN status='completed' AND payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} - cost - (price * COALESCE(commission_pct,0) / 100.0) ELSE 0 END), 0) AS net_profit,
            COUNT(CASE WHEN status='completed' THEN 1 END)                               AS completed,
            COUNT(CASE WHEN status='noshow' THEN 1 END)                                  AS noshows,
            COUNT(*)                                                                      AS total
@@ -398,7 +398,7 @@ router.get('/cash', auth, async (req, res) => {
          COALESCE(SUM(CASE WHEN method='debt'     THEN amount END),0) AS debt_total,
          COALESCE(SUM(CASE WHEN method IS NULL    THEN amount END),0) AS no_method_total,
          (SELECT COALESCE(SUM(tip),0)   FROM by_appt) AS tips_total,
-         (SELECT COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) FROM by_appt) AS revenue_total,
+         (SELECT COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('by_appt')} ELSE 0 END),0) FROM by_appt) AS revenue_total,
          (SELECT COUNT(*) FROM by_appt) AS cuts_count
        FROM method_totals`,
       [shopId, date]

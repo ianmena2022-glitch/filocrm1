@@ -439,6 +439,16 @@ router.put('/:id/status', auth, async (req, res) => {
       const price = Math.max(parseFloat(priceQ.rows[0]?.price || 0) - parseFloat(priceQ.rows[0]?.sena || 0), 0);
       try { splitsToWrite = _validateSplits(price, payment_splits); }
       catch(spErr) { return res.status(400).json({ error: spErr.message }); }
+      // Un método propio marcado como fiado cuenta como 'debt' (así genera la deuda) y los renglones
+      // del mismo método se juntan en uno
+      if (splitsToWrite) {
+        const byMethod = new Map();
+        for (const s of splitsToWrite) {
+          const m = await normalizeDebtMethod([apptShopId, shopId], s.method);
+          byMethod.set(m, (byMethod.get(m) || 0) + s.amount);
+        }
+        splitsToWrite = [...byMethod].map(([method, amount]) => ({ method, amount }));
+      }
     }
 
     // Si lo cobran dos personas a la vez, solo una se queda con el cobro. Estado y método de pago se
@@ -565,25 +575,39 @@ router.put('/:id/status', auth, async (req, res) => {
     } catch(_) {}
 
 
-    // Si es fiado, registrar deuda
-    if (status === 'completed' && effectivePM === 'debt') {
-      await pool.query(
-        `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
-         SELECT $1::int, $2::int, $3::text, $4::int, $5::numeric, $6::text
-          WHERE NOT EXISTS (SELECT 1 FROM client_debts WHERE appointment_id=$4::int AND paid=FALSE)`,
-        [appt.shop_id, appt.client_id || null, appt.client_name, appt.id,
-         // La seña ya cobrada no es deuda
-         Math.max(parseFloat(appt.price || 0) - (appt.sena_status === 'confirmed' ? parseFloat(appt.sena_amount || 0) : 0), 0),
-         `Turno ${appt.service_name || ''} - ${appt.date}`]
-      );
-      console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${appt.price}`);
-    }
-    // Si el turno deja de ser fiado (se reabre, se cancela o se corrige el método),
-    // la deuda pendiente que había generado ya no existe
-    const stillDebt = status === 'completed' && appt.payment_method === 'debt';
-    if (!stillDebt && (wasCompleted || prevStatus === 'completed')) {
-      await pool.query('DELETE FROM client_debts WHERE appointment_id=$1 AND paid=FALSE', [appt.id])
-        .catch(e => console.warn('[APPT] limpiar deuda:', e.message));
+    // Fiado: todo el turno (método 'debt') o la parte fiada de un pago dividido (p.ej. pagó una
+    // parte en efectivo y quedó debiendo el resto). La deuda solo se toca cuando llega cómo se
+    // cobró: si solo se edita la propina, queda como estaba.
+    const clearDebt = () => pool.query('DELETE FROM client_debts WHERE appointment_id=$1 AND paid=FALSE', [appt.id])
+      .catch(e => console.warn('[APPT] limpiar deuda:', e.message));
+    if (status === 'completed' && (splitsToWrite || effectivePM)) {
+      const debtAmount = splitsToWrite
+        ? splitsToWrite.filter(s => s.method === 'debt').reduce((n, s) => n + s.amount, 0)
+        : effectivePM === 'debt'
+          // La seña ya cobrada no es deuda
+          ? Math.max(parseFloat(appt.price || 0) - (appt.sena_status === 'confirmed' ? parseFloat(appt.sena_amount || 0) : 0), 0)
+          : 0;
+      if (debtAmount > 0) {
+        // Corrección de un cobro que ya tenía deuda pendiente: se ajusta el monto
+        const upd = await pool.query(
+          'UPDATE client_debts SET amount=$1 WHERE appointment_id=$2 AND paid=FALSE RETURNING id', [debtAmount, appt.id]
+        );
+        if (!upd.rows.length) {
+          await pool.query(
+            `INSERT INTO client_debts (shop_id, client_id, client_name, appointment_id, amount, description)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [appt.shop_id, appt.client_id || null, appt.client_name, appt.id, debtAmount,
+             `Turno ${appt.service_name || ''} - ${appt.date}`]
+          );
+        }
+        console.log(`[CAJA] Deuda registrada para ${appt.client_name}: $${debtAmount}`);
+      } else {
+        // Ya no es fiado (se corrigió el método): la deuda pendiente que había generado no existe más
+        await clearDebt();
+      }
+    } else if (status !== 'completed' && wasCompleted) {
+      // Se reabrió o se canceló un turno cobrado
+      await clearDebt();
     }
 
     // Notificar al cliente cuando el turno es confirmado
@@ -867,10 +891,18 @@ router.put('/:id', auth, async (req, res) => {
       } catch (spErr) {
         if (!/payment_splits/i.test(spErr.message)) console.error('[APPT] resync splits:', spErr.message);
       }
-      // Deuda pendiente: ajustar el monto. Si ya fue cobrada no se toca (la plata ya entró a caja).
+      // Deuda pendiente: ajustar el monto (en un pago dividido, solo la parte fiada, ya reescalada).
+      // Si ya fue cobrada no se toca (la plata ya entró a caja).
+      let debtTarget = target;
+      if (edited.payment_method === 'mixed') {
+        const d = await pool.query(
+          `SELECT COALESCE(SUM(amount),0) AS t FROM payment_splits WHERE appointment_id=$1 AND method='debt'`, [edited.id]
+        ).catch(() => null);
+        debtTarget = parseFloat(d?.rows[0]?.t || 0);
+      }
       await pool.query(
         `UPDATE client_debts SET amount=$1 WHERE appointment_id=$2 AND paid=FALSE`,
-        [target, edited.id]
+        [debtTarget, edited.id]
       ).catch(() => {});
     }
 

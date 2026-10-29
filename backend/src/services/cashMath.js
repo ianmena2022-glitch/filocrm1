@@ -3,6 +3,10 @@
 const pool = require('../db/pool');
 const { getShopTz } = require('../db/shopTz');
 
+// Precio de un turno sin su parte fiada: en un pago dividido, lo fiado no es ingreso hasta que se
+// cobra (igual que un turno fiado entero, que se excluye aparte). `t` es la tabla o alias del turno.
+const paidPriceSql = (t) => `(${t}.price - CASE WHEN ${t}.payment_method='mixed' THEN COALESCE((SELECT SUM(ps.amount) FROM payment_splits ps WHERE ps.appointment_id=${t}.id AND ps.method='debt'),0) ELSE 0 END)`;
+
 const isMissing = (e, what) => new RegExp(`${what}.*does not exist|relation "${what}"|column.*${what}`, 'i').test(e.message || '');
 
 // Ingresos por método del día (splits-aware, neto de seña ya cobrada + seña por su método).
@@ -180,7 +184,7 @@ async function computeDayClose(shopId, date) {
   const ap = await pool.query(
     `SELECT
        COALESCE(SUM(tip),0) AS tips_total,
-       COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+       COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} ELSE 0 END),0) AS revenue_total,
        COUNT(*) AS cuts_count
      FROM appointments WHERE shop_id=$1 AND date=$2::date AND status='completed'`,
     [shopId, date]
@@ -236,7 +240,7 @@ async function dailySeries(shopId, from, to) {
     `WITH d AS (SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS date),
      ap AS (
        SELECT date,
-              COALESCE(SUM(price) FILTER (WHERE payment_method IS DISTINCT FROM 'debt'),0) AS revenue,
+              COALESCE(SUM(${paidPriceSql('appointments')}) FILTER (WHERE payment_method IS DISTINCT FROM 'debt'),0) AS revenue,
               COUNT(*) AS cuts,
               COALESCE(SUM(price * COALESCE(commission_pct,0) / 100.0),0)               AS appt_comm,
               COALESCE(SUM(tip) FILTER (WHERE barber_id IS NULL),0)                      AS owner_tips,
@@ -538,4 +542,4 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   }
 }
 
-module.exports = { monthReport, dailySeries, periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };
+module.exports = { paidPriceSql, monthReport, dailySeries, periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };

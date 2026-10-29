@@ -7799,8 +7799,9 @@ function _resetPayReview() {
 function renderPaySplitRows() {
   const el = document.getElementById('pay-split-rows');
   if (!el) return;
-  // El fiado no puede ser parte de un split: no generaría deuda y el monto desaparecería de la caja
-  const methods = _availablePayMethods().filter(m => !m.is_debt);
+  // El fiado también puede ser una parte (p.ej. pagó una parte y quedó debiendo el resto): esa parte
+  // queda como deuda del cliente y no entra a la caja hasta que la pague
+  const methods = _availablePayMethods();
   const options = methods.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
   el.innerHTML = window._paySplitRows.map((row, i) => `
     <div style="display:flex;gap:6px;align-items:center">
@@ -7941,7 +7942,10 @@ async function confirmPayment(apptId) {
     document.getElementById('payment-popup')?.remove();
     // Si se corrigió desde Caja, refrescar el detalle abierto de las cuentas
     if (window._payEdit) document.querySelectorAll('[id^="method-detail-"]').forEach(d => { if (d.style.display !== 'none') { const k = d.id.replace('method-detail-', ''); d.style.display = 'none'; toggleMethodDetail(k); } });
-    showSuccessPop({ title: window._payEdit ? 'Cobro corregido' : (body.payment_method === 'debt' || (window._paymentMethods||[]).find(m => m.key === body.payment_method)?.is_debt) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
+    const _isDebtKey = (k) => k === 'debt' || (window._paymentMethods||[]).find(m => m.key === k)?.is_debt;
+    const _splitDebt = (body.payment_splits || []).filter(s => _isDebtKey(s.method)).reduce((n, s) => n + s.amount, 0);
+    if (_splitDebt > 0) successLabel += ` · 💰 Quedó debiendo $${_splitDebt.toLocaleString('es-AR')}`;
+    showSuccessPop({ title: window._payEdit ? 'Cobro corregido' : _isDebtKey(body.payment_method) ? 'Fiado registrado' : '¡Cobrado!', sub: successLabel });
     loadDashboard();
     if (document.getElementById('sec-agenda').classList.contains('active')) loadAgenda();
     await loadCashSummary();

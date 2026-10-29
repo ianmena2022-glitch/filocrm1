@@ -4,7 +4,7 @@ const auth   = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { methodTotalsForDay, dayCommissions, computeNet, methodMovementsForDay, periodSummary, monthReport } = require('../services/cashMath');
+const { paidPriceSql, methodTotalsForDay, dayCommissions, computeNet, methodMovementsForDay, periodSummary, monthReport } = require('../services/cashMath');
 
 // Solo enterprise owners pueden acceder
 // Verifica JWT primero; si el flag no está en el token (cuenta creada antes del fix),
@@ -532,7 +532,7 @@ router.get('/branches/:id/cash', auth, enterpriseOnly, async (req, res) => {
          COALESCE(SUM(CASE WHEN payment_method='debt' THEN price ELSE 0 END),0)     AS debt_total,
          COALESCE(SUM(CASE WHEN payment_method IS NULL THEN price ELSE 0 END),0)    AS no_method_total,
          COALESCE(SUM(tip),0) AS tips_total,
-         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN price ELSE 0 END),0) AS revenue_total,
+         COALESCE(SUM(CASE WHEN payment_method IS DISTINCT FROM 'debt' THEN ${paidPriceSql('appointments')} ELSE 0 END),0) AS revenue_total,
          COUNT(*) FILTER (WHERE status='completed') AS cuts_count
        FROM appointments
        WHERE shop_id=$1 AND date=$2 AND status='completed'`,
