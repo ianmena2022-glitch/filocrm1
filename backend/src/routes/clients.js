@@ -85,6 +85,21 @@ function parseBirthday(raw) {
   return t;
 }
 
+// Otro cliente del local con el mismo número (aunque esté escrito distinto: +54 9 11…, 5411…, 11…).
+// Un número = un cliente: así visitas, gastos y puntos van siempre a la misma ficha.
+async function clientWithPhone(shopId, phone, exceptId = null) {
+  const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
+  const key = phoneKey(phone);
+  if (!key) return null;
+  const r = await pool.query(
+    `SELECT id, name, phone FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+       AND ($3::int IS NULL OR id <> $3::int)
+     ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
+    [shopId, key, exceptId]
+  );
+  return r.rows[0] || null;
+}
+
 // POST /api/clients
 router.post('/', auth, async (req, res) => {
   const { name, phone, notes, address, birthday } = req.body;
@@ -92,6 +107,13 @@ router.post('/', auth, async (req, res) => {
 
   try {
     const effectiveShopId = req.parentShopId || req.shopId;
+    const existing = await clientWithPhone(effectiveShopId, phone);
+    if (existing) {
+      return res.status(409).json({
+        error: `Ya tenés un cliente con ese número: ${existing.name}. Usá esa ficha para que sus visitas y puntos queden juntos.`,
+        code: 'PHONE_EXISTS', client: existing,
+      });
+    }
     const result = await pool.query(
       'INSERT INTO clients (shop_id, name, phone, notes, address, birthday) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
       [effectiveShopId, name.trim(), phone?.trim() || null, notes?.trim() || null, address?.trim() || null, parseBirthday(birthday)]
@@ -123,6 +145,15 @@ router.put('/:id', auth, async (req, res) => {
 
     // Modo edición normal: COALESCE para no pisar name/phone con null si no vienen
     const { address } = req.body;
+    if (phone) {
+      const existing = await clientWithPhone(effectiveShopId, phone, parseInt(req.params.id));
+      if (existing) {
+        return res.status(409).json({
+          error: `Ese número ya es de otro cliente: ${existing.name}. Un número solo puede estar en una ficha.`,
+          code: 'PHONE_EXISTS', client: existing,
+        });
+      }
+    }
     const result = await pool.query(
       `UPDATE clients SET
          name     = COALESCE($1, name),

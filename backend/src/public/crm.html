@@ -4833,7 +4833,7 @@ async function api(method, path, body) {
     setTimeout(() => window.location.reload(), 1500);
     throw new Error(data.error || 'Sesión cerrada');
   }
-  if (!res.ok) throw new Error(data.error || 'Error del servidor');
+  if (!res.ok) { const err = new Error(data.error || 'Error del servidor'); err.status = res.status; err.data = data; throw err; }
   return data;
 }
 
@@ -8311,8 +8311,14 @@ async function _createAppointment() {
         opt.dataset.points = '0';
         sel.appendChild(opt);
       } catch(ce) {
-        // Si falla la creación del cliente (ej: duplicado), seguir igual sin client_id
-        console.warn('[createAppointment] No se pudo crear cliente:', ce.message);
+        // Ya hay un cliente con ese número: el turno va a esa ficha (visitas y puntos juntos)
+        if (ce.data?.code === 'PHONE_EXISTS' && ce.data.client?.id) {
+          clientId = String(ce.data.client.id);
+          showToast('ℹ️', 'Cliente existente', `Ese número ya es de ${ce.data.client.name}: el turno queda en su ficha`);
+        } else {
+          // Si falla la creación del cliente por otro motivo, seguir igual sin client_id
+          console.warn('[createAppointment] No se pudo crear cliente:', ce.message);
+        }
       }
     }
 
