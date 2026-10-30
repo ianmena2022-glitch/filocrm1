@@ -937,6 +937,8 @@ async function loadDashboard() {
       if (pend.appt_count > 0)        parts.push(pend.appt_count + ' turno' + (pend.appt_count !== 1 ? 's' : ''));
       if (pend.product_sales_count>0) parts.push(pend.product_sales_count + ' venta' + (pend.product_sales_count !== 1 ? 's' : '') + ' de productos');
       if (pend.bonuses_count > 0)     parts.push(pend.bonuses_count + ' bonus');
+      // Las propinas suman al total: mostrarlas aparte para que se vea de dónde sale
+      if (Number(pend.tips_total) > 0) parts.push('$' + Number(pend.tips_total).toLocaleString('es-AR') + ' de propinas');
       if (pendSub) pendSub.textContent = parts.length ? parts.join(' · ') : 'sin pendientes';
     }
   } catch(e) { console.error('[pending]', e.message); }
@@ -962,6 +964,7 @@ async function loadDashboard() {
     animateStat(document.getElementById('stat-completados'), completados);
     animateStat(document.getElementById('stat-pendientes'),  pendientes);
     window._dashApptComision = comision;
+    window._dashPropinas = propinas;
     animateStat(document.getElementById('stat-comision'), comision, { prefix: '$' });
     const subEl = document.getElementById('stat-comision-sub'); if (subEl && propinas > 0) subEl.textContent = `Comisión + $${propinas.toLocaleString('es-AR')} propinas`;
 
@@ -1015,7 +1018,7 @@ function apptRowHTML(a, statusLabel) {
       <div class="appt-service">${escHtml(a.service_name || 'Sin servicio')}${a.from_queue ? ' · <span style="color:#7ab8ff;font-weight:700">⚡ Fila virtual</span>' : ''}</div>
       ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">🏠 ${a.client_address}</div>` : ''}
     </div>
-    <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+    <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}${parseFloat(a.tip||0) > 0 ? `<div style="font-family:'Barlow',sans-serif;font-size:11px;font-weight:600;color:#4ade80">🎁 +$${parseFloat(a.tip).toLocaleString('es-AR')} propina</div>` : ''}</div>
     <div><span class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</span></div>
     <div>${a.status === 'pending' || a.status === 'confirmed' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}</div>
   </div>`;
@@ -1030,7 +1033,8 @@ async function loadAgenda() {
 
     const completados = myAppts.filter(a => a.status === 'completed').length;
     const facturado = myAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.price||0), 0);
-    document.getElementById('date-summary').textContent = `${myAppts.length} turnos · $${facturado.toLocaleString('es-AR')}`;
+    const propinasDia = myAppts.filter(a => a.status === 'completed').reduce((s, a) => s + parseFloat(a.tip||0), 0);
+    document.getElementById('date-summary').textContent = `${myAppts.length} turnos · $${facturado.toLocaleString('es-AR')}` + (propinasDia > 0 ? ` · 🎁 $${propinasDia.toLocaleString('es-AR')} propinas` : '');
 
     const statusLabel = { pending:'Pendiente', completed:'Completado', noshow:'No vino', cancelled:'Cancelado', confirmed:'Confirmado' };
 
@@ -1059,7 +1063,7 @@ async function loadAgenda() {
           ${a.client_address ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">🏠 ${a.client_address}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-          <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}</div>
+          <div class="appt-price">$${parseFloat(a.price||0).toLocaleString('es-AR')}${parseFloat(a.tip||0) > 0 ? `<div style="font-family:'Barlow',sans-serif;font-size:11px;font-weight:600;color:#4ade80">🎁 +$${parseFloat(a.tip).toLocaleString('es-AR')} propina</div>` : ''}</div>
           <span class="status-badge status-${a.status}">${statusLabel[a.status]||a.status}</span>
           ${a.status === 'pending' || a.status === 'confirmed' ? `<button class="btn-complete" onclick="completeAppt(${a.id})">✓ Completar</button>` : ''}
         </div>
@@ -1585,7 +1589,8 @@ async function loadBarberProductos() {
       const comEl = document.getElementById('stat-comision');
       const subEl = document.getElementById('stat-comision-sub');
       if (comEl) comEl.textContent = '$' + (apptComision + commProd).toLocaleString('es-AR');
-      if (subEl && commProd > 0) subEl.textContent = 'Turnos + productos';
+      const propinas = window._dashPropinas || 0;
+      if (subEl && commProd > 0) subEl.textContent = propinas > 0 ? `Turnos + productos + $${propinas.toLocaleString('es-AR')} propinas` : 'Turnos + productos';
     }
   } catch(e) { console.error('loadBarberProductos', e); }
 }

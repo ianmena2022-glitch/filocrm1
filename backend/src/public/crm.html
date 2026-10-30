@@ -11600,7 +11600,7 @@ async function openSettlementModal(barberId, barberName) {
       ? `<tr class="stl-more" data-group="${group}" onclick="toggleSettlementRows('${group}', this)" style="cursor:pointer"><td colspan="3" style="text-align:center;padding:8px 6px;font-size:12px;color:var(--yellow);font-weight:600">▾ Ver ${n} ${label} más</td></tr>`
       : '';
     const rows = data.appointments.map((a, i) =>
-      `<tr${i >= 8 ? ' class="stl-hidden" data-group="appts" style="display:none"' : ''}><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px;white-space:nowrap">${apptWhen(a)}</td><td style="padding:6px 4px;font-size:12px">${escHtml(a.service_name || 'Servicio')}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}</td></tr>`
+      `<tr${i >= 8 ? ' class="stl-hidden" data-group="appts" style="display:none"' : ''}><td style="padding:6px 4px;color:rgba(255,255,255,0.7);font-size:12px;white-space:nowrap">${apptWhen(a)}</td><td style="padding:6px 4px;font-size:12px">${escHtml(a.service_name || 'Servicio')}</td><td style="padding:6px 4px;font-size:12px;color:var(--yellow)">$${parseFloat(a.price||0).toLocaleString('es-AR')}${parseFloat(a.tip||0) > 0 ? `<div style="font-size:10.5px;color:#00E676">🎁 +$${parseFloat(a.tip).toLocaleString('es-AR')}</div>` : ''}</td></tr>`
     ).join('');
     const extra = moreRow('appts', data.appointments.length - 8, data.appointments.length - 8 === 1 ? 'turno' : 'turnos');
     const prodList = data.product_sales || [];
