@@ -244,8 +244,9 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
     }
     const shop = shopRes.rows[0];
 
-    // Check paused
-    if (shop.queue_paused) {
+    // Check paused (una cuenta vencida tampoco toma gente en la fila)
+    const { shopHasAccess } = require('../services/shopAccess');
+    if (shop.queue_paused || !(await shopHasAccess(shop.id))) {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
     }
 
@@ -373,7 +374,9 @@ router.get('/:slug/status', async (req, res) => {
     const shop = shopRes.rows[0];
 
     if (!entry_id) {
-      return res.json({ shop_name: shop.name, queue_paused: shop.queue_paused });
+      // Cuenta vencida: la fila se muestra pausada
+      const { shopHasAccess } = require('../services/shopAccess');
+      return res.json({ shop_name: shop.name, queue_paused: shop.queue_paused || !(await shopHasAccess(shop.id)) });
     }
 
     // Get entry

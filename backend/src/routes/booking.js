@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const pool      = require('../db/pool');
 const wpp       = require('../services/whatsapp');
 const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
+const { shopHasAccess, INACTIVE_MSG } = require('../services/shopAccess');
 
 // De qué cuenta salen los barberos de una página de reservas. Los barberos de una sucursal
 // están cargados en la sucursal; solo si la sucursal no tiene ninguno se usan los del dueño
@@ -48,6 +49,8 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopData = shop.rows[0];
+    // Cuenta vencida: la página no toma turnos
+    if (!(await shopHasAccess(shopData.id))) return res.status(403).json({ error: INACTIVE_MSG, code: 'SHOP_INACTIVE' });
 
     // Si es enterprise owner con WPP compartido → devolver lista de sucursales para que el cliente elija
     if (shopData.is_enterprise_owner && shopData.enterprise_shared_wpp) {
@@ -498,6 +501,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       [req.params.slug]
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
+    if (!(await shopHasAccess(shop.rows[0].id))) return res.status(403).json({ error: INACTIVE_MSG, code: 'SHOP_INACTIVE' });
     const shopData = shop.rows[0];
     // Sucursal: hereda la elección de barbero del dueño enterprise (igual que la página de reserva)
     if (!shopData.allow_barber_choice && shopData.is_branch && shopData.parent_enterprise_id) {

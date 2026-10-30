@@ -575,6 +575,11 @@ async function init() {
   try {
     const res = await fetch(API);
     const data = await res.json();
+    // Cuenta del local vencida: aviso claro (no "no se encontró")
+    if (res.status === 403 && data.code === 'SHOP_INACTIVE') {
+      document.getElementById('loading').innerHTML = `<div class="loading">${escapeHtmlT(data.error)}</div>`;
+      return;
+    }
     if (!res.ok) throw new Error(data.error);
 
     // ── Modo Enterprise: mostrar selección de sucursal primero ──
