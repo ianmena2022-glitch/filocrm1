@@ -492,7 +492,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
 
   try {
     const shop = await pool.query(
-      'SELECT * FROM shops WHERE booking_slug = $1',
+      // Una sucursal desactivada no toma turnos (aunque alguien llame directo a la API)
+      `SELECT * FROM shops WHERE booking_slug = $1
+         AND NOT (COALESCE(is_branch, FALSE) AND subscription_status = 'cancelled')`,
       [req.params.slug]
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });

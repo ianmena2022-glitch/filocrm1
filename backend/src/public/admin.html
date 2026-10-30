@@ -1074,15 +1074,15 @@ async function loadUnmatchedPayments() {
           ${esc(reason[r.reason] || r.reason)} · pago MP #${esc(r.payment_id)}${r.payer ? ' · ' + esc(r.payer) : ''}${r.shop_name ? ' · cuenta: <strong>' + esc(r.shop_name) + '</strong>' : ''}${r.detail ? ' · ' + esc(r.detail) : ''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="up-q-${esc(r.payment_id)}" placeholder="Buscar cuenta (nombre o email)" oninput="searchUnmatchedShop('${esc(r.payment_id)}')" style="flex:1;min-width:180px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 10px;color:#fff;font-size:13px" value="">
+          <input id="up-q-${esc(r.payment_id)}" placeholder="Buscar cuenta (nombre o email)" oninput="searchUnmatchedShop(${jsArg(r.payment_id)})" style="flex:1;min-width:180px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 10px;color:#fff;font-size:13px" value="">
           <select id="up-shop-${esc(r.payment_id)}" data-no-filo-select style="min-width:160px;background:#0b1a2e;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px">
             ${r.shop_id ? `<option value="${r.shop_id}">${esc(r.shop_name || ('Cuenta ' + r.shop_id))}</option>` : '<option value="">— elegí la cuenta —</option>'}
           </select>
           <select id="up-plan-${esc(r.payment_id)}" data-no-filo-select style="background:#0b1a2e;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px">
             ${['starter','staff','enterprise'].map(p => `<option value="${p}" ${r.plan === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}
           </select>
-          <button onclick="assignUnmatched('${esc(r.payment_id)}')" style="background:var(--y);color:#000;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer">Acreditar 30 días</button>
-          <button onclick="dismissUnmatched('${esc(r.payment_id)}')" style="background:transparent;color:var(--g);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:8px 12px;cursor:pointer">Descartar</button>
+          <button onclick="assignUnmatched(${jsArg(r.payment_id)})" style="background:var(--y);color:#000;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer">Acreditar 30 días</button>
+          <button onclick="dismissUnmatched(${jsArg(r.payment_id)})" style="background:transparent;color:var(--g);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:8px 12px;cursor:pointer">Descartar</button>
         </div>
       </div>`).join('');
   } catch (e) { if (el) el.innerHTML = `<div style="color:var(--r)">Error: ${esc(e.message)}</div>`; }
@@ -1440,13 +1440,13 @@ function renderTreeRow(a, depth, parentId) {
     <td data-label="Acciones" style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
       ${a.phone ? `<button class="action-btn" onclick="openWelcomeModal(${a.id})" style="background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.3);color:#25D366" title="Enviar mensaje de bienvenida a ${esc(a.phone)}">💬 Chat</button>` : ''}
-      ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},'${esc(a.name)}')" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
+      ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},${jsArg(a.name)})" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
       ${!isBarber && !isBranch ? (isArchivedAccount(a)
         ? `<button class="action-btn" onclick="setArchived(${a.id}, false)" title="Volver a la lista principal">📤 Desarchivar</button>`
         : `<button class="action-btn" onclick="setArchived(${a.id}, true)" title="Mover a Archivadas (no se borra)">📦 Archivar</button>`) : ''}
-      <button class="action-btn" onclick="resetWpp(${a.id},'${esc(a.name)}')" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
+      <button class="action-btn" onclick="resetWpp(${a.id},${jsArg(a.name)})" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
       ${(() => { const on = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date(); return `<button class="action-btn" onclick="toggleWppCareful(${a.id}, ${on})" style="background:rgba(251,191,36,${on ? '.18' : '.06'});border-color:rgba(251,191,36,.3);color:#fbbf24" title="Modo cuidado de WhatsApp">🛡 ${on ? 'Cuidado ON' : 'Cuidado'}</button>`; })()}
-      <button class="action-btn danger" onclick="deleteAccount(${a.id},'${esc(a.name)}')">Borrar</button>
+      <button class="action-btn danger" onclick="deleteAccount(${a.id},${jsArg(a.name)})">Borrar</button>
     </td>
   </tr>`;
 }
@@ -2008,8 +2008,8 @@ async function loadPeerReferrals() {
         ? `<span style="background:rgba(255,209,0,.12);color:var(--y);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">+${r.bonuses_granted} meses</span>`
         : '<span style="color:var(--g)">—</span>';
       return `<tr>
-        <td><strong>${r.name}</strong></td>
-        <td data-label="Email" style="color:var(--g);font-size:12px">${r.email}</td>
+        <td><strong>${esc(r.name)}</strong></td>
+        <td data-label="Email" style="color:var(--g);font-size:12px">${esc(r.email)}</td>
         <td data-label="Total ref." style="font-weight:700;color:#aaff00">${r.total_referred}</td>
         <td data-label="Activos">${activeBadge}</td>
         <td data-label="En trial" style="color:var(--g)">${r.trial_referred}</td>
@@ -2057,12 +2057,12 @@ function renderVendorsTable() {
       <td data-label="Link">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;color:var(--g);word-break:break-all;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(link)}</span>
-          <button class="action-btn" onclick="copyVendorLink('${esc(link)}')" title="Copiar link">📋</button>
+          <button class="action-btn" onclick="copyVendorLink(${jsArg(link)})" title="Copiar link">📋</button>
         </div>
       </td>
       <td data-label="Referidos" style="text-align:center">
         ${v.referred_count > 0
-          ? `<button class="action-btn" onclick="openVendorAccounts(${v.id},'${esc(v.name)}')" style="color:var(--y);border-color:rgba(255,209,0,.3)">
+          ? `<button class="action-btn" onclick="openVendorAccounts(${v.id},${jsArg(v.name)})" style="color:var(--y);border-color:rgba(255,209,0,.3)">
                <span style="font-family:'Oswald',sans-serif;font-size:15px">${v.referred_count}</span>
                <span style="font-size:10px;margin-left:4px">ver →</span>
              </button>`
@@ -2085,7 +2085,7 @@ function renderVendorsTable() {
       </td>
       <td data-label="Acciones" style="display:flex;gap:6px">
         <button class="action-btn" onclick="openVendorModal(${v.id})">Editar</button>
-        <button class="action-btn danger" onclick="deleteVendor(${v.id},'${esc(v.name)}')">Borrar</button>
+        <button class="action-btn danger" onclick="deleteVendor(${v.id},${jsArg(v.name)})">Borrar</button>
       </td>
     </tr>`;
   }).join('');
@@ -2427,6 +2427,10 @@ function renderMetrics() {
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Valor para pasar como argumento en un onclick="fn(...)": string JS válido y seguro dentro del
+// atributo, tenga el texto comillas, barras invertidas o lo que sea (nombres que carga el público)
+function jsArg(v) { return String(JSON.stringify(v == null ? '' : String(v))).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(d) { return new Date(d).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function daysUntil(d) { if(!d) return null; const diff = new Date(d)-new Date(); return Math.max(0,Math.ceil(diff/(1000*60*60*24))); }
 function labelStatus(s) { return {trial:'Trial',active:'Activo',expired:'Expirado',cancelled:'Cancelado'}[s]||s; }
@@ -2499,9 +2503,9 @@ async function loadAfiliados() {
         </td>
         <td style="font-size:12px;font-family:monospace;color:var(--g)">${esc(a.bank_info || '—')}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="action-btn" onclick="loadAffDetail(${a.id},'${esc(a.name)}')">Ver detalle</button>
+          <button class="action-btn" onclick="loadAffDetail(${a.id},${jsArg(a.name)})">Ver detalle</button>
           ${parseFloat(a.pending_amount) > 0
-            ? `<button class="action-btn" style="background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80" onclick="markAllPaid(${a.id},'${esc(a.name)}')">✅ Marcar todo pagado</button>`
+            ? `<button class="action-btn" style="background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.3);color:#4ade80" onclick="markAllPaid(${a.id},${jsArg(a.name)})">✅ Marcar todo pagado</button>`
             : ''}
         </td>
       </tr>`).join('');
@@ -2699,17 +2703,17 @@ function renderNailsTable(shops) {
       : '';
 
     return `<tr>
-      <td><strong>${s.name}</strong>${testTag}</td>
-      <td style="color:var(--g);font-size:12px">${s.email}</td>
+      <td><strong>${esc(s.name)}</strong>${testTag}</td>
+      <td style="color:var(--g);font-size:12px">${esc(s.email)}</td>
       <td>${planBadge}</td>
       <td>${statusBadge}</td>
       <td style="font-size:12px;color:var(--g)">${trialDate}</td>
       <td style="text-align:center">${s.technicians_count || 0}</td>
       <td style="text-align:center">${s.clients_count || 0}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="action-btn" onclick="openNailsEdit('${s.id}','${s.name}','${s.email}','${s.plan}','${s.subscription_status}')">Editar</button>
+        <button class="action-btn" onclick="openNailsEdit(${jsArg(s.id)},${jsArg(s.name)},${jsArg(s.email)},${jsArg(s.plan)},${jsArg(s.subscription_status)})">Editar</button>
         <button class="action-btn" onclick="toggleNailsTest('${s.id}',${!s.is_test_account})">${s.is_test_account ? 'Quitar test' : 'Marcar test'}</button>
-        <button class="action-btn danger" onclick="deleteNailsShop('${s.id}','${s.name}')">Eliminar</button>
+        <button class="action-btn danger" onclick="deleteNailsShop(${jsArg(s.id)},${jsArg(s.name)})">Eliminar</button>
       </td>
     </tr>`;
   }).join('');
@@ -3097,7 +3101,7 @@ async function promoShopSearch(q) {
   try {
     const d = await promoApi('GET', '/shops-search?q=' + encodeURIComponent(q));
     el.innerHTML = (d.shops||[]).map(s => `
-      <div onclick="promoShopPick(${s.id}, '${escapeHtml(s.name).replace(/'/g,"\\'")}')" style="padding:7px 10px;cursor:pointer;border-radius:5px;font-size:12.5px;display:flex;justify-content:space-between;color:rgba(255,255,255,.85)" onmouseover="this.style.background='rgba(255,209,0,.08)'" onmouseout="this.style.background='transparent'">
+      <div onclick="promoShopPick(${s.id}, ${jsArg(s.name)})" style="padding:7px 10px;cursor:pointer;border-radius:5px;font-size:12.5px;display:flex;justify-content:space-between;color:rgba(255,255,255,.85)" onmouseover="this.style.background='rgba(255,209,0,.08)'" onmouseout="this.style.background='transparent'">
         <span>${escapeHtml(s.name)} <span style="color:var(--g);font-size:11px">· ${escapeHtml(s.email||'')}</span></span>
         <span style="color:var(--g);font-size:11px">${s.filo_plan||''}</span>
       </div>

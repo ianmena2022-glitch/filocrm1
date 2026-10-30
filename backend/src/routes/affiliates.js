@@ -2,6 +2,16 @@ const router  = require('express').Router();
 const pool    = require('../db/pool');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+
+// Login: máximo 10 intentos cada 15 minutos por IP (evita probar contraseñas a la fuerza)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Demasiados intentos de ingreso. Esperá 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Comisión one-time por plan (primer pago del shop referido)
 const COMMISSIONS = {
@@ -43,6 +53,8 @@ async function ensureTables() {
     )
   `).catch(() => {});
 
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_affiliate_commissions_shop ON affiliate_commissions(shop_id) WHERE shop_id IS NOT NULL`)
+    .catch(e => console.warn('[AFFILIATE] índice único de comisiones:', e.message));
   await pool.query(`ALTER TABLE shops ADD COLUMN IF NOT EXISTS affiliate_id INT REFERENCES affiliates(id) ON DELETE SET NULL`).catch(() => {});
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_shops_affiliate ON shops(affiliate_id)`).catch(() => {});
 }
@@ -92,14 +104,14 @@ function affAuth(req, res, next) {
 }
 
 // ── POST /api/affiliates/register ─────────────────────────────────────────────
-router.post('/register', async (req, res) => {
+router.post('/register', loginLimiter, async (req, res) => {
   const { name, email, password, phone, promo_method, bank_info } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña son requeridos' });
   if (password.length < 6)          return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
   if (!bank_info?.trim())           return res.status(400).json({ error: 'CBU/Alias para cobros es requerido' });
 
   try {
-    const exists = await pool.query('SELECT id FROM affiliates WHERE email=$1', [email.toLowerCase()]);
+    const exists = await pool.query('SELECT id FROM affiliates WHERE email=$1', [email.toLowerCase().trim()]);
     if (exists.rows.length) return res.status(400).json({ error: 'Ya existe una cuenta con ese email' });
 
     const hash = await bcrypt.hash(password, 12);
@@ -122,7 +134,7 @@ router.post('/register', async (req, res) => {
 });
 
 // ── POST /api/affiliates/login ────────────────────────────────────────────────
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
   try {
@@ -194,11 +206,15 @@ async function creditAffiliateCommission(shopId, plan) {
     const amount = COMMISSIONS[plan] || 0;
     if (!amount) return;
 
-    await pool.query(
+    // Si llegan dos avisos de pago a la vez, solo uno inserta (índice único por cuenta) y suma
+    const ins = await pool.query(
       `INSERT INTO affiliate_commissions (affiliate_id, shop_id, shop_name, plan, amount)
-       VALUES ($1,$2,$3,$4,$5)`,
+       SELECT $1,$2,$3,$4,$5
+        WHERE NOT EXISTS (SELECT 1 FROM affiliate_commissions WHERE shop_id=$2)
+       ON CONFLICT DO NOTHING RETURNING id`,
       [shop.affiliate_id, shopId, shop.name, plan, amount]
     );
+    if (!ins.rows.length) return;
     await pool.query(
       'UPDATE affiliates SET total_earned = total_earned + $1 WHERE id=$2',
       [amount, shop.affiliate_id]

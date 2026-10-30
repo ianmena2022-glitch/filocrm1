@@ -2,6 +2,16 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 const pool   = require('../db/pool');
+const rateLimit = require('express-rate-limit');
+
+// Login: máximo 10 intentos cada 15 minutos por IP (evita probar contraseñas a la fuerza)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Demasiados intentos de ingreso. Esperá 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function planPrice(p) {
   if (p === 'enterprise') return 130000;
@@ -25,7 +35,7 @@ function vendorAuth(req, res, next) {
 }
 
 // POST /api/vendor/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(401).json({ error: 'Credenciales incorrectas' });

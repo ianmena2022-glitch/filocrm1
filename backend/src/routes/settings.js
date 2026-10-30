@@ -396,7 +396,9 @@ router.put('/plan', auth, async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    res.json({ ok: true, plan, token, shop: updatedShop });
+    // Sin la contraseña (hash) ni la sesión de WhatsApp
+    const { password, wpp_session, verify_code, reset_token, ...safeShop } = updatedShop;
+    res.json({ ok: true, plan, token, shop: safeShop });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

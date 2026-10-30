@@ -6036,7 +6036,7 @@ function notifRender() {
     return;
   }
   list.innerHTML = _notifItems.map(n => `
-    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}" onclick="notifClick(${n.id}, '${escapeN(n.link || '')}')">
+    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}" onclick="notifClick(${n.id}, ${jsArg(n.link || '')})">
       <div class="notif-icon">${escapeN(n.icon || '🔔')}</div>
       <div class="notif-body">
         <div class="notif-title">${escapeN(n.title)}</div>
@@ -6586,6 +6586,10 @@ function walkInRowHtml(entry, isCalled, position) {
 }
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Valor para pasar como argumento en un onclick="fn(...)": string JS válido y seguro dentro del
+// atributo, tenga el texto comillas, barras invertidas o lo que sea (nombres que carga el público)
+function jsArg(v) { return String(JSON.stringify(v == null ? '' : String(v))).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function callNextInQueue() {
   const btn = document.getElementById('fila-next-btn');
@@ -8026,7 +8030,7 @@ function renderClients(filtered) {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="appt-btn" onclick="editClientById(${c.id})" title="Editar">✏️</button>
-        <button class="appt-btn" onclick="quickRescue(${c.id},'${escHtml(c.name).replace(/'/g,"\\'")}')" title="Enviar WhatsApp de rescate">💬</button>
+        <button class="appt-btn" onclick="quickRescue(${c.id},${jsArg(c.name)})" title="Enviar WhatsApp de rescate">💬</button>
         <button class="appt-btn" onclick="deleteClient(${c.id})" title="Eliminar">🗑</button>
       </div>
     </div>`;
@@ -8460,7 +8464,7 @@ async function showChurnList() {
             <span>Hace ${c.days_since_last} días sin visitar</span>
           </div>
         </div>
-        <button class="btn-motor" style="width:auto;padding:10px 16px" onclick="rescueClient(${c.id},'${escHtml(c.name).replace(/'/g,"\\'")}')">💬 Rescatar</button>
+        <button class="btn-motor" style="width:auto;padding:10px 16px" onclick="rescueClient(${c.id},${jsArg(c.name)})">💬 Rescatar</button>
       </div>
     `).join('');
   } catch (e) {
@@ -11349,12 +11353,12 @@ async function loadEquipo() {
         </div>
         <div class="equipo-barber-actions">
           <div class="equipo-barber-actions-row">
-            <button class="appt-btn" onclick="openBarberPhotosModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Fotos y portfolio">📸</button>
+            <button class="appt-btn" onclick="openBarberPhotosModal(${b.id},${jsArg(b.name)})" title="Fotos y portfolio">📸</button>
             <button class="appt-btn" onclick="editBarber(${b.id})" title="Editar">✏️</button>
-            <button class="appt-btn" onclick="openBonusModal(${b.id},'${b.name.replace(/'/g,"\\'")}')" title="Dar bonus" style="background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80">🎁 Bonus</button>
-            <button class="appt-btn noshow" onclick="removeBarber(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')" title="Eliminar">🗑</button>
+            <button class="appt-btn" onclick="openBonusModal(${b.id},${jsArg(b.name)})" title="Dar bonus" style="background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80">🎁 Bonus</button>
+            <button class="appt-btn noshow" onclick="removeBarber(${b.id},${jsArg(b.name)})" title="Eliminar">🗑</button>
           </div>
-          ${hasPending ? `<button class="btn-add equipo-barber-cta" onclick="openSettlementModal(${b.id},'${b.name.replace(/'/g,"\\'")}')">💸 Liquidar</button>` : `<button class="appt-btn equipo-barber-cta liquidado" onclick="openSettlementHistory(${b.id},'${b.name.replace(/'/g,"\\'")}')">📋 Historial</button>`}
+          ${hasPending ? `<button class="btn-add equipo-barber-cta" onclick="openSettlementModal(${b.id},${jsArg(b.name)})">💸 Liquidar</button>` : `<button class="appt-btn equipo-barber-cta liquidado" onclick="openSettlementHistory(${b.id},${jsArg(b.name)})">📋 Historial</button>`}
         </div>
       </div>`;
     }).join('');
@@ -12872,7 +12876,7 @@ function renderDashProdPanel() {
       return `<div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid ${borde};border-radius:10px;margin-bottom:6px">
         <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${catIcon[p.categoria]||'📦'}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}
             ${sinS ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,67,67,.15);color:var(--red);margin-left:5px">SIN STOCK</span>' : ''}
             ${bajo && !sinS ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,145,0,.15);color:var(--orange);margin-left:5px">BAJO</span>' : ''}
           </div>
@@ -12883,9 +12887,9 @@ function renderDashProdPanel() {
           <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
-          <button onclick="openVentaProducto(${p.id},'${nombre}',${p.precio_venta},${stock})"
+          <button onclick="openVentaProducto(${p.id},${jsArg(p.nombre)},${p.precio_venta},${stock})"
             style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">💰 Vender</button>
-          <button onclick="openAjusteStock(${p.id},'${nombre}')"
+          <button onclick="openAjusteStock(${p.id},${jsArg(p.nombre)})"
             style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">📦 Stock</button>
           <button onclick="openProductoModal(${p.id})"
             style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'Barlow',sans-serif">✏️ Editar</button>
@@ -13652,8 +13656,8 @@ function renderEntBranches(branches) {
           ? `<button class="ent-btn-edit" onclick="showSection('configuracion')">⚙️ Configurar</button>`
           : `<button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
              ${active
-               ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">Desactivar</button>`
-               : `<button class="ent-btn-edit" onclick="reactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">↺ Reactivar</button>`}`
+               ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},${jsArg(b.name)})">Desactivar</button>`
+               : `<button class="ent-btn-edit" onclick="reactivateBranch(${b.id},${jsArg(b.name)})">↺ Reactivar</button>`}`
         }
       </div>
     </div>`;
@@ -14497,14 +14501,14 @@ function renderDashProductos(ventas) {
         html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">
           <span style="font-size:14px">${catIcon[p.categoria]||'📦'}</span>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}</div>
             <div style="font-size:10px;color:var(--gray)">${p.precio_venta?fmt(p.precio_venta):''}</div>
           </div>
           <div style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;color:${col};min-width:28px;text-align:right">${stock}</div>
           <div style="display:flex;gap:4px">
-            <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\\'")}',${p.precio_venta},${stock})" title="Vender"
+            <button onclick="openVentaProducto(${p.id},${jsArg(p.nombre)},${p.precio_venta},${stock})" title="Vender"
               style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">💰</button>
-            <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\\'")}')" title="Stock"
+            <button onclick="openAjusteStock(${p.id},${jsArg(p.nombre)})" title="Stock"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">📦</button>
             <button onclick="openProductoModal(${p.id})" title="Editar"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center">✏️</button>
@@ -14573,9 +14577,9 @@ function renderProductosCfg() {
         <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-        <button onclick="openVentaProducto(${p.id},'${p.nombre.replace(/'/g,"\\'")}',${p.precio_venta},${stock})"
+        <button onclick="openVentaProducto(${p.id},${jsArg(p.nombre)},${p.precio_venta},${stock})"
           style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">💰 Vender</button>
-        <button onclick="openAjusteStock(${p.id},'${p.nombre.replace(/'/g,"\\'")}')"
+        <button onclick="openAjusteStock(${p.id},${jsArg(p.nombre)})"
           style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">📦 Stock</button>
         <button onclick="openProductoModal(${p.id})"
           style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--gray);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer">✏️</button>
