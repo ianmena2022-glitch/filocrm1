@@ -184,6 +184,8 @@ router.get('/:slug/member-verify', publicGetLimiter, async (req, res) => {
 // Devuelve los slots disponibles para una fecha y servicio
 router.get('/:slug/available', publicGetLimiter, async (req, res) => {
   const { date, service_id } = req.query;
+  // Si el cliente ya eligió con quién atenderse, solo los horarios de ese barbero
+  const onlyBarberId = parseInt(req.query.barber_id) || null;
   if (!date) return res.status(400).json({ error: 'Fecha requerida' });
 
   try {
@@ -269,6 +271,10 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
         const bsDayKey = DAY_KEYS[dayOfWeek];
 
         barberMap = {};
+        // El barbero elegido tiene que ser de este local; si no trabaja ese día, no hay horarios
+        if (onlyBarberId && !barbersQ.rows.some(b => b.id === onlyBarberId)) {
+          return res.status(400).json({ error: 'Barbero inválido' });
+        }
         for (const b of barbersQ.rows) {
           const sched = b.barber_schedule;
           // Si tiene schedule, verificar que trabaja este día
@@ -309,8 +315,13 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
             const endMin = eh * 60 + em;
             barberMap[a.barber_id].ranges.push({ from: sh * 60 + sm, to: endMin > 0 ? endMin : sh * 60 + sm + 30 });
           }
+        } else if (onlyBarberId) {
+          return res.json({ slots: [], duration, barber_off: true }); // ese barbero no trabaja este día
         } else {
           barberMap = null; // sin barberos disponibles este día → usar lógica normal
+        }
+        if (onlyBarberId && barberMap && !barberMap[onlyBarberId]) {
+          return res.json({ slots: [], duration, barber_off: true });
         }
       }
     }
@@ -360,7 +371,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
         const slotHH = String(Math.floor(t / 60)).padStart(2, '0');
         const slotMM = String(t % 60).padStart(2, '0');
         const slotTime = `${slotHH}:${slotMM}`;
-        const freeCount = Object.values(barberMap).filter(b => {
+        const isFree = (b) => {
           // Verificar que el barbero trabaja en este slot específico
           if (b.schedule) {
             const cfg = b.schedule[bsDayKey];
@@ -368,9 +379,11 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
             if (cfg.from && cfg.to && (slotTime < cfg.from || slotTime >= cfg.to)) return false;
           }
           return !b.ranges.some(o => t < o.to && t + duration > o.from);
-        }).length;
+        };
+        const freeCount = Object.values(barberMap).filter(isFree).length;
         const unassignedHere = unassignedRanges.filter(o => t < o.to && t + duration > o.from).length;
-        available = freeCount > unassignedHere;
+        // Con barbero elegido: él tiene que estar libre (y quedar lugar para los turnos sin barbero)
+        available = freeCount > unassignedHere && (!onlyBarberId || isFree(barberMap[onlyBarberId]));
       } else {
         available = !occupiedRanges.some(o => t < o.to && t + duration > o.from);
       }

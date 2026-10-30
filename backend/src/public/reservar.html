@@ -613,7 +613,12 @@ function loadShopData(data) {
   services = data.services;
   barbers  = data.barbers || [];
   const step4El = document.getElementById('step-4');
-  if (step4El) step4El.style.display = (shopData.allow_barber_choice && barbers.length) ? 'flex' : 'none';
+  if (step4El) {
+    step4El.style.display = barberFirst() ? 'flex' : 'none';
+    // Con elección de barbero el orden es Servicio → Barbero → Fecha → Hora → Datos
+    const anchor = document.getElementById(barberFirst() ? 'step-2' : 'step-5');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(step4El, anchor);
+  }
   // Renumerar visualmente los dots según los steps visibles (si step-4 queda hidden,
   // step-5 pasa a mostrar "4" en el dot) → evita el hueco "1 2 3 _ 5"
   const visibleSteps = Array.from(document.querySelectorAll('.step'))
@@ -878,9 +883,17 @@ function selectService(id) {
 
 // ── DATE ──
 function goToDate() {
+  if (barberFirst() && !selectedBarber && !anyBarberPicked) { goToBarberPick(); return; }
   showScreen('date');
   setStep(2);
   renderCalendar();
+}
+
+// Paso "¿Con quién querés atenderte?" antes de la fecha
+function goToBarberPick() {
+  renderBarbers();
+  showScreen('barber');
+  setStep(4);
 }
 
 function renderCalendar() {
@@ -917,7 +930,9 @@ function renderCalendar() {
     // Verificar si es día cerrado extraordinario
     const closedDays = shopData?.closed_days ? JSON.parse(shopData.closed_days) : [];
     const isExtraordinaryClosed = closedDays.includes(dateStr);
-    const isClosed = isWeeklyClosed || isExtraordinaryClosed;
+    // El barbero elegido no trabaja ese día de la semana
+    const barberOff = !!(selectedBarber && selectedBarber.barber_schedule && !isBarberAvailableClient(selectedBarber.barber_schedule, dateStr, null));
+    const isClosed = isWeeklyClosed || isExtraordinaryClosed || barberOff;
     const disabled = isPast || isClosed;
 
     let cls = 'cal-day';
@@ -955,12 +970,14 @@ async function loadSlots() {
   try {
     const params = new URLSearchParams({ date: selectedDate });
     if (selectedService) params.set('service_id', selectedService.id);
+    if (selectedBarber) params.set('barber_id', selectedBarber.id);
     const res = await fetch(`${API}/available?${params}`);
     const data = await res.json();
 
     if (!data.slots.length) {
-      document.getElementById('slots-container').innerHTML =
-        '<div class="no-slots">😔 No hay horarios disponibles este día.<br>Probá con otra fecha.</div>';
+      document.getElementById('slots-container').innerHTML = selectedBarber
+        ? `<div class="no-slots">😔 ${escapeHtmlT(selectedBarber.name)} no tiene horarios libres este día.<br>Probá con otra fecha.</div>`
+        : '<div class="no-slots">😔 No hay horarios disponibles este día.<br>Probá con otra fecha.</div>';
       return;
     }
 
@@ -976,19 +993,23 @@ async function loadSlots() {
   }
 }
 
-function selectTime(time) {
+async function selectTime(time) {
   selectedTime = time;
   document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
   event.target.classList.add('selected');
+  // Eligió "primer profesional disponible": se asigna ahora que hay día y hora
+  if (barberFirst() && anyBarberPicked && !selectedBarber) {
+    await selectFirstAvailableBarberPublic();
+    if (!selectedBarber) return;
+  }
   setTimeout(() => goToForm(), 300);
 }
 
 // ── FORM ──
 function goToForm() {
-  if (shopData?.allow_barber_choice && barbers.length && !selectedBarber) {
-    renderBarbers();
-    showScreen('barber');
-    setStep(4);
+  // El barbero se elige antes de la fecha: desde la pantalla de barbero se sigue a la fecha
+  if (barberFirst() && document.getElementById('screen-barber')?.style.display === 'block') {
+    goToDate();
     return;
   }
   showScreen('form');
@@ -1166,27 +1187,42 @@ function showScreen(name) {
   });
 }
 
+// ¿El cliente elige primero con quién atenderse? (si el local deja elegir barbero)
+function barberFirst() { return !!(shopData?.allow_barber_choice && barbers.length); }
+
+// Los pasos se marcan según el orden en que se ven (con barbero elegible, "Barbero" va segundo)
 function setStep(n) {
-  for (let i = 0; i <= 5; i++) {
-    const el = document.getElementById('step-' + i);
-    if (!el) continue;
+  const order = Array.from(document.querySelectorAll('.step')).map(el => el.id);
+  const pos = order.indexOf('step-' + n);
+  order.forEach((id, i) => {
+    const el = document.getElementById(id);
     el.classList.remove('active','done');
-    if (i < n) el.classList.add('done');
-    if (i === n) el.classList.add('active');
-  }
+    if (i < pos) el.classList.add('done');
+    if (i === pos) el.classList.add('active');
+  });
 }
 
 function goBack(toStep) {
   // Limpiar estado de los pasos que se están abandonando
-  if (toStep <= 3) { selectedBarber = null; anyBarberPicked = false; document.getElementById('btn-next-barber') && (document.getElementById('btn-next-barber').disabled = true); }
+  const resetBarber = () => { selectedBarber = null; anyBarberPicked = false; document.getElementById('btn-next-barber') && (document.getElementById('btn-next-barber').disabled = true); };
+  // Con el barbero elegido primero, volver a la hora o a la fecha no lo borra
+  if (!barberFirst() && toStep <= 3) resetBarber();
+  if (barberFirst() && document.getElementById('screen-barber')?.style.display === 'block') resetBarber();
   if (toStep <= 2) selectedTime = null;
-  if (toStep <= 1) { selectedDate = null; selectedService = null; }
+  if (toStep <= 1) { selectedDate = null; if (!barberFirst()) selectedService = null; }
 
-  // Si hay eleccion de barbero activa, el flujo es: service(1) > date(2) > time(3) > barber(4) > form(5)
+  // Con elección de barbero el flujo es: service(1) > barber(4) > date(2) > time(3) > form(5).
+  // Volver desde la fecha lleva al barbero; desde el barbero, al servicio.
   // Si no, el flujo es: service(1) > date(2) > time(3) > form(4)
-  if (shopData?.allow_barber_choice && barbers.length) {
-    const screens = ['service','date','time','barber','form'];
-    showScreen(screens[toStep - 1]);
+  if (barberFirst()) {
+    // Desde la pantalla de barbero se vuelve al servicio
+    if (document.getElementById('screen-barber')?.style.display === 'block') { showScreen('service'); setStep(1); return; }
+    if (toStep === 1 && document.getElementById('screen-date')?.style.display === 'block') { goToBarberPick(); return; }
+    // "Primer profesional disponible": al volver a elegir la hora se reasigna
+    if (toStep <= 3 && anyBarberPicked) selectedBarber = null;
+    const screens = { 1: 'service', 2: 'date', 3: 'time' };
+    if (toStep === 2) renderCalendar();
+    showScreen(screens[toStep] || 'service');
     setStep(toStep);
   } else {
     const screens = ['service','date','time','form'];
@@ -1252,6 +1288,23 @@ async function renderBarbers() {
   const bonusPct = parseInt(shopData?.any_barber_bonus_pct) || 0;
   if (bonusEl) { bonusEl.textContent = bonusPct ? `+${bonusPct}% puntos 🎁` : ''; bonusEl.style.display = bonusPct ? 'inline-block' : 'none'; }
 
+  // Elegir barbero antes de la fecha: todos elegibles, con los días y horarios en que atiende
+  if (barberFirst() && !selectedTime) {
+    document.getElementById('barber-no-avail')?.remove();
+    grid.innerHTML = barbers.map(b => `
+    <div class="service-btn ${selectedBarber?.id === b.id ? 'selected' : ''}" onclick="selectBarber(${b.id})" id="barber-${b.id}"
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+      ${b.profile_photo_url
+        ? `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#0a1828"><img src="${escapeHtmlT(b.profile_photo_url)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
+        : `<div style="width:38px;height:38px;border-radius:50%;background:${escapeHtmlT(b.barber_color || '#FFD100')};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0">${escapeHtmlT(b.name.charAt(0).toUpperCase())}</div>`}
+      <div style="min-width:0">
+        <div style="font-weight:600;font-size:15px">${escapeHtmlT(b.name)}</div>
+        ${barberDaysText(b.barber_schedule) ? `<div style="font-size:11.5px;color:var(--g);margin-top:2px">${escapeHtmlT(barberDaysText(b.barber_schedule))}</div>` : ''}
+      </div>
+    </div>`).join('');
+    return;
+  }
+
   // Obtener barberos ya ocupados en este slot
   let busyIds = new Set();
   try {
@@ -1310,6 +1363,27 @@ async function renderBarbers() {
 // true cuando el cliente eligió "Primer profesional disponible" (puede sumar bonus de puntos)
 let anyBarberPicked = false;
 
+// "Lun a vie 10:00–20:00", "Vie 13:00–20:00": cuándo atiende un barbero (vacío si no tiene horario propio)
+function barberDaysText(sched) {
+  if (!sched) return '';
+  const keys = ['mon','tue','wed','thu','fri','sat','sun'];
+  const names = { mon: 'Lun', tue: 'Mar', wed: 'Mié', thu: 'Jue', fri: 'Vie', sat: 'Sáb', sun: 'Dom' };
+  const on = keys.filter(k => sched[k]?.active);
+  if (!on.length) return '';
+  // Agrupar días seguidos con el mismo horario
+  const parts = [];
+  let i = 0;
+  while (i < on.length) {
+    const hours = `${sched[on[i]].from || ''}–${sched[on[i]].to || ''}`;
+    let j = i;
+    while (j + 1 < on.length && keys.indexOf(on[j + 1]) === keys.indexOf(on[j]) + 1 && `${sched[on[j + 1]].from || ''}–${sched[on[j + 1]].to || ''}` === hours) j++;
+    const days = i === j ? names[on[i]] : `${names[on[i]]} a ${names[on[j]].toLowerCase()}`;
+    parts.push(hours === '–' ? days : `${days} ${hours}`);
+    i = j + 1;
+  }
+  return parts.join(' · ');
+}
+
 function selectBarber(id) {
   anyBarberPicked = false;
   const anyBtn = document.getElementById('btn-any-barber');
@@ -1337,6 +1411,15 @@ function showToastPublic(msg, isError) {
 }
 
 async function selectFirstAvailableBarberPublic() {
+  if (barberFirst() && !selectedTime) {
+    selectedBarber = null;
+    anyBarberPicked = true;
+    document.querySelectorAll('#barber-grid .service-btn').forEach(b => b.classList.remove('selected'));
+    const anyBtn = document.getElementById('btn-any-barber');
+    if (anyBtn) anyBtn.style.borderStyle = 'solid';
+    document.getElementById('btn-next-barber').disabled = false;
+    return;
+  }
   if (!selectedTime) return showToastPublic('⚠️ Seleccioná una hora primero', true);
   try {
     const activeSlug = currentBranchSlug || slug;
@@ -1380,6 +1463,13 @@ async function selectFirstAvailableBarberPublic() {
 
 
 function goBackFromForm() {
+  if (barberFirst()) {
+    // El barbero ya se eligió antes: volver a la hora (si fue "primero disponible", se reasigna)
+    if (anyBarberPicked) selectedBarber = null;
+    selectedTime = null;
+    loadSlots();
+    return;
+  }
   if (shopData?.allow_barber_choice && barbers.length) {
     selectedBarber = null;
     anyBarberPicked = false;
