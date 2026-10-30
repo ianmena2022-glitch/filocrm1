@@ -227,7 +227,7 @@ router.post('/', auth, async (req, res) => {
         const barberData = await pool.query(
           'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
         );
-        if (barberData.rows.length && barberData.rows[0].barber_commission_pct) {
+        if (barberData.rows.length && barberData.rows[0].barber_commission_pct != null) {
           realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
         }
         console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
@@ -480,7 +480,7 @@ router.put('/:id/status', auth, async (req, res) => {
         );
         const svcPct = svcQ.rows[0]?.commission_pct;
         const pct = (svcPct !== null && svcPct !== undefined) ? parseInt(svcPct)
-          : (bQ.rows[0].barber_commission_pct ? parseInt(bQ.rows[0].barber_commission_pct) : 50);
+          : (bQ.rows[0].barber_commission_pct != null ? parseInt(bQ.rows[0].barber_commission_pct) : 50);
         await pool.query(
           'UPDATE appointments SET barber_id=$1, barber_name=$2, commission_pct=$3 WHERE id=$4 AND shop_id=$5 AND barber_id IS NULL',
           [bId, bQ.rows[0].name, pct, req.params.id, apptShopId]
@@ -827,7 +827,7 @@ router.put('/:id', auth, async (req, res) => {
           newCommissionPct = svcPct;
         } else {
           const b = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [newBarberId]);
-          newCommissionPct = (b.rows.length && b.rows[0].barber_commission_pct) ? parseInt(b.rows[0].barber_commission_pct) : 50;
+          newCommissionPct = (b.rows.length && b.rows[0].barber_commission_pct != null) ? parseInt(b.rows[0].barber_commission_pct) : 50;
         }
       }
     }

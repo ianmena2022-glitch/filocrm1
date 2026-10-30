@@ -729,10 +729,10 @@ function renderBranches(branches) {
     const showFull = b.branch_label && b.branch_label !== b.name;
     const meta     = [b.address, b.city].filter(Boolean).join(' · ');
     return `
-      <button class="branch-btn" onclick="selectBranch('${b.booking_slug}', this)" ${!b.booking_slug ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>
-        ${b.branch_label ? `<div class="branch-label-tag">📍 ${b.branch_label}</div>` : ''}
+      <button class="branch-btn" onclick="selectBranch(${escapeHtmlT(JSON.stringify(b.booking_slug || ''))}, this)" ${!b.booking_slug ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>
+        ${b.branch_label ? `<div class="branch-label-tag">📍 ${escapeHtmlT(b.branch_label)}</div>` : ''}
         <div class="branch-name">${escapeHtmlT(b.name)}</div>
-        ${meta ? `<div class="branch-meta">📍 ${meta}</div>` : ''}
+        ${meta ? `<div class="branch-meta">📍 ${escapeHtmlT(meta)}</div>` : ''}
       </button>`;
   }).join('');
 }
@@ -825,7 +825,7 @@ async function verifyMember() {
   btn.disabled = true; btn.textContent = 'Verificando...';
 
   try {
-    const res = await fetch(`${API}/member-verify?phone=${phone}`);
+    const res = await fetch(`${API}/member-verify?phone=${encodeURIComponent(phone)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al verificar');
 
@@ -901,7 +901,7 @@ function renderCalendar() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d);
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const isPast = date < today;
     const isToday = date.toDateString() === today.toDateString();
     const isSelected = dateStr === selectedDate;
@@ -1500,7 +1500,7 @@ async function loadStoreForClient() {
       prizeList.innerHTML = '<div class="no-prizes">Todavía no tenés suficientes puntos para ningún premio. ¡Seguí acumulando!</div>';
     } else {
       prizeList.innerHTML = storeItems.map(item => `
-        <button class="prize-btn" onclick="selectPrize(${item.id}, '${item.name.replace(/'/g,"\'")}', ${item.points_cost})" id="prize-btn-${item.id}">
+        <button class="prize-btn" onclick="selectPrize(${item.id}, ${escapeHtmlT(JSON.stringify(item.name))}, ${item.points_cost})" id="prize-btn-${item.id}">
           <div>
             <div class="prize-name">🎁 ${escapeHtmlT(item.name)}</div>
             ${item.description ? `<div class="prize-desc">${escapeHtmlT(item.description)}</div>` : ''}

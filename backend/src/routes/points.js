@@ -259,13 +259,15 @@ router.get('/client/phone/:slug/:phone', phoneLookupLimiter, async (req, res) =>
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
 
-    // Sanitizar teléfono: solo dígitos, últimos 8, con LIMIT para evitar enumeración
-    const rawPhone = req.params.phone.replace(/\D/g, '').slice(-8);
-    if (rawPhone.length < 6) return res.json({ client: null });
+    // Mismo cliente aunque el número esté guardado con otro formato (+54 9 11 2345-6789, 5411…)
+    const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
+    const key = phoneKey(req.params.phone);
+    if (!key) return res.json({ client: null });
 
     const client = await pool.query(
-      'SELECT id, name, points FROM clients WHERE shop_id=$1 AND phone LIKE $2 LIMIT 1',
-      [shop.rows[0].id, '%' + rawPhone]
+      `SELECT id, name, points FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+        ORDER BY points DESC NULLS LAST, id LIMIT 1`,
+      [shop.rows[0].id, key]
     );
     if (!client.rows.length) return res.json({ client: null });
     res.json({ client: client.rows[0] });

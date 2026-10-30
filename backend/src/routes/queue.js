@@ -223,7 +223,7 @@ async function computeWaitInfo(shopId, entry) {
 router.post('/:slug/join', joinLimiter, async (req, res) => {
   try {
     const { slug } = req.params;
-    const { service_name, price, barber_id } = req.body;
+    const { service_name, barber_id } = req.body;
     // Datos públicos: sin < > y con largo acotado
     const cleanTxt = (v, n) => (v == null ? '' : String(v)).replace(/[<>]/g, '').trim().slice(0, n);
     const name  = cleanTxt(req.body.name, 100);
@@ -235,7 +235,8 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
 
     // Find shop
     const shopRes = await pool.query(
-      'SELECT id, name, booking_slug, queue_paused FROM shops WHERE booking_slug=$1',
+      `SELECT id, name, booking_slug, queue_paused FROM shops WHERE booking_slug=$1
+         AND NOT (COALESCE(is_branch, FALSE) AND subscription_status = 'cancelled')`,
       [slug]
     );
     if (!shopRes.rows.length) {
@@ -267,10 +268,14 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
     let resolvedName = name.trim();
     if (phone) {
       const phoneClean = phone.trim();
-      const clientRes = await pool.query(
-        'SELECT id, name FROM clients WHERE shop_id=$1 AND phone=$2 LIMIT 1',
-        [shop.id, phoneClean]
-      );
+      // Mismo cliente aunque el número esté escrito distinto (con 54, 9, guiones…)
+      const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
+      const key = phoneKey(phoneClean);
+      const clientRes = key ? await pool.query(
+        `SELECT id, name FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+          ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
+        [shop.id, key]
+      ) : { rows: [] };
       if (clientRes.rows.length) {
         clientId    = clientRes.rows[0].id;
         resolvedName = clientRes.rows[0].name; // use the stored name for known clients
@@ -303,13 +308,23 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
     }
 
     // Insert entry (con servicio y barbero opcional). Precio no puede ser negativo.
-    const safePrice = Math.max(0, parseFloat(price) || 0);
+    // El servicio y su precio salen de la lista del local (no del precio que manda la página pública).
+    // Si no coincide con ninguno se guarda sin precio y se completa al cobrar.
+    let svcName = cleanTxt(service_name, 120) || null;
+    let safePrice = 0;
+    if (svcName) {
+      const svc = await pool.query(
+        'SELECT name, price FROM services WHERE shop_id=$1 AND active=TRUE AND lower(name)=lower($2) LIMIT 1',
+        [shop.id, svcName]
+      );
+      if (svc.rows.length) { svcName = svc.rows[0].name; safePrice = Math.max(0, parseFloat(svc.rows[0].price) || 0); }
+    }
     await ensureQueueTokenColumn();
     const publicToken = crypto.randomBytes(16).toString('hex');
     const insertRes = await pool.query(
       `INSERT INTO queue_entries (shop_id, client_name, client_phone, client_id, status, service_name, price, barber_id, public_token)
        VALUES ($1, $2, $3, $4, 'waiting', $5, $6, $7, $8) RETURNING id`,
-      [shop.id, resolvedName, phone || null, clientId, cleanTxt(service_name, 120) || null, safePrice, validBarberId, publicToken]
+      [shop.id, resolvedName, phone || null, clientId, svcName, safePrice, validBarberId, publicToken]
     );
     const entry_id = insertRes.rows[0].id;
     // Eligió "cualquier profesional" pudiendo elegir (hay 2+ barberos): puede sumar el bonus de puntos
@@ -348,7 +363,8 @@ router.get('/:slug/status', async (req, res) => {
 
     // Find shop
     const shopRes = await pool.query(
-      'SELECT id, name, booking_slug, queue_paused FROM shops WHERE booking_slug=$1',
+      `SELECT id, name, booking_slug, queue_paused FROM shops WHERE booking_slug=$1
+         AND NOT (COALESCE(is_branch, FALSE) AND subscription_status = 'cancelled')`,
       [slug]
     );
     if (!shopRes.rows.length) {
@@ -705,12 +721,14 @@ router.post('/complete/:id', auth, async (req, res) => {
     const p = parseFloat(price) || 0;
     const t = parseFloat(tip) || 0;
     let pct = parseInt(commission_pct) || 50;
+    let svcPctSet = false;
     const c = parseFloat(cost) || 0;
     const svcIdInt = service_id && !Number.isNaN(parseInt(service_id)) ? parseInt(service_id) : null;
     if (svcIdInt) {
       const svcRes = await pool.query('SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2', [svcIdInt, shopId]);
       if (svcRes.rows.length && svcRes.rows[0].commission_pct !== null && svcRes.rows[0].commission_pct !== undefined) {
         pct = parseInt(svcRes.rows[0].commission_pct);
+        svcPctSet = true;
       }
     }
     const tz = await getShopTz(shopId);
@@ -734,11 +752,23 @@ router.post('/complete/:id', auth, async (req, res) => {
       return res.json({ ok: true, appointment_id: entry.appointment_id || null, already_completed: true });
     }
 
-    const finalBarberId = barber_id || entry.barber_id || null;
+    // Si cobra un barbero, el corte es suyo (o del barbero al que ya estaba asignado). El dueño
+    // puede elegir otro barbero, pero tiene que ser de este local.
+    let finalBarberId = req.isBarber ? (entry.barber_id || req.shopId) : (barber_id || entry.barber_id || null);
     let barberName = null;
     if (finalBarberId) {
-      const bRes = await db.query('SELECT name FROM shops WHERE id=$1', [finalBarberId]);
-      barberName = bRes.rows[0]?.name || null;
+      const bRes = await db.query(
+        'SELECT name, barber_commission_pct FROM shops WHERE id=$1 AND parent_shop_id=$2 AND is_barber=TRUE',
+        [parseInt(finalBarberId), shopId]
+      );
+      if (bRes.rows.length) {
+        barberName = bRes.rows[0].name;
+        // Comisión: la del servicio si tiene una propia; si no, la que el dueño le configuró al barbero
+        // (no la que manda la pantalla, que puede estar desactualizada)
+        if (!svcPctSet) pct = bRes.rows[0].barber_commission_pct != null ? parseInt(bRes.rows[0].barber_commission_pct) : 50;
+      } else {
+        finalBarberId = null;
+      }
     }
     const finalClientId   = entry.client_id || null;
     const finalClientName = client_name || entry.client_name;

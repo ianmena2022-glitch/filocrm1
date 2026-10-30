@@ -13651,7 +13651,9 @@ function renderEntBranches(branches) {
         ${b.is_main
           ? `<button class="ent-btn-edit" onclick="showSection('configuracion')">⚙️ Configurar</button>`
           : `<button class="ent-btn-edit" onclick="openEditBranchModal(decodeURIComponent('${bJson}'))">✏️ Editar</button>
-             ${active ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">Desactivar</button>` : ''}`
+             ${active
+               ? `<button class="ent-btn-del" onclick="deactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">Desactivar</button>`
+               : `<button class="ent-btn-edit" onclick="reactivateBranch(${b.id},'${escHtml(b.name).replace(/'/g,"\\'")}')">↺ Reactivar</button>`}`
         }
       </div>
     </div>`;
@@ -13897,8 +13899,17 @@ async function saveBranchEdit() {
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
+async function reactivateBranch(id, name) {
+  if (!(await confirmModal(`¿Reactivar la sucursal "${name}"? Va a poder volver a entrar y su página de reservas vuelve a tomar turnos.`))) return;
+  try {
+    await api('PUT', `/enterprise/branches/${id}/reactivate`);
+    showToast('✅', 'Sucursal reactivada', '');
+    loadEnterpriseDashboard();
+  } catch(e) { showToast('❌', 'Error', e.message); }
+}
+
 async function deactivateBranch(id, name) {
-  if (!(await confirmModal(`¿Desactivar la sucursal "${name}"? Los datos se conservan.`))) return;
+  if (!(await confirmModal(`¿Desactivar la sucursal "${name}"? No va a poder entrar y su página de reservas deja de tomar turnos. Los datos se conservan y la podés reactivar cuando quieras.`))) return;
   try {
     await api('DELETE', `/enterprise/branches/${id}`);
     showToast('🗑', 'Sucursal desactivada', '');

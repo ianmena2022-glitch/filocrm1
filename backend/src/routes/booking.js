@@ -2,6 +2,7 @@ const router    = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const pool      = require('../db/pool');
 const wpp       = require('../services/whatsapp');
+const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
 
 // De qué cuenta salen los barberos de una página de reservas. Los barberos de una sucursal
 // están cargados en la sucursal; solo si la sucursal no tiene ninguno se usan los del dueño
@@ -41,7 +42,8 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
   try {
     const shop = await pool.query(
       `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url, social_links
-       FROM shops WHERE booking_slug = $1`,
+       FROM shops WHERE booking_slug = $1
+        AND NOT (COALESCE(is_branch, FALSE) AND subscription_status = 'cancelled')`,
       [req.params.slug]
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
@@ -52,6 +54,7 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
       const branches = await pool.query(
         `SELECT id, name, branch_label, city, address, booking_slug
          FROM shops WHERE parent_enterprise_id=$1 AND is_branch=TRUE
+           AND subscription_status IS DISTINCT FROM 'cancelled'
          ORDER BY name`,
         [shopData.id]
       );
@@ -146,10 +149,12 @@ router.get('/:slug/member-verify', publicGetLimiter, async (req, res) => {
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopId = shop.rows[0].id;
 
-    const client = await pool.query(
-      'SELECT id, name, phone FROM clients WHERE shop_id=$1 AND phone=$2',
-      [shopId, phone]
-    );
+    const key = phoneKey(phone);
+    const client = key ? await pool.query(
+      `SELECT id, name, phone FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+        ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
+      [shopId, key]
+    ) : { rows: [] };
     if (!client.rows.length) return res.status(404).json({ error: 'No se encontró un cliente con ese número' });
     const clientData = client.rows[0];
 
@@ -649,10 +654,13 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       // Buscar o crear cliente
       let clientId = null;
       if (client_phone) {
-        const existing = await pgClient.query(
-          'SELECT id FROM clients WHERE shop_id=$1 AND phone=$2',
-          [shopData.id, client_phone]
-        );
+        // Mismo cliente aunque haya escrito el número distinto que la última vez (con 54, 9, guiones…)
+        const key = phoneKey(client_phone);
+        const existing = key ? await pgClient.query(
+          `SELECT id FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+            ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
+          [shopData.id, key]
+        ) : { rows: [] };
         if (existing.rows.length) {
           clientId = existing.rows[0].id;
           if (client_address) {

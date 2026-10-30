@@ -52,7 +52,7 @@ function shopPayload(shop) {
     is_barber:            shop.is_barber || false,
     parent_shop_id:       shop.parent_shop_id || null,
     commission_enabled:           shop.commission_enabled || false,
-    barber_commission_pct:        shop.barber_commission_pct || 50,
+    barber_commission_pct:        shop.barber_commission_pct ?? 50,
     product_sale_commission_pct:  shop.product_sale_commission_pct != null ? parseFloat(shop.product_sale_commission_pct) : null,
     barber_color:         shop.barber_color || '#FFD100',
     subscription_status:  shop.subscription_status || 'trial',
@@ -300,6 +300,17 @@ router.post('/login', loginLimiter, async (req, res) => {
         error: 'orphan_barber',
         message: 'Fuiste dado de baja del equipo. Pedile al dueño de la barbería un nuevo link de invitación.'
       });
+    }
+
+    // Sucursal desactivada por la cuenta principal (o barbero de esa sucursal)
+    if (shop.is_branch && shop.subscription_status === 'cancelled') {
+      return res.status(403).json({ error: 'Esta sucursal fue desactivada. Pedile a la cuenta principal que la vuelva a activar.' });
+    }
+    if (shop.is_barber && shop.parent_shop_id) {
+      const p = (await pool.query('SELECT is_branch, subscription_status FROM shops WHERE id=$1', [shop.parent_shop_id])).rows[0];
+      if (p?.is_branch && p.subscription_status === 'cancelled') {
+        return res.status(403).json({ error: 'Esta sucursal fue desactivada. Pedile a la cuenta principal que la vuelva a activar.' });
+      }
     }
 
     // Verificar si el trial expiró y aún no tiene suscripción activa

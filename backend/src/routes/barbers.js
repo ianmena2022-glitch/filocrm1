@@ -188,11 +188,22 @@ router.get('/parent-config', auth, async (req, res) => {
   try {
     const parentId = req.parentShopId || req.shopId;
     const result = await pool.query(
-      'SELECT commission_enabled, name, barber_self_upload_enabled FROM shops WHERE id=$1',
+      'SELECT commission_enabled, name, barber_self_upload_enabled, timezone FROM shops WHERE id=$1',
       [parentId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Shop no encontrado' });
-    res.json(result.rows[0]);
+    const out = { ...result.rows[0] };
+    // Comisión actual del barbero (el dueño la puede cambiar después de que el barbero entró)
+    if (req.isBarber) {
+      const b = (await pool.query(
+        'SELECT barber_commission_pct, product_sale_commission_pct FROM shops WHERE id=$1', [req.shopId]
+      )).rows[0];
+      if (b) {
+        out.barber_commission_pct = b.barber_commission_pct ?? 50;
+        out.product_sale_commission_pct = b.product_sale_commission_pct != null ? parseFloat(b.product_sale_commission_pct) : null;
+      }
+    }
+    res.json(out);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -217,7 +228,7 @@ router.get('/my-pending', auth, async (req, res) => {
          FROM appointments
         WHERE shop_id=$1 AND barber_id=$2 AND status='completed'
           AND (commission_settled IS NULL OR commission_settled=FALSE)`,
-      [shopId, barberId, parseInt(barber.barber_commission_pct || 50)]
+      [shopId, barberId, parseInt(barber.barber_commission_pct ?? 50)]
     );
     const ps = await pool.query(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(barber_commission_amount),0)::float AS total
@@ -274,7 +285,7 @@ router.get('/:id/pending-settlement', auth, ownerOnly, async (req, res) => {
     const apptCommission = appts.rows.reduce((s, a) => {
       const pct = (a.commission_pct !== null && a.commission_pct !== undefined)
         ? parseFloat(a.commission_pct)
-        : parseFloat(barber.barber_commission_pct || 50);
+        : parseFloat(barber.barber_commission_pct ?? 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
     const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);
@@ -422,7 +433,7 @@ router.post('/:id/settle', auth, ownerOnly, async (req, res) => {
     const apptCommission = appts.rows.reduce((s, a) => {
       const pct = (a.commission_pct !== null && a.commission_pct !== undefined)
         ? parseFloat(a.commission_pct)
-        : parseFloat(barber.barber_commission_pct || 50);
+        : parseFloat(barber.barber_commission_pct ?? 50);
       return s + parseFloat(a.price || 0) * pct / 100;
     }, 0);
     const tipsTotal = appts.rows.reduce((s, a) => s + parseFloat(a.tip || 0), 0);

@@ -732,7 +732,20 @@ button, .btn, [role="button"], [onclick] { touch-action: manipulation; }
 const API = window.location.origin + '/api';
 let token = localStorage.getItem('barber_token');
 let me = JSON.parse(localStorage.getItem('barber_me') || 'null');
-let currentDate = new Date().toISOString().split('T')[0];
+// Fechas YYYY-MM-DD en la zona horaria del local (no UTC: después de las 21 h en Argentina,
+// toISOString ya da el día siguiente)
+function shopTz() { return (me && (me.parent_timezone || me.timezone)) || 'America/Argentina/Buenos_Aires'; }
+function ymd(d) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: shopTz() }).format(d); }
+  catch (_) { return localYmd(d); }
+}
+// Fecha de un día armado en el calendario del dispositivo (medianoche o mediodía local)
+function localYmd(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function todayStr() { return ymd(new Date()); }
+
+let currentDate = todayStr();
 let allAppts = [];
 
 async function api(method, path, body) {
@@ -741,9 +754,28 @@ async function api(method, path, body) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: body ? JSON.stringify(body) : undefined
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) { sessionExpired(data.error); throw new Error(data.error || 'Sesión cerrada'); }
   if (!res.ok) throw new Error(data.error || 'Error');
   return data;
+}
+
+// La sesión venció (dura 30 días), el barbero fue dado de baja o la sucursal se desactivó:
+// volver a la pantalla de ingreso con el motivo, en vez de dejar la pantalla fallando sin avisar
+function sessionExpired(msg) {
+  if (_pollingInterval) { clearInterval(_pollingInterval); _pollingInterval = null; }
+  token = null; me = null;
+  localStorage.removeItem('barber_token');
+  localStorage.removeItem('barber_me');
+  document.getElementById('payment-popup')?.remove();
+  document.getElementById('barber-wip-popup')?.remove();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = '';
+  const errEl = document.getElementById('auth-error');
+  if (errEl) {
+    errEl.textContent = (msg && !/token/i.test(msg)) ? msg : 'Tu sesión se cerró. Volvé a ingresar.';
+    errEl.style.display = 'block';
+  }
 }
 
 function showToast(msg) {
@@ -887,12 +919,12 @@ function showTab(tab) {
 function changeDate(delta) {
   const d = new Date(currentDate + 'T12:00:00');
   d.setDate(d.getDate() + delta);
-  currentDate = d.toISOString().split('T')[0];
+  currentDate = localYmd(d);
   loadAgenda();
 }
 
 function formatDateLabel(dateStr) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayStr();
   if (dateStr === today) return 'Hoy';
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -904,7 +936,9 @@ async function loadDashboard() {
     try {
       const parentData = await api('GET', '/barbers/parent-config');
       me.commission_enabled = parentData.commission_enabled;
-      me.barber_commission_pct = parentData.barber_commission_pct || me.barber_commission_pct;
+      if (parentData.barber_commission_pct != null) me.barber_commission_pct = parentData.barber_commission_pct;
+      if ('product_sale_commission_pct' in parentData) me.product_sale_commission_pct = parentData.product_sale_commission_pct;
+      if (parentData.timezone) me.parent_timezone = parentData.timezone;
       me.barber_self_upload_enabled = !!parentData.barber_self_upload_enabled;
       localStorage.setItem('barber_me', JSON.stringify(me));
     } catch(e) {}
@@ -945,7 +979,7 @@ async function loadDashboard() {
 
   // Load today's appointments for dashboard
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayStr();
     const appts = await api('GET', `/appointments?date=${today}`);
     allAppts = appts.filter(a => !a.barber_id || parseInt(a.barber_id) === parseInt(me.id));
 
@@ -1148,6 +1182,8 @@ async function confirmPayment(apptId) {
 // ── WEEK CALENDAR ─────────────────────────────────────────
 let weekOffset = 0;
 let calendarAppts = {}; // { 'YYYY-MM-DD': [appts] }
+let calendarLoadedAt = 0;
+const CALENDAR_TTL_MS = 60000;
 
 function getWeekDates(offset) {
   const today = new Date();
@@ -1165,8 +1201,10 @@ function getWeekDates(offset) {
 }
 
 async function loadCalendarWeek(dates) {
+  // Turnos nuevos, cancelados o cobrados: refrescar lo cargado si tiene más de un minuto
+  if (Date.now() - calendarLoadedAt > CALENDAR_TTL_MS) { calendarAppts = {}; calendarLoadedAt = Date.now(); }
   const promises = dates.map(async d => {
-    const ds = d.toISOString().split("T")[0];
+    const ds = localYmd(d);
     if (calendarAppts[ds] !== undefined) return; // ya cargado
     try {
       const appts = await api("GET", "/appointments?date=" + ds);
@@ -1183,10 +1221,10 @@ async function renderCalendar() {
   if (!el) return;
 
   const dates = getWeekDates(weekOffset);
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayStr();
 
-  // Mostrar skeleton mientras carga
-  el.innerHTML = "<div style='padding:24px;text-align:center;color:var(--gray);font-size:13px'>Cargando...</div>";
+  // Mostrar "Cargando" solo la primera vez (en los refrescos automáticos no parpadea)
+  if (!el.querySelector('.cal-wrapper')) el.innerHTML = "<div style='padding:24px;text-align:center;color:var(--gray);font-size:13px'>Cargando...</div>";
 
   await loadCalendarWeek(dates);
 
@@ -1195,7 +1233,7 @@ async function renderCalendar() {
 
   let headerHTML = "<div class='cal-header' style='grid-template-columns:repeat(" + cols + ",1fr)'>";
   dates.forEach(d => {
-    const ds = d.toISOString().split("T")[0];
+    const ds = localYmd(d);
     const isToday = ds === today;
     headerHTML += "<div class='cal-day-header" + (isToday ? " today" : "") + "'>";
     headerHTML += DAYS_ES[d.getDay()];
@@ -1215,7 +1253,7 @@ async function renderCalendar() {
 
   let bodyHTML = "<div class='cal-body' style='grid-template-columns:repeat(" + cols + ",1fr)'>";
   dates.forEach(d => {
-    const ds = d.toISOString().split("T")[0];
+    const ds = localYmd(d);
     const appts = calendarAppts[ds] || [];
     bodyHTML += "<div class='cal-col'>";
     if (!appts.length) {
@@ -1224,8 +1262,8 @@ async function renderCalendar() {
       appts.forEach(a => {
         const statusClass = a.status === "completed" ? " completed" : a.status === "cancelled" || a.status === "noshow" ? " cancelled" : "";
         const time = String(a.time_start||'').slice(0,5);
-        const client = a.client_name || "Sin nombre";
-        bodyHTML += "<div class='cal-event" + statusClass + "' title='" + client + " - " + (a.service_name||'') + "' onclick='goToAgendaDate(\"" + ds + "\")' style='cursor:pointer'>";
+        const client = escHtml(a.client_name || "Sin nombre");
+        bodyHTML += "<div class='cal-event" + statusClass + "' title='" + client + " - " + escHtml(a.service_name||'') + "' onclick='goToAgendaDate(\"" + ds + "\")' style='cursor:pointer'>";
         bodyHTML += "<div class='cal-event-time'>" + time + "</div>";
         bodyHTML += "<div class='cal-event-client'>" + client + "</div>";
         bodyHTML += "</div>";
@@ -1290,7 +1328,7 @@ async function loadFila() {
           <div class="fila-called-name">${escHtml(c.client_name)}</div>
           <div class="fila-called-phone">${c.client_phone ? `📞 ${escHtml(c.client_phone)}` : ''}</div>
           ${c.service_name ? `<div style="font-size:12px;color:var(--gray);margin-bottom:10px">✂️ ${escHtml(c.service_name)}</div>` : ''}
-          <button class="btn-served" onclick="barberServe(${c.id}, '${(c.client_name||'').replace(/'/g,"\\'")}', '${(c.service_name||'').replace(/'/g,"\\'")}', ${parseFloat(c.price)||0})">✓ Marcar atendido</button>
+          <button class="btn-served" onclick="barberServe(${c.id}, ${escHtml(JSON.stringify(c.client_name||''))}, ${escHtml(JSON.stringify(c.service_name||''))}, ${parseFloat(c.price)||0})">✓ Marcar atendido</button>
         </div>
       `).join('');
     } else {
@@ -1476,7 +1514,7 @@ async function openBarberWalkInPayment(entryId, clientName='', preServiceName=''
   }
 }
 
-function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function onBarberServiceChange() {
   const sel = document.getElementById('bwip-service');
@@ -1579,7 +1617,7 @@ async function loadBarberProductos() {
     _barberProductos = await api('GET', '/products');
     renderBarberProductos();
     // Mis ventas de hoy — pedir solo las de hoy sin límite artificial
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayStr();
     const misVentas = await api('GET', `/products/ventas?date=${today}`).catch(() => []);
     renderBarberMisVentas(misVentas);
     // Actualizar comisión en stat card (incluir producto)
@@ -1797,7 +1835,10 @@ async function submitAddAppt() {
   const notes = document.getElementById('aa-notes').value.trim();
 
   if (!date || !time) { showToast('Completá fecha y hora'); return; }
-
+  if (window._aaSaving) return;
+  window._aaSaving = true;
+  const aaBtn = document.getElementById('aa-submit-btn');
+  if (aaBtn) { aaBtn.disabled = true; aaBtn.style.opacity = '.6'; }
   try {
     await api('POST', '/appointments', {
       date,
@@ -1814,6 +1855,9 @@ async function submitAddAppt() {
     if (date === currentDate) await loadAgenda();
   } catch(e) {
     showToast(e.message || 'Error al agendar');
+  } finally {
+    window._aaSaving = false;
+    if (aaBtn) { aaBtn.disabled = false; aaBtn.style.opacity = ''; }
   }
 }
 
@@ -1823,7 +1867,10 @@ async function confirmarBarberVenta() {
   const prec  = parseFloat(document.getElementById('bv-precio').value || 0);
   const metod = document.getElementById('bv-metodo').value;
   const cli   = document.getElementById('bv-cliente').value.trim();
-  if (!id) return;
+  if (!id || window._bvSaving) return;
+  window._bvSaving = true;
+  const bvBtn = document.getElementById('bv-submit-btn');
+  if (bvBtn) { bvBtn.disabled = true; bvBtn.style.opacity = '.6'; }
   try {
     await api('POST', `/products/${id}/sell`, {
       quantity: cant, unit_price: prec,
@@ -1835,6 +1882,9 @@ async function confirmarBarberVenta() {
     await loadBarberProductos();
   } catch(e) {
     showToast('❌ ' + (e.message || 'Error'));
+  } finally {
+    window._bvSaving = false;
+    if (bvBtn) { bvBtn.disabled = false; bvBtn.style.opacity = ''; }
   }
 }
 
@@ -2053,7 +2103,7 @@ if (token && me?.is_barber) {
     </div>
 
     <div style="display:flex;gap:10px;margin-top:18px">
-      <button onclick="submitAddAppt()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Agendar</button>
+      <button id="aa-submit-btn" onclick="submitAddAppt()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Agendar</button>
       <button onclick="aaCloseModal()" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
     </div>
   </div>
@@ -2096,7 +2146,7 @@ if (token && me?.is_barber) {
       </div>
     </div>
     <div style="display:flex;gap:10px;margin-top:18px">
-      <button onclick="confirmarBarberVenta()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Confirmar</button>
+      <button id="bv-submit-btn" onclick="confirmarBarberVenta()" style="flex:1;background:var(--yellow);color:#050d18;border:none;padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">✅ Confirmar</button>
       <button onclick="document.getElementById('modal-barber-venta').style.display='none'" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);padding:13px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer">Cancelar</button>
     </div>
   </div>

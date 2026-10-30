@@ -315,6 +315,19 @@ router.delete('/branches/:id', auth, enterpriseOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── PUT /api/enterprise/branches/:id/reactivate — volver a activar una sucursal ──
+router.put('/branches/:id/reactivate', auth, enterpriseOnly, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE shops SET subscription_status='active'
+       WHERE id=$1 AND parent_enterprise_id=$2 AND is_branch=TRUE RETURNING id`,
+      [req.params.id, req.shopId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Sucursal no encontrada' });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/enterprise/stats — stats consolidadas de todas las sucursales ────
 router.get('/stats', auth, enterpriseOnly, async (req, res) => {
   try {
