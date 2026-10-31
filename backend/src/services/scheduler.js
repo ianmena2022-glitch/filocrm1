@@ -218,7 +218,7 @@ async function runExpiredCleanup() {
 
 // ── Señas vencidas ───────────────────────────────────────────────────────────
 // Un turno reservado con seña tiene 60 minutos para pagarse. Si venció y el cliente no mandó
-// comprobante, se cancela: el horario ya se le ofrece a otros, y si quedara "esperando seña"
+// comprobante (o se lo rechazaron), se cancela: el horario ya se le ofrece a otros, y si quedara "esperando seña"
 // un pago tardío podría confirmarlo encima de otro turno. Con comprobante enviado queda para
 // que el local lo revise.
 async function runSenaExpiration() {
@@ -226,7 +226,7 @@ async function runSenaExpiration() {
     const { rows } = await pool.query(
       `UPDATE appointments SET status='cancelled', sena_status='lost'
         WHERE status='waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW()
-          AND sena_comprobante_status IS NULL
+          AND (sena_comprobante_status IS NULL OR sena_comprobante_status = 'rejected')
         RETURNING id, shop_id`
     );
     for (const a of rows) {
