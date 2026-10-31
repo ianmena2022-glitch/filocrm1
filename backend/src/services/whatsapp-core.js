@@ -599,6 +599,7 @@ async function findAnyPendingPayment(shopId) {
        FROM appointments a JOIN shops s ON s.id = a.shop_id JOIN clients c ON c.id = a.client_id
        WHERE (a.shop_id=$1 OR s.parent_enterprise_id=$1)
          AND a.status='waiting_sena' AND a.sena_comprobante_status IS NULL
+         AND (a.sena_expires_at IS NULL OR a.sena_expires_at > NOW())
          AND c.phone IS NOT NULL AND c.phone != ''
        LIMIT 1`,
       [shopId]
@@ -648,6 +649,8 @@ async function findPendingPayment(shopId, phone) {
        WHERE (a.shop_id = $1 OR s.parent_enterprise_id = $1)
          AND a.status = 'waiting_sena'
          AND a.sena_comprobante_status IS NULL
+         -- Seña vencida: el horario ya se liberó, un comprobante tardío no la confirma sola
+         AND (a.sena_expires_at IS NULL OR a.sena_expires_at > NOW())
          AND EXISTS (
            SELECT 1 FROM clients c
            WHERE c.id = a.client_id

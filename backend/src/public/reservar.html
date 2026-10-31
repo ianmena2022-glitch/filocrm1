@@ -239,6 +239,10 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
 
 /* SUCCESS */
 .success{text-align:center;padding:40px 20px}
+.done-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.done-btn{flex:1 1 140px;display:block;text-align:center;padding:13px 10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:14px;font-weight:600;text-decoration:none}
+.done-cancel{margin-top:16px;font-size:13px;color:rgba(255,255,255,.6);line-height:1.5}
+.done-cancel a{color:var(--y);font-weight:700}
 .success-icon{font-size:72px;margin-bottom:20px;display:block}
 .success-title{font-family:'Oswald',sans-serif;font-size:32px;font-weight:700;margin-bottom:12px;color:var(--gr)}
 .success-msg{font-size:16px;color:var(--g);line-height:1.7;margin-bottom:28px}
@@ -461,7 +465,7 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
           <div class="summary" id="summary"></div>
         </div>
       </div>
-      <button class="btn-primary" onclick="confirmReservation()">✅ Confirmar turno</button>
+      <button class="btn-primary" id="btn-confirm" onclick="confirmReservation()">✅ Confirmar turno</button>
       <button class="btn-back" onclick="goBack(3)">← Volver</button>
     </div>
 
@@ -471,10 +475,10 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
         <span class="success-icon">💸</span>
         <div class="success-title" style="color:#c084fc">Reserva recibida</div>
         <div class="success-msg" style="color:rgba(255,255,255,.8);margin-bottom:20px">
-          Para confirmar tu turno, enviá la seña al siguiente alias:
+          Para confirmar tu turno, transferí la seña a:
         </div>
         <div style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:14px;padding:20px;margin-bottom:20px;text-align:center">
-          <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(192,132,252,.7);margin-bottom:8px">Alias de transferencia</div>
+          <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(192,132,252,.7);margin-bottom:8px">Alias / CBU</div>
           <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
             <div id="sena-alias-display" style="font-size:22px;font-weight:800;color:#c084fc;font-family:monospace;letter-spacing:1px"></div>
             <button type="button" id="sena-alias-copy" onclick="copySenaField('sena-alias-display', this)" aria-label="Copiar alias" title="Copiar" style="background:rgba(168,85,247,.2);border:1px solid rgba(168,85,247,.4);color:#c084fc;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">📋 Copiar</button>
@@ -491,14 +495,21 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
           El barbero confirmará tu turno una vez verificado el pago.
         </div>
         <div id="success-detail-sena" style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:16px;line-height:1.6"></div>
-        <button id="sena-ya-pague-btn" onclick="doReserve()" style="display:none;width:100%;padding:16px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">
-          ✅ Ya pagué la seña
-        </button>
         <div id="sena-done-msg" style="display:none;padding:16px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:12px;text-align:center">
           <div style="font-size:20px;margin-bottom:6px">✅</div>
           <div style="font-size:14px;font-weight:700;color:#4ade80">¡Listo! Tu reserva quedó pendiente</div>
           <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">El barbero va a confirmar tu turno cuando verifique la transferencia.</div>
         </div>
+        <div id="sena-extras"></div>
+      </div>
+    </div>
+
+    <!-- Link del cliente: ver / cancelar su turno -->
+    <div id="screen-manage" style="display:none">
+      <div class="success">
+        <span class="success-icon">✂️</span>
+        <div class="success-title" id="manage-title">Tu turno</div>
+        <div id="manage-detail"><div class="loading"><div class="spinner"></div>Cargando turno...</div></div>
       </div>
     </div>
 
@@ -509,6 +520,7 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
         <div class="success-title">¡Turno confirmado!</div>
         <div class="success-msg" id="success-msg"></div>
         <div class="success-detail" id="success-detail"></div>
+        <div id="success-extras"></div>
         <div class="filo-cta">
           <div class="filo-cta-txt">¿Tenés una barbería o peluquería?</div>
           <a href="https://filocrm.com.ar" target="_blank" rel="noopener" class="filo-cta-btn">
@@ -598,6 +610,10 @@ async function init() {
       return;
     }
 
+    // Link del cliente para ver o cancelar su turno
+    const turnoToken = new URLSearchParams(location.search).get('turno');
+    if (turnoToken) { loadShopData(data); initManage(turnoToken); return; }
+
     // ── Modo normal ──
     loadShopData(data);
     renderServices();
@@ -631,6 +647,9 @@ function loadShopData(data) {
       if (/^[0-9]+$/.test(dot.textContent.trim())) dot.textContent = String(i + 1);
     }
   });
+  // Con elección de barbero, después del servicio viene "con quién"; si no, la fecha
+  const nextSvcBtn = document.getElementById('btn-next-service');
+  if (nextSvcBtn) nextSvcBtn.textContent = barberFirst() ? 'Elegir profesional →' : 'Elegir fecha →';
   if (shopData.home_service) {
     const af = document.getElementById('client-address-field');
     if (af) af.style.display = 'block';
@@ -879,6 +898,15 @@ function selectService(id) {
   document.querySelectorAll('.service-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('svc-' + id).classList.add('selected');
   document.getElementById('btn-next-service').disabled = false;
+  revealNext('btn-next-service');
+}
+
+// En el celular el botón para seguir queda abajo de todo: llevarlo a la vista al elegir
+function revealNext(btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  if (r.bottom > window.innerHeight - 70) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ── DATE ──
@@ -1054,10 +1082,11 @@ async function checkPhonePoints(phone) {
   } catch(e) { /* silent */ }
 }
 
-// Datos del cliente guardados para el POST diferido (flujo seña)
-let _pendingReserveData = null;
+let _reserving = false;
+const confirmBtnLabel = '✅ Confirmar turno';
 
 async function confirmReservation() {
+  if (_reserving) return;
   const name = document.getElementById('client-name').value.trim();
   const phone = getFullPhone('client-phone', 'phone-prefix');
   const address = document.getElementById('client-address')?.value.trim() || '';
@@ -1066,57 +1095,16 @@ async function confirmReservation() {
   if (phoneClean.length < 10) { showError('Ingresá un número de WhatsApp válido'); return; }
   if (!name) { showError('Por favor ingresá tu nombre'); return; }
   if (shopData?.home_service && !address) { showError('El domicilio es obligatorio para servicio a domicilio'); return; }
-
   hideError();
-
-  // Fix #17: deshabilitar botón para prevenir double-submit
-  const confirmBtn = document.querySelector('#screen-form .btn-primary');
-  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Procesando...'; }
-  const reEnableBtn = () => { if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '✅ Confirmar turno'; } };
-
-  // Si hay seña activa → mostrar pantalla informativa ANTES de crear el turno
-  const requiresSena = !isMemberFlow
-    && shopData?.sena_enabled
-    && shopData?.sena_alias
-    && (selectedService?.price || 0) > 0;
-
-  if (requiresSena) {
-    const senaAmount = Math.ceil(selectedService.price * ((shopData.sena_pct || 30) / 100));
-    const dateFormatted = new Date(selectedDate + 'T12:00:00')
-      .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-
-    // Guardar datos para el POST cuando el cliente haga click en "Ya pagué"
-    _pendingReserveData = { name, phone, address };
-
-    document.getElementById('sena-alias-display').textContent  = shopData.sena_alias;
-    document.getElementById('sena-amount-display').textContent = `$${senaAmount.toLocaleString('es-AR')}`;
-    document.getElementById('success-detail-sena').innerHTML = `
-      <strong>${escapeHtmlT(selectedService?.name || 'Turno')}</strong><br>
-      📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
-      📍 ${escapeHtmlT(shopData.name)}${shopData.address ? ' — ' + escapeHtmlT(shopData.address) : ''}
-    `;
-    document.getElementById('sena-ya-pague-btn').style.display = 'block';
-    document.getElementById('sena-done-msg').style.display = 'none';
-    document.getElementById('steps').style.display = 'none';
-    showScreen('sena');
-    // Crear el turno ahora — el backend envía el WPP de seña en este momento
-    doReserve({ name, phone, address });
-    return;
-  }
-
-  // Sin seña → flujo normal
-  try {
-    await doReserve({ name, phone, address });
-  } catch(e) {
-    reEnableBtn();
-  }
+  await doReserve({ name, phone, address });
 }
 
-async function doReserve(clientData) {
-  const { name, phone, address } = clientData || _pendingReserveData || {};
-  const btn = document.getElementById('sena-ya-pague-btn') || document.querySelector('#screen-form .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
-
+// Crea el turno. Recién cuando el servidor lo confirma se muestra la seña o el "listo":
+// si el horario se ocupó, el cliente sigue en el formulario y puede elegir otro.
+async function doReserve({ name, phone, address }) {
+  const btn = document.getElementById('btn-confirm');
+  _reserving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Reservando...'; }
   try {
     const res = await fetch(`${API}/reserve`, {
       method: 'POST',
@@ -1136,52 +1124,126 @@ async function doReserve(clientData) {
       })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    const dateFormatted = new Date(selectedDate + 'T12:00:00')
-      .toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-
-    document.getElementById('steps').style.display = 'none';
-
-    if (data.requires_sena) {
-      // El turno quedó en waiting_sena — mostrar confirmación en la misma pantalla
-      if (btn) btn.style.display = 'none';
-      const doneMsg = document.getElementById('sena-done-msg');
-      if (doneMsg) doneMsg.style.display = 'block';
-    } else {
-      let successMsg = data.message;
-      if (data.redeem) successMsg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
-      document.getElementById('success-msg').textContent = successMsg;
-      document.getElementById('success-detail').innerHTML = `
-        <strong>${escapeHtmlT(selectedService?.name || 'Turno')}</strong><br>
-        📅 ${dateFormatted} a las <strong>${selectedTime}</strong><br>
-        📍 ${escapeHtmlT(shopData.name)}${shopData.address ? ' — ' + escapeHtmlT(shopData.address) : ''}
-      `;
-      showScreen('success');
-    }
+    if (!res.ok) throw new Error(data.error || 'No se pudo reservar el turno');
+    showBookingDone(data);
   } catch (e) {
-    // Mostrar error en la pantalla donde está el usuario (sena o form)
-    const isOnSena = document.getElementById('screen-sena')?.style.display !== 'none';
-    if (isOnSena) {
-      let errEl = document.getElementById('sena-error');
-      if (!errEl) {
-        errEl = document.createElement('div');
-        errEl.id = 'sena-error';
-        errEl.style.cssText = 'background:rgba(255,67,67,.12);border:1px solid rgba(255,67,67,.3);border-radius:10px;padding:12px 16px;color:#ff8080;font-size:13px;margin-top:12px;text-align:center';
-        document.getElementById('sena-ya-pague-btn')?.insertAdjacentElement('afterend', errEl);
-      }
-      errEl.textContent = e.message;
-      errEl.style.display = 'block';
-    } else {
-      showError(e.message);
-    }
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Ya pagué la seña'; }
+    showError(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = confirmBtnLabel; }
+  } finally {
+    _reserving = false;
+  }
+}
+
+function showBookingDone(data) {
+  const appt = data.appointment || {};
+  const dateFormatted = new Date(selectedDate + 'T12:00:00')
+    .toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const barberName = data.barber_name || selectedBarber?.name || '';
+  const detail = `
+    <strong>${escapeHtmlT(selectedService?.name || 'Turno')}</strong><br>
+    📅 ${dateFormatted} a las <strong>${escapeHtmlT(selectedTime)}</strong><br>
+    ${barberName ? `✂️ Con ${escapeHtmlT(barberName)}<br>` : ''}
+    📍 ${escapeHtmlT(shopData.name)}${shopData.address ? ' — ' + escapeHtmlT(shopData.address) : ''}`;
+  const extras = bookingExtras(data, appt);
+  document.getElementById('steps').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (data.requires_sena) {
+    document.getElementById('sena-alias-display').textContent = data.sena_alias || '';
+    document.getElementById('sena-amount-display').textContent = `$${Number(data.sena_amount || 0).toLocaleString('es-AR')}`;
+    document.getElementById('success-detail-sena').innerHTML = detail;
+    document.getElementById('sena-done-msg').style.display = 'block';
+    document.getElementById('sena-extras').innerHTML = extras;
+    showScreen('sena');
+    return;
+  }
+  let msg = data.message || '';
+  if (data.redeem) msg += `\n\n🎁 Premio canjeado: ${data.redeem}. ¡Avisale a tu barbero al llegar!`;
+  if (data.redeem_failed) msg += '\n\n⚠️ No se pudo canjear el premio: ya no te alcanzan los puntos. Tu turno quedó reservado igual.';
+  document.getElementById('success-msg').textContent = msg;
+  document.getElementById('success-detail').innerHTML = detail;
+  document.getElementById('success-extras').innerHTML = extras;
+  showScreen('success');
+}
+
+// Agregar al calendario, cómo llegar y el link para cancelar
+function bookingExtras(data, appt) {
+  const ymd = (selectedDate || '').replace(/-/g, '');
+  const hm = t => String(t || '').slice(0, 5).replace(':', '') + '00';
+  const end = appt.time_end || selectedTime;
+  const calUrl = 'https://calendar.google.com/calendar/render?' + new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${selectedService?.name || 'Turno'} — ${shopData.name}`,
+    dates: `${ymd}T${hm(selectedTime)}/${ymd}T${hm(end)}`,
+    ctz: data.timezone || shopData.timezone || 'America/Argentina/Buenos_Aires',
+    location: [shopData.address, shopData.city].filter(Boolean).join(', '),
+  });
+  const mapsUrl = shopData.address
+    ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([shopData.name, shopData.address, shopData.city].filter(Boolean).join(' '))
+    : '';
+  const manageUrl = data.manage_token ? `${location.origin}/reservar/${currentBranchSlug || slug}?turno=${data.manage_token}` : '';
+  return `
+    <div class="done-actions">
+      <a class="done-btn" href="${escapeHtmlT(calUrl)}" target="_blank" rel="noopener">📅 Agregar al calendario</a>
+      ${mapsUrl ? `<a class="done-btn" href="${escapeHtmlT(mapsUrl)}" target="_blank" rel="noopener">📍 Cómo llegar</a>` : ''}
+    </div>
+    ${manageUrl ? `<div class="done-cancel">¿No podés venir? <a href="${escapeHtmlT(manageUrl)}">Cancelá tu turno acá</a>. Te lo mandamos también por WhatsApp.</div>` : ''}`;
+}
+
+// ── Link del cliente para ver o cancelar su turno (?turno=...) ──
+async function initManage(token) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('steps').style.display = 'none';
+  showScreen('manage');
+  const box = document.getElementById('manage-detail');
+  try {
+    const res = await fetch(`${API}/turno/${encodeURIComponent(token)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No encontramos ese turno.');
+    renderManage(data.appointment, token);
+  } catch (e) {
+    box.innerHTML = `<div class="no-slots">${escapeHtmlT(e.message)}</div>`;
+  }
+}
+
+function renderManage(a, token) {
+  const fecha = new Date(a.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const cancelled = a.status === 'cancelled';
+  const titleEl = document.getElementById('manage-title');
+  titleEl.textContent = cancelled ? 'Turno cancelado' : 'Tu turno';
+  titleEl.style.color = cancelled ? '#ff8080' : '';
+  document.getElementById('manage-detail').innerHTML = `
+    <div class="success-detail" style="text-align:left${cancelled ? ';opacity:.6;text-decoration:line-through' : ''}">
+      <strong>${escapeHtmlT(a.service_name || 'Turno')}</strong><br>
+      📅 ${fecha} a las <strong>${escapeHtmlT(a.time_start)}</strong><br>
+      ${a.barber_name ? `✂️ Con ${escapeHtmlT(a.barber_name)}<br>` : ''}
+      📍 ${escapeHtmlT(a.shop_name)}${a.shop_address ? ' — ' + escapeHtmlT(a.shop_address) : ''}
+    </div>
+    ${a.can_cancel ? `<button class="btn-primary" id="btn-cancel-appt" style="background:#ff4343;color:#fff;box-shadow:none;margin-top:18px" onclick="cancelMyAppointment(${escapeHtmlT(JSON.stringify(token))})">Cancelar turno</button>` : ''}
+    ${!a.can_cancel && !cancelled ? `<div class="done-cancel">Este turno ya no se puede cancelar desde acá. Si necesitás cambiarlo, escribile al local.</div>` : ''}
+    <a class="btn-back" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="${location.pathname}">${cancelled ? 'Reservar otro turno' : 'Reservar otro turno →'}</a>`;
+}
+
+async function cancelMyAppointment(token) {
+  if (!confirm('¿Seguro que querés cancelar el turno?')) return;
+  const btn = document.getElementById('btn-cancel-appt');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelando...'; }
+  try {
+    const res = await fetch(`${API}/turno/${encodeURIComponent(token)}/cancel`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo cancelar el turno');
+    renderManage(data.appointment, token);
+    showToastPublic('Turno cancelado. ¡Gracias por avisar!');
+  } catch (e) {
+    showToastPublic(e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Cancelar turno'; }
   }
 }
 
 // ── HELPERS ──
 function showScreen(name) {
-  ['branch','service','member-login','date','time','barber','form','sena','success'].forEach(s => {
+  ['branch','service','member-login','date','time','barber','form','sena','success','manage'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) el.style.display = s === name ? 'block' : 'none';
   });
@@ -1263,6 +1325,7 @@ function copySenaField(elId, btn, isAmount) {
 function showError(msg) {
   const el = document.getElementById('error-banner');
   el.textContent = msg; el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function hideError() {
   document.getElementById('error-banner').style.display = 'none';
@@ -1392,6 +1455,7 @@ function selectBarber(id) {
   document.querySelectorAll('#barber-grid .service-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('barber-' + id)?.classList.add('selected');
   document.getElementById('btn-next-barber').disabled = false;
+  revealNext('btn-next-barber');
 }
 
 function showToastPublic(msg, isError) {
@@ -1418,6 +1482,7 @@ async function selectFirstAvailableBarberPublic() {
     const anyBtn = document.getElementById('btn-any-barber');
     if (anyBtn) anyBtn.style.borderStyle = 'solid';
     document.getElementById('btn-next-barber').disabled = false;
+    revealNext('btn-next-barber');
     return;
   }
   if (!selectedTime) return showToastPublic('⚠️ Seleccioná una hora primero', true);
@@ -1579,9 +1644,10 @@ document.getElementById('client-phone')?.addEventListener('input', function() {
 });
 
 async function loadStoreForClient() {
-  if (!slug) return;
+  const activeSlug = currentBranchSlug || slug;
+  if (!activeSlug) return;
   try {
-    const res = await fetch(`${window.location.origin}/api/points/store/public/${slug}`);
+    const res = await fetch(`${window.location.origin}/api/points/store/public/${activeSlug}`);
     const data = await res.json();
     storeItems = (data.items || []).filter(i => clientPointsData.points >= i.points_cost);
 

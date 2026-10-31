@@ -270,7 +270,9 @@ router.get('/client/phone/:slug/:phone', phoneLookupLimiter, async (req, res) =>
       [shop.rows[0].id, key]
     );
     if (!client.rows.length) return res.json({ client: null });
-    res.json({ client: client.rows[0] });
+    // Solo el nombre de pila: con un número ajeno no se tiene que poder ver el nombre completo del cliente
+    const c = client.rows[0];
+    res.json({ client: { id: c.id, name: String(c.name || '').trim().split(/\s+/)[0] || '', points: c.points } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

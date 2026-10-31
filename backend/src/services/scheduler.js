@@ -216,6 +216,37 @@ async function runExpiredCleanup() {
   }
 }
 
+// ── Señas vencidas ───────────────────────────────────────────────────────────
+// Un turno reservado con seña tiene 60 minutos para pagarse. Si venció y el cliente no mandó
+// comprobante, se cancela: el horario ya se le ofrece a otros, y si quedara "esperando seña"
+// un pago tardío podría confirmarlo encima de otro turno. Con comprobante enviado queda para
+// que el local lo revise.
+async function runSenaExpiration() {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE appointments SET status='cancelled', sena_status='lost'
+        WHERE status='waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW()
+          AND sena_comprobante_status IS NULL
+        RETURNING id, shop_id`
+    );
+    for (const a of rows) {
+      // Devolver el premio canjeado, si lo había
+      const red = await pool.query(
+        `SELECT id, client_id, item_id, points_used FROM points_redemptions WHERE appointment_id=$1 AND shop_id=$2 AND status='pending'`,
+        [a.id, a.shop_id]
+      );
+      for (const r of red.rows) {
+        if (r.client_id) await pool.query('UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3', [r.points_used, r.client_id, a.shop_id]);
+        if (r.item_id) await pool.query('UPDATE points_store SET stock = stock + 1 WHERE id=$1 AND shop_id=$2 AND stock IS NOT NULL', [r.item_id, a.shop_id]);
+        await pool.query(`UPDATE points_redemptions SET status='cancelled' WHERE id=$1`, [r.id]);
+      }
+    }
+    if (rows.length) console.log(`[SEÑAS] ${rows.length} turno(s) cancelado(s) por seña no pagada`);
+  } catch (e) {
+    console.error('[SEÑAS] error:', e.message);
+  }
+}
+
 // ── Arrancar scheduler ────────────────────────────────────────────────────────
 const _schedulerHandles = [];
 function _addInterval(fn, ms) {
@@ -443,6 +474,9 @@ function startScheduler() {
   _addInterval(runExpiredCleanup, 24 * 60 * 60 * 1000);
 
   _addInterval(runTransferPolling, 10 * 1000);
+
+  _addTimeout(runSenaExpiration, 45_000);
+  _addInterval(runSenaExpiration, 5 * 60 * 1000);
 }
 
 function stopScheduler() {
@@ -453,4 +487,4 @@ function stopScheduler() {
   _schedulerHandles.length = 0;
 }
 
-module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina, runAppointmentReminders, isQuietHour, fixMananaToHoy };
+module.exports = { startScheduler, stopScheduler, nowInTz, yesterdayInTz, nowArgentina, runAppointmentReminders, runSenaExpiration, isQuietHour, fixMananaToHoy };

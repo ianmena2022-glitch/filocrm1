@@ -944,7 +944,26 @@ router.put('/:id/sena', auth, async (req, res) => {
       );
       if (!locked.rows.length || locked.rows[0].status !== 'waiting_sena') {
         await client.query('ROLLBACK');
+        client.release();
         return res.status(404).json({ error: 'Turno no encontrado o ya fue procesado' });
+      }
+      // Si la seña venció, el horario se le pudo dar a otro cliente: no confirmar encima de otro turno
+      if (action === 'confirm') {
+        const clash = await client.query(
+          `SELECT o.id FROM appointments a JOIN appointments o
+              ON o.shop_id = a.shop_id AND o.date = a.date AND o.id <> a.id
+             AND o.status NOT IN ('cancelled','noshow')
+             AND NOT (o.status = 'waiting_sena' AND o.sena_expires_at IS NOT NULL AND o.sena_expires_at < NOW())
+             AND o.time_start < a.time_end AND o.time_end > a.time_start
+             AND (a.barber_id IS NULL OR o.barber_id = a.barber_id)
+           WHERE a.id = $1 LIMIT 1`,
+          [req.params.id]
+        );
+        if (clash.rows.length) {
+          await client.query('ROLLBACK');
+          client.release();
+          return res.status(409).json({ error: 'La seña venció y ese horario ya lo tomó otro turno. Coordiná otro horario con el cliente.' });
+        }
       }
       result = await client.query(
         `UPDATE appointments SET status=$1, sena_status=$2 WHERE id=$3 RETURNING *`,

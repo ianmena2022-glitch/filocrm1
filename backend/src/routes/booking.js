@@ -4,6 +4,37 @@ const pool      = require('../db/pool');
 const wpp       = require('../services/whatsapp');
 const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
 const { shopHasAccess, INACTIVE_MSG } = require('../services/shopAccess');
+const crypto    = require('crypto');
+const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
+
+const toMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); };
+// Ningún cliente puede tener más de estos turnos por venir en un mismo local (evita que alguien llene la agenda)
+const MAX_UPCOMING_PER_PHONE = 3;
+const ACTIVE_APPT_SQL = `(a.status IN ('pending','confirmed') OR (a.status = 'waiting_sena' AND (a.sena_expires_at IS NULL OR a.sena_expires_at > NOW())))`;
+
+// Link para que el cliente vea o cancele su turno: id + firma (no se puede adivinar el de otro turno)
+function manageToken(apptId) {
+  const sig = crypto.createHmac('sha256', `${process.env.JWT_SECRET || 'filo'}:turno`).update(String(apptId)).digest('hex').slice(0, 20);
+  return `${apptId}-${sig}`;
+}
+function parseManageToken(token) {
+  const m = /^(\d{1,10})-([0-9a-f]{20})$/.exec(String(token || ''));
+  if (!m) return null;
+  return crypto.timingSafeEqual(Buffer.from(manageToken(m[1])), Buffer.from(m[0])) ? parseInt(m[1]) : null;
+}
+const manageUrl = (slug, apptId) => `${process.env.APP_URL || 'https://filocrm.com.ar'}/reservar/${slug}?turno=${manageToken(apptId)}`;
+const firstName = n => String(n || '').trim().split(/\s+/)[0] || '';
+
+// Franjas de atención del local para un día (en minutos). null = el local no atiende ese día
+function shopDayRanges(scheduleRaw, date) {
+  const schedule = scheduleRaw ? (() => { try { return JSON.parse(scheduleRaw); } catch { return null; } })() : null;
+  if (!schedule) return [{ from: 9 * 60, to: 20 * 60 }];
+  const dayKey = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'][new Date(date + 'T12:00:00').getDay()];
+  const day = schedule[dayKey];
+  if (!day || !day.active) return null;
+  const ranges = Array.isArray(day.ranges) ? day.ranges : [{ start: day.start || '09:00', end: day.end || '20:00' }];
+  return ranges.map(r => ({ from: toMin(r.start || '09:00'), to: toMin(r.end || '20:00') }));
+}
 
 // De qué cuenta salen los barberos de una página de reservas. Los barberos de una sucursal
 // están cargados en la sucursal; solo si la sucursal no tiene ninguno se usan los del dueño
@@ -26,8 +57,8 @@ const publicGetLimiter = rateLimit({
 
 // Helper: verificar si un barbero trabaja en una fecha+hora dada
 // barberSchedule: null = sin restricciones (siempre disponible)
-// date: 'YYYY-MM-DD', timeStart: 'HH:MM'
-function isBarberAvailable(barberSchedule, date, timeStart) {
+// date: 'YYYY-MM-DD', timeStart/timeEnd: 'HH:MM' (el turno tiene que terminar antes de que se vaya)
+function isBarberAvailable(barberSchedule, date, timeStart, timeEnd) {
   if (!barberSchedule) return true;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   const d = new Date(date + 'T12:00:00');
@@ -35,14 +66,15 @@ function isBarberAvailable(barberSchedule, date, timeStart) {
   const dayCfg = barberSchedule[dayKey];
   if (!dayCfg || !dayCfg.active) return false;
   if (!timeStart || !dayCfg.from || !dayCfg.to) return true;
-  return timeStart >= dayCfg.from && timeStart < dayCfg.to;
+  if (timeEnd && toMin(timeEnd) > toMin(dayCfg.to)) return false;
+  return toMin(timeStart) >= toMin(dayCfg.from) && toMin(timeStart) < toMin(dayCfg.to);
 }
 
 // GET /api/booking/:slug — info pública de la barbería para el formulario
 router.get('/:slug', publicGetLimiter, async (req, res) => {
   try {
     const shop = await pool.query(
-      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url, social_links
+      `SELECT id, name, city, address, phone, wpp_connected, schedule, home_service, allow_barber_choice, filo_plan, closed_days, is_enterprise_owner, enterprise_shared_wpp, sena_enabled, sena_pct, sena_alias, sena_cbu, is_branch, parent_enterprise_id, profile_photo_url, banner_photo_url, social_links, timezone
        FROM shops WHERE booking_slug = $1
         AND NOT (COALESCE(is_branch, FALSE) AND subscription_status = 'cancelled')`,
       [req.params.slug]
@@ -176,7 +208,8 @@ router.get('/:slug/member-verify', publicGetLimiter, async (req, res) => {
       return res.status(400).json({ error: `Ya usaste todos tus créditos de este mes (${mem.credits_used}/${mem.credits_total})` });
     }
 
-    res.json({ client: clientData, membership: mem });
+    // Solo el nombre de pila: con un número ajeno no se tiene que poder ver el nombre completo del cliente
+    res.json({ client: { id: clientData.id, name: firstName(clientData.name), phone: clientData.phone }, membership: mem });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -186,7 +219,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
   const { date, service_id } = req.query;
   // Si el cliente ya eligió con quién atenderse, solo los horarios de ese barbero
   const onlyBarberId = parseInt(req.query.barber_id) || null;
-  if (!date) return res.status(400).json({ error: 'Fecha requerida' });
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha requerida' });
 
   try {
     const shop = await pool.query(
@@ -195,6 +228,10 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     );
     if (!shop.rows.length) return res.status(404).json({ error: 'Barbería no encontrada' });
     const shopId = shop.rows[0].id;
+    // "Hoy" y "ahora" según la zona horaria del local
+    const tz = await getShopTz(shopId);
+    const todayLocal = shopDate(tz);
+    if (date < todayLocal) return res.json({ slots: [], duration: 30, past: true });
 
     // Duración del servicio
     let duration = 30;
@@ -345,9 +382,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     }
 
     const slots = [];
-    const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
-    const nowAR = new Date(Date.now() - AR_OFFSET_MS);
-    const todayAR = nowAR.toISOString().split('T')[0];
+    const nowMinsLocal = toMin(shopTime(tz));
 
     // Construir lista de slots válidos a partir de todas las franjas horarias
     const validTimes = [];
@@ -358,10 +393,7 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     }
 
     for (const t of validTimes) {
-      if (date === todayAR) {
-        const nowMinsAR = nowAR.getUTCHours() * 60 + nowAR.getUTCMinutes();
-        if (t <= nowMinsAR) continue;
-      }
+      if (date === todayLocal && t <= nowMinsLocal) continue;
 
       let available;
       if (barberMap) {
@@ -377,6 +409,8 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
             const cfg = b.schedule[bsDayKey];
             if (!cfg || !cfg.active) return false;
             if (cfg.from && cfg.to && (slotTime < cfg.from || slotTime >= cfg.to)) return false;
+            // El servicio tiene que terminar antes de que el barbero se vaya
+            if (cfg.to && t + duration > toMin(cfg.to)) return false;
           }
           return !b.ranges.some(o => t < o.to && t + duration > o.from);
         };
@@ -505,6 +539,14 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
   if (redeem_item_id && !client_phone) {
     return res.status(400).json({ error: 'Para canjear puntos necesitás ingresar tu número de WhatsApp.' });
   }
+  // Turno "de membresía" (sin cargo y sin seña) solo con una membresía que se valida abajo
+  if (is_member_booking && !membership_id) {
+    return res.status(400).json({ error: 'Para reservar con membresía primero verificá tu número.' });
+  }
+  // El WhatsApp es obligatorio: sin él no hay a quién confirmarle el turno ni ficha de cliente
+  if (!phoneKey(client_phone)) {
+    return res.status(400).json({ error: 'Ingresá un número de WhatsApp válido.' });
+  }
 
   try {
     const shop = await pool.query(
@@ -523,11 +565,22 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
 
     // No se puede reservar en un día que ya pasó (según la zona horaria del local)
+    const shopTz = await getShopTz(shopData.id);
+    const todayLocal = shopDate(shopTz);
+    if (date < todayLocal) {
+      return res.status(400).json({ error: 'No se puede reservar en una fecha pasada.' });
+    }
+
+    // Tope de turnos por venir por cliente
     {
-      const { getShopTz, shopDate } = require('../db/shopTz');
-      const todayLocal = shopDate(await getShopTz(shopData.id));
-      if (date < todayLocal) {
-        return res.status(400).json({ error: 'No se puede reservar en una fecha pasada.' });
+      const upcoming = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM appointments a JOIN clients c ON c.id = a.client_id
+          WHERE a.shop_id=$1 AND a.date >= $3::date AND ${ACTIVE_APPT_SQL}
+            AND ${phoneMatchSql('c.phone', '$2')}`,
+        [shopData.id, phoneKey(client_phone), todayLocal]
+      );
+      if (upcoming.rows[0].n >= MAX_UPCOMING_PER_PHONE) {
+        return res.status(429).json({ error: `Ya tenés ${upcoming.rows[0].n} turnos reservados en ${shopData.name}. Si necesitás otro, escribile al local.` });
       }
     }
 
@@ -611,6 +664,18 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     const [h, m] = time_start.split(':').map(Number);
     const end = new Date(2000, 0, 1, h, m + duration);
     const time_end = `${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')}`;
+
+    // El turno tiene que caer dentro del horario del local y no puede ser una hora que ya pasó
+    {
+      const startMin = toMin(time_start);
+      const ranges = shopDayRanges(shopData.schedule, date) || [];
+      if (!ranges.some(r => startMin >= r.from && startMin + duration <= r.to)) {
+        return res.status(400).json({ error: 'Ese horario está fuera del horario de atención. Elegí otro.' });
+      }
+      if (date === todayLocal && startMin <= toMin(shopTime(shopTz))) {
+        return res.status(400).json({ error: 'Ese horario ya pasó. Elegí otro.' });
+      }
+    }
 
     // Determinar si se requiere seña
     const senaCbu = shopData.sena_cbu || shopData.sena_alias;
@@ -739,7 +804,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             return res.status(400).json({ error: 'Barbero no encontrado' });
           }
           const chosenBarber = barberData.rows[0];
-          if (!isBarberAvailable(chosenBarber.barber_schedule, date, time_start)) {
+          if (!isBarberAvailable(chosenBarber.barber_schedule, date, time_start, time_end)) {
             await pgClient.query('ROLLBACK');
             pgClient.release();
             return res.status(400).json({ error: 'El barbero seleccionado no trabaja en esa fecha/horario' });
@@ -753,7 +818,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             [barberShopId]
           );
           const availableBarbers = barbers.rows.filter(b =>
-            isBarberAvailable(b.barber_schedule, date, time_start)
+            isBarberAvailable(b.barber_schedule, date, time_start, time_end)
           );
           if (availableBarbers.length) {
             // Filtrar los que YA tienen un turno pisándose en ese horario (anti double-booking)
@@ -761,6 +826,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
               `SELECT DISTINCT barber_id FROM appointments
                 WHERE shop_id=$1 AND date=$2 AND barber_id IS NOT NULL
                   AND status NOT IN ('cancelled','noshow')
+                  AND NOT (status = 'waiting_sena' AND sena_expires_at IS NOT NULL AND sena_expires_at < NOW())
                   AND time_start < $3 AND time_end > $4`,
               [shopData.id, date, time_end, time_start]
             );
@@ -904,6 +970,11 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     // compartido), sendText usa el del dueño enterprise
     const wpp = require('../services/whatsapp');
     const wppShopId = shopData.id;
+    // Link para que el cliente vea o cancele su turno (va en la pantalla final y en el WhatsApp)
+    const cancelLink = manageUrl(req.params.slug, _apptRow.id);
+    const cancelLine = `
+
+¿No podés venir? Cancelá tu turno acá: ${cancelLink}`;
     console.log(`[booking] turno creado id=${appt.rows[0]?.id} requiresSena=${!!requiresSena} senaCbu=${senaCbu||'null'} wpp_connected=${shopData.wpp_connected} wppShopId=${wppShopId} client_phone=${client_phone||'null'}`);
 
     if (requiresSena) {
@@ -919,7 +990,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
               minutesLimit: 60,
             });
             if (!msgCliente) msgCliente = `✂️ *${shopData.name}* — Reserva recibida\n\n👤 Hola ${client_name}! Tu turno del ${dateFormatted} a las *${time_start}* quedó *pendiente de seña*.\n\n💸 Para confirmar, enviá una seña de *$${senaAmount.toLocaleString('es-AR')}* al CVU/CBU:\n\n📲 *${senaCbu}*\n\n⏰ Tenés *60 minutos*. Si no se recibe, el turno queda libre.`;
-            await wpp.sendText(wppShopId, client_phone, msgCliente);
+            await wpp.sendText(wppShopId, client_phone, msgCliente + cancelLine);
             console.log(`[booking] WPP seña enviada OK a ${client_phone} via shop ${wppShopId}`);
           } catch(e) { console.error('[booking] WPP seña error:', e.message); }
         })();
@@ -949,7 +1020,7 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
             serviceName: svcName || null,
           });
           if (!msg) msg = require('../services/msgVariants').bookingText({ nombre: client_name, shop: shopData.name, fecha: dateFormatted, hora: time_start, servicio: svcName || null });
-          await wpp.sendText(wppShopId, client_phone, msg, { category: 'booking_confirm' });
+          await wpp.sendText(wppShopId, client_phone, msg + cancelLine, { category: 'booking_confirm' });
         } catch (e) {
           if (e.code !== 'AUTO_DISABLED') console.error('Error notificando al cliente:', e.message);
         }
@@ -958,20 +1029,120 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
 
     const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+    const barberName = _barberId
+      ? (await pool.query('SELECT name FROM shops WHERE id=$1', [_barberId]).catch(() => ({ rows: [] }))).rows[0]?.name || null
+      : null;
     res.status(201).json({
       ok: true,
       redeem: redeemInfo,
-      requires_sena: requiresSena,
+      // Pidió canjear un premio pero no se pudo (ya no le alcanzan los puntos o el premio no existe)
+      redeem_failed: !!redeem_item_id && !redeemInfo,
+      barber_name: barberName,
+      manage_token: manageToken(_apptRow.id),
+      timezone: shopTz,
+      requires_sena: !!requiresSena,
       sena_amount: requiresSena ? senaAmount : null,
       sena_alias: requiresSena ? senaCbu : null,
       message: requiresSena
         ? `Tu reserva fue recibida. Para confirmarla, enviá una seña de $${senaAmount.toLocaleString('es-AR')} al CBU/CVU ${senaCbu} en los próximos 60 minutos.`
-        : `¡Turno confirmado! Te esperamos el ${dateLabel} a las ${time_start} en ${shopData.name}.`,
+        : `Te esperamos el ${dateLabel} a las ${time_start} en ${shopData.name}.`,
       appointment: appt.rows[0]
     });
   } catch (e) {
     console.error('Booking error:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Ver / cancelar un turno desde el link que recibe el cliente ──────────────
+async function loadManagedAppt(slug, token) {
+  const apptId = parseManageToken(token);
+  if (!apptId) return null;
+  const q = await pool.query(
+    `SELECT a.id, a.shop_id, a.client_id, a.service_name, a.date::text AS date, a.time_start, a.time_end, a.status, a.barber_id,
+            b.name AS barber_name, s.name AS shop_name, s.address AS shop_address, s.parent_enterprise_id
+       FROM appointments a
+       JOIN shops s ON s.id = a.shop_id
+       LEFT JOIN shops b ON b.id = a.barber_id
+      WHERE a.id=$1 AND s.booking_slug=$2`,
+    [apptId, slug]
+  );
+  return q.rows[0] || null;
+}
+async function canCancel(appt) {
+  if (!['pending', 'confirmed', 'waiting_sena'].includes(appt.status)) return false;
+  const tz = await getShopTz(appt.shop_id);
+  const today = shopDate(tz);
+  if (appt.date !== today) return appt.date > today;
+  return toMin(appt.time_start) > toMin(shopTime(tz));
+}
+const publicAppt = (a, cancellable) => ({
+  service_name: a.service_name, date: a.date, time_start: String(a.time_start).slice(0, 5), time_end: a.time_end ? String(a.time_end).slice(0, 5) : null,
+  status: a.status, barber_name: a.barber_name, shop_name: a.shop_name, shop_address: a.shop_address, can_cancel: cancellable,
+});
+
+// GET /api/booking/:slug/turno/:token — datos del turno para el link del cliente
+router.get('/:slug/turno/:token', publicGetLimiter, async (req, res) => {
+  try {
+    const appt = await loadManagedAppt(req.params.slug, req.params.token);
+    if (!appt) return res.status(404).json({ error: 'No encontramos ese turno.' });
+    res.json({ appointment: publicAppt(appt, await canCancel(appt)) });
+  } catch (e) {
+    console.error('[booking turno]', e.message);
+    res.status(500).json({ error: 'No se pudo cargar el turno.' });
+  }
+});
+
+// POST /api/booking/:slug/turno/:token/cancel — el cliente cancela su turno
+router.post('/:slug/turno/:token/cancel', reserveRateLimit, async (req, res) => {
+  try {
+    const appt = await loadManagedAppt(req.params.slug, req.params.token);
+    if (!appt) return res.status(404).json({ error: 'No encontramos ese turno.' });
+    if (!(await canCancel(appt))) {
+      return res.status(409).json({ error: appt.status === 'cancelled' ? 'Este turno ya estaba cancelado.' : 'Este turno ya no se puede cancelar. Escribile al local.' });
+    }
+    const upd = await pool.query(
+      `UPDATE appointments SET status='cancelled' WHERE id=$1 AND status IN ('pending','confirmed','waiting_sena') RETURNING id`,
+      [appt.id]
+    );
+    if (!upd.rows.length) return res.status(409).json({ error: 'Este turno ya estaba cancelado.' });
+
+    // Devolver el premio canjeado (puntos y stock), igual que cuando lo cancela el local
+    try {
+      const redQ = await pool.query(
+        `SELECT id, client_id, item_id, points_used FROM points_redemptions WHERE appointment_id=$1 AND shop_id=$2 AND status='pending'`,
+        [appt.id, appt.shop_id]
+      );
+      for (const red of redQ.rows) {
+        if (red.client_id) await pool.query('UPDATE clients SET points = points + $1 WHERE id=$2 AND shop_id=$3', [red.points_used, red.client_id, appt.shop_id]);
+        if (red.item_id) await pool.query('UPDATE points_store SET stock = stock + 1 WHERE id=$1 AND shop_id=$2 AND stock IS NOT NULL', [red.item_id, appt.shop_id]);
+        await pool.query(`UPDATE points_redemptions SET status='cancelled' WHERE id=$1`, [red.id]);
+      }
+    } catch (e) { console.error('[booking cancel] devolución de canje:', e.message); }
+
+    // Avisar al local y al barbero
+    try {
+      require('../services/sse').emitWithParent(appt.shop_id, appt.parent_enterprise_id, 'appointment.updated', {
+        id: appt.id, shop_id: appt.shop_id, status: 'cancelled', date: appt.date, time_start: appt.time_start, barber_id: appt.barber_id,
+      });
+    } catch (_) {}
+    try {
+      const recipients = [appt.shop_id];
+      if (appt.barber_id) recipients.push(appt.barber_id);
+      await require('../services/notifications').createMany(recipients, {
+        shopId: appt.shop_id,
+        type: 'appointment.cancelled',
+        title: 'Turno cancelado por el cliente',
+        body: [appt.service_name, `${appt.date} ${String(appt.time_start).slice(0, 5)}`].filter(Boolean).join(' · '),
+        icon: '❌',
+        link: '/app#agenda',
+      });
+    } catch (e) { console.error('[booking cancel] notif:', e.message); }
+
+    res.json({ ok: true, appointment: publicAppt({ ...appt, status: 'cancelled' }, false) });
+  } catch (e) {
+    console.error('[booking cancel]', e.message);
+    res.status(500).json({ error: 'No se pudo cancelar el turno.' });
   }
 });
 
