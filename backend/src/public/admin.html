@@ -246,6 +246,10 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
           style="padding:5px 14px;border-radius:6px;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;background:var(--y);color:var(--nk)">
           ✂ CRM
         </button>
+        <button id="sw-cars" onclick="switchApp('cars')"
+          style="padding:5px 14px;border-radius:6px;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;background:transparent;color:var(--g)">
+          🚗 Cars
+        </button>
         <button id="sw-nails" onclick="switchApp('nails')"
           style="padding:5px 14px;border-radius:6px;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:all .2s;background:transparent;color:var(--g)">
           💅 Nails
@@ -666,6 +670,93 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       </div>
     </div>
     </div><!-- /nails-content -->
+
+    <!-- ── FILOCARS CONTENT ── -->
+    <div id="cars-content" style="display:none">
+      <div class="page-title" style="color:#4DA3FF">🚗 FiloCars</div>
+      <div class="page-sub">Agencias de autos: cuentas, estado y vencimientos</div>
+
+      <!-- Conexión -->
+      <div style="margin-bottom:20px;padding:16px 20px;background:rgba(77,163,255,.07);border:1px solid rgba(77,163,255,.2);border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--g)">FiloCars:</span>
+        <input id="cars-api-url" class="input" style="width:340px;font-size:13px" placeholder="https://filocars-production.up.railway.app" />
+        <input id="cars-admin-pass" class="input" style="width:220px;font-size:13px" type="password" placeholder="ADMIN_PASSWORD de FiloCars" autocomplete="off" />
+        <button class="btn-sm" style="background:#4DA3FF;color:#fff" onclick="connectCars()">Conectar</button>
+        <span id="cars-conn-status" style="font-size:12px;color:var(--g)"></span>
+        <a id="cars-open-admin" href="https://filocars-production.up.railway.app/admin" target="_blank" rel="noopener" style="font-size:12px;color:var(--g);margin-left:auto">Abrir admin de FiloCars ↗</a>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-label">Agencias</div><div class="stat-val" id="cars-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Activas</div><div class="stat-val green" id="cars-active">—</div></div>
+        <div class="stat-card"><div class="stat-label">En prueba</div><div class="stat-val" id="cars-trial">—</div></div>
+        <div class="stat-card"><div class="stat-label">Vencidas</div><div class="stat-val" style="color:var(--r)" id="cars-expired">—</div></div>
+        <div class="stat-card"><div class="stat-label">Autos en stock</div><div class="stat-val" style="color:#4DA3FF" id="cars-stock">—</div></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <input class="search-input" id="cars-search" placeholder="🔍 Buscar agencia o email..." oninput="filterCars()">
+        <select class="filter" id="cars-filter-status" onchange="filterCars()">
+          <option value="">Todos los estados</option>
+          <option value="trial">Prueba</option>
+          <option value="active">Activa</option>
+          <option value="expired">Vencida</option>
+          <option value="cancelled">Cancelada</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Agencia</th><th>Dueño</th><th>Estado</th><th>Vence</th><th>Usuarios</th><th>Stock</th><th>Ventas</th><th>Última venta</th><th>Alta</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="cars-tbody">
+            <tr><td colspan="10" style="text-align:center;color:var(--g);padding:32px">Conectá FiloCars con su contraseña de admin</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- MODAL EDITAR AGENCIA -->
+      <div class="modal-overlay" id="cars-edit-modal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 style="color:#4DA3FF">Editar agencia</h3>
+            <button class="modal-close" onclick="closeModal('cars-edit-modal')">×</button>
+          </div>
+          <div class="modal-body">
+            <div id="cars-edit-name" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px"></div>
+            <div id="cars-edit-email" style="font-size:13px;color:var(--g);margin-bottom:16px"></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Estado</label>
+                <select class="input filter" id="cars-edit-status">
+                  <option value="trial">Prueba</option>
+                  <option value="active">Activa</option>
+                  <option value="expired">Vencida</option>
+                  <option value="cancelled">Cancelada</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Sumar días (la activa)</label>
+                <input class="input" id="cars-edit-days" type="number" min="1" max="3650" placeholder="Ej: 30">
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cars-edit-test" style="width:auto"> Cuenta test (sin vencimiento)</label>
+            </div>
+            <div class="form-group">
+              <label>Contraseña nueva del dueño</label>
+              <input class="input" id="cars-edit-pw" type="text" placeholder="Dejar vacío para no cambiarla" autocomplete="off">
+            </div>
+            <div id="cars-edit-err" style="color:var(--r);font-size:13px;display:none"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-sm gray" onclick="closeModal('cars-edit-modal')">Cancelar</button>
+            <button class="btn-sm" style="background:#4DA3FF;color:#fff" onclick="saveCarsEdit()">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /cars-content -->
 
     <!-- TAB: AFILIADOS -->
     <div id="tab-afiliados" style="display:none">
@@ -2583,34 +2674,33 @@ async function markAllPaid(affId, name) {
 // ══════════════════════════════════════
 let currentApp = 'crm';
 
+// Pestañas de arriba a la izquierda: CRM · Cars · Nails
+const ADMIN_APPS = {
+  crm:   { content: 'crm-content',   sw: 'sw-crm',   bg: 'var(--y)', fg: 'var(--nk)', logo: '✂ FILO ADMIN',      logoColor: 'var(--y)' },
+  cars:  { content: 'cars-content',  sw: 'sw-cars',  bg: '#4DA3FF',  fg: '#fff',      logo: '🚗 FILOCARS ADMIN', logoColor: '#4DA3FF' },
+  nails: { content: 'nails-content', sw: 'sw-nails', bg: '#c96080',  fg: '#fff',      logo: '💅 NAILS ADMIN',    logoColor: '#c9a96e' },
+};
+
 function switchApp(app) {
   currentApp = app;
-  const crmContent  = document.getElementById('crm-content');
-  const nailsContent = document.getElementById('nails-content');
-  const swCrm   = document.getElementById('sw-crm');
-  const swNails = document.getElementById('sw-nails');
-  const logo    = document.getElementById('topbar-logo-text');
+  for (const [key, cfg] of Object.entries(ADMIN_APPS)) {
+    const on = key === app;
+    document.getElementById(cfg.content).style.display = on ? (key === 'crm' ? '' : 'block') : 'none';
+    const sw = document.getElementById(cfg.sw);
+    sw.style.background = on ? cfg.bg : 'transparent';
+    sw.style.color      = on ? cfg.fg : 'var(--g)';
+  }
+  const logo       = document.getElementById('topbar-logo-text');
   const refreshBtn = document.getElementById('topbar-refresh-btn');
+  logo.textContent = ADMIN_APPS[app].logo;
+  logo.style.color = ADMIN_APPS[app].logoColor;
 
   if (app === 'crm') {
-    crmContent.style.display  = '';
-    nailsContent.style.display = 'none';
-    swCrm.style.background   = 'var(--y)';
-    swCrm.style.color        = 'var(--nk)';
-    swNails.style.background = 'transparent';
-    swNails.style.color      = 'var(--g)';
-    logo.textContent         = '✂ FILO ADMIN';
-    logo.style.color         = 'var(--y)';
-    refreshBtn.onclick       = loadAll;
+    refreshBtn.onclick = loadAll;
+  } else if (app === 'cars') {
+    refreshBtn.onclick = loadCars;
+    if (getCarsToken()) loadCars();
   } else {
-    crmContent.style.display  = 'none';
-    nailsContent.style.display = 'block';
-    swNails.style.background = '#c96080';
-    swNails.style.color      = '#fff';
-    swCrm.style.background   = 'transparent';
-    swCrm.style.color        = 'var(--g)';
-    logo.textContent         = '💅 NAILS ADMIN';
-    logo.style.color         = '#c9a96e';
     refreshBtn.onclick       = loadNails;
     // Auto-conectar si ya hay credenciales guardadas
     const savedUrl   = localStorage.getItem('nails_api_url')   || '';
@@ -2804,8 +2894,139 @@ async function deleteNailsShop(id, name) {
   } catch(e) { alert('Error: ' + e.message); }
 }
 
+// ══════════════════════════════════════
+// FILOCARS — habla directo con la API admin de FiloCars (que permite este origen por CORS).
+// Se guarda el token de sesión (12 h), nunca la contraseña.
+// ══════════════════════════════════════
+const CARS_DEFAULT_URL = 'https://filocars-production.up.railway.app';
+let carsAgencies = [];
+let carsEditId = null;
+
+function getCarsBase() { return (document.getElementById('cars-api-url').value || CARS_DEFAULT_URL).trim().replace(/\/$/, ''); }
+function getCarsToken() { try { return localStorage.getItem('cars_admin_token') || ''; } catch (_) { return ''; } }
+function setCarsToken(t) { try { t ? localStorage.setItem('cars_admin_token', t) : localStorage.removeItem('cars_admin_token'); } catch (_) {} }
+
+async function carsFetch(path, opts = {}) {
+  const res = await fetch(getCarsBase() + '/api/admin' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getCarsToken(), ...(opts.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { setCarsToken(null); throw new Error('Sesión de FiloCars vencida: volvé a conectar'); }
+  if (!res.ok) throw new Error(data.error || 'Error de FiloCars');
+  return data;
+}
+
+async function connectCars() {
+  const statusEl = document.getElementById('cars-conn-status');
+  const passEl = document.getElementById('cars-admin-pass');
+  if (!passEl.value) { statusEl.textContent = 'Poné la contraseña de admin de FiloCars'; statusEl.style.color = 'var(--r)'; return; }
+  statusEl.textContent = 'Conectando...'; statusEl.style.color = 'var(--g)';
+  try {
+    const res = await fetch(getCarsBase() + '/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: passEl.value }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo conectar');
+    setCarsToken(data.token);
+    try { localStorage.setItem('cars_api_url', getCarsBase()); } catch (_) {}
+    passEl.value = '';
+    await loadCars();
+  } catch (e) {
+    statusEl.textContent = '✗ ' + (e.message === 'Failed to fetch' ? 'FiloCars no responde o no permite este origen' : e.message);
+    statusEl.style.color = 'var(--r)';
+  }
+}
+
+async function loadCars() {
+  const statusEl = document.getElementById('cars-conn-status');
+  if (!getCarsToken()) { statusEl.textContent = 'Sin conectar'; statusEl.style.color = 'var(--g)'; return; }
+  statusEl.textContent = 'Cargando...'; statusEl.style.color = 'var(--g)';
+  try {
+    carsAgencies = await carsFetch('/agencies');
+    const real = carsAgencies.filter(a => !a.is_test);
+    const count = (...st) => real.filter(a => st.includes(a.subscription_status)).length;
+    document.getElementById('cars-total').textContent   = real.length;
+    document.getElementById('cars-active').textContent  = count('active');
+    document.getElementById('cars-trial').textContent   = count('trial');
+    document.getElementById('cars-expired').textContent = count('expired', 'cancelled');
+    document.getElementById('cars-stock').textContent   = carsAgencies.reduce((s, a) => s + (a.stock || 0), 0);
+    document.getElementById('cars-open-admin').href = getCarsBase() + '/admin';
+    statusEl.textContent = '✓ Conectado'; statusEl.style.color = 'var(--gr)';
+    filterCars();
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message; statusEl.style.color = 'var(--r)';
+  }
+}
+
+function renderCarsTable(list) {
+  const tbody = document.getElementById('cars-tbody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--g);padding:32px">${carsAgencies.length ? 'Sin resultados' : 'Todavía no hay agencias registradas'}</td></tr>`;
+    return;
+  }
+  const fd = (d) => d ? new Date(d).toLocaleDateString('es-AR') : '—';
+  const label = { trial: 'Prueba', active: 'Activa', expired: 'Vencida', cancelled: 'Cancelada' };
+  tbody.innerHTML = list.map(a => {
+    const testTag = a.is_test ? ' <span style="background:rgba(255,145,0,.15);color:var(--or);font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">TEST</span>' : '';
+    return `<tr>
+      <td><strong>${esc(a.name)}</strong>${testTag}<div style="font-size:11px"><a href="${esc(getCarsBase())}/catalogo/${esc(a.slug)}" target="_blank" rel="noopener" style="color:var(--g)">/catalogo/${esc(a.slug)}</a></div></td>
+      <td style="color:var(--g);font-size:12px">${esc(a.owner_email || a.email)}${a.phone ? `<div>${esc(a.phone)}</div>` : ''}</td>
+      <td><span class="badge ${esc(a.subscription_status)}">${esc(label[a.subscription_status] || a.subscription_status)}</span></td>
+      <td style="font-size:12px;color:var(--g)">${fd(a.trial_ends_at)}</td>
+      <td style="text-align:center">${a.users || 0}</td>
+      <td style="text-align:center">${a.stock || 0}</td>
+      <td style="text-align:center">${a.sales || 0}</td>
+      <td style="font-size:12px;color:var(--g)">${fd(a.last_sale_at)}</td>
+      <td style="font-size:12px;color:var(--g)">${fd(a.created_at)}</td>
+      <td><button class="action-btn" onclick="openCarsEdit(${jsArg(a.id)})">Editar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterCars() {
+  const search = document.getElementById('cars-search').value.toLowerCase();
+  const status = document.getElementById('cars-filter-status').value;
+  renderCarsTable(carsAgencies.filter(a =>
+    (!status || a.subscription_status === status) &&
+    (!search || `${a.name} ${a.owner_email || ''} ${a.email || ''} ${a.slug}`.toLowerCase().includes(search))));
+}
+
+function openCarsEdit(id) {
+  const a = carsAgencies.find(x => String(x.id) === String(id));
+  if (!a) return;
+  carsEditId = a.id;
+  document.getElementById('cars-edit-name').textContent = a.name;
+  document.getElementById('cars-edit-email').textContent = a.owner_email || a.email || '';
+  document.getElementById('cars-edit-status').value = a.subscription_status;
+  document.getElementById('cars-edit-days').value = '';
+  document.getElementById('cars-edit-pw').value = '';
+  document.getElementById('cars-edit-test').checked = !!a.is_test;
+  document.getElementById('cars-edit-err').style.display = 'none';
+  document.getElementById('cars-edit-modal').classList.add('open');
+}
+
+async function saveCarsEdit() {
+  const errEl = document.getElementById('cars-edit-err');
+  errEl.style.display = 'none';
+  const body = {
+    subscription_status: document.getElementById('cars-edit-status').value,
+    is_test: document.getElementById('cars-edit-test').checked,
+  };
+  const days = parseInt(document.getElementById('cars-edit-days').value);
+  if (days > 0) body.add_days = days;
+  const pw = document.getElementById('cars-edit-pw').value.trim();
+  if (pw) body.owner_password = pw;
+  try {
+    await carsFetch(`/agencies/${carsEditId}`, { method: 'PUT', body: JSON.stringify(body) });
+    closeModal('cars-edit-modal');
+    await loadCars();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
 // Restaurar config guardada al cargar
 window.addEventListener('DOMContentLoaded', () => {
+  try { const u = localStorage.getItem('cars_api_url'); document.getElementById('cars-api-url').value = u || CARS_DEFAULT_URL; } catch (_) {}
   const savedUrl   = localStorage.getItem('nails_api_url');
   const savedToken = localStorage.getItem('nails_admin_token');
   if (savedUrl)   document.getElementById('nails-api-url').value = savedUrl;
