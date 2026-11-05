@@ -314,7 +314,7 @@ const CARS_URL = 'https://filocars-production.up.railway.app';
 const MONTH_SECONDS = 30 * 86400;
 const SAVE_KEY = 'filo_tycoon_v2';
 const REFRESH_MS = 5 * 60 * 1000;
-const BUILD = '2026-11-05-f'; // cambiarlo en cada versión: el juego abierto se recarga solo
+const BUILD = '2026-11-05-g'; // cambiarlo en cada versión: el juego abierto se recarga solo
 const QS = new URLSearchParams(location.search);
 const DEMO = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !QS.has('real')) || QS.has('demo');
 
@@ -1082,7 +1082,7 @@ function rescueMsg(a, k) {
   const intro = a.paid
     ? `¡Hola! 👋 Te escribo de *Filo* 💈\n\nVi que la cuenta de *${a.name}* quedó vencida y no quería que te pierdas todo lo nuevo que sumamos:`
     : `¡Hola! 👋 Te escribo de *Filo* 💈\n\nHace un tiempo probaste Filo para *${a.name}* y desde entonces lo mejoramos muchísimo:`;
-  return `${intro}\n\n✅ Tus clientes sacan turno solos, las 24 hs, desde tu link\n✅ Recordatorios automáticos por WhatsApp: muchos menos clientes que faltan\n✅ Caja, comisiones de cada barbero y estadísticas al día\n✅ App en el celu que te avisa de cada turno nuevo\n\nQueremos que lo vuelvas a probar: *te regalamos 1 mes gratis* 🎁\nEntrá a filocrm.com.ar con tu cuenta, tocá *"¿Tenés un código de descuento?"* y poné *VOLVEMOS*.\n\nSi querés, lo configuramos juntos en 10 minutos. ¿Te doy una mano? 🙌`;
+  return `${intro}\n\n✅ Tus clientes sacan turno solos, las 24 hs, desde tu link\n✅ Recordatorios automáticos por WhatsApp: muchos menos clientes que faltan\n✅ Caja, comisiones de cada barbero y estadísticas al día\n✅ App en el celu que te avisa de cada turno nuevo\n\nQueremos que lo vuelvas a probar: *te regalamos 1 mes gratis* 🎁\nEntrá a filocrm.com.ar con tu cuenta, tocá *"¿Tenés un código de descuento?"* y poné *VOLVEMOS*.\n\n¿Preferís arrancar de cero con una cuenta nueva? Entrá desde este link y tocá *"Crear cuenta"*: el mes gratis ya queda cargado 👉 https://filocrm.com.ar/app?promo=VOLVEMOS\n\nSi querés, lo configuramos juntos en 10 minutos. ¿Te doy una mano? 🙌`;
 }
 function rescueList() {
   if (!D) return [];
