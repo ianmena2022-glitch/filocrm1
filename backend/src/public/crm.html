@@ -5320,6 +5320,26 @@ async function applyPromoCode() {
   if (!code) { msg.textContent = ''; return; }
   msg.textContent = 'Validando...';
   msg.style.color = 'rgba(255,255,255,.5)';
+  // Cuenta vencida que vuelve: los códigos con días gratis (p.ej. VOLVEMOS) reactivan la prueba
+  const st = currentShop?.subscription_status;
+  if (st === 'expired' || st === 'cancelled') {
+    try {
+      const r = await api('POST', '/payments/return-code', { code });
+      if (r && r.ok) {
+        currentShop = { ...currentShop, ...r.shop };
+        localStorage.setItem('filo_shop', JSON.stringify(currentShop));
+        try { localStorage.removeItem('filo_promo_code'); } catch(_) {}
+        closeQRModal();
+        document.getElementById('paywall-screen')?.classList.remove('show');
+        showToast('🎉', '¡Bienvenido de vuelta!', `Tenés ${r.trial_days} días gratis para usar Filo.`);
+        setTimeout(() => startApp(), 500);
+        return;
+      }
+    } catch(e) {
+      // 404 = no es un código de días gratis: se prueba como descuento. Otros errores se muestran.
+      if (e.status && e.status !== 404) { msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171'; return; }
+    }
+  }
   try {
     const data = await api('GET', `/payments/price/${_qrSelectedPlan}?code=${encodeURIComponent(code)}`);
     if (data.discount > 0 && data.promo) {

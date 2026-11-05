@@ -567,7 +567,7 @@ function missions() {
       msg: `¡Hola! Te escribo de Filo 💈 ¡Bienvenido! ¿Pudiste cargar tus servicios y barberos? Si querés, en 5 minutos te ayudo a dejar la agenda lista.` });
     if ((a.status === 'expired' || a.status === 'cancelled') && (daysSince(a.expiredAt) ?? 99) <= 45) M.push({ id: 'rescue-' + a.id, pri: 2, ico: '🛟', bg: '#ffe1e8', who: a,
       t: `Rescatá a ${a.name}`, s: `Se fue hace ${daysSince(a.expiredAt) ?? '?'} días`, rw: `+${money(PLAN_PRICES[a.plan] || PLAN_PRICES.starter)}/mes y +${STAR.recover} ⭐ si vuelve`,
-      msg: `¡Hola! Te escribo de Filo 💈 Vi que la cuenta de ${a.name} quedó pausada. ¿Hubo algo que no te sirvió? Me encantaría ayudarte a que vuelva a funcionar para tu barbería.` });
+      msg: `¡Hola! 👋 Te escribo de *Filo* 💈\n\nVi que la cuenta de *${a.name}* quedó pausada y desde entonces lo mejoramos muchísimo:\n\n✅ Tus clientes sacan turno solos, las 24 hs, desde tu link\n✅ Recordatorios automáticos por WhatsApp: muchos menos clientes que faltan\n✅ Caja, comisiones de cada barbero y estadísticas al día\n✅ App en el celu que te avisa de cada turno nuevo\n\nQueremos que lo vuelvas a probar: *te regalamos 1 mes gratis* 🎁\nEntrá a filocrm.com.ar con tu cuenta, tocá *"¿Tenés un código de descuento?"* y poné *VOLVEMOS*.\n\nSi querés, lo configuramos juntos en 10 minutos. ¿Te doy una mano? 🙌` });
     if (a.status === 'active') {
       if (d !== null && d <= 1) M.push({ id: 'pay-' + a.id, pri: 1, ico: '💸', bg: '#e6ffef', who: a,
         t: `Cobro de ${a.name}`, s: d < 0 ? `Venció hace ${-d} día${-d > 1 ? 's' : ''}` : d === 0 ? 'Vence hoy' : 'Vence mañana', rw: `${money(a.price)}/mes en juego`,

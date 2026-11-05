@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
   '/api/payments/transfer-status',   // polling del pago por transferencia
   '/api/payments/subscription',      // estado de la suscripción
   '/api/payments/price',             // precio con promo en el paywall
+  '/api/payments/return-code',       // canjear código de días gratis al volver (p.ej. VOLVEMOS)
+  '/api/referrals/redeem',           // canjear un mes gratis de referidos con la cuenta vencida
   '/api/payments/webhook-qr',        // webhook MP (sin auth)
   '/api/auth/setup-test',
   '/api/payments/webhook',

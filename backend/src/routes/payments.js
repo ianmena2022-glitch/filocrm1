@@ -289,6 +289,40 @@ router.get('/price/:plan', auth, async (req, res) => {
   }
 });
 
+// POST /api/payments/return-code { code } — una cuenta vencida o cancelada que vuelve canjea un
+// código con días de prueba (p.ej. VOLVEMOS = 30 días gratis). Una sola vez por cuenta y por código.
+router.post('/return-code', auth, async (req, res) => {
+  try {
+    const promos = require('../services/promotions');
+    await promos.ensureTrialSchema();
+    const code = String(req.body?.code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 60);
+    if (!code) return res.status(400).json({ error: 'Escribí el código' });
+    const s = (await pool.query(
+      'SELECT id, filo_plan, subscription_status, is_barber, is_branch FROM shops WHERE id=$1', [req.shopId])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Cuenta no encontrada' });
+    if (s.is_barber || s.is_branch) return res.status(400).json({ error: 'El código lo tiene que canjear la cuenta principal' });
+    if (!['expired', 'cancelled'].includes(s.subscription_status)) return res.status(400).json({ error: 'Este código es para cuentas que vuelven a Filo' });
+    const p = await promos.getTrialPromoForSignup({ code, plan: s.filo_plan || 'starter' });
+    if (!p) return res.status(404).json({ error: 'El código no es válido o ya venció' });
+    const used = await pool.query(
+      `SELECT 1 FROM promotion_uses WHERE promotion_id=$1 AND shop_id=$2 AND payment_id='trial-return' LIMIT 1`, [p.id, s.id]);
+    if (used.rows.length) return res.status(409).json({ error: 'Ya usaste este código' });
+    const until = new Date(Date.now() + p.trial_days * 86400000);
+    await pool.query(
+      `UPDATE shops SET subscription_status='trial', trial_ends_at=$1, expired_at=NULL WHERE id=$2`,
+      [until.toISOString(), s.id]);
+    await promos.recordUse({ promotionId: p.id, shopId: s.id, paymentId: 'trial-return', plan: s.filo_plan, originalAmount: 0, finalAmount: 0 });
+    const shop = (await pool.query(
+      'SELECT id, name, subscription_status, trial_ends_at, free_months, filo_plan, plan, is_barber, is_branch, is_enterprise_owner, parent_shop_id, parent_enterprise_id FROM shops WHERE id=$1',
+      [s.id])).rows[0];
+    console.log(`[return-code] Shop ${s.id} volvió con ${code}: ${p.trial_days} días hasta ${until.toDateString()}`);
+    res.json({ ok: true, trial_days: p.trial_days, shop });
+  } catch (e) {
+    console.error('[return-code]', e.message);
+    res.status(500).json({ error: 'No se pudo canjear el código' });
+  }
+});
+
 // POST /api/payments/qr-order — crear orden Checkout Pro (QR escaneable + link).
 // El init_point abre Checkout Pro donde el cliente puede pagar con tarjeta, débito,
 // transferencia desde cualquier banco (Transferencias 3.0), MP, Rapipago o Pago Fácil.
