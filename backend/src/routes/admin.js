@@ -999,4 +999,88 @@ router.post('/push/test', adminAuth, async (req, res) => {
   res.json(r);
 });
 
+// ── Filo Tycoon: PIN de 4 dígitos para abrir el juego ────────────────────────
+// El PIN vive en la variable TYCOON_PIN de Railway (nunca en el código público).
+const tycoonPinTries = new Map();
+router.post('/tycoon/unlock', adminAuth, (req, res) => {
+  const ip = req.ip || 'unknown', now = Date.now();
+  const e = tycoonPinTries.get(ip) || { n: 0, until: now + 15 * 60 * 1000 };
+  if (now > e.until) { e.n = 0; e.until = now + 15 * 60 * 1000; }
+  if (e.n >= 5) return res.status(429).json({ error: 'Demasiados intentos. Esperá 15 minutos.' });
+  const pin = String(process.env.TYCOON_PIN || '');
+  if (!/^\d{4}$/.test(pin)) return res.status(503).json({ error: 'Falta configurar el PIN en el servidor' });
+  const a = Buffer.from(String(req.body?.pin || '')), b = Buffer.from(pin);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    e.n++; tycoonPinTries.set(ip, e);
+    return res.status(403).json({ error: 'PIN incorrecto', left: 5 - e.n });
+  }
+  tycoonPinTries.delete(ip);
+  res.json({ ok: true });
+});
+
+// ── Puente con FILO Contenido (para Filo Tycoon) ─────────────────────────────
+// Contenido usa una cookie de sesión propia (PIN). Desde otro dominio el celular no la manda,
+// así que el servidor hace de puente: el juego guarda la sesión de Contenido y la manda en
+// X-Contenido-Session; acá se reenvía como cookie. Solo para el admin logueado.
+const CONTENIDO_URL = (process.env.CONTENIDO_URL || 'https://filo-contenido.up.railway.app').replace(/\/$/, '');
+const CONTENIDO_ACTIONS = new Set(['approve', 'changes', 'published', 'unapprove', 'unpublish']);
+
+function contenidoCookie(req) {
+  const s = String(req.headers['x-contenido-session'] || '');
+  return s.length < 4096 && !/[\r\n]/.test(s) ? s : '';
+}
+
+// POST /api/admin/contenido/login { pin } → { session }
+router.post('/contenido/login', adminAuth, async (req, res) => {
+  try {
+    const r = await fetch(CONTENIDO_URL + '/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: String(req.body?.pin || '') }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return res.status(r.status === 401 ? 401 : 502).json({ error: data.error || 'PIN incorrecto' });
+    const cookies = (typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [r.headers.get('set-cookie')])
+      .filter(Boolean).map(c => c.split(';')[0].trim());
+    if (!cookies.length) return res.status(502).json({ error: 'Contenido no devolvió sesión' });
+    res.json({ session: cookies.join('; ') });
+  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+});
+
+// GET /api/admin/contenido/pieces
+router.get('/contenido/pieces', adminAuth, async (req, res) => {
+  try {
+    const r = await fetch(CONTENIDO_URL + '/api/pieces', { headers: { Cookie: contenidoCookie(req) } });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status === 401 ? 401 : (r.ok ? 200 : 502)).json(r.ok ? data : { error: data.error || 'Sesión de Contenido vencida' });
+  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+});
+
+// POST /api/admin/contenido/pieces/:id/:action  (approve | changes {feedback} | published | unapprove | unpublish)
+router.post('/contenido/pieces/:id/:action', adminAuth, async (req, res) => {
+  if (!CONTENIDO_ACTIONS.has(req.params.action)) return res.status(400).json({ error: 'Acción inválida' });
+  try {
+    const r = await fetch(`${CONTENIDO_URL}/api/pieces/${encodeURIComponent(req.params.id)}/${req.params.action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: contenidoCookie(req) },
+      body: JSON.stringify(req.params.action === 'changes' ? { feedback: String(req.body?.feedback || '').slice(0, 2000) } : {}),
+    });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status === 401 ? 401 : (r.ok ? 200 : 502)).json(r.ok ? data : { error: data.error || 'No se pudo completar' });
+  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+});
+
+// GET /api/admin/contenido/media/:id — imagen o video del posteo (se transmite tal cual)
+router.get('/contenido/media/:id', adminAuth, async (req, res) => {
+  try {
+    const headers = { Cookie: contenidoCookie(req) };
+    if (req.headers.range) headers.Range = req.headers.range;
+    const r = await fetch(`${CONTENIDO_URL}/media/${encodeURIComponent(req.params.id)}`, { headers });
+    if (!r.ok && r.status !== 206) return res.status(r.status === 401 ? 401 : 404).end();
+    res.status(r.status);
+    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const v = r.headers.get(h); if (v) res.setHeader(h, v); }
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    const { Readable } = require('stream');
+    Readable.fromWeb(r.body).pipe(res);
+  } catch (e) { if (!res.headersSent) res.status(502).end(); }
+});
+
 module.exports = router;

@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2b1d5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Filo Tycoon">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/tycoon.webmanifest">
+<link rel="icon" type="image/png" href="/tycoon-icon-192.png">
+<link rel="apple-touch-icon" href="/tycoon-apple-touch-icon.png">
+<title>Filo Tycoon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#2b1d5c; --bg2:#3a2878; --card:#ffffff; --ink:#2b1d5c; --mute:#7a6fa3;
+  --gold:#ffc83d; --gold2:#ff9f1c; --pink:#ff5d8f; --mint:#3ddc97; --sky:#5ec8ff; --red:#ff5a5f;
+  --shadow:0 4px 0 rgba(0,0,0,.18);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:#fff;font-family:'Fredoka',system-ui,sans-serif;overscroll-behavior:none}
+body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+button{font-family:inherit;cursor:pointer;border:0}
+.wrap{max-width:560px;margin:0 auto;padding:0 12px 40px}
+
+/* HUD */
+.hud{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg) 80%,transparent);padding:calc(env(safe-area-inset-top) + 10px) 0 10px}
+.hud-row{display:flex;align-items:center;gap:6px}
+.coins{flex:1;min-width:0;background:var(--bg2);border-radius:18px;padding:8px 12px;display:flex;align-items:center;gap:9px;box-shadow:var(--shadow)}
+.coin-ico{width:32px;height:32px;flex:none}
+.coins b{font-size:22px;font-weight:700;line-height:1;display:block;font-variant-numeric:tabular-nums;white-space:nowrap}
+.coins small{font-size:11px;color:#cbbcff;white-space:nowrap}
+.pill{background:var(--bg2);border-radius:14px;padding:8px 6px;text-align:center;box-shadow:var(--shadow);min-width:50px}
+.pill b{display:block;font-size:16px;white-space:nowrap}
+.pill small{font-size:10px;color:#cbbcff}
+.icon-btn{background:var(--bg2);color:#fff;border-radius:14px;width:40px;height:52px;font-size:18px;box-shadow:var(--shadow);flex:none}
+
+/* Escena */
+.scene{position:relative;border-radius:24px;overflow:hidden;box-shadow:0 6px 0 rgba(0,0,0,.25);margin-top:4px;touch-action:manipulation}
+.scene svg{display:block;width:100%;height:auto}
+.lvl-tag{position:absolute;left:10px;top:10px;background:rgba(43,29,92,.75);border-radius:12px;padding:5px 10px;font-size:13px;font-weight:600}
+.tap-hint{position:absolute;right:10px;top:10px;background:rgba(255,255,255,.85);color:var(--ink);border-radius:12px;padding:5px 10px;font-size:12px;font-weight:600;animation:bob 2s ease-in-out infinite}
+.float{position:absolute;pointer-events:none;font-weight:700;font-size:18px;color:var(--gold);text-shadow:0 2px 0 #7a4b00;animation:floatUp 1.1s ease-out forwards;white-space:nowrap}
+@keyframes floatUp{to{transform:translateY(-70px);opacity:0}}
+@keyframes bob{50%{transform:translateY(-3px)}}
+.cloud{animation:drift linear infinite}
+@keyframes drift{from{transform:translateX(-120px)}to{transform:translateX(520px)}}
+.hq{transform-origin:200px 232px;transition:transform .08s;cursor:pointer}
+.hq.squash{transform:scale(1.04,.96)}
+.pole-stripes{animation:pole 1.2s linear infinite}
+@keyframes pole{to{transform:translateY(-12px)}}
+.blink{animation:blink 1.4s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.drone{animation:droneFly 9s ease-in-out infinite}
+@keyframes droneFly{0%,100%{transform:translate(40px,40px)}50%{transform:translate(300px,25px)}}
+.balloon{animation:balloon 14s ease-in-out infinite}
+@keyframes balloon{0%,100%{transform:translate(310px,30px)}50%{transform:translate(290px,14px)}}
+.sat{animation:sat 20s linear infinite}
+@keyframes sat{from{transform:translate(-30px,18px)}to{transform:translate(430px,6px)}}
+.water{animation:water 1s ease-in-out infinite alternate;transform-origin:center bottom}
+@keyframes water{to{transform:scaleY(.8)}}
+.billboard{cursor:pointer}
+
+/* Meta */
+.goal{margin-top:12px;background:var(--bg2);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow)}
+.goal-top{display:flex;justify-content:space-between;font-size:13px;color:#cbbcff;gap:8px}
+.goal-top b{color:#fff}
+.bar{height:14px;background:rgba(0,0,0,.25);border-radius:10px;margin:8px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:10px;transition:width .6s}
+.goal-sub{font-size:13px}
+
+/* Distritos */
+.district{margin-top:14px}
+.d-head{display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px}
+.d-head h3{margin:0;font-size:17px}
+.d-head span{font-size:12px;color:#cbbcff}
+.street{display:flex;gap:6px;overflow-x:auto;padding:10px 8px 6px;border-radius:18px;scroll-snap-type:x proximity;scrollbar-width:none}
+.street::-webkit-scrollbar{display:none}
+.street.filo{background:linear-gradient(#8fd3ff 0,#bfe8ff 60%,#7bd389 60%,#5cbf6e 100%)}
+.shop{flex:none;width:74px;text-align:center;scroll-snap-align:start;background:none;padding:0;color:var(--ink)}
+.shop svg{width:74px;height:78px;display:block}
+.shop .nm{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.85);border-radius:6px;padding:1px 3px;margin-top:2px}
+.road{position:relative;height:120px;border-radius:18px;overflow:hidden;background:linear-gradient(#ffd6a5 0,#ffe8c7 45%,#6b6b80 45%,#55556a 100%)}
+.road .lane{position:absolute;left:0;right:0;top:82px;height:4px;background:repeating-linear-gradient(90deg,#fff 0 18px,transparent 18px 34px);opacity:.8}
+.road .car{position:absolute;width:54px;height:28px;animation:carGo linear infinite}
+@keyframes carGo{from{left:-70px}to{left:105%}}
+.showrooms{position:absolute;left:0;right:0;top:4px;display:flex;gap:6px;padding:0 8px;overflow-x:auto;scrollbar-width:none}
+.showrooms::-webkit-scrollbar{display:none}
+.showroom{flex:none;width:64px;background:none;padding:0;color:var(--ink)}
+.showroom svg{width:64px;height:46px;display:block}
+.showroom .nm{font-size:9px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.85);border-radius:6px;padding:0 3px}
+.connect{background:#fff;color:var(--ink);border-radius:18px;padding:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.connect p{margin:0 0 4px;width:100%;font-size:14px}
+.connect input{flex:1;min-width:140px}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-top:16px;background:var(--bg2);padding:5px;border-radius:16px;position:sticky;top:calc(env(safe-area-inset-top) + 74px);z-index:15}
+.tab{flex:1;background:none;color:#cbbcff;font-size:14px;font-weight:600;padding:10px 2px;border-radius:12px;position:relative;white-space:nowrap}
+.tab.on{background:#fff;color:var(--ink)}
+.tab .dot{position:absolute;top:2px;right:4px;background:var(--pink);color:#fff;font-size:10px;border-radius:9px;padding:0 5px;line-height:16px}
+.panel{display:none;margin-top:10px}
+.panel.on{display:block}
+
+.card{background:var(--card);color:var(--ink);border-radius:18px;padding:12px;margin-bottom:8px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center}
+.card .ico{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:24px;flex:none}
+.card .txt{flex:1;min-width:0}
+.card .t{font-weight:600;font-size:15px;line-height:1.2}
+.card .s{font-size:12px;color:var(--mute);margin-top:2px}
+.card .rw{font-size:12px;color:#b36b00;font-weight:600;margin-top:3px}
+.btn{background:var(--gold);color:var(--ink);font-weight:700;font-size:14px;padding:10px 12px;border-radius:12px;box-shadow:0 3px 0 #c98a00;white-space:nowrap}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #c98a00}
+.btn.wa{background:#25d366;color:#fff;box-shadow:0 3px 0 #128c4a}
+.btn.ig{background:linear-gradient(45deg,#f09433,#dc2743 50%,#bc1888);color:#fff;box-shadow:0 3px 0 #7a1050}
+.btn.off{background:#e6e1f5;color:#9a90c2;box-shadow:none}
+.btn.ghost{background:#efeafc;color:var(--ink);box-shadow:0 3px 0 #cfc6ee}
+.btn.owned{background:#e6fff2;color:#1c8a55;box-shadow:none}
+.btn[disabled]{opacity:.6}
+.done-tag{font-size:12px;color:var(--mint);font-weight:700}
+.empty{text-align:center;color:#cbbcff;padding:20px;font-size:14px}
+.sec-title{font-size:13px;color:#cbbcff;margin:14px 4px 6px;text-transform:uppercase;letter-spacing:.5px}
+.mc{display:inline-block;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe58a,#ffc83d 55%,#c98a00);margin-right:4px;vertical-align:-1px}
+
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat{background:#fff;color:var(--ink);border-radius:16px;padding:12px;box-shadow:var(--shadow)}
+.stat small{color:var(--mute);font-size:12px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.feed .card{padding:10px}
+
+/* Publicidad */
+.post{background:#fff;color:var(--ink);border-radius:18px;margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden}
+.post-head{display:flex;align-items:center;gap:6px;padding:12px 12px 6px;flex-wrap:wrap}
+.post-head .when{font-weight:700;font-size:15px;text-transform:capitalize}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;background:#f2edff;color:var(--mute)}
+.tag.pending{background:#fff3c4;color:#8a6000}.tag.changes{background:#ffe8d6;color:#a5520a}.tag.approved{background:#e6fff2;color:#1c8a55}.tag.published{background:#e3efff;color:#2a62c9}
+.post .topic{padding:0 12px 8px;font-weight:600;font-size:16px}
+.post-media{background:#140d30;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;min-height:60px;align-items:center;justify-content:center}
+.post-media img{flex:none;width:100%;aspect-ratio:4/5;object-fit:cover;scroll-snap-align:center;display:block}
+.post-media video{width:100%;max-height:70vh;aspect-ratio:9/16;background:#000;display:block}
+.post-media .ph{color:#cbbcff;font-size:13px;padding:22px;text-align:center}
+.post-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.caption{background:#f6f3ff;border-radius:12px;padding:10px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:120px;overflow:hidden;position:relative}
+.caption.open{max-height:none}
+.caption .tags{color:#2a62c9;display:block;margin-top:6px}
+.more{background:none;color:var(--mute);font-size:12px;padding:0;text-align:left}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row .btn{flex:1 1 auto}
+.fb{border-left:3px solid #ff9f43;padding:4px 10px;font-size:13px;background:#fff6ec;border-radius:0 10px 10px 0}
+.pmsg{font-size:12px;color:var(--mute);min-height:1em}
+textarea{font-family:inherit;font-size:16px;padding:10px;border-radius:12px;border:2px solid #e2dcf5;width:100%;color:var(--ink);min-height:80px;resize:vertical}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;background:rgba(20,12,48,.7);z-index:50;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.on{display:flex}
+.modal{background:#fff;color:var(--ink);border-radius:24px;padding:22px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 0 rgba(0,0,0,.25);animation:pop .3s cubic-bezier(.2,1.6,.4,1);max-height:90vh;overflow:auto}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.modal h2{margin:6px 0 4px;font-size:24px}
+.modal p{margin:6px 0 14px;color:var(--mute)}
+.modal .big{font-size:56px;line-height:1}
+input{font-family:inherit;font-size:16px;padding:12px;border-radius:12px;border:2px solid #e2dcf5;width:100%;color:var(--ink)}
+label{display:flex;align-items:center;gap:8px;font-size:14px;margin:10px 0;text-align:left}
+label input[type=checkbox]{width:auto}
+.field{text-align:left;margin:10px 0}
+.field span{font-size:12px;color:var(--mute)}
+.err{color:var(--red);font-size:13px;min-height:18px}
+.toast-box{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 74px);z-index:40;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{background:#fff;color:var(--ink);border-radius:14px;padding:10px 14px;font-weight:600;font-size:14px;box-shadow:0 4px 0 rgba(0,0,0,.2);animation:pop .3s,fade .4s 3.2s forwards;max-width:92%}
+@keyframes fade{to{opacity:0;transform:translateY(-10px)}}
+.confetti{position:fixed;top:-10px;width:10px;height:14px;z-index:60;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+.lock{position:fixed;inset:0;z-index:70;background:radial-gradient(circle at 50% 30%,#5b3bd1,#2b1d5c 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;padding-top:calc(env(safe-area-inset-top) + 24px)}
+.lock-ico{width:96px;height:96px;border-radius:24px;box-shadow:0 8px 0 rgba(0,0,0,.25)}
+.lock h2{margin:14px 0 2px;font-size:28px}
+.lock p{margin:0 0 18px;color:#cbbcff;min-height:20px}
+.pin-dots{display:flex;gap:16px;margin-bottom:28px}
+.pin-dots i{width:18px;height:18px;border-radius:50%;border:3px solid #fff;transition:.15s}
+.pin-dots i.on{background:var(--gold);border-color:var(--gold);transform:scale(1.1)}
+.pin-dots.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
+.keypad{display:grid;grid-template-columns:repeat(3,76px);gap:14px}
+.keypad button{width:76px;height:76px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:30px;font-weight:600;box-shadow:0 4px 0 rgba(0,0,0,.2)}
+.keypad button:active{background:rgba(255,255,255,.3);transform:translateY(2px)}
+.keypad [data-k=del]{background:none;box-shadow:none;font-size:26px}
+.demo-badge{background:var(--pink);color:#fff;font-size:11px;border-radius:8px;padding:2px 8px;margin-left:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="hud-row">
+      <div class="coins">
+        <svg class="coin-ico" viewBox="0 0 40 40"><circle cx="20" cy="21" r="17" fill="#c98a00"/><circle cx="20" cy="19" r="17" fill="#ffc83d"/><circle cx="20" cy="19" r="12" fill="#ffdb6e"/><text x="20" y="25" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="17" fill="#b36b00">$</text></svg>
+        <div style="min-width:0"><b id="coins">$0,00</b><small id="rate">$0 /seg</small></div>
+      </div>
+      <div class="pill"><b id="stars">⭐0</b><small id="rank">Novato</small></div>
+      <div class="pill"><b id="streak">🔥0</b><small>racha</small></div>
+      <button class="icon-btn" id="btn-settings" aria-label="Ajustes">⚙️</button>
+    </div>
+  </div>
+
+  <div class="scene" id="scene">
+    <svg id="city" viewBox="0 0 400 260" aria-label="Tu ciudad Filo"></svg>
+    <div class="lvl-tag" id="lvl-tag">Garage</div>
+    <div class="tap-hint" id="tap-hint">Tocá el edificio 👆</div>
+  </div>
+
+  <div class="goal">
+    <div class="goal-top"><span>Próximo nivel: <b id="goal-name">—</b></span><span id="goal-pct">0%</span></div>
+    <div class="bar"><i id="goal-bar" style="width:0"></i></div>
+    <div class="goal-sub" id="goal-sub">Cargando tus números…</div>
+  </div>
+
+  <div class="district">
+    <div class="d-head"><h3>💈 Barrio Filo</h3><span id="filo-count"></span></div>
+    <div class="street filo" id="street"></div>
+  </div>
+
+  <div class="district">
+    <div class="d-head"><h3>🚗 Ruta FiloCars</h3><span id="cars-count"></span></div>
+    <div id="cars-zone"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="missions">Misiones<span class="dot" id="mis-dot" hidden></span></button>
+    <button class="tab" data-tab="ads">Publicidad<span class="dot" id="ads-dot" hidden></span></button>
+    <button class="tab" data-tab="upgrades">Decorar</button>
+    <button class="tab" data-tab="empire">Imperio</button>
+  </div>
+  <div class="panel on" id="p-missions"></div>
+  <div class="panel" id="p-ads"></div>
+  <div class="panel" id="p-upgrades"></div>
+  <div class="panel" id="p-empire"></div>
+</div>
+
+<div class="toast-box" id="toasts"></div>
+
+<!-- Login -->
+<div class="overlay" id="ov-login">
+  <div class="modal">
+    <div class="big">🏙️</div>
+    <h2>Filo Tycoon</h2>
+    <p>Entrá con la contraseña del panel admin. Tu imperio crece con la plata real de Filo y FiloCars.</p>
+    <input type="password" id="login-pass" placeholder="Contraseña admin" autocomplete="current-password">
+    <div class="err" id="login-err"></div>
+    <button class="btn" style="width:100%" id="btn-login">Entrar</button>
+  </div>
+</div>
+
+<!-- PIN -->
+<div class="lock" id="ov-pin" hidden>
+  <img src="/tycoon-icon-192.png" alt="" class="lock-ico">
+  <h2>Filo Tycoon</h2>
+  <p id="pin-msg">Ingresá tu PIN</p>
+  <div class="pin-dots" id="pin-dots"><i></i><i></i><i></i><i></i></div>
+  <div class="keypad" id="keypad">
+    <button>1</button><button>2</button><button>3</button>
+    <button>4</button><button>5</button><button>6</button>
+    <button>7</button><button>8</button><button>9</button>
+    <span></span><button>0</button><button data-k="del" aria-label="Borrar">⌫</button>
+  </div>
+</div>
+
+<!-- Evento / premio -->
+<div class="overlay" id="ov-event">
+  <div class="modal">
+    <div class="big" id="ev-ico">🎉</div>
+    <h2 id="ev-title"></h2>
+    <p id="ev-text"></p>
+    <button class="btn" style="width:100%" id="ev-ok">¡Genial!</button>
+  </div>
+</div>
+
+<!-- Detalle de cuenta -->
+<div class="overlay" id="ov-shop">
+  <div class="modal" id="shop-modal"></div>
+</div>
+
+<!-- Ajustes -->
+<div class="overlay" id="ov-settings">
+  <div class="modal" style="text-align:left">
+    <h2 style="text-align:center">Ajustes</h2>
+    <label><input type="checkbox" id="set-sound"> Sonidos</label>
+    <p style="font-size:13px;margin:4px 0 10px">Las monedas no se pueden tocar: 1 moneda = 1 peso, y salen solo del MRR real (barberías y agencias que pagan, sin cuentas de prueba ni de socios).</p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn ghost" style="flex:1" id="btn-close-settings">Listo</button>
+      <button class="btn ghost" style="flex:1" id="btn-logout">Salir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ═════════════════════════ Reglas fijas ═════════════════════════
+// 1 moneda = 1 peso. Las monedas por segundo = MRR real / segundos del mes. Nada del juego cambia ese ritmo.
+const PLAN_PRICES = { starter: 40000, staff: 80000, enterprise: 130000 };
+const CARS_PRICE = 50000;                 // precio mensual de FiloCars (SUBSCRIPTION_PRICE_ARS por defecto)
+const CARS_URL = 'https://filocars-production.up.railway.app';
+const MONTH_SECONDS = 30 * 86400;
+const SAVE_KEY = 'filo_tycoon_v2';
+const REFRESH_MS = 5 * 60 * 1000;
+const DEMO = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || new URLSearchParams(location.search).has('demo');
+
+// Niveles: SOLO por MRR real. No se compran.
+const LEVELS = [
+  { name: 'Garage',           mrr: 0,         floors: 0 },
+  { name: 'Local a la calle', mrr: 200000,    floors: 1 },
+  { name: 'Oficina',          mrr: 500000,    floors: 2 },
+  { name: 'Edificio',         mrr: 1000000,   floors: 4 },
+  { name: 'Torre',            mrr: 2500000,   floors: 6 },
+  { name: 'Rascacielos',      mrr: 5000000,   floors: 8 },
+  { name: 'Ciudad Filo',      mrr: 10000000,  floors: 10 },
+  { name: 'Imperio Filo',     mrr: 25000000,  floors: 12 },
+];
+// Decoraciones: se compran una vez con tus monedas. Son solo visuales: no cambian el ingreso.
+const DECOS = [
+  { id: 'cafe',   ico: '☕', name: 'Carrito de café',        cost: 5000 },
+  { id: 'arbol',  ico: '🌳', name: 'Plaza con árboles',      cost: 20000 },
+  { id: 'neon',   ico: '✨', name: 'Cartel de neón',         cost: 50000 },
+  { id: 'auto',   ico: '🏎️', name: 'Auto deportivo en la puerta', cost: 120000 },
+  { id: 'fuente', ico: '⛲', name: 'Fuente en la plaza',      cost: 250000 },
+  { id: 'drone',  ico: '🚁', name: 'Dron publicitario',      cost: 500000 },
+  { id: 'globo',  ico: '🎈', name: 'Globo Filo',             cost: 1000000 },
+  { id: 'sat',    ico: '🛰️', name: 'Satélite propio',        cost: 3000000 },
+];
+// Estrellas: se ganan haciendo cosas reales por el negocio. Dan rango, no plata.
+const STAR = { contact: 1, signup: 10, convert: 25, recover: 30, wpp: 8, pwa: 5, stock: 8, level: 50, approve: 3, changes: 1, publish: 10 };
+const RANKS = [[0, 'Novato'], [30, 'Vendedor'], [100, 'Closer'], [300, 'Crack'], [700, 'Magnate'], [1500, 'Leyenda']];
+
+// ═════════════════════════ Utilidades ═════════════════════════
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DAY = 86400000;
+const daysUntil = (d) => d ? Math.ceil((new Date(d) - Date.now()) / DAY) : null;
+const daysSince = (d) => d ? Math.floor((Date.now() - new Date(d)) / DAY) : null;
+const todayStr = () => new Date().toLocaleDateString('sv-SE');
+const money = (n) => '$' + Math.round(n).toLocaleString('es-AR');
+const money2 = (n) => '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {} }
+function adminToken() { try { return localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token'); } catch (_) { return null; } }
+function waLink(phone, text) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.slice(1);
+  if (!d.startsWith('54')) d = '549' + d.replace(/^15/, '');
+  return 'https://wa.me/' + d + '?text=' + encodeURIComponent(text);
+}
+
+// ═════════════════════════ Partida ═════════════════════════
+const fresh = () => ({ wallet: 0, earned: 0, spent: 0, stars: 0, lastTick: null, lastRate: 0, streak: 0, lastDay: null,
+  snap: null, contacted: {}, feed: [], deco: {}, sound: true, bestLevel: 0, ctSession: null });
+let S = fresh();
+try { const raw = lsGet(SAVE_KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (_) {}
+const save = () => lsSet(SAVE_KEY, JSON.stringify(S));
+
+let D = null;   // números reales
+let ADS = null; // posteos de FILO Contenido
+
+function levelIndex(mrr) { let i = 0; LEVELS.forEach((l, k) => { if (mrr >= l.mrr) i = k; }); return i; }
+function totalMrr() { return D ? D.filo.mrr + D.cars.mrr : 0; }
+function ratePerSec() { return D ? totalMrr() / MONTH_SECONDS : (S.lastRate || 0); }
+function rankOf(st) { let r = RANKS[0][1]; RANKS.forEach(([n, name]) => { if (st >= n) r = name; }); return r; }
+function star(n, why) { S.stars += n; if (why) addFeed('⭐', `+${n} ⭐ ${why}`); }
+function addFeed(ico, text) { S.feed.unshift({ ico, text, at: Date.now() }); S.feed = S.feed.slice(0, 50); }
+
+// Suma de monedas por tiempo real transcurrido (corre igual con la app cerrada: se calcula al volver)
+function accrue() {
+  const now = Date.now();
+  if (S.lastTick == null) { S.lastTick = now; return 0; }
+  const secs = Math.max(0, (now - S.lastTick) / 1000);
+  const g = secs * ratePerSec();
+  S.wallet += g; S.earned += g; S.lastTick = now;
+  if (D) S.lastRate = ratePerSec();
+  return g;
+}
+
+// ═════════════════════════ Sonido ═════════════════════════
+let actx = null;
+function beep(f = 660, dur = 0.06, type = 'triangle', vol = 0.05) {
+  if (!S.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = f; g.gain.value = vol;
+    o.connect(g); g.connect(actx.destination); o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur); o.stop(actx.currentTime + dur);
+  } catch (_) {}
+}
+const fanfare = () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.15, 'square', 0.04), i * 110));
+
+// ═════════════════════════ Datos reales ═════════════════════════
+async function fetchFilo() {
+  const h = { Authorization: 'Bearer ' + adminToken() };
+  const [acc, fc] = await Promise.all([
+    fetch('/api/admin/accounts', { headers: h }),
+    fetch('/api/admin/billing-forecast', { headers: h }).catch(() => null),
+  ]);
+  if (acc.status === 401) { const e = new Error('auth'); e.auth = true; throw e; }
+  if (!acc.ok) throw new Error('No se pudieron leer las cuentas de Filo');
+  const forecast = (fc && fc.ok) ? ((await fc.json()).forecast || {}) : {};
+  // Igual que los KPIs del admin: fuera barberos, sucursales, cuentas test y las marcadas "No contar en los KPIs"
+  const rows = ((await acc.json()).accounts || []).filter(a => !a.is_barber && !a.is_branch && !a.is_test && !a.exclude_from_kpis);
+  return rows.map(a => ({
+    id: String(a.id), name: a.name || 'Sin nombre', phone: a.phone, city: a.city,
+    status: a.subscription_status, plan: a.filo_plan,
+    price: forecast[a.id] ? forecast[a.id].mrr_price : (PLAN_PRICES[a.filo_plan] || 0),
+    renew: a.trial_ends_at, expiredAt: a.expired_at, createdAt: a.created_at,
+    wpp: !!a.wpp_connected, pwa: (parseInt(a.pwa_count) || 0) > 0,
+  }));
+}
+async function fetchCars() {
+  const t = lsGet('cars_admin_token');
+  if (!t) return null;
+  const res = await fetch(CARS_URL + '/api/admin/agencies', { headers: { Authorization: 'Bearer ' + t } });
+  if (res.status === 401) { lsSet('cars_admin_token', null); return null; }
+  if (!res.ok) throw new Error('FiloCars no respondió');
+  const list = await res.json();
+  // Las agencias marcadas como test no cuentan
+  return (Array.isArray(list) ? list : (list.agencies || [])).filter(a => !a.is_test).map(a => ({
+    id: String(a.id), name: a.name || 'Agencia', phone: a.phone, status: a.subscription_status,
+    renew: a.trial_ends_at, stock: a.stock || 0, sales: a.sales || 0, lastSale: a.last_sale_at, createdAt: a.created_at,
+  }));
+}
+function demoData() {
+  const names = ['Barbería Don Tito', 'El Corte Fino', 'Navaja & Co', 'Studio Fade', 'La Peluca', 'Barber King', 'Tijera Loca', 'Old School BA', 'Dandy Barber', 'Corte Urbano', 'Rey del Fade', 'Bigote Club'];
+  const st = ['active', 'active', 'active', 'trial', 'active', 'trial', 'expired', 'active', 'active', 'trial', 'cancelled', 'active'];
+  const plans = ['starter', 'staff', 'starter', 'starter', 'enterprise', 'staff', 'starter', 'staff', 'starter', 'starter', 'staff', 'starter'];
+  const filo = names.map((n, i) => ({ id: 'd' + i, name: n, phone: '11 5' + (100 + i) + '-00' + (10 + i), status: st[i], plan: plans[i],
+    price: PLAN_PRICES[plans[i]], renew: new Date(Date.now() + ((i % 5) - 1) * DAY).toISOString(),
+    expiredAt: new Date(Date.now() - (i + 3) * DAY).toISOString(), createdAt: new Date(Date.now() - i * 9 * DAY).toISOString(),
+    wpp: i % 4 !== 1, pwa: i % 3 !== 2 }));
+  const cars = ['Autos del Sur', 'Rodar Motors', 'Gran Ruta', 'Usados Ya'].map((n, i) => ({ id: 'c' + i, name: n, phone: '11 6000-00' + i,
+    status: ['active', 'trial', 'active', 'trial'][i], renew: new Date(Date.now() + (i + 1) * DAY).toISOString(), stock: [24, 0, 12, 3][i], sales: [9, 0, 4, 1][i] }));
+  return { filo, cars };
+}
+function normalize(filo, cars, carsConnected) {
+  const act = filo.filter(a => a.status === 'active');
+  const cl = cars || [];
+  const cAct = cl.filter(a => a.status === 'active');
+  return {
+    filo: { list: filo, active: act.length, trial: filo.filter(a => a.status === 'trial').length,
+      lost: filo.filter(a => a.status === 'expired' || a.status === 'cancelled').length,
+      mrr: act.reduce((s, a) => s + (a.price || 0), 0) },
+    cars: { connected: carsConnected, list: cl, active: cAct.length, trial: cl.filter(a => a.status === 'trial').length,
+      mrr: cAct.length * CARS_PRICE, sales: cl.reduce((s, a) => s + a.sales, 0), stock: cl.reduce((s, a) => s + a.stock, 0) },
+    at: Date.now(),
+  };
+}
+
+async function refresh(first) {
+  try {
+    let filo, cars, carsOk = false, carsErr = null;
+    if (DEMO) { const d = demoData(); filo = d.filo; cars = d.cars; carsOk = true; }
+    else {
+      filo = await fetchFilo();
+      try { cars = await fetchCars(); carsOk = !!cars; } catch (e) { carsErr = e.message; cars = null; }
+    }
+    if (!carsOk && carsErr && D && D.cars.connected) { cars = D.cars.list; carsOk = true; }
+    accrue();              // cerrar el tramo con el ritmo anterior antes de cambiarlo
+    D = normalize(filo, cars, carsOk);
+    S.lastRate = ratePerSec();
+    detectEvents();
+    renderAll();
+    if (first) daily();
+  } catch (e) {
+    if (e.auth) { showLogin(); return; }
+    toast('⚠️ ' + (e.message === 'Failed to fetch' ? 'Sin conexión: reintento en un rato' : e.message));
+  }
+  loadAds();
+}
+
+// ═════════════════════════ Eventos reales → estrellas ═════════════════════════
+const queue = [];
+function detectEvents() {
+  const now = {};
+  D.filo.list.forEach(a => now['f' + a.id] = { s: a.status, w: a.wpp, p: a.pwa, n: a.name, k: 'filo' });
+  D.cars.list.forEach(a => now['c' + a.id] = { s: a.status, st: a.stock > 0, n: a.name, k: 'cars' });
+  now.__carsSeen = D.cars.connected;
+  const prev = S.snap;
+  if (!prev) {
+    S.snap = now;
+    S.bestLevel = levelIndex(totalMrr());
+    queue.push({ ico: '🏗️', title: '¡Bienvenido a tu imperio!', text: `Arrancás con ${D.filo.active} barberías que pagan${D.cars.connected ? ` y ${D.cars.active} agencias` : ''}. Tu MRR real es ${money(totalMrr())}: eso genera ${money2(ratePerSec())} por segundo, las 24 horas. 1 moneda = 1 peso.` });
+    save(); showNextEvent(); return;
+  }
+  const isLost = (s) => s === 'expired' || s === 'cancelled';
+  for (const [k, c] of Object.entries(now)) {
+    if (k.startsWith('__')) continue;
+    const p = prev[k];
+    const where = c.k === 'filo' ? 'barbería' : 'agencia';
+    if (!p) {
+      if (prev.__carsSeen === false && c.k === 'cars') continue; // recién conectado: no son "nuevas"
+      star(STAR.signup, `nueva ${where}: ${c.n}`);
+      queue.push({ ico: c.k === 'filo' ? '💈' : '🚗', title: `¡Nueva ${where}!`, text: `${c.n} se sumó${c.s === 'trial' ? ' en prueba' : ''}. +${STAR.signup} ⭐. Ahora: convertila 😉` });
+      continue;
+    }
+    if (c.s === 'active' && p.s === 'trial') {
+      star(STAR.convert, `${c.n} pasó a pagar`);
+      queue.push({ ico: '🏆', title: '¡Conversión!', text: `${c.n} ahora paga: tus monedas por segundo suben solas. +${STAR.convert} ⭐`, party: true });
+    } else if (c.s === 'active' && isLost(p.s)) {
+      star(STAR.recover, `recuperaste a ${c.n}`);
+      queue.push({ ico: '🛟', title: '¡Cliente recuperado!', text: `${c.n} volvió. +${STAR.recover} ⭐`, party: true });
+    } else if (isLost(c.s) && !isLost(p.s)) {
+      addFeed('🥀', `Se fue ${c.n}`);
+      toast(`🥀 ${c.n} se dio de baja. Tenés una misión para rescatarla.`);
+    }
+    if (c.k === 'filo' && c.s === 'active') {
+      if (c.w && p.w === false) { star(STAR.wpp, `${c.n} reconectó WhatsApp`); toast(`📲 ${c.n} reconectó WhatsApp · +${STAR.wpp} ⭐`); }
+      if (c.p && p.p === false) { star(STAR.pwa, `${c.n} instaló la app`); toast(`📱 ${c.n} instaló la app · +${STAR.pwa} ⭐`); }
+    }
+    if (c.k === 'cars' && c.st && p.st === false) { star(STAR.stock, `${c.n} cargó autos`); toast(`🚙 ${c.n} cargó autos · +${STAR.stock} ⭐`); }
+  }
+  const li = levelIndex(totalMrr());
+  if (li > (S.bestLevel || 0)) {
+    for (let i = (S.bestLevel || 0) + 1; i <= li; i++) {
+      star(STAR.level, `subiste a ${LEVELS[i].name}`);
+      queue.push({ ico: '🏙️', title: `¡Nivel ${i}: ${LEVELS[i].name}!`, text: `Tu MRR real superó ${money(LEVELS[i].mrr)}. Tu edificio creció. +${STAR.level} ⭐`, party: true });
+    }
+    S.bestLevel = li;
+  }
+  S.snap = now; save(); showNextEvent();
+}
+
+function daily() {
+  const t = todayStr();
+  if (S.lastDay === t) return;
+  const y = new Date(Date.now() - DAY).toLocaleDateString('sv-SE');
+  S.streak = S.lastDay === y ? S.streak + 1 : 1;
+  S.lastDay = t;
+  const n = Math.min(S.streak, 10);
+  star(n, `racha de ${S.streak} día${S.streak > 1 ? 's' : ''}`);
+  queue.push({ ico: '🔥', title: `Racha de ${S.streak} día${S.streak > 1 ? 's' : ''}`, text: `Volviste a cuidar tu imperio. +${n} ⭐. Hacé una misión hoy para que el negocio crezca.` });
+  save(); showNextEvent();
+}
+
+let evOpen = false;
+function showNextEvent() {
+  if (evOpen || !queue.length) return;
+  const ev = queue.shift(); evOpen = true;
+  $('ev-ico').textContent = ev.ico; $('ev-title').textContent = ev.title; $('ev-text').textContent = ev.text;
+  $('ov-event').classList.add('on');
+  if (ev.party) { confetti(); fanfare(); } else beep(880, 0.12);
+}
+$('ev-ok').onclick = () => { $('ov-event').classList.remove('on'); evOpen = false; renderHud(); setTimeout(showNextEvent, 250); };
+
+// ═════════════════════════ Misiones ═════════════════════════
+function missions() {
+  if (!D) return [];
+  const M = [];
+  D.filo.list.forEach(a => {
+    const d = daysUntil(a.renew);
+    if (a.status === 'trial' && d !== null && d >= 0 && d <= 4) M.push({ id: 'conv-' + a.id, pri: 1, ico: '🎯', bg: '#fff3c4', who: a,
+      t: `Convertí a ${a.name}`, s: d === 0 ? 'La prueba vence HOY' : `La prueba vence en ${d} día${d > 1 ? 's' : ''}`,
+      rw: `+${money(a.price || PLAN_PRICES.starter)}/mes y +${STAR.convert} ⭐ si pasa a pagar`,
+      msg: `¡Hola! Te escribo de Filo 💈 Vi que la prueba de ${a.name} termina ${d === 0 ? 'hoy' : `en ${d} días`}. ¿Cómo te viene resultando? Si querés te ayudo a dejar todo listo para seguir sin cortes.` });
+    if (a.status === 'trial' && d !== null && d > 4 && daysSince(a.createdAt) <= 3) M.push({ id: 'welcome-' + a.id, pri: 3, ico: '👋', bg: '#e3f6ff', who: a,
+      t: `Dale la bienvenida a ${a.name}`, s: 'Se sumó hace poco: un buen arranque ayuda a que se quede', rw: 'Clave para convertir',
+      msg: `¡Hola! Te escribo de Filo 💈 ¡Bienvenido! ¿Pudiste cargar tus servicios y barberos? Si querés, en 5 minutos te ayudo a dejar la agenda lista.` });
+    if ((a.status === 'expired' || a.status === 'cancelled') && (daysSince(a.expiredAt) ?? 99) <= 45) M.push({ id: 'rescue-' + a.id, pri: 2, ico: '🛟', bg: '#ffe1e8', who: a,
+      t: `Rescatá a ${a.name}`, s: `Se fue hace ${daysSince(a.expiredAt) ?? '?'} días`, rw: `+${money(PLAN_PRICES[a.plan] || PLAN_PRICES.starter)}/mes y +${STAR.recover} ⭐ si vuelve`,
+      msg: `¡Hola! Te escribo de Filo 💈 Vi que la cuenta de ${a.name} quedó pausada. ¿Hubo algo que no te sirvió? Me encantaría ayudarte a que vuelva a funcionar para tu barbería.` });
+    if (a.status === 'active') {
+      if (d !== null && d <= 1) M.push({ id: 'pay-' + a.id, pri: 1, ico: '💸', bg: '#e6ffef', who: a,
+        t: `Cobro de ${a.name}`, s: d < 0 ? `Venció hace ${-d} día${-d > 1 ? 's' : ''}` : d === 0 ? 'Vence hoy' : 'Vence mañana', rw: `${money(a.price)}/mes en juego`,
+        msg: `¡Hola! Te escribo de Filo 💈 Te recuerdo que tu plan se renueva ${d <= 0 ? 'hoy' : 'mañana'}. Cualquier cosa con el pago avisame y lo vemos.` });
+      if (!a.wpp) M.push({ id: 'wpp-' + a.id, pri: 2, ico: '📲', bg: '#e9fbe9', who: a,
+        t: `${a.name}: WhatsApp desconectado`, s: 'Sus clientes no reciben recordatorios → riesgo de baja', rw: `+${STAR.wpp} ⭐ al reconectar`,
+        msg: `¡Hola! Te escribo de Filo 💈 Vi que el WhatsApp de ${a.name} está desconectado, así que los recordatorios a tus clientes no están saliendo. ¿Lo reconectamos juntos? Son 2 minutos.` });
+      if (!a.pwa) M.push({ id: 'pwa-' + a.id, pri: 3, ico: '📱', bg: '#efe8ff', who: a,
+        t: `${a.name} no instaló la app`, s: 'Con la app instalada usan más Filo y se quedan más', rw: `+${STAR.pwa} ⭐ al instalarla`,
+        msg: `¡Hola! Te escribo de Filo 💈 ¿Sabías que podés tener Filo como app en el celu, con avisos de cada turno? Abrí filocrm.com.ar en el navegador y tocá "Agregar a inicio". ¿Te ayudo?` });
+    }
+  });
+  D.cars.list.forEach(a => {
+    const d = daysUntil(a.renew);
+    if (a.status === 'trial' && d !== null && d >= 0 && d <= 4) M.push({ id: 'cconv-' + a.id, pri: 1, ico: '🎯', bg: '#fff3c4', who: a,
+      t: `Convertí a ${a.name}`, s: `FiloCars · la prueba vence ${d === 0 ? 'HOY' : `en ${d} días`}`, rw: `+${money(CARS_PRICE)}/mes y +${STAR.convert} ⭐ si pasa a pagar`,
+      msg: `¡Hola! Te escribo de FiloCars 🚗 Vi que la prueba de ${a.name} termina ${d === 0 ? 'hoy' : `en ${d} días`}. ¿Cómo te viene sirviendo el catálogo? Te ayudo a dejar todo listo.` });
+    if (a.status !== 'expired' && a.status !== 'cancelled' && a.stock === 0) M.push({ id: 'cstock-' + a.id, pri: 2, ico: '🚙', bg: '#ffeedd', who: a,
+      t: `${a.name} no cargó autos`, s: 'FiloCars · sin stock no ven el valor', rw: `+${STAR.stock} ⭐ cuando cargue`,
+      msg: `¡Hola! Te escribo de FiloCars 🚗 Vi que todavía no cargaste autos en tu catálogo. ¿Te ayudo a subir los primeros? En 10 minutos lo dejamos andando.` });
+    if (a.status === 'expired' || a.status === 'cancelled') M.push({ id: 'crescue-' + a.id, pri: 3, ico: '🛟', bg: '#ffe1e8', who: a,
+      t: `Rescatá a ${a.name}`, s: 'FiloCars · agencia dada de baja', rw: `+${money(CARS_PRICE)}/mes y +${STAR.recover} ⭐ si vuelve`,
+      msg: `¡Hola! Te escribo de FiloCars 🚗 Vi que la cuenta de ${a.name} quedó pausada. ¿Hubo algo que no te sirvió? Me encantaría ayudarte.` });
+  });
+  // Publicidad
+  if (ADS && ADS.list) {
+    const rev = ADS.list.filter(p => p.status === 'pending').length;
+    const due = ADS.list.filter(p => p.status === 'approved' && (!p.publish_at || new Date(p.publish_at) - Date.now() < DAY)).length;
+    if (rev) M.push({ id: 'ads-review', pri: 2, ico: '📣', bg: '#fff0f6', ad: 'review', t: `Revisá ${rev} publicidad${rev > 1 ? 'es' : ''}`, s: 'FILO Contenido · aprobá o pedí cambios', rw: `+${STAR.approve} ⭐ por cada una` });
+    if (due) M.push({ id: 'ads-publish', pri: 1, ico: '📸', bg: '#fff0f6', ad: 'ready', t: `Subí ${due} posteo${due > 1 ? 's' : ''} a Instagram`, s: 'Aprobados y con fecha para hoy', rw: `+${STAR.publish} ⭐ por cada uno` });
+  }
+  return M.sort((a, b) => a.pri - b.pri);
+}
+function contactedToday(id) { return S.contacted[id] === todayStr(); }
+function contact(m) {
+  if (m.ad) { openTab('ads'); return; }
+  const url = waLink(m.who.phone, m.msg);
+  if (!contactedToday(m.id)) {
+    S.contacted[m.id] = todayStr();
+    star(STAR.contact);
+    addFeed('💬', `Contactaste a ${m.who.name}`);
+    toast(`💬 +${STAR.contact} ⭐ por moverte. Las grandes llegan cuando se concrete.`);
+    for (const k in S.contacted) if (daysSince(S.contacted[k]) > 30) delete S.contacted[k];
+    save(); renderMissions(); renderHud();
+  }
+  if (url) window.open(url, '_blank', 'noopener');
+  else toast('Esta cuenta no tiene teléfono cargado');
+}
+
+// ═════════════════════════ FILO Contenido (publicidad) ═════════════════════════
+async function ctApi(path, opts = {}) {
+  const res = await fetch('/api/admin/contenido' + path, { ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken(), 'X-Contenido-Session': S.ctSession || '', ...(opts.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { const e = new Error(data.error || 'Sesión vencida'); e.auth = true; throw e; }
+  if (!res.ok) throw new Error(data.error || 'No se pudo completar');
+  return data;
+}
+function demoAds() {
+  const t = (h) => new Date(Date.now() + h * 3600000).toISOString();
+  return [
+    { id: 'p1', kind: 'reel', status: 'pending', topic: 'Tu agenda llena sin contestar un solo WhatsApp', caption: 'Tus clientes reservan solos, 24/7. Vos cortás. 💈', hashtags: ['#barberia', '#filo'], publish_at: t(20), media: [] },
+    { id: 'p2', kind: 'carousel', status: 'approved', topic: '5 errores que vacían tu barbería', caption: 'Deslizá y fijate cuántos estás cometiendo 👀', hashtags: ['#barber'], publish_at: t(3), media: [] },
+    { id: 'p3', kind: 'reel', status: 'changes', topic: 'Recordatorios automáticos', caption: 'Chau ausencias.', feedback: 'El gancho más corto', hashtags: [], publish_at: t(48), media: [] },
+  ];
+}
+async function loadAds() {
+  if (DEMO) { if (!ADS) ADS = { list: demoAds() }; renderAds(); renderMissions(); drawCity(); return; }
+  if (!S.ctSession) { ADS = null; renderAds(); return; }
+  try { const { pieces } = await ctApi('/pieces'); ADS = { list: pieces || [] }; }
+  catch (e) { if (e.auth) { S.ctSession = null; save(); ADS = null; } else ADS = ADS || { error: e.message }; }
+  renderAds(); renderMissions(); drawCity();
+}
+async function connectContenido() {
+  const pin = $('ct-pin').value, err = $('ct-err');
+  if (!pin) { err.textContent = 'Poné el PIN'; return; }
+  err.textContent = 'Conectando…';
+  try {
+    const { session } = await ctApi('/login', { method: 'POST', body: JSON.stringify({ pin }) });
+    S.ctSession = session; save();
+    toast('📣 ¡FILO Contenido conectado!');
+    loadAds();
+  } catch (e) { err.textContent = e.message; }
+}
+const mediaCache = {};
+async function mediaUrl(id) {
+  if (mediaCache[id]) return mediaCache[id];
+  const res = await fetch('/api/admin/contenido/media/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + adminToken(), 'X-Contenido-Session': S.ctSession || '' } });
+  if (!res.ok) throw new Error('No se pudo cargar el archivo');
+  const blob = await res.blob();
+  return (mediaCache[id] = { url: URL.createObjectURL(blob), blob });
+}
+const adUi = {};
+const fullText = p => [p.caption || '', (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n');
+function whenAd(iso) {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso), tz = { timeZone: 'America/Argentina/Buenos_Aires' };
+  return d.toLocaleDateString('es-AR', { ...tz, weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '') + ' · ' + d.toLocaleTimeString('es-AR', { ...tz, hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function renderAds() {
+  const p = $('p-ads');
+  const pend = ADS && ADS.list ? ADS.list.filter(x => x.status === 'pending').length : 0;
+  $('ads-dot').hidden = !pend; $('ads-dot').textContent = pend;
+  if (!DEMO && !S.ctSession) {
+    p.innerHTML = `<div class="connect"><p>📣 Conectá <b>FILO Contenido</b> para revisar y subir la publicidad desde el juego. Cada posteo aprobado y publicado te da estrellas.</p><input type="password" inputmode="numeric" id="ct-pin" placeholder="PIN de FILO Contenido"><button class="btn" id="btn-ct">Conectar</button><div class="err" id="ct-err" style="width:100%"></div></div>`;
+    $('btn-ct').onclick = connectContenido; return;
+  }
+  if ([...p.querySelectorAll('video')].some(v => !v.paused)) return; // no cortar un video que estás mirando
+  if (!ADS) { p.innerHTML = '<div class="empty">Cargando publicidad…</div>'; return; }
+  if (ADS.error) { p.innerHTML = `<div class="empty">⚠️ ${esc(ADS.error)}</div>`; return; }
+  const groups = [
+    ['Para revisar', x => x.status === 'pending' || x.status === 'changes'],
+    ['Listos para subir', x => x.status === 'approved'],
+  ];
+  const pub = ADS.list.filter(x => x.status === 'published').length;
+  let h = DEMO ? '<div class="sec-title">Ejemplo <span class="demo-badge">DEMO</span></div>' : '';
+  for (const [title, fn] of groups) {
+    const list = ADS.list.filter(fn).sort((a, b) => new Date(a.publish_at || 0) - new Date(b.publish_at || 0));
+    h += `<div class="sec-title">${title} · ${list.length}</div>`;
+    h += list.length ? list.map(postCard).join('') : `<div class="empty">Nada por acá 👌</div>`;
+  }
+  h += `<div class="empty">📤 ${pub} publicado${pub !== 1 ? 's' : ''} en total</div>`;
+  p.innerHTML = h;
+  ADS.list.forEach(x => { if (x.status !== 'published') hydrateMedia(x); });
+}
+function postCard(x) {
+  const u = adUi[x.id] || {};
+  const lab = { pending: 'Para revisar', changes: 'Cambios pedidos', approved: 'Aprobado', published: 'Publicado' }[x.status] || x.status;
+  let act = '';
+  if (x.status === 'pending' || x.status === 'changes') {
+    act = u.asking
+      ? `<textarea id="fb-${esc(x.id)}" placeholder="¿Qué cambiarías? Ej: el gancho más corto, menos texto…"></textarea><div class="row"><button class="btn" data-ad="send-changes" data-id="${esc(x.id)}">Enviar pedido</button><button class="btn ghost" data-ad="cancel" data-id="${esc(x.id)}">Cancelar</button></div>`
+      : (x.status === 'changes' ? `<div class="pmsg">Esperando la versión corregida…</div>` : `<div class="row"><button class="btn" data-ad="approve" data-id="${esc(x.id)}">✅ Aprobar (+${STAR.approve} ⭐)</button><button class="btn ghost" data-ad="ask" data-id="${esc(x.id)}">Pedir cambios</button></div>`);
+  } else if (x.status === 'approved') {
+    act = `<div class="row"><button class="btn ig" data-ad="share" data-id="${esc(x.id)}">Compartir a Instagram</button><button class="btn ghost" data-ad="copy" data-id="${esc(x.id)}">Copiar texto</button></div>
+      <div class="row"><button class="btn" data-ad="published" data-id="${esc(x.id)}">📤 Ya lo publiqué (+${STAR.publish} ⭐)</button><button class="btn ghost" data-ad="unapprove" data-id="${esc(x.id)}">Volver a revisar</button></div>`;
+  }
+  return `<div class="post" id="post-${esc(x.id)}">
+    <div class="post-head"><span class="when">${esc(whenAd(x.publish_at))}</span><span class="tag">${x.kind === 'reel' ? 'Reel' : 'Carrusel'}</span>${x.revision > 1 ? `<span class="tag">v${x.revision}</span>` : ''}<span class="tag ${esc(x.status)}">${lab}</span></div>
+    <div class="topic">${esc(x.topic)}</div>
+    <div class="post-media" id="media-${esc(x.id)}"><div class="ph">${(x.media || []).length ? 'Cargando…' : '🎬 Archivo todavía no cargado'}</div></div>
+    <div class="post-body">
+      ${x.status === 'changes' && x.feedback ? `<div class="fb"><b>Tu pedido:</b> ${esc(x.feedback)}</div>` : ''}
+      ${x.trial && x.kind === 'reel' ? `<div class="fb" style="border-color:#6ea8ff;background:#eef4ff">Subilo como <b>reel de prueba</b> (lo ve primero gente que no te sigue).</div>` : ''}
+      <div class="caption ${u.open ? 'open' : ''}">${esc(x.caption)}${(x.hashtags || []).length ? `<span class="tags">${esc(x.hashtags.join(' '))}</span>` : ''}</div>
+      <button class="more" data-ad="more" data-id="${esc(x.id)}">${u.open ? 'Ver menos' : 'Ver todo el texto'}</button>
+      ${act}
+      <div class="pmsg" id="pmsg-${esc(x.id)}">${esc(u.msg || '')}</div>
+    </div></div>`;
+}
+async function hydrateMedia(x) {
+  const box = $('media-' + x.id);
+  const ids = x.media || [];
+  if (!box || !ids.length || DEMO) return;
+  try {
+    if (x.kind === 'reel') {
+      const cover = x.cover ? await mediaUrl(x.cover).catch(() => null) : null;
+      box.innerHTML = `<button class="btn ghost" style="margin:30px auto;display:block" data-ad="play" data-id="${esc(x.id)}">▶️ Ver el reel</button>`;
+      if (cover) box.style.background = `#000 url(${cover.url}) center/cover`;
+    } else {
+      const urls = await Promise.all(ids.map(mediaUrl));
+      if (!document.body.contains(box)) return;
+      box.innerHTML = urls.map((m, i) => `<img src="${m.url}" alt="Imagen ${i + 1} de ${urls.length}">`).join('');
+    }
+  } catch (e) { box.innerHTML = `<div class="ph">⚠️ ${esc(e.message)}</div>`; }
+}
+function setAdMsg(id, t) { adUi[id] = { ...(adUi[id] || {}), msg: t }; const el = $('pmsg-' + id); if (el) el.textContent = t; }
+async function adAction(x, action, body, okText, stars) {
+  try {
+    let piece;
+    if (DEMO) piece = { ...x, status: { approve: 'approved', changes: 'changes', published: 'published', unapprove: 'pending' }[action], feedback: body && body.feedback };
+    else piece = (await ctApi(`/pieces/${encodeURIComponent(x.id)}/${action}`, { method: 'POST', body: JSON.stringify(body || {}) })).piece;
+    ADS.list = ADS.list.map(p => p.id === piece.id ? piece : p);
+    adUi[x.id] = { msg: okText };
+    if (stars) { star(stars, `${action === 'published' ? 'publicaste' : 'aprobaste'} "${x.topic}"`); toast(`⭐ +${stars} · ${okText}`); if (action === 'published') confetti(40); beep(990, .1); save(); }
+    renderAds(); renderMissions(); renderHud(); drawCity();
+  } catch (e) { if (e.auth) { S.ctSession = null; save(); renderAds(); } else setAdMsg(x.id, e.message); }
+}
+async function shareAd(x, btn) {
+  btn.disabled = true; setAdMsg(x.id, 'Preparando…');
+  try {
+    try { await navigator.clipboard.writeText(fullText(x)); } catch (_) {}
+    if (DEMO || !(x.media || []).length) throw new Error('No hay archivo para compartir');
+    const files = [];
+    for (let i = 0; i < x.media.length; i++) {
+      const m = await mediaUrl(x.media[i]);
+      files.push(new File([m.blob], x.kind === 'reel' ? `filo-${x.id}.mp4` : `filo-${x.id}-${String(i + 1).padStart(2, '0')}.png`, { type: m.blob.type || (x.kind === 'reel' ? 'video/mp4' : 'image/png') }));
+    }
+    if (!navigator.canShare || !navigator.canShare({ files })) throw new Error('Este celular no deja compartir estos archivos');
+    await navigator.share({ files });
+    setAdMsg(x.id, 'El texto ya está copiado: pegalo en Instagram. Después tocá "Ya lo publiqué".');
+  } catch (e) { setAdMsg(x.id, e.name === 'AbortError' ? '' : e.message); }
+  finally { btn.disabled = false; }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-ad]'); if (!b || !ADS || !ADS.list) return;
+  const x = ADS.list.find(p => p.id === b.dataset.id); if (!x) return;
+  const id = x.id;
+  switch (b.dataset.ad) {
+    case 'more': adUi[id] = { ...(adUi[id] || {}), open: !(adUi[id] || {}).open }; return renderAds();
+    case 'ask': adUi[id] = { asking: true }; return renderAds();
+    case 'cancel': adUi[id] = {}; return renderAds();
+    case 'approve': b.disabled = true; return adAction(x, 'approve', null, 'Aprobado: ya está en "Listos para subir"', STAR.approve);
+    case 'send-changes': {
+      const fb = ($('fb-' + id)?.value || '').trim();
+      if (!fb) return setAdMsg(id, 'Escribí qué querés cambiar');
+      b.disabled = true; return adAction(x, 'changes', { feedback: fb }, 'Pedido enviado', STAR.changes);
+    }
+    case 'published': b.disabled = true; return adAction(x, 'published', null, '¡Publicado!', STAR.publish);
+    case 'unapprove': b.disabled = true; return adAction(x, 'unapprove', null, 'Volvió a revisar');
+    case 'copy': try { await navigator.clipboard.writeText(fullText(x)); setAdMsg(id, 'Texto copiado'); } catch (_) { setAdMsg(id, 'No se pudo copiar'); } return;
+    case 'share': return shareAd(x, b);
+    case 'play': {
+      const box = $('media-' + id); box.innerHTML = '<div class="ph">Cargando video…</div>';
+      try { const m = await mediaUrl(x.media[0]); box.style.background = ''; box.innerHTML = `<video controls playsinline autoplay src="${m.url}"></video>`; }
+      catch (err) { box.innerHTML = `<div class="ph">⚠️ ${esc(err.message)}</div>`; }
+    }
+  }
+});
+
+// ═════════════════════════ Dibujo (estilo caricatura) ═════════════════════════
+const PALETTE = ['#ff7eb6', '#7ee0ff', '#ffd166', '#a78bfa', '#6ee7b7', '#ffa69e', '#90caf9', '#f4a261'];
+function hash(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
+const has = (id) => !!S.deco[id];
+
+function drawCity() {
+  const hour = new Date().getHours();
+  const night = hour >= 20 || hour < 7;
+  const li = D ? levelIndex(totalMrr()) : 0;
+  const L = LEVELS[li];
+  const sky = night ? ['#1b1446', '#3b2a7a'] : ['#6fd0ff', '#c9f0ff'];
+  let s = `<defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient>
+    <pattern id="stripes" width="6" height="12" patternUnits="userSpaceOnUse"><rect width="6" height="12" fill="#fff"/><rect class="pole-stripes" y="0" width="6" height="6" fill="#ff4d6d"/><rect class="pole-stripes" y="12" width="6" height="6" fill="#ff4d6d"/></pattern>
+  </defs>
+  <rect width="400" height="260" fill="url(#sky)"/>`;
+  if (night) {
+    for (let i = 0; i < 28; i++) s += `<circle cx="${(i * 73) % 400}" cy="${(i * 37) % 110}" r="${i % 3 ? 1 : 1.6}" fill="#fff" opacity=".8"/>`;
+    s += `<circle cx="330" cy="45" r="18" fill="#fff4c2"/><circle cx="338" cy="40" r="15" fill="${sky[0]}"/>`;
+  } else {
+    s += `<circle cx="335" cy="48" r="26" fill="#ffe066" opacity=".35"/><circle cx="335" cy="48" r="18" fill="#ffd93d"/>`;
+  }
+  [[30, 22, 55], [90, 50, 75], [10, 80, 95]].forEach(([y, delay, dur]) => {
+    s += `<g class="cloud" style="animation-duration:${dur}s;animation-delay:-${delay}s" opacity="${night ? .25 : .95}"><g transform="translate(0,${y})"><ellipse cx="30" cy="10" rx="22" ry="11" fill="#fff"/><ellipse cx="50" cy="12" rx="16" ry="9" fill="#fff"/><ellipse cx="14" cy="13" rx="12" ry="7" fill="#fff"/></g></g>`;
+  });
+  if (has('sat')) s += `<g class="sat"><rect x="-8" y="-3" width="6" height="6" fill="#9ad"/><rect x="-2" y="-4" width="5" height="8" rx="1" fill="#ddd"/><rect x="3" y="-3" width="6" height="6" fill="#9ad"/></g>`;
+  if (has('globo')) s += `<g class="balloon"><ellipse cx="0" cy="0" rx="16" ry="19" fill="#ff5d8f"/><path d="M-16 0 Q0 6 16 0" stroke="#ffc83d" stroke-width="4" fill="none"/><text x="0" y="-3" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" font-family="Fredoka">FILO</text><line x1="-6" y1="17" x2="-4" y2="28" stroke="#7a4b00"/><line x1="6" y1="17" x2="4" y2="28" stroke="#7a4b00"/><rect x="-6" y="28" width="12" height="8" rx="2" fill="#b36b00"/></g>`;
+  if (has('drone')) s += `<g class="drone"><rect x="-10" y="-2" width="20" height="5" rx="2" fill="#444"/><rect x="-14" y="-5" width="8" height="2" fill="#888"/><rect x="6" y="-5" width="8" height="2" fill="#888"/><line x1="0" y1="3" x2="0" y2="9" stroke="#444"/><rect x="-22" y="9" width="44" height="13" rx="3" fill="#ffc83d"/><text x="0" y="19" text-anchor="middle" font-size="8" font-weight="700" fill="#2b1d5c" font-family="Fredoka">¡PROBÁ FILO!</text></g>`;
+  s += `<path d="M0 190 Q60 150 130 180 T260 175 T400 170 V260 H0Z" fill="${night ? '#2f5d50' : '#8ee09b'}"/>`;
+  const sky2 = Math.min(li + 2, 9);
+  for (let i = 0; i < sky2; i++) {
+    const x = 12 + i * 42 + (i >= sky2 / 2 ? 120 : 0), hgt = 30 + ((i * 29 + li * 13) % 45);
+    if (x > 380) continue;
+    s += `<rect x="${x}" y="${205 - hgt}" width="28" height="${hgt}" rx="3" fill="${night ? '#463a8a' : '#b9a7ff'}" opacity=".7"/>`;
+    for (let w = 0; w < hgt / 12 - 1; w++) s += `<rect x="${x + 6}" y="${210 - hgt + w * 12}" width="5" height="5" fill="${night ? '#ffe17a' : '#fff'}" opacity=".7"/><rect x="${x + 17}" y="${210 - hgt + w * 12}" width="5" height="5" fill="${night ? '#ffe17a' : '#fff'}" opacity=".7"/>`;
+  }
+  // cartel de publicidad (FILO Contenido)
+  const pend = ADS && ADS.list ? ADS.list.filter(p => p.status === 'pending').length : 0;
+  const ready = ADS && ADS.list ? ADS.list.filter(p => p.status === 'approved').length : 0;
+  if (ADS && ADS.list) {
+    s += `<g class="billboard" id="billboard"><rect x="22" y="140" width="4" height="40" fill="#5b4a8a"/><rect x="62" y="140" width="4" height="40" fill="#5b4a8a"/>
+      <rect x="10" y="112" width="68" height="34" rx="5" fill="${pend ? '#ff5d8f' : '#fff'}" stroke="#2b1d5c" stroke-width="2"/>
+      <text x="44" y="126" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="9" fill="${pend ? '#fff' : '#2b1d5c'}">📣 PUBLICIDAD</text>
+      <text x="44" y="139" text-anchor="middle" font-family="Fredoka" font-weight="600" font-size="8.5" fill="${pend ? '#fff' : '#2b1d5c'}" ${pend ? 'class="blink"' : ''}>${pend ? `${pend} para revisar` : ready ? `${ready} para subir` : 'al día ✓'}</text></g>`;
+  }
+  s += `<rect y="222" width="400" height="38" fill="${night ? '#3c3c55' : '#5b5b76'}"/><rect y="219" width="400" height="5" fill="#d9d2ee"/>`;
+  for (let i = 0; i < 12; i++) s += `<rect x="${i * 36 + 4}" y="240" width="18" height="3" rx="1.5" fill="#fff" opacity=".7"/>`;
+  if (has('arbol')) [96, 300, 340, 378].forEach(x => { s += `<rect x="${x - 2}" y="200" width="4" height="20" fill="#8d5524"/><circle cx="${x}" cy="196" r="12" fill="#3ddc97"/><circle cx="${x - 6}" cy="200" r="8" fill="#2fbf7f"/>`; });
+  if (has('fuente')) s += `<g transform="translate(318,206)"><ellipse cx="0" cy="12" rx="20" ry="5" fill="#7ec8ff" stroke="#2b1d5c" stroke-width="1.5"/><rect x="-3" y="-2" width="6" height="14" fill="#d9d2ee" stroke="#2b1d5c" stroke-width="1.2"/><path class="water" d="M0 -2 Q-10 -14 -14 8 M0 -2 Q10 -14 14 8" stroke="#5ec8ff" stroke-width="2.5" fill="none"/></g>`;
+  if (has('cafe')) s += `<g transform="translate(262,198)"><rect x="0" y="6" width="24" height="16" rx="2" fill="#a0522d" stroke="#2b1d5c" stroke-width="1.5"/><path d="M-3 6 L12 -4 L27 6Z" fill="#ffc83d" stroke="#2b1d5c" stroke-width="1.5"/><text x="12" y="18" text-anchor="middle" font-size="9">☕</text><circle cx="4" cy="23" r="2.5" fill="#2b1d5c"/><circle cx="20" cy="23" r="2.5" fill="#2b1d5c"/></g>`;
+  s += `<g class="hq" id="hq">` + drawHQ(L.floors, li, night) + `</g>`;
+  if (has('auto')) s += `<g transform="translate(250,226)"><path d="M2 10 Q4 2 16 2 L30 2 Q40 2 46 8 L50 10 V15 H2Z" fill="#ff3b3b" stroke="#2b1d5c" stroke-width="1.8"/><path d="M16 3 L22 -3 H32 L38 3Z" fill="#dff6ff" stroke="#2b1d5c" stroke-width="1.5"/><circle cx="12" cy="15" r="4.5" fill="#2b1d5c"/><circle cx="40" cy="15" r="4.5" fill="#2b1d5c"/><circle cx="12" cy="15" r="1.8" fill="#ffc83d"/><circle cx="40" cy="15" r="1.8" fill="#ffc83d"/></g>`;
+  $('city').innerHTML = s;
+  $('lvl-tag').textContent = `Nv. ${li} · ${L.name}`;
+  $('hq').addEventListener('pointerdown', onTap);
+  const bb = $('billboard'); if (bb) bb.addEventListener('click', () => openTab('ads'));
+}
+
+function drawHQ(floors, li, night) {
+  const fh = 15, w = 92, x = 200 - w / 2, base = 220;
+  const color = ['#ff9f1c', '#ff7eb6', '#7c5cff', '#4cc9f0', '#3ddc97', '#ff5d8f', '#ffc83d', '#a78bfa'][li % 8];
+  const win = night ? '#ffe17a' : '#dff6ff';
+  let g = '';
+  const gh = 34, top = base - gh - floors * fh;
+  for (let f = 0; f < floors; f++) {
+    const y = base - gh - (f + 1) * fh;
+    g += `<rect x="${x + 4}" y="${y}" width="${w - 8}" height="${fh}" fill="${color}" stroke="#2b1d5c" stroke-width="2"/>`;
+    for (let k = 0; k < 5; k++) g += `<rect x="${x + 11 + k * 15}" y="${y + 4}" width="9" height="8" rx="2" fill="${win}" stroke="#2b1d5c" stroke-width="1.2"/>`;
+  }
+  g += `<rect x="${x + 2}" y="${top - 6}" width="${w - 4}" height="7" rx="3" fill="#2b1d5c"/>`;
+  const neon = has('neon');
+  g += `<rect x="${200 - 30}" y="${top - 26}" width="60" height="19" rx="6" fill="${neon ? '#2b1d5c' : '#fff'}" stroke="#2b1d5c" stroke-width="2"/>`;
+  g += `<text x="200" y="${top - 12}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="14" fill="${neon ? '#ff5dd8' : '#2b1d5c'}" ${neon ? 'class="blink" style="filter:drop-shadow(0 0 3px #ff5dd8)"' : ''}>FILO</text>`;
+  if (li >= 5) g += `<line x1="200" y1="${top - 26}" x2="200" y2="${top - 44}" stroke="#2b1d5c" stroke-width="2"/><circle cx="200" cy="${top - 46}" r="3" fill="#ff5a5f" class="blink"/>`;
+  g += `<rect x="${x}" y="${base - gh}" width="${w}" height="${gh}" rx="4" fill="#fff6e6" stroke="#2b1d5c" stroke-width="2"/>`;
+  for (let k = 0; k < 6; k++) g += `<path d="M${x + k * (w / 6)} ${base - gh} h${w / 6} v7 a${w / 12} 5 0 0 1 -${w / 6} 0z" fill="${k % 2 ? '#fff' : '#ff4d6d'}" stroke="#2b1d5c" stroke-width="1.5"/>`;
+  if (floors === 0) {
+    g += `<rect x="${x + 14}" y="${base - 24}" width="${w - 28}" height="24" fill="#c9c3e0" stroke="#2b1d5c" stroke-width="2"/>`;
+    for (let k = 1; k < 5; k++) g += `<line x1="${x + 14}" y1="${base - 24 + k * 5}" x2="${x + w - 14}" y2="${base - 24 + k * 5}" stroke="#2b1d5c" stroke-width="1"/>`;
+  } else {
+    g += `<rect x="${x + 10}" y="${base - 22}" width="28" height="18" rx="2" fill="${win}" stroke="#2b1d5c" stroke-width="1.5"/><rect x="${x + w - 38}" y="${base - 22}" width="28" height="18" rx="2" fill="${win}" stroke="#2b1d5c" stroke-width="1.5"/>`;
+    g += `<rect x="${200 - 8}" y="${base - 22}" width="16" height="22" rx="2" fill="#7c5cff" stroke="#2b1d5c" stroke-width="1.5"/><circle cx="${200 + 4}" cy="${base - 11}" r="1.5" fill="#ffc83d"/>`;
+  }
+  g += `<rect x="${x - 9}" y="${base - 30}" width="7" height="24" rx="3" fill="url(#stripes)" stroke="#2b1d5c" stroke-width="1.5"/><circle cx="${x - 5.5}" cy="${base - 31}" r="3.5" fill="#ffc83d" stroke="#2b1d5c" stroke-width="1.2"/>`;
+  return g;
+}
+
+function drawShop(a) {
+  const c = PALETTE[hash(a.id) % PALETTE.length];
+  const lost = a.status === 'expired' || a.status === 'cancelled';
+  const trial = a.status === 'trial';
+  const big = a.plan === 'enterprise' ? 2 : a.plan === 'staff' ? 1 : 0;
+  const body = lost ? '#b8b3c9' : c, hgt = 34 + big * 12, y = 70 - hgt;
+  let g = `<svg viewBox="0 0 74 78"><ellipse cx="37" cy="73" rx="32" ry="4" fill="rgba(0,0,0,.15)"/>`;
+  g += `<rect x="9" y="${y}" width="56" height="${hgt}" rx="4" fill="${body}" stroke="#2b1d5c" stroke-width="2"/>`;
+  if (big) for (let i = 0; i < big; i++) g += `<rect x="16" y="${y + 5 + i * 12}" width="9" height="7" rx="1.5" fill="#dff6ff" stroke="#2b1d5c"/><rect x="32" y="${y + 5 + i * 12}" width="9" height="7" rx="1.5" fill="#dff6ff" stroke="#2b1d5c"/><rect x="48" y="${y + 5 + i * 12}" width="9" height="7" rx="1.5" fill="#dff6ff" stroke="#2b1d5c"/>`;
+  for (let k = 0; k < 5; k++) g += `<path d="M${9 + k * 11.2} 38 h11.2 v5 a5.6 4 0 0 1 -11.2 0z" fill="${lost ? (k % 2 ? '#ddd' : '#999') : (k % 2 ? '#fff' : '#ff4d6d')}" stroke="#2b1d5c" stroke-width="1.2"/>`;
+  g += `<rect x="15" y="50" width="20" height="14" rx="2" fill="${lost ? '#8a849e' : '#dff6ff'}" stroke="#2b1d5c" stroke-width="1.5"/>`;
+  g += `<rect x="41" y="49" width="15" height="21" rx="2" fill="${lost ? '#6d6783' : '#7c5cff'}" stroke="#2b1d5c" stroke-width="1.5"/>`;
+  if (!lost) g += `<rect x="59" y="46" width="5" height="17" rx="2.5" fill="url(#stripes2)" stroke="#2b1d5c" stroke-width="1.2"/>`;
+  if (lost) g += `<rect x="14" y="54" width="44" height="9" rx="2" fill="#fff" stroke="#2b1d5c" transform="rotate(-8 37 58)"/><text x="37" y="61" text-anchor="middle" font-size="7" font-weight="700" fill="#ff5a5f" font-family="Fredoka" transform="rotate(-8 37 58)">CERRADO</text>`;
+  if (trial) {
+    g += `<g stroke="#e09f3e" stroke-width="2" opacity=".95"><line x1="6" y1="${y - 4}" x2="6" y2="70"/><line x1="68" y1="${y - 4}" x2="68" y2="70"/><line x1="6" y1="${y + 8}" x2="68" y2="${y + 8}"/><line x1="6" y1="${y + 8}" x2="68" y2="${y + 30}"/></g>`;
+    g += `<rect x="20" y="${y - 12}" width="34" height="11" rx="3" fill="#ffc83d" stroke="#2b1d5c" stroke-width="1.2"/><text x="37" y="${y - 4}" text-anchor="middle" font-size="7" font-weight="700" fill="#2b1d5c" font-family="Fredoka">EN PRUEBA</text>`;
+  }
+  if (a.status === 'active' && !a.wpp) g += `<circle cx="62" cy="${y + 2}" r="7" fill="#ff5a5f" stroke="#fff" stroke-width="2"/><text x="62" y="${y + 5.5}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" font-family="Fredoka">!</text>`;
+  if (a.status === 'active' && a.plan === 'enterprise') g += `<text x="37" y="${y - 2}" text-anchor="middle" font-size="12">👑</text>`;
+  return g + `</svg>`;
+}
+function drawShowroom(a) {
+  const c = PALETTE[(hash(a.id) + 3) % PALETTE.length];
+  const lost = a.status === 'expired' || a.status === 'cancelled';
+  let g = `<svg viewBox="0 0 64 46"><rect x="4" y="12" width="56" height="32" rx="3" fill="${lost ? '#b8b3c9' : c}" stroke="#2b1d5c" stroke-width="2"/>`;
+  g += `<path d="M2 14 L32 2 L62 14Z" fill="${lost ? '#8a849e' : '#2b1d5c'}"/>`;
+  g += `<rect x="9" y="20" width="46" height="18" rx="2" fill="${lost ? '#8a849e' : '#dff6ff'}" stroke="#2b1d5c" stroke-width="1.5"/>`;
+  if (!lost && a.stock > 0) g += `<rect x="16" y="28" width="16" height="7" rx="3" fill="#ff5a5f"/><circle cx="20" cy="36" r="2" fill="#2b1d5c"/><circle cx="28" cy="36" r="2" fill="#2b1d5c"/><rect x="34" y="28" width="16" height="7" rx="3" fill="#4cc9f0"/><circle cx="38" cy="36" r="2" fill="#2b1d5c"/><circle cx="46" cy="36" r="2" fill="#2b1d5c"/>`;
+  if (a.status === 'trial') g += `<rect x="14" y="5" width="36" height="10" rx="3" fill="#ffc83d" stroke="#2b1d5c"/><text x="32" y="12.5" text-anchor="middle" font-size="6.5" font-weight="700" fill="#2b1d5c" font-family="Fredoka">EN PRUEBA</text>`;
+  return g + `</svg>`;
+}
+function carSvg(color) {
+  return `<svg viewBox="0 0 54 28"><rect x="4" y="10" width="46" height="11" rx="5" fill="${color}" stroke="#2b1d5c" stroke-width="2"/><path d="M14 11 L19 3 H35 L41 11Z" fill="${color}" stroke="#2b1d5c" stroke-width="2"/><rect x="21" y="5" width="7" height="6" fill="#dff6ff"/><rect x="30" y="5" width="7" height="6" fill="#dff6ff"/><circle cx="15" cy="22" r="5" fill="#2b1d5c"/><circle cx="15" cy="22" r="2" fill="#ccc"/><circle cx="40" cy="22" r="5" fill="#2b1d5c"/><circle cx="40" cy="22" r="2" fill="#ccc"/><circle cx="49" cy="14" r="2" fill="#ffe17a"/></svg>`;
+}
+
+// ═════════════════════════ Render ═════════════════════════
+function renderHud() {
+  $('coins').textContent = money2(S.wallet);
+  const r = ratePerSec();
+  $('rate').textContent = `${money2(r)}/seg · ${money(r * 86400)}/día`;
+  $('stars').textContent = '⭐' + S.stars;
+  $('rank').textContent = rankOf(S.stars);
+  $('streak').textContent = '🔥' + (S.streak || 0);
+}
+function renderGoal() {
+  if (!D) return;
+  const mrr = totalMrr(), li = levelIndex(mrr), next = LEVELS[li + 1];
+  if (!next) { $('goal-name').textContent = '¡Máximo!'; $('goal-bar').style.width = '100%'; $('goal-pct').textContent = '100%'; $('goal-sub').textContent = `MRR ${money(mrr)}. Sos leyenda.`; return; }
+  const cur = LEVELS[li].mrr, pct = Math.max(0, Math.min(100, (mrr - cur) / (next.mrr - cur) * 100));
+  const falta = next.mrr - mrr;
+  $('goal-name').textContent = next.name;
+  $('goal-bar').style.width = pct + '%';
+  $('goal-pct').textContent = Math.floor(pct) + '%';
+  $('goal-sub').innerHTML = `MRR real <b>${money(mrr)}</b> · faltan <b>${money(falta)}</b> ≈ <b>${Math.ceil(falta / PLAN_PRICES.starter)}</b> Starter, <b>${Math.ceil(falta / PLAN_PRICES.staff)}</b> Staff o <b>${Math.ceil(falta / CARS_PRICE)}</b> agencias`;
+}
+function renderStreet() {
+  if (!D) return;
+  const order = { active: 0, trial: 1, expired: 2, cancelled: 3 };
+  const list = [...D.filo.list].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.price - a.price));
+  $('filo-count').textContent = `${D.filo.active} pagan · ${D.filo.trial} en prueba · ${money(D.filo.mrr)}/mes`;
+  const defs = `<svg width="0" height="0" style="position:absolute"><defs><pattern id="stripes2" width="5" height="10" patternUnits="userSpaceOnUse"><rect width="5" height="10" fill="#fff"/><rect class="pole-stripes" width="5" height="5" fill="#ff4d6d"/><rect class="pole-stripes" y="10" width="5" height="5" fill="#ff4d6d"/></pattern></defs></svg>`;
+  $('street').innerHTML = defs + (list.length ? list.map(a => `<button class="shop" data-k="f" data-id="${esc(a.id)}">${drawShop(a)}<div class="nm">${esc(a.name)}</div></button>`).join('')
+    : '<div class="empty" style="color:#2b1d5c">Todavía no hay barberías. ¡La primera te espera!</div>');
+}
+function renderCars() {
+  const z = $('cars-zone');
+  if (!D) return;
+  if (!D.cars.connected) {
+    $('cars-count').textContent = 'sin conectar';
+    z.innerHTML = `<div class="connect"><p>🔒 Conectá FiloCars para sumar sus agencias a tu imperio.</p><input type="password" id="cars-pass" placeholder="Contraseña admin de FiloCars"><button class="btn" id="btn-cars">Conectar</button><div class="err" id="cars-err" style="width:100%"></div></div>`;
+    $('btn-cars').onclick = connectCars;
+    return;
+  }
+  $('cars-count').textContent = `${D.cars.active} pagan · ${D.cars.sales} ventas · ${money(D.cars.mrr)}/mes`;
+  const act = D.cars.list.filter(a => a.status === 'active');
+  const cars = (act.length ? act : D.cars.list.filter(a => a.status === 'trial')).slice(0, 8);
+  const order = { active: 0, trial: 1, expired: 2, cancelled: 3 };
+  const rooms = [...D.cars.list].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+  z.innerHTML = `<div class="road"><div class="showrooms">${rooms.length ? rooms.map(a => `<button class="showroom" data-k="c" data-id="${esc(a.id)}">${drawShowroom(a)}<div class="nm">${esc(a.name)}</div></button>`).join('') : '<div class="empty" style="color:#2b1d5c;padding:14px">Sin agencias todavía</div>'}</div><div class="lane"></div>
+    ${cars.map((a, i) => `<div class="car" style="top:${i % 2 ? 90 : 66}px;animation-duration:${7 + (hash(a.id) % 6)}s;animation-delay:-${i * 1.7}s;${i % 2 ? 'transform:scaleX(-1);animation-direction:reverse' : ''}">${carSvg(PALETTE[hash(a.id) % PALETTE.length])}</div>`).join('')}</div>`;
+}
+function renderMissions() {
+  const M = missions(), p = $('p-missions');
+  const pending = M.filter(m => !contactedToday(m.id)).length;
+  $('mis-dot').hidden = !pending; $('mis-dot').textContent = pending;
+  if (!D) { p.innerHTML = '<div class="empty">Cargando…</div>'; return; }
+  if (!M.length) { p.innerHTML = '<div class="empty">🎉 No hay nada urgente. Tu imperio está en orden.<br>Salí a buscar barberías y agencias nuevas: cada una sube tus monedas por segundo.</div>'; return; }
+  p.innerHTML = `<div class="sec-title">Acciones reales que hacen crecer tu negocio</div>` + M.map((m, i) => `
+    <div class="card"><div class="ico" style="background:${m.bg}">${m.ico}</div>
+      <div class="txt"><div class="t">${esc(m.t)}</div><div class="s">${esc(m.s)}</div><div class="rw">${esc(m.rw)}</div></div>
+      ${m.ad ? `<button class="btn" data-m="${i}">Ir</button>`
+        : contactedToday(m.id) ? `<div style="text-align:center"><div class="done-tag">✓ Hoy</div><button class="btn ghost" style="margin-top:4px;padding:6px 8px;font-size:12px" data-m="${i}">Otra vez</button></div>`
+        : `<button class="btn wa" data-m="${i}">WhatsApp</button>`}
+    </div>`).join('');
+  p.querySelectorAll('[data-m]').forEach(b => b.onclick = () => contact(M[+b.dataset.m]));
+}
+function renderUpgrades() {
+  const p = $('p-upgrades');
+  p.innerHTML = `<div class="sec-title">Decorá tu ciudad · solo visual, no cambia el ingreso</div>` + DECOS.map(u => {
+    const own = has(u.id), ok = S.wallet >= u.cost;
+    const left = ratePerSec() > 0 && !ok ? (u.cost - S.wallet) / ratePerSec() : 0;
+    const eta = left ? (left > 86400 ? `en ${Math.ceil(left / 86400)} días` : left > 3600 ? `en ${Math.ceil(left / 3600)} h` : `en ${Math.ceil(left / 60)} min`) : '';
+    return `<div class="card"><div class="ico" style="background:#f2edff">${u.ico}</div>
+      <div class="txt"><div class="t">${esc(u.name)}</div><div class="s">${own ? 'Ya está en tu ciudad' : ok ? '¡Te alcanza!' : `Te alcanza ${eta} al ritmo actual`}</div></div>
+      ${own ? `<button class="btn owned" disabled>✓ Tuyo</button>` : `<button class="btn ${ok ? '' : 'off'}" data-u="${u.id}"><i class="mc"></i>${money(u.cost)}</button>`}</div>`;
+  }).join('');
+  p.querySelectorAll('[data-u]').forEach(b => b.onclick = () => buy(b.dataset.u));
+}
+function renderEmpire() {
+  if (!D) return;
+  const p = $('p-empire');
+  const ret = Math.round(D.filo.active / Math.max(1, D.filo.active + D.filo.lost) * 100);
+  p.innerHTML = `<div class="sec-title">Tus números reales ${DEMO ? '<span class="demo-badge">DEMO</span>' : ''}</div>
+    <div class="stats">
+      <div class="stat"><small>MRR total</small><b>${money(totalMrr())}</b></div>
+      <div class="stat"><small>ARR</small><b>${money(totalMrr() * 12)}</b></div>
+      <div class="stat"><small>MRR Filo</small><b>${money(D.filo.mrr)}</b></div>
+      <div class="stat"><small>MRR FiloCars</small><b>${D.cars.connected ? money(D.cars.mrr) : '—'}</b></div>
+      <div class="stat"><small>Barberías que pagan</small><b>${D.filo.active}</b></div>
+      <div class="stat"><small>Retención Filo</small><b>${ret}%</b></div>
+    </div>
+    <div class="sec-title">Tu partida</div>
+    <div class="stats">
+      <div class="stat"><small>Generado en el juego</small><b>${money(S.earned)}</b></div>
+      <div class="stat"><small>Gastado en decoración</small><b>${money(S.spent)}</b></div>
+      <div class="stat"><small>Estrellas</small><b>⭐ ${S.stars}</b></div>
+      <div class="stat"><small>Rango</small><b>${rankOf(S.stars)}</b></div>
+    </div>
+    <div class="sec-title">Últimos logros</div>
+    <div class="feed">${S.feed.length ? S.feed.slice(0, 15).map(f => `<div class="card"><div class="ico" style="background:#f2edff;width:36px;height:36px;font-size:18px">${f.ico}</div><div class="txt"><div class="t" style="font-size:14px">${esc(f.text)}</div><div class="s">${new Date(f.at).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div></div>`).join('') : '<div class="empty">Todavía nada. ¡Hacé tu primera misión!</div>'}</div>
+    <div class="empty" style="font-size:12px">No cuentan barberos, sucursales, cuentas test ni las marcadas "No contar en los KPIs"; en FiloCars no cuentan las agencias test. Datos de las ${new Date(D.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}, se refrescan cada 5 min.</div>`;
+}
+function renderAll() { drawCity(); renderHud(); renderGoal(); renderStreet(); renderCars(); renderMissions(); renderUpgrades(); renderEmpire(); renderAds(); }
+
+// ═════════════════════════ Acciones ═════════════════════════
+function onTap(e) {
+  const hq = $('hq'); hq.classList.add('squash'); setTimeout(() => hq.classList.remove('squash'), 80);
+  const r = $('scene').getBoundingClientRect();
+  const f = document.createElement('div'); f.className = 'float'; f.textContent = '+' + money2(ratePerSec()) + '/seg';
+  f.style.left = Math.min(e.clientX - r.left - 30, r.width - 130) + 'px'; f.style.top = (e.clientY - r.top - 20) + 'px';
+  $('scene').appendChild(f); setTimeout(() => f.remove(), 1100);
+  $('tap-hint').style.display = 'none';
+  beep(700 + Math.random() * 200, 0.05);
+}
+function buy(id) {
+  const u = DECOS.find(x => x.id === id);
+  if (!u || has(id)) return;
+  accrue();
+  if (S.wallet < u.cost) { beep(200, 0.1, 'sawtooth', 0.03); return; }
+  S.wallet -= u.cost; S.spent += u.cost; S.deco[id] = Date.now(); addFeed(u.ico, `Compraste: ${u.name}`); save();
+  beep(990, 0.1); setTimeout(() => beep(1320, 0.12), 90);
+  toast(`${u.ico} ${u.name} ya está en tu ciudad`);
+  drawCity(); confetti(30); renderHud(); renderUpgrades();
+}
+function openDetail(k, id) {
+  const a = (k === 'f' ? D.filo.list : D.cars.list).find(x => x.id === id);
+  if (!a) return;
+  const lab = { active: '✅ Paga', trial: '🏗️ En prueba', expired: '🥀 Vencida', cancelled: '🥀 Cancelada' }[a.status] || a.status;
+  const d = daysUntil(a.renew);
+  const mine = missions().filter(m => m.who === a);
+  const per = k === 'f' ? a.price : CARS_PRICE;
+  $('shop-modal').innerHTML = `<div style="width:120px;margin:0 auto">${k === 'f' ? drawShop(a) : drawShowroom(a)}</div>
+    <h2>${esc(a.name)}</h2>
+    <p>${lab}${k === 'f' && a.plan ? ' · plan ' + esc(a.plan) : ''}${a.city ? ' · ' + esc(a.city) : ''}<br>
+    ${a.status === 'active' ? `Aporta ${money(per)}/mes = ${money2(per / MONTH_SECONDS)}/seg · ` : ''}${d !== null && a.status !== 'expired' && a.status !== 'cancelled' ? (d >= 0 ? `renueva en ${d} días` : `venció hace ${-d} días`) : ''}
+    ${k === 'c' ? `<br>${a.stock} autos en stock · ${a.sales} ventas` : ''}</p>
+    ${mine.length ? mine.map((m, i) => `<button class="btn wa" style="width:100%;margin-bottom:6px" data-dm="${i}">${m.ico} ${esc(m.t)}</button>`).join('') : '<p>Todo en orden con esta cuenta 👌</p>'}
+    <button class="btn ghost" style="width:100%" id="close-shop">Cerrar</button>`;
+  $('ov-shop').classList.add('on');
+  $('shop-modal').querySelectorAll('[data-dm]').forEach(b => b.onclick = () => contact(mine[+b.dataset.dm]));
+  $('close-shop').onclick = () => $('ov-shop').classList.remove('on');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.shop,.showroom'); if (b) openDetail(b.dataset.k, b.dataset.id);
+});
+$('ov-shop').addEventListener('click', e => { if (e.target.id === 'ov-shop') $('ov-shop').classList.remove('on'); });
+
+async function connectCars() {
+  const pass = $('cars-pass').value, err = $('cars-err');
+  if (!pass) { err.textContent = 'Poné la contraseña'; return; }
+  err.textContent = 'Conectando…';
+  try {
+    const res = await fetch(CARS_URL + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo conectar');
+    lsSet('cars_admin_token', data.token);
+    if (S.snap) S.snap.__carsSeen = false;
+    await refresh();
+    toast('🚗 ¡FiloCars conectado!');
+  } catch (e) { err.textContent = e.message === 'Failed to fetch' ? 'FiloCars no responde' : e.message; }
+}
+
+function openTab(name) {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(x => x.classList.toggle('on', x.id === 'p-' + name));
+  if (name === 'upgrades') renderUpgrades();
+  if (name === 'empire') renderEmpire();
+  if (name === 'ads') renderAds();
+  document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => openTab(t.dataset.tab));
+
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  $('toasts').appendChild(t); setTimeout(() => t.remove(), 3700);
+}
+function confetti(n = 70) {
+  const cols = ['#ffc83d', '#ff5d8f', '#3ddc97', '#5ec8ff', '#a78bfa'];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('div'); c.className = 'confetti';
+    c.style.left = Math.random() * 100 + 'vw'; c.style.background = cols[i % cols.length];
+    c.style.animationDuration = (1.6 + Math.random() * 1.6) + 's'; c.style.animationDelay = (Math.random() * 0.4) + 's';
+    document.body.appendChild(c); setTimeout(() => c.remove(), 3800);
+  }
+}
+
+function showLogin() { $('ov-login').classList.add('on'); setTimeout(() => $('login-pass').focus(), 100); }
+async function doLogin() {
+  const pass = $('login-pass').value; $('login-err').textContent = '';
+  if (!pass) return;
+  try {
+    const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass, remember: true }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo entrar');
+    lsSet('admin_token', data.token);
+    $('ov-login').classList.remove('on'); $('login-pass').value = '';
+    askPin(() => refresh(true));
+  } catch (e) { $('login-err').textContent = e.message; }
+}
+$('btn-login').onclick = doLogin;
+$('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+$('btn-settings').onclick = () => { $('set-sound').checked = S.sound; $('ov-settings').classList.add('on'); };
+$('btn-close-settings').onclick = () => { S.sound = $('set-sound').checked; save(); $('ov-settings').classList.remove('on'); };
+$('btn-logout').onclick = () => { try { localStorage.removeItem('admin_token'); sessionStorage.removeItem('admin_token'); } catch (_) {} $('ov-settings').classList.remove('on'); showLogin(); };
+
+// ═════════════════════════ Bucle en vivo ═════════════════════════
+let saveAcc = 0;
+function loop() {
+  accrue();
+  renderHud();
+  if (++saveAcc > 120) { save(); saveAcc = 0; }
+  requestAnimationFrame(loop);
+}
+setInterval(() => { if ($('p-upgrades').classList.contains('on')) renderUpgrades(); }, 2000);
+// ═════════════════════════ PIN ═════════════════════════
+// Se pide al abrir la app y si estuvo más de 5 min en segundo plano. Lo valida el servidor.
+let pinBuf = '', pinNext = null, pinBusy = false, hiddenAt = 0;
+function unlocked() { try { return sessionStorage.getItem('tycoon_unlocked') === '1'; } catch (_) { return false; } }
+function setUnlocked(v) { try { v ? sessionStorage.setItem('tycoon_unlocked', '1') : sessionStorage.removeItem('tycoon_unlocked'); } catch (_) {} }
+function drawDots() { [...$('pin-dots').children].forEach((d, i) => d.classList.toggle('on', i < pinBuf.length)); }
+function askPin(next) {
+  if (unlocked()) { if (next) next(); return; }
+  pinNext = next; pinBuf = ''; drawDots();
+  $('pin-msg').textContent = 'Ingresá tu PIN';
+  $('ov-pin').hidden = false;
+}
+async function checkPin() {
+  pinBusy = true;
+  try {
+    if (!DEMO) {
+      const res = await fetch('/api/admin/tycoon/unlock', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken() }, body: JSON.stringify({ pin: pinBuf }) });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { $('ov-pin').hidden = true; showLogin(); return; }
+      if (!res.ok) throw new Error(data.error + (data.left > 0 ? ` · te quedan ${data.left} intentos` : ''));
+    }
+    setUnlocked(true);
+    $('ov-pin').hidden = true; beep(990, 0.08);
+    const n = pinNext; pinNext = null; if (n) n();
+  } catch (err) {
+    $('pin-msg').textContent = err.message === 'Failed to fetch' ? 'Sin conexión' : err.message;
+    $('pin-dots').classList.add('shake'); beep(200, 0.15, 'sawtooth', 0.03);
+    setTimeout(() => $('pin-dots').classList.remove('shake'), 400);
+    pinBuf = ''; drawDots();
+  } finally { pinBusy = false; }
+}
+function pinKey(k) {
+  if (pinBusy || $('ov-pin').hidden) return;
+  if (k === 'del') pinBuf = pinBuf.slice(0, -1);
+  else if (pinBuf.length < 4) pinBuf += k;
+  beep(600, 0.03); drawDots();
+  if (pinBuf.length === 4) checkPin();
+}
+$('keypad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) pinKey(b.dataset.k || b.textContent); });
+document.addEventListener('keydown', e => { if (/^\d$/.test(e.key)) pinKey(e.key); else if (e.key === 'Backspace') pinKey('del'); });
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { accrue(); save(); hiddenAt = Date.now(); return; }
+  const away = S.lastTick ? Date.now() - S.lastTick : 0;
+  const g = accrue(); save();
+  if (away > 120000 && g > 0) toast(`💤 Mientras no estabas generaste ${money2(g)}`);
+  if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) setUnlocked(false);
+  if (D) askPin(() => { daily(); refresh(); });
+});
+setInterval(() => { if (!document.hidden && unlocked()) refresh(); }, REFRESH_MS);
+
+// arranque: lo generado con la app cerrada se suma al ritmo del último MRR conocido
+(() => {
+  const away = S.lastTick ? Date.now() - S.lastTick : 0;
+  const g = accrue();
+  if (away > 120000 && g > 0) setTimeout(() => toast(`💤 Mientras no estabas generaste ${money2(g)}`), 600);
+})();
+drawCity(); renderHud(); renderAds();
+if (DEMO || adminToken()) askPin(() => refresh(true)); else showLogin();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

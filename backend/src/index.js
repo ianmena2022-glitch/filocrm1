@@ -178,6 +178,11 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(publicDir, 'admin.html'));
 });
 
+// Filo Tycoon (juego idle con los números reales; usa el login admin)
+app.get('/tycoon', (req, res) => {
+  res.sendFile(path.join(publicDir, 'tycoon.html'));
+});
+
 // Dashboard vendedor
 app.get('/vendor', (req, res) => {
   res.sendFile(path.join(publicDir, 'vendor.html'));
