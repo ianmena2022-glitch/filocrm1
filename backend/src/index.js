@@ -179,7 +179,9 @@ app.get('/admin', (req, res) => {
 });
 
 // Filo Tycoon (juego idle con los números reales; usa el login admin)
-app.get('/tycoon', (req, res) => {
+app.get(['/tycoon', '/tycoon.html'], (req, res) => {
+  // Sin caché: el iPhone guardaba la versión vieja de la app y no tomaba las actualizaciones
+  res.set('Cache-Control', 'no-store, must-revalidate');
   res.sendFile(path.join(publicDir, 'tycoon.html'));
 });
 

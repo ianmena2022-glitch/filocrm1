@@ -304,6 +304,7 @@ const CARS_URL = 'https://filocars-production.up.railway.app';
 const MONTH_SECONDS = 30 * 86400;
 const SAVE_KEY = 'filo_tycoon_v2';
 const REFRESH_MS = 5 * 60 * 1000;
+const BUILD = '2026-11-05-e'; // cambiarlo en cada versión: el juego abierto se recarga solo
 const QS = new URLSearchParams(location.search);
 const DEMO = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !QS.has('real')) || QS.has('demo');
 
@@ -481,7 +482,20 @@ function normalize(filo, cars, carsConnected) {
   };
 }
 
+// Si hay una versión nueva del juego publicada, recarga (una vez por versión) guardando antes la partida
+async function checkVersion() {
+  if (DEMO) return;
+  try {
+    const { build } = await (await fetch('/api/admin/tycoon/version', { cache: 'no-store' })).json();
+    if (!build || build === BUILD) return;
+    try { if (sessionStorage.getItem('tycoon_reloaded') === build) return; sessionStorage.setItem('tycoon_reloaded', build); } catch (_) {}
+    accrue(); save(); saveRemote(true, true);
+    setTimeout(() => location.reload(), 300);
+  } catch (_) {}
+}
+
 async function refresh(first) {
+  checkVersion();
   try {
     let filo, cars, carsOk = false, carsErr = null;
     if (DEMO) { const d = demoData(); filo = d.filo; cars = d.cars; carsOk = true; }

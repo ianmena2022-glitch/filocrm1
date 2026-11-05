@@ -1033,6 +1033,18 @@ async function settingSet(key, value) {
 }
 const jsonOr = (s, d) => { try { return JSON.parse(s); } catch (_) { return d; } };
 
+// GET /api/admin/tycoon/version → { build } — el juego se recarga solo si hay una versión nueva
+let _tycoonBuild = null;
+router.get('/tycoon/version', (req, res) => {
+  try {
+    if (!_tycoonBuild) {
+      const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'tycoon.html'), 'utf8');
+      _tycoonBuild = (html.match(/const BUILD = '([^']+)'/) || [])[1] || 'x';
+    }
+    res.set('Cache-Control', 'no-store').json({ build: _tycoonBuild });
+  } catch (e) { res.json({ build: null }); }
+});
+
 // GET /api/admin/tycoon/state → { state }   ·   PUT { state }
 router.get('/tycoon/state', adminAuth, async (req, res) => {
   try { const r = await settingGet('tycoon_state'); res.json({ state: r ? jsonOr(r.value, null) : null }); }
@@ -1125,7 +1137,8 @@ async function contenidoFetch(req, path, opts = {}) {
 
 // POST /api/admin/contenido/login { pin }
 router.post('/contenido/login', adminAuth, async (req, res) => {
-  try { await contenidoLogin(req.body?.pin); res.json({ ok: true }); }
+  // session va también en la respuesta: las versiones viejas del juego (guardadas en el celu) la esperan
+  try { const session = await contenidoLogin(req.body?.pin); res.json({ ok: true, session }); }
   catch (e) { res.status(e.status || 502).json({ error: e.status ? e.message : 'FILO Contenido no responde' }); }
 });
 
