@@ -92,6 +92,8 @@ router.post('/redeem', auth, async (req, res) => {
       [req.shopId]
     );
 
+    // El CRM muestra "Plan: N días" con este dato (si no, queda el valor viejo: "último día")
+    updated.rows[0].trial_days_left = Math.max(0, Math.ceil((base - Date.now()) / 86400000));
     console.log(`[REFERRALS] Shop ${req.shopId} canjeó 1 mes gratis. Quedan ${freeMonths - 1}. Acceso hasta ${base.toDateString()}`);
     res.json({ ok: true, shop: updated.rows[0], free_months_left: freeMonths - 1 });
   } catch (e) {

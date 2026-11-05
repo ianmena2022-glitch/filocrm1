@@ -315,6 +315,7 @@ router.post('/return-code', auth, async (req, res) => {
     const shop = (await pool.query(
       'SELECT id, name, subscription_status, trial_ends_at, free_months, filo_plan, plan, is_barber, is_branch, is_enterprise_owner, parent_shop_id, parent_enterprise_id FROM shops WHERE id=$1',
       [s.id])).rows[0];
+    shop.trial_days_left = p.trial_days; // el CRM muestra "Trial: N días" con este dato
     console.log(`[return-code] Shop ${s.id} volvió con ${code}: ${p.trial_days} días hasta ${until.toDateString()}`);
     res.json({ ok: true, trial_days: p.trial_days, shop });
   } catch (e) {
