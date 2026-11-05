@@ -100,7 +100,15 @@ button{font-family:inherit;cursor:pointer;border:0}
 
 /* Tabs */
 .tabs{display:flex;gap:4px;margin-top:16px;background:var(--bg2);padding:5px;border-radius:16px;position:sticky;top:calc(env(safe-area-inset-top) + 74px);z-index:15}
-.tab{flex:1;background:none;color:#cbbcff;font-size:14px;font-weight:600;padding:10px 2px;border-radius:12px;position:relative;white-space:nowrap}
+.tab{flex:1 1 auto;min-width:0;background:none;color:#cbbcff;font-size:12.5px;font-weight:600;padding:10px 4px;border-radius:12px;position:relative;white-space:nowrap}
+.res-chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
+.res-chips .chip{background:var(--bg2);border-radius:12px;padding:7px 10px;font-size:12px;color:#e6defc}
+.res-chips .chip b{font-size:16px;margin-right:3px;color:#fff}
+.res-filter{display:flex;gap:6px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none}
+.res-filter button{flex:none;background:var(--bg2);color:#cbbcff;font-size:13px;font-weight:600;padding:7px 12px;border-radius:99px}
+.res-filter button.on{background:#fff;color:var(--ink)}
+.card.done{opacity:.55}
+.warn{font-size:11.5px;color:#b5470b;margin-top:3px}
 .tab.on{background:#fff;color:var(--ink)}
 .tab .dot{position:absolute;top:2px;right:4px;background:var(--pink);color:#fff;font-size:10px;border-radius:9px;padding:0 5px;line-height:16px}
 .panel{display:none;margin-top:10px}
@@ -226,11 +234,13 @@ label input[type=checkbox]{width:auto}
 
   <div class="tabs">
     <button class="tab on" data-tab="missions">Misiones<span class="dot" id="mis-dot" hidden></span></button>
+    <button class="tab" data-tab="rescue">Rescate<span class="dot" id="res-dot" hidden></span></button>
     <button class="tab" data-tab="ads">Publicidad<span class="dot" id="ads-dot" hidden></span></button>
     <button class="tab" data-tab="upgrades">Decorar</button>
     <button class="tab" data-tab="empire">Imperio</button>
   </div>
   <div class="panel on" id="p-missions"></div>
+  <div class="panel" id="p-rescue"></div>
   <div class="panel" id="p-ads"></div>
   <div class="panel" id="p-upgrades"></div>
   <div class="panel" id="p-empire"></div>
@@ -304,7 +314,7 @@ const CARS_URL = 'https://filocars-production.up.railway.app';
 const MONTH_SECONDS = 30 * 86400;
 const SAVE_KEY = 'filo_tycoon_v2';
 const REFRESH_MS = 5 * 60 * 1000;
-const BUILD = '2026-11-05-e'; // cambiarlo en cada versión: el juego abierto se recarga solo
+const BUILD = '2026-11-05-f'; // cambiarlo en cada versión: el juego abierto se recarga solo
 const QS = new URLSearchParams(location.search);
 const DEMO = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !QS.has('real')) || QS.has('demo');
 
@@ -346,20 +356,24 @@ const money2 = (n) => '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 2
 function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
 function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {} }
 function adminToken() { try { return localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token'); } catch (_) { return null; } }
-function waLink(phone, text) {
+// WhatsApp de celulares argentinos: 54 + 9 + área + número = 13 dígitos (muchos están guardados sin el 9)
+function waNumber(phone) {
   let d = String(phone || '').replace(/\D/g, '');
   if (!d) return null;
   if (d.startsWith('00')) d = d.slice(2);
   if (d.startsWith('0')) d = d.slice(1);
-  // WhatsApp de celulares argentinos: 54 + 9 + área + número (muchos están guardados sin el 9)
   if (d.startsWith('54')) { const r = d.slice(2); d = '54' + (r.startsWith('9') ? r : '9' + r); }
   else d = '549' + d;
-  return 'https://wa.me/' + d + '?text=' + encodeURIComponent(text);
+  return d;
+}
+function waLink(phone, text) {
+  const d = waNumber(phone);
+  return d ? 'https://wa.me/' + d + '?text=' + encodeURIComponent(text) : null;
 }
 
 // ═════════════════════════ Partida ═════════════════════════
 const fresh = () => ({ wallet: 0, earned: 0, spent: 0, stars: 0, lastTick: null, lastRate: 0, streak: 0, lastDay: null,
-  snap: null, contacted: {}, feed: [], deco: {}, sound: true, bestLevel: 0, ctSession: null });
+  snap: null, contacted: {}, rescued: {}, feed: [], deco: {}, sound: true, bestLevel: 0, ctSession: null });
 let S = fresh();
 try { const raw = lsGet(SAVE_KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (_) {}
 const save = () => lsSet(SAVE_KEY, JSON.stringify(S));
@@ -442,6 +456,7 @@ async function fetchFilo() {
     price: forecast[a.id] ? forecast[a.id].mrr_price : (PLAN_PRICES[a.filo_plan] || 0),
     renew: a.trial_ends_at, expiredAt: a.expired_at, createdAt: a.created_at,
     wpp: !!a.wpp_connected, pwa: (parseInt(a.pwa_count) || 0) > 0,
+    email: a.email, paid: !!a.first_payment_at, archived: a.archived_manual === true,
   }));
 }
 async function fetchCars() {
@@ -452,7 +467,7 @@ async function fetchCars() {
   const list = await res.json();
   // Las agencias marcadas como test no cuentan
   return (Array.isArray(list) ? list : (list.agencies || [])).filter(a => !a.is_test).map(a => ({
-    id: String(a.id), name: a.name || 'Agencia', phone: a.phone, status: a.subscription_status,
+    id: String(a.id), name: a.name || 'Agencia', phone: a.phone, status: a.subscription_status, email: a.owner_email || a.email, city: a.city,
     renew: a.trial_ends_at, stock: a.stock || 0, sales: a.sales || 0, lastSale: a.last_sale_at, createdAt: a.created_at,
   }));
 }
@@ -463,9 +478,14 @@ function demoData() {
   const filo = names.map((n, i) => ({ id: 'd' + i, name: n, phone: '11 5' + (100 + i) + '-00' + (10 + i), status: st[i], plan: plans[i],
     price: PLAN_PRICES[plans[i]], renew: new Date(Date.now() + ((i % 5) - 1) * DAY).toISOString(),
     expiredAt: new Date(Date.now() - (i + 3) * DAY).toISOString(), createdAt: new Date(Date.now() - i * 9 * DAY).toISOString(),
-    wpp: i % 4 !== 1, pwa: i % 3 !== 2 }));
-  const cars = ['Autos del Sur', 'Rodar Motors', 'Gran Ruta', 'Usados Ya'].map((n, i) => ({ id: 'c' + i, name: n, phone: '11 6000-00' + i,
-    status: ['active', 'trial', 'active', 'trial'][i], renew: new Date(Date.now() + (i + 1) * DAY).toISOString(), stock: [24, 0, 12, 3][i], sales: [9, 0, 4, 1][i] }));
+    wpp: i % 4 !== 1, pwa: i % 3 !== 2, email: `demo${i}@ejemplo.com`, paid: i === 6, archived: false }));
+  // bajas viejas (sin fecha de baja, como muchas cuentas reales)
+  ['Barbería Los Viejos', 'Corte Sur', 'Barbería Prueba', 'Fade Club'].forEach((n, i) => filo.push({ id: 'old' + i, name: n,
+    phone: i === 3 ? null : '+54 11 7' + (200 + i) + '-1' + (100 + i), status: i % 2 ? 'cancelled' : 'expired', plan: i % 2 ? 'staff' : 'starter',
+    price: 0, renew: new Date(Date.now() - (150 + i * 20) * DAY).toISOString(), expiredAt: null, createdAt: new Date(Date.now() - (160 + i * 20) * DAY).toISOString(),
+    wpp: false, pwa: false, email: `vieja${i}@ejemplo.com`, paid: false, archived: i === 1 }));
+  const cars = ['Autos del Sur', 'Rodar Motors', 'Gran Ruta', 'Usados Ya', 'Motores Norte'].map((n, i) => ({ id: 'c' + i, name: n, phone: '11 6000-00' + i,
+    status: ['active', 'trial', 'active', 'trial', 'expired'][i], renew: new Date(Date.now() + (i + 1 - (i === 4 ? 40 : 0)) * DAY).toISOString(), stock: [24, 0, 12, 3, 0][i], sales: [9, 0, 4, 1, 0][i] }));
   return { filo, cars };
 }
 function normalize(filo, cars, carsConnected) {
@@ -604,9 +624,6 @@ function missions() {
     if (a.status === 'trial' && d !== null && d > 4 && daysSince(a.createdAt) <= 3) M.push({ id: 'welcome-' + a.id, pri: 3, ico: '👋', bg: '#e3f6ff', who: a,
       t: `Dale la bienvenida a ${a.name}`, s: 'Se sumó hace poco: un buen arranque ayuda a que se quede', rw: 'Clave para convertir',
       msg: `¡Hola! Te escribo de Filo 💈 ¡Bienvenido! ¿Pudiste cargar tus servicios y barberos? Si querés, en 5 minutos te ayudo a dejar la agenda lista.` });
-    if ((a.status === 'expired' || a.status === 'cancelled') && (daysSince(a.expiredAt) ?? 99) <= 45) M.push({ id: 'rescue-' + a.id, pri: 2, ico: '🛟', bg: '#ffe1e8', who: a,
-      t: `Rescatá a ${a.name}`, s: `Se fue hace ${daysSince(a.expiredAt) ?? '?'} días`, rw: `+${money(PLAN_PRICES[a.plan] || PLAN_PRICES.starter)}/mes y +${STAR.recover} ⭐ si vuelve`,
-      msg: `¡Hola! 👋 Te escribo de *Filo* 💈\n\nVi que la cuenta de *${a.name}* quedó pausada y desde entonces lo mejoramos muchísimo:\n\n✅ Tus clientes sacan turno solos, las 24 hs, desde tu link\n✅ Recordatorios automáticos por WhatsApp: muchos menos clientes que faltan\n✅ Caja, comisiones de cada barbero y estadísticas al día\n✅ App en el celu que te avisa de cada turno nuevo\n\nQueremos que lo vuelvas a probar: *te regalamos 1 mes gratis* 🎁\nEntrá a filocrm.com.ar con tu cuenta, tocá *"¿Tenés un código de descuento?"* y poné *VOLVEMOS*.\n\nSi querés, lo configuramos juntos en 10 minutos. ¿Te doy una mano? 🙌` });
     if (a.status === 'active') {
       if (d !== null && d <= 1) M.push({ id: 'pay-' + a.id, pri: 1, ico: '💸', bg: '#e6ffef', who: a,
         t: `Cobro de ${a.name}`, s: d < 0 ? `Venció hace ${-d} día${-d > 1 ? 's' : ''}` : d === 0 ? 'Vence hoy' : 'Vence mañana', rw: `${money(a.price)}/mes en juego`,
@@ -627,10 +644,13 @@ function missions() {
     if (a.status !== 'expired' && a.status !== 'cancelled' && a.stock === 0) M.push({ id: 'cstock-' + a.id, pri: 2, ico: '🚙', bg: '#ffeedd', who: a,
       t: `${a.name} no cargó autos`, s: 'FiloCars · sin stock no ven el valor', rw: `+${STAR.stock} ⭐ cuando cargue`,
       msg: `¡Hola! Te escribo de FiloCars 🚗 Vi que todavía no cargaste autos en tu catálogo. ¿Te ayudo a subir los primeros? En 10 minutos lo dejamos andando.` });
-    if (a.status === 'expired' || a.status === 'cancelled') M.push({ id: 'crescue-' + a.id, pri: 3, ico: '🛟', bg: '#ffe1e8', who: a,
-      t: `Rescatá a ${a.name}`, s: 'FiloCars · agencia dada de baja', rw: `+${money(CARS_PRICE)}/mes y +${STAR.recover} ⭐ si vuelve`,
-      msg: `¡Hola! Te escribo de FiloCars 🚗 Vi que la cuenta de ${a.name} quedó pausada. ¿Hubo algo que no te sirvió? Me encantaría ayudarte.` });
   });
+  // Rescate: una sola tarjeta que lleva a la pestaña con todas las bajas
+  const resPend = rescueList().filter(x => x.g < 3 && !S.rescued[x.key]);
+  if (resPend.length) M.push({ id: 'rescue-tab', pri: 2, ico: '🛟', bg: '#ffe1e8', ad: 'rescue',
+    t: `Rescatá ${resPend.length} cuenta${resPend.length > 1 ? 's' : ''} que se fue${resPend.length > 1 ? 'ron' : ''}`,
+    s: 'Mensaje con 1 mes gratis (código VOLVEMOS) listo para mandar',
+    rw: `Hasta ${money(resPend.reduce((s, x) => s + x.price, 0))}/mes y +${STAR.recover} ⭐ por cada una que vuelva` });
   // Publicidad
   if (ADS && ADS.list) {
     const rev = ADS.list.filter(p => p.status === 'pending').length;
@@ -642,7 +662,7 @@ function missions() {
 }
 function contactedToday(id) { return S.contacted[id] === todayStr(); }
 function contact(m) {
-  if (m.ad) { openTab('ads'); return; }
+  if (m.ad) { openTab(m.ad === 'rescue' ? 'rescue' : 'ads'); return; }
   const url = waLink(m.who.phone, m.msg);
   if (!contactedToday(m.id)) {
     S.contacted[m.id] = todayStr();
@@ -1048,7 +1068,96 @@ function renderEmpire() {
     <div class="feed">${S.feed.length ? S.feed.slice(0, 15).map(f => `<div class="card"><div class="ico" style="background:#f2edff;width:36px;height:36px;font-size:18px">${f.ico}</div><div class="txt"><div class="t" style="font-size:14px">${esc(f.text)}</div><div class="s">${new Date(f.at).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div></div>`).join('') : '<div class="empty">Todavía nada. ¡Hacé tu primera misión!</div>'}</div>
     <div class="empty" style="font-size:12px">No cuentan barberos, sucursales, cuentas test ni las marcadas "No contar en los KPIs"; en FiloCars no cuentan las agencias test. Datos de las ${new Date(D.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}, se refrescan cada 5 min.</div>`;
 }
-function renderAll() { drawCity(); renderHud(); renderGoal(); renderStreet(); renderCars(); renderMissions(); renderUpgrades(); renderEmpire(); renderAds(); }
+// ═════════════════════════ Rescate: todas las cuentas que se dieron de baja ═════════════════════════
+const isLostStatus = s => s === 'expired' || s === 'cancelled';
+function leftAt(a) { return a.expiredAt || (a.renew && new Date(a.renew) < Date.now() ? a.renew : null) || a.createdAt; }
+function agoTxt(d) {
+  const days = daysSince(d);
+  if (days === null) return '';
+  if (days < 1) return 'hoy'; if (days < 30) return `hace ${days} día${days > 1 ? 's' : ''}`;
+  const m = Math.round(days / 30); return m === 1 ? 'hace 1 mes' : `hace ${m} meses`;
+}
+function rescueMsg(a, k) {
+  if (k === 'c') return `¡Hola! 👋 Te escribo de *FiloCars* 🚗\n\nVi que la cuenta de *${a.name}* quedó pausada. Desde entonces mejoramos un montón el catálogo y la gestión de ventas. ¿Te gustaría volver a probarlo? Te ayudo a dejar tu stock cargado en 10 minutos 🙌`;
+  const intro = a.paid
+    ? `¡Hola! 👋 Te escribo de *Filo* 💈\n\nVi que la cuenta de *${a.name}* quedó vencida y no quería que te pierdas todo lo nuevo que sumamos:`
+    : `¡Hola! 👋 Te escribo de *Filo* 💈\n\nHace un tiempo probaste Filo para *${a.name}* y desde entonces lo mejoramos muchísimo:`;
+  return `${intro}\n\n✅ Tus clientes sacan turno solos, las 24 hs, desde tu link\n✅ Recordatorios automáticos por WhatsApp: muchos menos clientes que faltan\n✅ Caja, comisiones de cada barbero y estadísticas al día\n✅ App en el celu que te avisa de cada turno nuevo\n\nQueremos que lo vuelvas a probar: *te regalamos 1 mes gratis* 🎁\nEntrá a filocrm.com.ar con tu cuenta, tocá *"¿Tenés un código de descuento?"* y poné *VOLVEMOS*.\n\nSi querés, lo configuramos juntos en 10 minutos. ¿Te doy una mano? 🙌`;
+}
+function rescueList() {
+  if (!D) return [];
+  const out = [];
+  D.filo.list.filter(a => isLostStatus(a.status)).forEach(a => out.push({ k: 'f', a, key: 'f' + a.id, at: leftAt(a), price: PLAN_PRICES[a.plan] || PLAN_PRICES.starter }));
+  D.cars.list.filter(a => isLostStatus(a.status)).forEach(a => out.push({ k: 'c', a, key: 'c' + a.id, at: leftAt(a), price: CARS_PRICE }));
+  const group = x => {
+    if (x.a.paid) return 0;
+    if (!x.a.phone || /prueba|test/i.test(x.a.name)) return 3;
+    return (daysSince(x.at) ?? 999) <= 90 ? 1 : 2;
+  };
+  out.forEach(x => x.g = group(x));
+  return out.sort((x, y) => x.g - y.g || new Date(y.at || 0) - new Date(x.at || 0));
+}
+let resFilter = 'todo';
+function renderRescue() {
+  const p = $('p-rescue');
+  const L = rescueList();
+  const pend = L.filter(x => x.g < 3 && !S.rescued[x.key]).length;
+  $('res-dot').hidden = !pend; $('res-dot').textContent = pend;
+  if (!D) { p.innerHTML = '<div class="empty">Cargando…</div>'; return; }
+  if (!L.length) { p.innerHTML = '<div class="empty">🎉 No hay cuentas dadas de baja. ¡Nadie se fue!</div>'; return; }
+  const sent = L.filter(x => S.rescued[x.key]).length;
+  const pot = L.filter(x => x.g < 3).reduce((s, x) => s + x.price, 0);
+  const GROUPS = ['⭐ Ya pagó alguna vez', '🔥 Se fueron hace poco (3 meses o menos)', '🕰️ Se fueron hace más tiempo', '⚠️ Revisar antes: sin teléfono o parecen pruebas'];
+  const shown = L.filter(x => resFilter === 'todo' || (resFilter === 'pend' ? !S.rescued[x.key] : S.rescued[x.key]));
+  let h = `<div class="sec-title">Cuentas que se dieron de baja · ${DEMO ? '<span class="demo-badge">DEMO</span>' : 'se actualiza sola'}</div>
+    <div class="res-chips"><div class="chip"><b>${L.length}</b>cuentas</div><div class="chip"><b>${sent}</b>ya les escribiste</div><div class="chip"><b>${money(pot)}</b>/mes si vuelven</div></div>
+    <div class="res-filter">${[['todo', 'Todas'], ['pend', 'Sin escribir'], ['done', 'Ya escritas']].map(([k, t]) => `<button data-rf="${k}" class="${resFilter === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="card" style="background:#fff8e1"><div class="ico" style="background:#ffe9a8">🎁</div><div class="txt"><div class="t" style="font-size:14px">El mensaje les regala 1 mes gratis con <b>VOLVEMOS</b></div><div class="s">Entran con su cuenta de siempre y lo ponen en "¿Tenés un código de descuento?". Si vuelve: +${STAR.recover} ⭐</div></div></div>`;
+  GROUPS.forEach((g, gi) => {
+    const list = shown.filter(x => x.g === gi);
+    if (!list.length) return;
+    h += `<div class="sec-title">${g} · ${list.length}</div>`;
+    h += list.map(x => {
+      const a = x.a, n = waNumber(a.phone), done = S.rescued[x.key];
+      const info = [x.k === 'c' ? 'FiloCars' : null, a.city, x.k === 'f' && a.plan ? a.plan.charAt(0).toUpperCase() + a.plan.slice(1) : null, a.status === 'cancelled' ? 'cancelada' : 'vencida', agoTxt(x.at)].filter(Boolean).join(' · ');
+      const warn = [a.archived ? 'La archivaste a mano en el admin.' : '', n && n.length !== 13 ? `El número parece incompleto (${n.length} dígitos): revisalo.` : '', /prueba|test/i.test(a.name) ? 'El nombre parece de prueba.' : ''].filter(Boolean).join(' ');
+      return `<div class="card ${done ? 'done' : ''}"><div class="ico" style="background:${x.k === 'c' ? '#ffeedd' : '#ffe1e8'}">${x.k === 'c' ? '🚗' : '💈'}</div>
+        <div class="txt"><div class="t">${esc(a.name)}</div><div class="s">${esc(info)}</div>
+          <div class="s">${n ? '+' + n : 'sin teléfono'}${a.email ? ' · ' + esc(a.email) : ''}</div>
+          ${warn ? `<div class="warn">${esc(warn)}</div>` : ''}
+          ${done ? `<div class="done-tag">✓ Le escribiste ${esc(new Date(done).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }))}</div>` : ''}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+          ${n ? `<button class="btn wa" data-rs="${esc(x.key)}">WhatsApp</button>` : a.email ? `<button class="btn ghost" data-rm="${esc(x.key)}">Mail</button>` : ''}
+          <button class="btn ghost" style="padding:6px 8px;font-size:12px" data-rt="${esc(x.key)}">${done ? 'Desmarcar' : '✓ Ya está'}</button>
+        </div></div>`;
+    }).join('');
+  });
+  if (!shown.length) h += '<div class="empty">Nada en este filtro 👌</div>';
+  p.innerHTML = h;
+  const byKey = k => L.find(x => x.key === k);
+  p.querySelectorAll('[data-rf]').forEach(b => b.onclick = () => { resFilter = b.dataset.rf; renderRescue(); });
+  p.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => {
+    const x = byKey(b.dataset.rs); markRescued(x, true);
+    window.open(waLink(x.a.phone, rescueMsg(x.a, x.k)), '_blank', 'noopener');
+  });
+  p.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+    const x = byKey(b.dataset.rm); markRescued(x, true);
+    location.href = `mailto:${encodeURIComponent(x.a.email)}?subject=${encodeURIComponent(x.k === 'c' ? 'Volvé a FiloCars 🚗' : 'Volvé a Filo 💈')}&body=${encodeURIComponent(rescueMsg(x.a, x.k).replace(/\*/g, ''))}`;
+  });
+  p.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { const x = byKey(b.dataset.rt); markRescued(x, !S.rescued[x.key]); });
+}
+function markRescued(x, on) {
+  if (on && !S.rescued[x.key]) {
+    S.rescued[x.key] = Date.now();
+    const id = 'rescue-day-' + x.key;
+    if (!contactedToday(id)) { S.contacted[id] = todayStr(); star(STAR.contact); }
+    addFeed('🛟', `Le escribiste a ${x.a.name} para que vuelva`);
+    toast(`🛟 +${STAR.contact} ⭐ · Si vuelve, +${STAR.recover} ⭐`);
+  } else if (!on) delete S.rescued[x.key];
+  save(); saveRemote(true); renderRescue(); renderMissions(); renderHud();
+}
+
+function renderAll() { drawCity(); renderHud(); renderGoal(); renderStreet(); renderCars(); renderMissions(); renderRescue(); renderUpgrades(); renderEmpire(); renderAds(); }
 
 // ═════════════════════════ Acciones ═════════════════════════
 function onTap(e) {
@@ -1114,6 +1223,7 @@ function openTab(name) {
   if (name === 'upgrades') renderUpgrades();
   if (name === 'empire') renderEmpire();
   if (name === 'ads') renderAds();
+  if (name === 'rescue') renderRescue();
   document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => openTab(t.dataset.tab));
