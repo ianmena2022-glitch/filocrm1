@@ -304,7 +304,8 @@ const CARS_URL = 'https://filocars-production.up.railway.app';
 const MONTH_SECONDS = 30 * 86400;
 const SAVE_KEY = 'filo_tycoon_v2';
 const REFRESH_MS = 5 * 60 * 1000;
-const DEMO = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || new URLSearchParams(location.search).has('demo');
+const QS = new URLSearchParams(location.search);
+const DEMO = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !QS.has('real')) || QS.has('demo');
 
 // Niveles: SOLO por MRR real. No se compran.
 const LEVELS = [
@@ -362,6 +363,30 @@ let S = fresh();
 try { const raw = lsGet(SAVE_KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch (_) {}
 const save = () => lsSet(SAVE_KEY, JSON.stringify(S));
 
+// La partida también se guarda en el servidor: así es la misma en el ícono, Safari y la compu.
+let stateReady = false, lastRemote = 0;
+async function loadRemote() {
+  if (DEMO || !adminToken()) return;
+  try {
+    const r = await fetch('/api/admin/tycoon/state', { headers: { Authorization: 'Bearer ' + adminToken() } });
+    if (!r.ok) return;
+    const { state } = await r.json();
+    if (state && (state.lastTick || 0) > (S.lastTick || 0)) { S = Object.assign(fresh(), state); save(); }
+  } catch (_) {}
+}
+function saveRemote(force, keepalive) {
+  if (DEMO || !stateReady || !adminToken()) return;
+  if (!force && Date.now() - lastRemote < 30000) return;
+  lastRemote = Date.now();
+  const st = { ...S }; delete st.ctSession;
+  fetch('/api/admin/tycoon/state', { method: 'PUT', keepalive: !!keepalive,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken() }, body: JSON.stringify({ state: st }) })
+    .then(r => r.json()).then(d => {
+      // otro dispositivo jugó más recién: seguimos con esa partida
+      if (d && d.kept === 'server' && d.state && (d.state.lastTick || 0) > (S.lastTick || 0)) { S = Object.assign(fresh(), d.state); save(); if (D) renderAll(); }
+    }).catch(() => {});
+}
+
 let D = null;   // números reales
 let ADS = null; // posteos de FILO Contenido
 
@@ -374,6 +399,7 @@ function addFeed(ico, text) { S.feed.unshift({ ico, text, at: Date.now() }); S.f
 
 // Suma de monedas por tiempo real transcurrido (corre igual con la app cerrada: se calcula al volver)
 function accrue() {
+  if (!stateReady) return 0; // primero se trae la partida del servidor
   const now = Date.now();
   if (S.lastTick == null) { S.lastTick = now; return 0; }
   const secs = Math.max(0, (now - S.lastTick) / 1000);
@@ -418,10 +444,9 @@ async function fetchFilo() {
   }));
 }
 async function fetchCars() {
-  const t = lsGet('cars_admin_token');
-  if (!t) return null;
-  const res = await fetch(CARS_URL + '/api/admin/agencies', { headers: { Authorization: 'Bearer ' + t } });
-  if (res.status === 401) { lsSet('cars_admin_token', null); return null; }
+  // El servidor guarda la sesión de FiloCars (y la renueva sola): no se pierde al cambiar de celu
+  const res = await fetch('/api/admin/tycoon/cars/agencies', { headers: { Authorization: 'Bearer ' + adminToken() } });
+  if (res.status === 412) return null; // todavía no conectado
   if (!res.ok) throw new Error('FiloCars no respondió');
   const list = await res.json();
   // Las agencias marcadas como test no cuentan
@@ -636,18 +661,19 @@ function demoAds() {
 }
 async function loadAds() {
   if (DEMO) { if (!ADS) ADS = { list: demoAds() }; renderAds(); renderMissions(); drawCity(); return; }
-  if (!S.ctSession) { ADS = null; renderAds(); return; }
-  try { const { pieces } = await ctApi('/pieces'); ADS = { list: pieces || [] }; }
-  catch (e) { if (e.auth) { S.ctSession = null; save(); ADS = null; } else ADS = ADS || { error: e.message }; }
+  // La sesión de Contenido la guarda el servidor: acá solo vemos si responde o si hay que conectar
+  try { const { pieces } = await ctApi('/pieces'); ADS = { list: pieces || [] }; ctNeedLogin = false; if (S.ctSession) { S.ctSession = null; save(); } }
+  catch (e) { if (e.auth) { ctNeedLogin = true; ADS = null; } else ADS = ADS || { error: e.message }; }
   renderAds(); renderMissions(); drawCity();
 }
+let ctNeedLogin = false;
 async function connectContenido() {
   const pin = $('ct-pin').value, err = $('ct-err');
   if (!pin) { err.textContent = 'Poné el PIN'; return; }
   err.textContent = 'Conectando…';
   try {
-    const { session } = await ctApi('/login', { method: 'POST', body: JSON.stringify({ pin }) });
-    S.ctSession = session; save();
+    await ctApi('/login', { method: 'POST', body: JSON.stringify({ pin }) });
+    ctNeedLogin = false;
     toast('📣 ¡FILO Contenido conectado!');
     loadAds();
   } catch (e) { err.textContent = e.message; }
@@ -671,7 +697,7 @@ function renderAds() {
   const p = $('p-ads');
   const pend = ADS && ADS.list ? ADS.list.filter(x => x.status === 'pending').length : 0;
   $('ads-dot').hidden = !pend; $('ads-dot').textContent = pend;
-  if (!DEMO && !S.ctSession) {
+  if (!DEMO && ctNeedLogin) {
     p.innerHTML = `<div class="connect"><p>📣 Conectá <b>FILO Contenido</b> para revisar y subir la publicidad desde el juego. Cada posteo aprobado y publicado te da estrellas.</p><input type="password" inputmode="numeric" id="ct-pin" placeholder="PIN de FILO Contenido"><button class="btn" id="btn-ct">Conectar</button><div class="err" id="ct-err" style="width:100%"></div></div>`;
     $('btn-ct').onclick = connectContenido; return;
   }
@@ -1058,10 +1084,10 @@ async function connectCars() {
   if (!pass) { err.textContent = 'Poné la contraseña'; return; }
   err.textContent = 'Conectando…';
   try {
-    const res = await fetch(CARS_URL + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass }) });
+    const res = await fetch('/api/admin/tycoon/cars/login', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken() }, body: JSON.stringify({ password: pass }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se pudo conectar');
-    lsSet('cars_admin_token', data.token);
     if (S.snap) S.snap.__carsSeen = false;
     await refresh();
     toast('🚗 ¡FiloCars conectado!');
@@ -1102,7 +1128,7 @@ async function doLogin() {
     if (!res.ok) throw new Error(data.error || 'No se pudo entrar');
     lsSet('admin_token', data.token);
     $('ov-login').classList.remove('on'); $('login-pass').value = '';
-    askPin(() => refresh(true));
+    askPin(boot);
   } catch (e) { $('login-err').textContent = e.message; }
 }
 $('btn-login').onclick = doLogin;
@@ -1117,7 +1143,7 @@ let saveAcc = 0;
 function loop() {
   accrue();
   renderHud();
-  if (++saveAcc > 120) { save(); saveAcc = 0; }
+  if (++saveAcc > 120) { save(); saveRemote(); saveAcc = 0; }
   requestAnimationFrame(loop);
 }
 setInterval(() => { if ($('p-upgrades').classList.contains('on')) renderUpgrades(); }, 2000);
@@ -1164,23 +1190,30 @@ $('keypad').addEventListener('click', e => { const b = e.target.closest('button'
 document.addEventListener('keydown', e => { if (/^\d$/.test(e.key)) pinKey(e.key); else if (e.key === 'Backspace') pinKey('del'); });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { accrue(); save(); hiddenAt = Date.now(); return; }
-  const away = S.lastTick ? Date.now() - S.lastTick : 0;
-  const g = accrue(); save();
-  if (away > 120000 && g > 0) toast(`💤 Mientras no estabas generaste ${money2(g)}`);
+  if (document.hidden) { accrue(); save(); saveRemote(true, true); hiddenAt = Date.now(); return; }
+  if (!booted) return;
   if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) setUnlocked(false);
-  if (D) askPin(() => { daily(); refresh(); });
+  askPin(async () => { await startState(); daily(); refresh(); });
 });
+window.addEventListener('pagehide', () => { accrue(); save(); saveRemote(true, true); });
+
+// Trae la partida del servidor (si es más nueva) y suma lo generado mientras estaba cerrada
+let booted = false;
+async function startState() {
+  stateReady = false;
+  await loadRemote();
+  stateReady = true;
+  const away = S.lastTick ? Date.now() - S.lastTick : 0;
+  const g = accrue(); save(); saveRemote(true);
+  if (away > 120000 && g > 0) toast(`💤 Mientras no estabas generaste ${money2(g)}`);
+  renderHud();
+}
+async function boot() { await startState(); booted = true; refresh(true); }
 setInterval(() => { if (!document.hidden && unlocked()) refresh(); }, REFRESH_MS);
 
-// arranque: lo generado con la app cerrada se suma al ritmo del último MRR conocido
-(() => {
-  const away = S.lastTick ? Date.now() - S.lastTick : 0;
-  const g = accrue();
-  if (away > 120000 && g > 0) setTimeout(() => toast(`💤 Mientras no estabas generaste ${money2(g)}`), 600);
-})();
-drawCity(); renderHud(); renderAds();
-if (DEMO || adminToken()) askPin(() => refresh(true)); else showLogin();
+// arranque: PIN → partida del servidor → lo generado con la app cerrada → datos reales
+drawCity(); renderHud();
+if (DEMO || adminToken()) askPin(boot); else showLogin();
 requestAnimationFrame(loop);
 })();
 </script>

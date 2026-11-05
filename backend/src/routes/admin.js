@@ -1018,62 +1018,145 @@ router.post('/tycoon/unlock', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Puente con FILO Contenido (para Filo Tycoon) ─────────────────────────────
-// Contenido usa una cookie de sesión propia (PIN). Desde otro dominio el celular no la manda,
-// así que el servidor hace de puente: el juego guarda la sesión de Contenido y la manda en
-// X-Contenido-Session; acá se reenvía como cookie. Solo para el admin logueado.
+
+// ── Filo Tycoon: todo guardado en el servidor ────────────────────────────────
+// La partida y las conexiones a FiloCars / FILO Contenido viven en app_settings, así no se
+// pierden al cambiar de dispositivo, borrar datos del navegador o abrir desde el ícono.
+async function settingGet(key) {
+  const r = await pool.query('SELECT value, updated_at FROM app_settings WHERE key=$1', [key]);
+  return r.rows[0] || null;
+}
+async function settingSet(key, value) {
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [key, value]);
+}
+const jsonOr = (s, d) => { try { return JSON.parse(s); } catch (_) { return d; } };
+
+// GET /api/admin/tycoon/state → { state }   ·   PUT { state }
+router.get('/tycoon/state', adminAuth, async (req, res) => {
+  try { const r = await settingGet('tycoon_state'); res.json({ state: r ? jsonOr(r.value, null) : null }); }
+  catch (e) { res.status(500).json({ error: 'No se pudo leer la partida' }); }
+});
+router.put('/tycoon/state', adminAuth, async (req, res) => {
+  try {
+    const st = req.body?.state;
+    if (!st || typeof st !== 'object') return res.status(400).json({ error: 'Partida inválida' });
+    const txt = JSON.stringify(st);
+    if (txt.length > 300000) return res.status(413).json({ error: 'Partida demasiado grande' });
+    // Nunca pisar una partida más nueva con una vieja (dos dispositivos abiertos)
+    const cur = await settingGet('tycoon_state');
+    const curTick = cur ? (jsonOr(cur.value, {}).lastTick || 0) : 0;
+    if ((st.lastTick || 0) < curTick) return res.json({ ok: true, kept: 'server', state: jsonOr(cur.value, null) });
+    await settingSet('tycoon_state', txt);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar la partida' }); }
+});
+
+// ── FiloCars (el servidor guarda la sesión y la renueva sola) ────────────────
+// Con la variable CARS_ADMIN_PASSWORD (referencia a la de FiloCars) nunca vuelve a pedir contraseña.
+const CARS_URL = (process.env.CARS_URL || 'https://filocars-production.up.railway.app').replace(/\/$/, '');
+async function carsLogin(password) {
+  const r = await fetch(CARS_URL + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.token) { const e = new Error(data.error || 'No se pudo entrar a FiloCars'); e.status = r.status === 401 ? 401 : 502; throw e; }
+  await settingSet('tycoon_cars_token', JSON.stringify({ token: data.token, at: Date.now() }));
+  return data.token;
+}
+async function carsFetch(path) {
+  const saved = jsonOr((await settingGet('tycoon_cars_token'))?.value, null);
+  let token = saved && Date.now() - saved.at < 11 * 3600 * 1000 ? saved.token : null;
+  if (!token && process.env.CARS_ADMIN_PASSWORD) token = await carsLogin(process.env.CARS_ADMIN_PASSWORD);
+  if (!token) { const e = new Error('Conectá FiloCars'); e.status = 412; throw e; }
+  let r = await fetch(CARS_URL + '/api/admin' + path, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 401 && process.env.CARS_ADMIN_PASSWORD) {
+    token = await carsLogin(process.env.CARS_ADMIN_PASSWORD);
+    r = await fetch(CARS_URL + '/api/admin' + path, { headers: { Authorization: 'Bearer ' + token } });
+  }
+  if (r.status === 401) { await settingSet('tycoon_cars_token', ''); const e = new Error('Conectá FiloCars'); e.status = 412; throw e; }
+  if (!r.ok) { const e = new Error('FiloCars no respondió'); e.status = 502; throw e; }
+  return r.json();
+}
+router.post('/tycoon/cars/login', adminAuth, async (req, res) => {
+  try { await carsLogin(String(req.body?.password || '')); res.json({ ok: true }); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+router.get('/tycoon/cars/agencies', adminAuth, async (req, res) => {
+  try { res.json(await carsFetch('/agencies')); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
+// ── Puente con FILO Contenido (el servidor guarda la sesión) ─────────────────
+// Contenido usa una cookie de sesión propia (PIN). El servidor la guarda y la reenvía; si vence
+// y está la variable CONTENIDO_PIN, vuelve a entrar solo. Solo para el admin logueado.
 const CONTENIDO_URL = (process.env.CONTENIDO_URL || 'https://filo-contenido.up.railway.app').replace(/\/$/, '');
 const CONTENIDO_ACTIONS = new Set(['approve', 'changes', 'published', 'unapprove', 'unpublish']);
 
-function contenidoCookie(req) {
-  const s = String(req.headers['x-contenido-session'] || '');
-  return s.length < 4096 && !/[\r\n]/.test(s) ? s : '';
+async function contenidoLogin(pin) {
+  const r = await fetch(CONTENIDO_URL + '/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: String(pin || '') }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || 'PIN incorrecto'); e.status = r.status === 401 ? 401 : 502; throw e; }
+  const cookies = (typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [r.headers.get('set-cookie')])
+    .filter(Boolean).map(c => c.split(';')[0].trim());
+  if (!cookies.length) { const e = new Error('Contenido no devolvió sesión'); e.status = 502; throw e; }
+  const session = cookies.join('; ');
+  await settingSet('tycoon_ct_session', session);
+  return session;
+}
+async function contenidoSession(req) {
+  const h = String(req.headers['x-contenido-session'] || '');
+  const fromHeader = h.length < 4096 && !/[\r\n]/.test(h) ? h : '';
+  const saved = (await settingGet('tycoon_ct_session'))?.value || '';
+  if (!saved && fromHeader) await settingSet('tycoon_ct_session', fromHeader); // migra la sesión vieja del celu
+  return saved || fromHeader;
+}
+// Hace el pedido a Contenido; si la sesión venció y hay CONTENIDO_PIN, entra de nuevo y reintenta
+async function contenidoFetch(req, path, opts = {}) {
+  let session = await contenidoSession(req);
+  const go = (s) => fetch(CONTENIDO_URL + path, { ...opts, headers: { ...(opts.headers || {}), Cookie: s } });
+  if (!session && process.env.CONTENIDO_PIN) session = await contenidoLogin(process.env.CONTENIDO_PIN);
+  let r = await go(session);
+  if (r.status === 401 && process.env.CONTENIDO_PIN) { session = await contenidoLogin(process.env.CONTENIDO_PIN); r = await go(session); }
+  if (r.status === 401) await settingSet('tycoon_ct_session', '');
+  return r;
 }
 
-// POST /api/admin/contenido/login { pin } → { session }
+// POST /api/admin/contenido/login { pin }
 router.post('/contenido/login', adminAuth, async (req, res) => {
-  try {
-    const r = await fetch(CONTENIDO_URL + '/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: String(req.body?.pin || '') }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(r.status === 401 ? 401 : 502).json({ error: data.error || 'PIN incorrecto' });
-    const cookies = (typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [r.headers.get('set-cookie')])
-      .filter(Boolean).map(c => c.split(';')[0].trim());
-    if (!cookies.length) return res.status(502).json({ error: 'Contenido no devolvió sesión' });
-    res.json({ session: cookies.join('; ') });
-  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+  try { await contenidoLogin(req.body?.pin); res.json({ ok: true }); }
+  catch (e) { res.status(e.status || 502).json({ error: e.status ? e.message : 'FILO Contenido no responde' }); }
 });
 
 // GET /api/admin/contenido/pieces
 router.get('/contenido/pieces', adminAuth, async (req, res) => {
   try {
-    const r = await fetch(CONTENIDO_URL + '/api/pieces', { headers: { Cookie: contenidoCookie(req) } });
+    const r = await contenidoFetch(req, '/api/pieces');
     const data = await r.json().catch(() => ({}));
     res.status(r.status === 401 ? 401 : (r.ok ? 200 : 502)).json(r.ok ? data : { error: data.error || 'Sesión de Contenido vencida' });
-  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+  } catch (e) { res.status(e.status === 401 ? 401 : 502).json({ error: e.status ? e.message : 'FILO Contenido no responde' }); }
 });
 
 // POST /api/admin/contenido/pieces/:id/:action  (approve | changes {feedback} | published | unapprove | unpublish)
 router.post('/contenido/pieces/:id/:action', adminAuth, async (req, res) => {
   if (!CONTENIDO_ACTIONS.has(req.params.action)) return res.status(400).json({ error: 'Acción inválida' });
   try {
-    const r = await fetch(`${CONTENIDO_URL}/api/pieces/${encodeURIComponent(req.params.id)}/${req.params.action}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: contenidoCookie(req) },
+    const r = await contenidoFetch(req, `/api/pieces/${encodeURIComponent(req.params.id)}/${req.params.action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.params.action === 'changes' ? { feedback: String(req.body?.feedback || '').slice(0, 2000) } : {}),
     });
     const data = await r.json().catch(() => ({}));
     res.status(r.status === 401 ? 401 : (r.ok ? 200 : 502)).json(r.ok ? data : { error: data.error || 'No se pudo completar' });
-  } catch (e) { res.status(502).json({ error: 'FILO Contenido no responde' }); }
+  } catch (e) { res.status(e.status === 401 ? 401 : 502).json({ error: e.status ? e.message : 'FILO Contenido no responde' }); }
 });
 
 // GET /api/admin/contenido/media/:id — imagen o video del posteo (se transmite tal cual)
 router.get('/contenido/media/:id', adminAuth, async (req, res) => {
   try {
-    const headers = { Cookie: contenidoCookie(req) };
+    const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
-    const r = await fetch(`${CONTENIDO_URL}/media/${encodeURIComponent(req.params.id)}`, { headers });
+    const r = await contenidoFetch(req, `/media/${encodeURIComponent(req.params.id)}`, { headers });
     if (!r.ok && r.status !== 206) return res.status(r.status === 401 ? 401 : 404).end();
     res.status(r.status);
     for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const v = r.headers.get(h); if (v) res.setHeader(h, v); }
