@@ -1085,20 +1085,49 @@ async function carsLogin(password) {
   await settingSet('tycoon_cars_token', JSON.stringify({ token: data.token, at: Date.now() }));
   return data.token;
 }
-async function carsFetch(path) {
+// opts: { method, body } para editar (PUT); sin opts es una lectura
+async function carsFetch(path, opts = {}) {
   const saved = jsonOr((await settingGet('tycoon_cars_token'))?.value, null);
   let token = saved && Date.now() - saved.at < 11 * 3600 * 1000 ? saved.token : null;
   if (!token && process.env.CARS_ADMIN_PASSWORD) token = await carsLogin(process.env.CARS_ADMIN_PASSWORD);
   if (!token) { const e = new Error('Conectá FiloCars'); e.status = 412; throw e; }
-  let r = await fetch(CARS_URL + '/api/admin' + path, { headers: { Authorization: 'Bearer ' + token } });
+  const call = (t) => fetch(CARS_URL + '/api/admin' + path, {
+    method: opts.method || 'GET',
+    headers: { Authorization: 'Bearer ' + t, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let r = await call(token);
   if (r.status === 401 && process.env.CARS_ADMIN_PASSWORD) {
     token = await carsLogin(process.env.CARS_ADMIN_PASSWORD);
-    r = await fetch(CARS_URL + '/api/admin' + path, { headers: { Authorization: 'Bearer ' + token } });
+    r = await call(token);
   }
   if (r.status === 401) { await settingSet('tycoon_cars_token', ''); const e = new Error('Conectá FiloCars'); e.status = 412; throw e; }
+  const data = await r.json().catch(() => ({}));
+  // Los errores de validación de FiloCars (400, 404) se pasan tal cual
+  if (r.status === 400 || r.status === 404) { const e = new Error(data.error || 'FiloCars rechazó el cambio'); e.status = r.status; throw e; }
   if (!r.ok) { const e = new Error('FiloCars no respondió'); e.status = 502; throw e; }
-  return r.json();
+  return data;
 }
+
+// Pestaña 🚗 Cars del admin: lee y edita agencias por el servidor, que guarda la sesión de FiloCars
+// y se vuelve a conectar solo con CARS_ADMIN_PASSWORD (el admin nunca ve ni pide esa contraseña).
+router.get('/cars/agencies', adminAuth, async (req, res) => {
+  try { res.json(await carsFetch('/agencies')); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+router.put('/cars/agencies/:id', adminAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Agencia inválida' });
+  const b = req.body || {};
+  const body = {};
+  if (b.subscription_status) body.subscription_status = String(b.subscription_status);
+  if (typeof b.is_test === 'boolean') body.is_test = b.is_test;
+  if (b.add_days) body.add_days = parseInt(b.add_days);
+  if (b.owner_password) body.owner_password = String(b.owner_password);
+  if (b.sample_data === true) body.sample_data = true;
+  try { res.json(await carsFetch(`/agencies/${id}`, { method: 'PUT', body })); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 router.post('/tycoon/cars/login', adminAuth, async (req, res) => {
   try { await carsLogin(String(req.body?.password || '')); res.json({ ok: true }); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
