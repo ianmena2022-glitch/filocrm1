@@ -52,6 +52,17 @@ router.get('/birthdays/today', auth, async (req, res) => {
   }
 });
 
+// GET /api/clients/by-phone?phone=… — fichas que comparten ese número (para preguntar "¿quién es?")
+// IMPORTANTE: antes de /:id, igual que /birthdays/today
+router.get('/by-phone', auth, async (req, res) => {
+  try {
+    const effectiveShopId = req.parentShopId || req.shopId;
+    res.json(await clientsWithPhone(effectiveShopId, req.query.phone));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/clients/:id
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -85,19 +96,26 @@ function parseBirthday(raw) {
   return t;
 }
 
-// Otro cliente del local con el mismo número (aunque esté escrito distinto: +54 9 11…, 5411…, 11…).
-// Un número = un cliente: así visitas, gastos y puntos van siempre a la misma ficha.
-async function clientWithPhone(shopId, phone, exceptId = null) {
+// Fichas del local con ese número (aunque esté escrito distinto: +54 9 11…, 5411…, 11…).
+// Un número lo pueden compartir varias personas (ej: un papá y su hijo), así que puede haber varias.
+async function clientsWithPhone(shopId, phone, exceptId = null) {
   const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
   const key = phoneKey(phone);
-  if (!key) return null;
+  if (!key) return [];
   const r = await pool.query(
-    `SELECT id, name, phone FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
-       AND ($3::int IS NULL OR id <> $3::int)
-     ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
+    `SELECT id, name, phone, total_visits, last_visit, points FROM clients
+      WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
+        AND ($3::int IS NULL OR id <> $3::int)
+      ORDER BY total_visits DESC NULLS LAST, id`,
     [shopId, key, exceptId]
   );
-  return r.rows[0] || null;
+  return r.rows;
+}
+
+// La misma persona (mismo número y mismo nombre) ya tiene ficha: no se crea otra
+async function samePerson(shopId, name, phone, exceptId = null) {
+  const { pickByName } = require('../services/phoneMatch');
+  return pickByName(await clientsWithPhone(shopId, phone, exceptId), name);
 }
 
 // POST /api/clients
@@ -107,11 +125,11 @@ router.post('/', auth, async (req, res) => {
 
   try {
     const effectiveShopId = req.parentShopId || req.shopId;
-    const existing = await clientWithPhone(effectiveShopId, phone);
+    const existing = await samePerson(effectiveShopId, name, phone);
     if (existing) {
       return res.status(409).json({
-        error: `Ya tenés un cliente con ese número: ${existing.name}. Usá esa ficha para que sus visitas y puntos queden juntos.`,
-        code: 'PHONE_EXISTS', client: existing,
+        error: `${existing.name} ya tiene ficha con ese número. Usá esa ficha para que sus visitas y puntos queden juntos.`,
+        code: 'SAME_CLIENT', client: existing,
       });
     }
     const result = await pool.query(
@@ -145,12 +163,15 @@ router.put('/:id', auth, async (req, res) => {
 
     // Modo edición normal: COALESCE para no pisar name/phone con null si no vienen
     const { address } = req.body;
-    if (phone) {
-      const existing = await clientWithPhone(effectiveShopId, phone, parseInt(req.params.id));
+    if (phone || name) {
+      // Con el número y el nombre que quedarían después de editar
+      const cur = await pool.query('SELECT name, phone FROM clients WHERE id=$1 AND shop_id=$2', [req.params.id, effectiveShopId]);
+      if (!cur.rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+      const existing = await samePerson(effectiveShopId, name || cur.rows[0].name, phone || cur.rows[0].phone, parseInt(req.params.id));
       if (existing) {
         return res.status(409).json({
-          error: `Ese número ya es de otro cliente: ${existing.name}. Un número solo puede estar en una ficha.`,
-          code: 'PHONE_EXISTS', client: existing,
+          error: `${existing.name} ya tiene ficha con ese número. No puede haber dos fichas de la misma persona.`,
+          code: 'SAME_CLIENT', client: existing,
         });
       }
     }

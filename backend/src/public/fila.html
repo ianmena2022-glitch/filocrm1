@@ -827,13 +827,22 @@
       btn.textContent = 'Anotando...';
 
       try {
-        const r = await apiPost(`/api/queue/${slug}/join`, {
+        const body = {
           name,
           phone: phone || undefined,
           ...(service_name ? { service_name, price } : {}),
           ...(barber_id ? { barber_id } : {})
-        });
-        const data = await r.json();
+        };
+        let r = await apiPost(`/api/queue/${slug}/join`, body);
+        let data = await r.json();
+
+        // El número ya está en una o más fichas (ej: papá e hijo): preguntar quién se anota
+        if (r.status === 409 && data.code === 'WHO_IS' && window.filoWhoIs) {
+          const pick = await window.filoWhoIs(data.options || [], name);
+          if (!pick) return;   // canceló: el botón se rehabilita en finally
+          r = await apiPost(`/api/queue/${slug}/join`, { ...body, name: pick.name || name, client_choice: pick.choice });
+          data = await r.json();
+        }
 
         if (r.status === 423) {
           setState('paused');
@@ -921,6 +930,6 @@
       <span>Powered by FILO</span>
     </a>
   </div>
-<script src="/pwa-install.js?v=4" defer></script><script src="/filo-select.js?v=2" defer></script>
+<script src="/pwa-install.js?v=4" defer></script><script src="/filo-select.js?v=2" defer></script><script src="/who-is.js?v=1" defer></script>
 </body>
 </html>

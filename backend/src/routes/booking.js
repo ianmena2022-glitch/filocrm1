@@ -2,7 +2,7 @@ const router    = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const pool      = require('../db/pool');
 const wpp       = require('../services/whatsapp');
-const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
+const { phoneKey, phoneMatchSql, clientsByPhone, whoIsResponse, readChoice } = require('../services/phoneMatch');
 const { shopHasAccess, INACTIVE_MSG } = require('../services/shopAccess');
 const crypto    = require('crypto');
 const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
@@ -617,11 +617,12 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
 
     // Validar membresía activa + que el teléfono del body sea el dueño de la membresía
+    let memberClientId = null;
     if (is_member_booking && membership_id) {
       if (!client_phone) return res.status(400).json({ error: 'Para reservar con membresía necesitás tu número.' });
       const normPhone = String(client_phone).replace(/\D/g, '').slice(-10);
       const mem = await pool.query(
-        `SELECT m.id, m.credits_total, m.credits_used, m.active, c.phone
+        `SELECT m.id, m.client_id, m.credits_total, m.credits_used, m.active, c.phone
          FROM memberships m
          JOIN clients c ON c.id = m.client_id
          WHERE m.id=$1 AND c.shop_id=$2`,
@@ -639,6 +640,18 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       if (remaining !== null && remaining <= 0) {
         return res.status(400).json({ error: 'Sin créditos disponibles en la membresía.' });
       }
+      memberClientId = m.client_id;
+    }
+
+    // ¿De quién es el turno? Un número lo pueden compartir varias personas (papá e hijo): si ya hay
+    // fichas con ese número, la página pregunta "¿quién sos?" y vuelve a mandar con client_choice
+    // (una de esas fichas, o 'new' = otra persona con ficha nueva). Con membresía es la del socio.
+    let chosenClientId = memberClientId;
+    if (!chosenClientId) {
+      const rows = await clientsByPhone(pool, shopData.id, client_phone);
+      const choice = readChoice(rows, req.body.client_choice);
+      if (choice.pending) return res.status(409).json(whoIsResponse(rows));
+      chosenClientId = choice.client ? choice.client.id : null;
     }
 
     // Resolver servicio
@@ -735,18 +748,11 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         return res.status(409).json({ error: 'Ese horario ya no está disponible. Por favor elegí otro.' });
       }
 
-      // Buscar o crear cliente
+      // Ficha elegida arriba ("¿quién sos?"), o una nueva con ese número si es otra persona
       let clientId = null;
       if (client_phone) {
-        // Mismo cliente aunque haya escrito el número distinto que la última vez (con 54, 9, guiones…)
-        const key = phoneKey(client_phone);
-        const existing = key ? await pgClient.query(
-          `SELECT id FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
-            ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
-          [shopData.id, key]
-        ) : { rows: [] };
-        if (existing.rows.length) {
-          clientId = existing.rows[0].id;
+        if (chosenClientId) {
+          clientId = chosenClientId;
           if (client_address) {
             await pgClient.query('UPDATE clients SET address=$1 WHERE id=$2', [client_address.trim(), clientId]);
           }

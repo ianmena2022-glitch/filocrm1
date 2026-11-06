@@ -4253,7 +4253,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       </div>
       <div class="form-field" id="t-new-client-phone-field" style="display:none">
         <label>WhatsApp (sin +54)</label>
-        <input type="tel" id="t-client-phone" placeholder="Ej: 1134567890">
+        <input type="tel" id="t-client-phone" placeholder="Ej: 1134567890" onchange="checkTurnoPhone()">
       </div>
       <div class="form-field" id="t-new-client-birthday-field" style="display:none">
         <label>🎂 Cumpleaños (opcional)</label>
@@ -4352,7 +4352,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       </div>
       <div class="form-field">
         <label>Teléfono / WhatsApp</label>
-        <input type="tel" id="c-phone" value="+54" placeholder="+54 9113425876">
+        <input type="tel" id="c-phone" value="+54" placeholder="+54 9113425876" onchange="checkNewClientPhone()">
       </div>
       <div class="form-field" id="c-address-field" style="display:none">
         <label>Domicilio</label>
@@ -8118,6 +8118,8 @@ async function createClient() {
   const notes = document.getElementById('c-notes').value.trim();
   const birthday = document.getElementById('c-birthday')?.value || null;
   if (!name) return showToast('⚠️', 'El nombre es obligatorio', '');
+  // Número que ya está en otras fichas: preguntar antes de crear (si no lo respondieron al cargarlo)
+  if (!(await checkNewClientPhone())) return;
   closeModal('modal-cliente');
   document.getElementById('c-name').value = '';
   document.getElementById('c-phone').value = '+54';
@@ -8277,6 +8279,103 @@ async function selectFirstAvailableBarber() {
   }
 }
 
+// Pop-up "Ya hay X clientes con este número": devuelve el id elegido, 'new' o null (cancelar).
+// Si ya hay uno abierto (ej: salir del campo teléfono tocando "Guardar") se comparte la misma respuesta.
+let _whoIsPending = null;
+function whoIsModal(typedName, phone, matches) {
+  if (_whoIsPending) return _whoIsPending;
+  _whoIsPending = _openWhoIsModal(typedName, phone, matches).finally(() => { _whoIsPending = null; });
+  return _whoIsPending;
+}
+function _openWhoIsModal(typedName, phone, matches) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.id = 'whois-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Barlow,sans-serif;animation:fadeIn .15s ease-out';
+    const btn = 'width:100%;text-align:left;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;padding:12px 14px;border-radius:10px;cursor:pointer;font-family:Barlow,sans-serif;font-size:14px;margin-bottom:8px;display:block';
+    const fmt = d => d ? new Date(d).toLocaleDateString('es-AR') : 'nunca';
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-labelledby="whois-title" style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow:auto;animation:modalIn .18s ease-out">
+        <div id="whois-title" style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px">📱 Ya hay ${matches.length} cliente${matches.length > 1 ? 's' : ''} con este número</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:16px">
+          El número <b>${escHtml(phone)}</b> ya está en ${matches.length > 1 ? 'estas fichas' : 'esta ficha'}. ¿Es alguno? Tocalo para autocompletar con sus datos.
+        </div>
+        ${matches.map(m => `
+          <button data-id="${m.id}" style="${btn}">
+            <div style="font-weight:700">${escHtml(m.name)}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">${m.total_visits || 0} visitas · última: ${fmt(m.last_visit)}</div>
+          </button>`).join('')}
+        <button data-id="new" style="${btn};border-color:var(--yellow,#FFD100);color:var(--yellow,#FFD100)">
+          <div style="font-weight:700">➕ Crear cliente nuevo${typedName ? ': ' + escHtml(typedName) : ''}</div>
+          <div style="font-size:12px;opacity:.75;margin-top:2px">Otra persona, con el mismo número de teléfono</div>
+        </button>
+        <button data-id="cancel" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,.6);padding:10px;cursor:pointer;font-family:Barlow,sans-serif;font-size:13px;margin-top:4px">Cancelar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = val => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const onKey = e => { if (e.key === 'Escape') close(null); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) return close(null);
+      const b = e.target.closest('button[data-id]');
+      if (!b) return;
+      const id = b.dataset.id;
+      close(id === 'cancel' ? null : id === 'new' ? 'new' : parseInt(id));
+    });
+    overlay.querySelector('button[data-id]')?.focus();
+  });
+}
+
+// Fichas que ya tienen ese número (vacío si el número es muy corto o falla la consulta)
+async function clientsSharingPhone(phone) {
+  if (String(phone || '').replace(/\D/g, '').length < 8) return [];
+  try { return await api('GET', '/clients/by-phone?phone=' + encodeURIComponent(phone)); } catch { return []; }
+}
+
+// Turno nuevo: al cargar el teléfono de un cliente nuevo, avisar si ya hay fichas con ese número.
+// Elegir una autocompleta el turno con esa ficha; "crear nuevo" deja seguir con el cliente nuevo.
+let _turnoPhoneOk = null;   // número para el que ya eligieron "crear cliente nuevo"
+async function checkTurnoPhone() {
+  if (document.getElementById('t-client').value) return;
+  const phone = document.getElementById('t-client-phone').value.trim();
+  if (!phone || phone === _turnoPhoneOk) return;
+  const matches = await clientsSharingPhone(phone);
+  if (!matches.length) return;
+  const choice = await whoIsModal(document.getElementById('t-client-name').value.trim(), phone, matches);
+  if (choice === null) return;
+  if (choice === 'new') { _turnoPhoneOk = phone; return; }
+  const sel = document.getElementById('t-client');
+  if (![...sel.options].some(o => o.value === String(choice))) {
+    const m = matches.find(x => x.id === choice);
+    const opt = new Option(m?.name || 'Cliente', String(choice));
+    opt.dataset.points = String(m?.points || 0);
+    sel.appendChild(opt);
+  }
+  sel.value = String(choice);
+  document.getElementById('t-client-name').value = '';
+  document.getElementById('t-client-phone').value = '';
+  onClientSelectChange();
+  showToast('✅', 'Cliente elegido', sel.selectedOptions[0]?.textContent || '');
+}
+
+// Cliente nuevo: lo mismo. Elegir una ficha existente la abre para editarla (con todos sus datos).
+let _newClientPhoneOk = null;
+async function checkNewClientPhone() {
+  const raw = document.getElementById('c-phone').value.trim();
+  if (!raw || raw === '+54' || raw === _newClientPhoneOk) return true;
+  const matches = await clientsSharingPhone(raw);
+  if (!matches.length) return true;
+  const choice = await whoIsModal(document.getElementById('c-name').value.trim(), raw, matches);
+  if (choice === null) return false;
+  if (choice === 'new') { _newClientPhoneOk = raw; return true; }
+  closeModal('modal-cliente');
+  ['c-name', 'c-notes', 'c-address', 'c-birthday'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('c-phone').value = '+54';
+  if (!clients.some(c => c.id === choice)) clients = await api('GET', '/clients');
+  editClientById(choice);
+  return false;
+}
+
 let _creatingAppt = false;
 async function createAppointment() {
   if (_creatingAppt) return;   // ya se está guardando: ignorar el segundo clic
@@ -8320,7 +8419,19 @@ async function _createAppointment() {
   if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
 
   try {
-    // Si hay nombre pero no hay cliente seleccionado, crear el cliente primero
+    // Cliente nuevo con un número que ya está en otras fichas (ej: Pablo Lescano y su hijo Santino
+    // comparten el número del papá): preguntar, salvo que ya lo hayan respondido al cargar el teléfono.
+    if (!clientId && clientName && clientPhone && clientPhone !== _turnoPhoneOk) {
+      const matches = await clientsSharingPhone(clientPhone);
+      // Mientras tanto pudieron responder el aviso que salta al salir del campo teléfono
+      const picked = document.getElementById('t-client').value;
+      if (picked) clientId = picked;
+      else if (matches.length && clientPhone !== _turnoPhoneOk) {
+        const choice = await whoIsModal(clientName, clientPhone, matches);
+        if (choice === null) return;            // canceló: no se crea nada
+        if (choice !== 'new') clientId = String(choice);
+      }
+    }
     if (!clientId && clientName) {
       try {
         const newClient = await api('POST', '/clients', { name: clientName, phone: clientPhone || null, birthday: clientBirthday });
@@ -8332,9 +8443,9 @@ async function _createAppointment() {
         sel.appendChild(opt);
       } catch(ce) {
         // Ya hay un cliente con ese número: el turno va a esa ficha (visitas y puntos juntos)
-        if (ce.data?.code === 'PHONE_EXISTS' && ce.data.client?.id) {
+        if (ce.data?.code === 'SAME_CLIENT' && ce.data.client?.id) {
           clientId = String(ce.data.client.id);
-          showToast('ℹ️', 'Cliente existente', `Ese número ya es de ${ce.data.client.name}: el turno queda en su ficha`);
+          showToast('ℹ️', 'Cliente existente', `${ce.data.client.name} ya tenía ficha: el turno queda en ella`);
         } else {
           // Si falla la creación del cliente por otro motivo, seguir igual sin client_id
           console.warn('[createAppointment] No se pudo crear cliente:', ce.message);

@@ -250,36 +250,38 @@ router.post('/:slug/join', joinLimiter, async (req, res) => {
       return res.status(423).json({ error: 'La fila está pausada', paused: true });
     }
 
-    // Topes: misma persona anotada dos veces, o fila llena
-    if (phone) {
-      const dup = await pool.query(
-        `SELECT 1 FROM queue_entries WHERE shop_id=$1 AND status IN ('waiting','called')
-           AND regexp_replace(client_phone, '[^0-9]', '', 'g') = regexp_replace($2, '[^0-9]', '', 'g') LIMIT 1`,
-        [shop.id, phone]
-      );
-      if (dup.rows.length) return res.status(409).json({ error: 'Ese teléfono ya está anotado en la fila.' });
-    }
+    // Fila llena
     const waitingCnt = await pool.query(`SELECT COUNT(*)::int AS n FROM queue_entries WHERE shop_id=$1 AND status='waiting'`, [shop.id]);
     if (waitingCnt.rows[0].n >= MAX_WAITING_PER_SHOP) {
       return res.status(429).json({ error: 'La fila está completa en este momento. Probá en un rato.' });
     }
 
-    // Look up client by phone — link if already registered, auto-create si es nuevo
+    // Ficha del cliente por número (aunque esté escrito distinto: con 54, 9, guiones…).
+    // Un número lo pueden compartir varias personas (papá e hijo): si ya hay fichas con ese número,
+    // la página pregunta "¿quién sos?" y vuelve a mandar el pedido con client_choice.
     let clientId = null;
     let resolvedName = name.trim();
     if (phone) {
       const phoneClean = phone.trim();
-      // Mismo cliente aunque el número esté escrito distinto (con 54, 9, guiones…)
-      const { phoneKey, phoneMatchSql } = require('../services/phoneMatch');
-      const key = phoneKey(phoneClean);
-      const clientRes = key ? await pool.query(
-        `SELECT id, name FROM clients WHERE shop_id=$1 AND ${phoneMatchSql('phone', '$2')}
-          ORDER BY total_visits DESC NULLS LAST, id LIMIT 1`,
-        [shop.id, key]
-      ) : { rows: [] };
-      if (clientRes.rows.length) {
-        clientId    = clientRes.rows[0].id;
-        resolvedName = clientRes.rows[0].name; // use the stored name for known clients
+      const { clientsByPhone, whoIsResponse, readChoice, sameName } = require('../services/phoneMatch');
+      const rows = await clientsByPhone(pool, shop.id, phoneClean);
+      const choice = readChoice(rows, req.body.client_choice);
+      if (choice.pending) return res.status(409).json(whoIsResponse(rows));
+
+      // Misma persona anotada dos veces (el papá y el hijo sí pueden estar a la vez con el mismo número)
+      const active = await pool.query(
+        `SELECT client_id, client_name FROM queue_entries WHERE shop_id=$1 AND status IN ('waiting','called')
+           AND regexp_replace(client_phone, '[^0-9]', '', 'g') = regexp_replace($2, '[^0-9]', '', 'g')`,
+        [shop.id, phoneClean]
+      );
+      const already = choice.client
+        ? active.rows.some(e => e.client_id === choice.client.id)
+        : active.rows.some(e => sameName(e.client_name, resolvedName));
+      if (already) return res.status(409).json({ error: 'Ya estás anotado en la fila.' });
+
+      if (choice.client) {
+        clientId    = choice.client.id;
+        resolvedName = choice.client.name; // use the stored name for known clients
       } else {
         // Cliente nuevo — crear en la base para que gane puntos y quede en el CRM
         try {
