@@ -679,10 +679,12 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
       <!-- Conexión -->
       <div style="margin-bottom:20px;padding:16px 20px;background:rgba(77,163,255,.07);border:1px solid rgba(77,163,255,.2);border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-size:13px;color:var(--g)">FiloCars:</span>
-        <input id="cars-api-url" class="input" style="width:340px;font-size:13px" placeholder="https://filocars-production.up.railway.app" />
-        <input id="cars-admin-pass" class="input" style="width:220px;font-size:13px" type="password" placeholder="ADMIN_PASSWORD de FiloCars" autocomplete="off" />
-        <button class="btn-sm" style="background:#4DA3FF;color:#fff" onclick="connectCars()">Conectar</button>
         <span id="cars-conn-status" style="font-size:12px;color:var(--g)"></span>
+        <!-- Solo aparece si el servidor no se pudo conectar solo (falta CARS_ADMIN_PASSWORD en Railway) -->
+        <span id="cars-login-box" style="display:none;gap:8px;align-items:center">
+          <input id="cars-admin-pass" class="input" style="width:220px;font-size:13px" type="password" placeholder="ADMIN_PASSWORD de FiloCars" autocomplete="off" />
+          <button class="btn-sm" style="background:#4DA3FF;color:#fff" onclick="connectCars()">Conectar</button>
+        </span>
         <a id="cars-open-admin" href="https://filocars-production.up.railway.app/admin" target="_blank" rel="noopener" style="font-size:12px;color:var(--g);margin-left:auto">Abrir admin de FiloCars ↗</a>
       </div>
 
@@ -743,6 +745,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
             </div>
             <div class="form-group">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cars-edit-test" style="width:auto"> Cuenta test (sin vencimiento)</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px"><input type="checkbox" id="cars-edit-sample" style="width:auto"> Cargar datos de ejemplo (autos, clientes, ventas y caja). Solo en una agencia sin autos.</label>
             </div>
             <div class="form-group">
               <label>Contraseña nueva del dueño</label>
@@ -2710,7 +2713,7 @@ function switchApp(app) {
     refreshBtn.onclick = loadAll;
   } else if (app === 'cars') {
     refreshBtn.onclick = loadCars;
-    if (getCarsToken()) loadCars();
+    loadCars();
   } else {
     refreshBtn.onclick       = loadNails;
     // Auto-conectar si ya hay credenciales guardadas
@@ -2906,52 +2909,49 @@ async function deleteNailsShop(id, name) {
 }
 
 // ══════════════════════════════════════
-// FILOCARS — habla directo con la API admin de FiloCars (que permite este origen por CORS).
-// Se guarda el token de sesión (12 h), nunca la contraseña.
+// FILOCARS — pasa por el servidor de FILO (/api/admin/cars/…), que guarda la sesión de FiloCars y se
+// reconecta solo con CARS_ADMIN_PASSWORD. Así nunca pide la contraseña en el navegador.
 // ══════════════════════════════════════
 const CARS_DEFAULT_URL = 'https://filocars-production.up.railway.app';
 let carsAgencies = [];
 let carsEditId = null;
 
-function getCarsBase() { return (document.getElementById('cars-api-url').value || CARS_DEFAULT_URL).trim().replace(/\/$/, ''); }
-function getCarsToken() { try { return localStorage.getItem('cars_admin_token') || ''; } catch (_) { return ''; } }
-function setCarsToken(t) { try { t ? localStorage.setItem('cars_admin_token', t) : localStorage.removeItem('cars_admin_token'); } catch (_) {} }
+function getCarsBase() { return CARS_DEFAULT_URL; }
 
 async function carsFetch(path, opts = {}) {
-  const res = await fetch(getCarsBase() + '/api/admin' + path, {
+  const res = await fetch('/api/admin/cars' + path, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getCarsToken(), ...(opts.headers || {}) },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}`, ...(opts.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401) { setCarsToken(null); throw new Error('Sesión de FiloCars vencida: volvé a conectar'); }
+  // 412: el servidor no tiene cómo entrar a FiloCars (falta la variable) → se ofrece conectar a mano
+  if (res.status === 412) { document.getElementById('cars-login-box').style.display = 'inline-flex'; throw new Error('Conectá FiloCars'); }
   if (!res.ok) throw new Error(data.error || 'Error de FiloCars');
+  document.getElementById('cars-login-box').style.display = 'none';
   return data;
 }
 
+// Respaldo si falta CARS_ADMIN_PASSWORD: el servidor entra una vez con esta contraseña y guarda la sesión
 async function connectCars() {
   const statusEl = document.getElementById('cars-conn-status');
   const passEl = document.getElementById('cars-admin-pass');
   if (!passEl.value) { statusEl.textContent = 'Poné la contraseña de admin de FiloCars'; statusEl.style.color = 'var(--r)'; return; }
   statusEl.textContent = 'Conectando...'; statusEl.style.color = 'var(--g)';
   try {
-    const res = await fetch(getCarsBase() + '/api/admin/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: passEl.value }),
+    const res = await fetch('/api/admin/tycoon/cars/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ password: passEl.value }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se pudo conectar');
-    setCarsToken(data.token);
-    try { localStorage.setItem('cars_api_url', getCarsBase()); } catch (_) {}
     passEl.value = '';
     await loadCars();
   } catch (e) {
-    statusEl.textContent = '✗ ' + (e.message === 'Failed to fetch' ? 'FiloCars no responde o no permite este origen' : e.message);
-    statusEl.style.color = 'var(--r)';
+    statusEl.textContent = '✗ ' + e.message; statusEl.style.color = 'var(--r)';
   }
 }
 
 async function loadCars() {
   const statusEl = document.getElementById('cars-conn-status');
-  if (!getCarsToken()) { statusEl.textContent = 'Sin conectar'; statusEl.style.color = 'var(--g)'; return; }
   statusEl.textContent = 'Cargando...'; statusEl.style.color = 'var(--g)';
   try {
     carsAgencies = await carsFetch('/agencies');
@@ -3013,6 +3013,7 @@ function openCarsEdit(id) {
   document.getElementById('cars-edit-days').value = '';
   document.getElementById('cars-edit-pw').value = '';
   document.getElementById('cars-edit-test').checked = !!a.is_test;
+  document.getElementById('cars-edit-sample').checked = false;
   document.getElementById('cars-edit-err').style.display = 'none';
   document.getElementById('cars-edit-modal').classList.add('open');
 }
@@ -3028,6 +3029,7 @@ async function saveCarsEdit() {
   if (days > 0) body.add_days = days;
   const pw = document.getElementById('cars-edit-pw').value.trim();
   if (pw) body.owner_password = pw;
+  if (document.getElementById('cars-edit-sample').checked) body.sample_data = true;
   try {
     await carsFetch(`/agencies/${carsEditId}`, { method: 'PUT', body: JSON.stringify(body) });
     closeModal('cars-edit-modal');
@@ -3037,7 +3039,8 @@ async function saveCarsEdit() {
 
 // Restaurar config guardada al cargar
 window.addEventListener('DOMContentLoaded', () => {
-  try { const u = localStorage.getItem('cars_api_url'); document.getElementById('cars-api-url').value = u || CARS_DEFAULT_URL; } catch (_) {}
+  // La sesión vieja de FiloCars guardada en el navegador ya no se usa
+  try { localStorage.removeItem('cars_admin_token'); localStorage.removeItem('cars_api_url'); } catch (_) {}
   const savedUrl   = localStorage.getItem('nails_api_url');
   const savedToken = localStorage.getItem('nails_admin_token');
   if (savedUrl)   document.getElementById('nails-api-url').value = savedUrl;
