@@ -1070,6 +1070,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         <input type="checkbox" id="edit-exclude-kpis" style="margin-top:3px;width:auto">
         <span><strong style="font-size:13px">No contar en los KPIs</strong><br><span style="font-size:11px;color:var(--g)">Para barberías de prueba o de socios: no suma en MRR, cuentas, métricas ni en "Falta cobrar este mes". La cuenta sigue funcionando normal.</span></span>
       </label>
+      <div class="form-group" style="margin-top:12px">
+        <label>Contraseña nueva</label>
+        <input class="input" id="edit-new-password" type="password" placeholder="Dejar vacío para no cambiarla" autocomplete="new-password">
+        <div style="font-size:11px;color:var(--g);margin-top:4px">Mínimo 6 caracteres. Pasale la contraseña nueva al dueño por un medio seguro.</div>
+      </div>
       <div id="edit-err" style="color:var(--r);font-size:13px;display:none"></div>
     </div>
     <div class="modal-footer">
@@ -1808,6 +1813,7 @@ function openEditModal(id) {
   document.getElementById('edit-plan').value = a.filo_plan || 'starter';
   document.getElementById('edit-status').value = a.subscription_status || 'trial';
   document.getElementById('edit-exclude-kpis').checked = !!a.exclude_from_kpis;
+  document.getElementById('edit-new-password').value = '';
   document.getElementById('edit-err').style.display = 'none';
   document.getElementById('edit-active-until').value = 'forever';
   updateActiveUntil();
@@ -1828,6 +1834,10 @@ async function saveEdit() {
   const plan   = document.getElementById('edit-plan').value;
   const status = document.getElementById('edit-status').value;
   const errEl  = document.getElementById('edit-err');
+  const newPassword = document.getElementById('edit-new-password').value;
+  if (newPassword && newPassword.length < 6) {
+    errEl.textContent = 'La contraseña nueva debe tener al menos 6 caracteres'; errEl.style.display = 'block'; return;
+  }
 
   try {
     const res = await fetch(`/api/admin/accounts/${id}`, {
@@ -1836,7 +1846,8 @@ async function saveEdit() {
       body: JSON.stringify({
         name, filo_plan: plan, subscription_status: status,
         exclude_from_kpis: document.getElementById('edit-exclude-kpis').checked,
-        active_until: document.getElementById('edit-active-until-wrap').style.display === 'block' ? document.getElementById('edit-active-until').value : undefined
+        active_until: document.getElementById('edit-active-until-wrap').style.display === 'block' ? document.getElementById('edit-active-until').value : undefined,
+        new_password: newPassword || undefined
       })
     });
     const data = await res.json();
