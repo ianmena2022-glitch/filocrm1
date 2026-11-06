@@ -4270,8 +4270,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <input type="number" id="t-price" placeholder="3500">
       </div>
       <div class="form-field">
-        <label>Fecha</label>
-        <input type="date" id="t-date">
+        <label>Fecha <span id="t-date-tag" style="margin-left:6px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px"></span></label>
+        <input type="date" id="t-date" oninput="updateTurnoDateTag()" onchange="updateTurnoDateTag()">
       </div>
       <div class="form-field">
         <label>Hora</label>
@@ -8376,6 +8376,42 @@ async function checkNewClientPhone() {
   return false;
 }
 
+// ── Fecha del turno: que se note para qué día es ───────────────────────────
+// El formulario arranca con el día que se estaba mirando en la agenda; si es otro día que hoy
+// se marca al lado de la fecha y se pide confirmación al guardar (antes quedaban turnos para
+// mañana o para un día pasado sin que nadie lo notara).
+function turnoDateInfo(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return null;
+  const today = shopToday();
+  const days = Math.round((new Date(dateStr + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
+  const d = new Date(dateStr + 'T12:00:00');
+  const long = `${d.toLocaleDateString('es-AR', { weekday: 'long' })} ${d.getDate()}/${d.getMonth() + 1}`;   // "sábado 7/11"
+  const label = days === 0 ? 'Hoy' : days === 1 ? 'Mañana' : days === -1 ? 'Ayer' : long.charAt(0).toUpperCase() + long.slice(1);
+  return { days, long, label };
+}
+function updateTurnoDateTag() {
+  const tag = document.getElementById('t-date-tag');
+  if (!tag) return;
+  const info = turnoDateInfo(document.getElementById('t-date').value);
+  if (!info) { tag.textContent = ''; tag.style.display = 'none'; return; }
+  tag.style.display = 'inline-block';
+  tag.textContent = info.days < 0 ? `⚠️ ${info.label} · ya pasó` : info.label;
+  tag.style.background = info.days === 0 ? 'rgba(46,204,113,.15)' : info.days < 0 ? 'rgba(255,80,80,.18)' : 'rgba(255,209,0,.18)';
+  tag.style.color      = info.days === 0 ? '#2ecc71'             : info.days < 0 ? '#ff8080'             : 'var(--yellow,#FFD100)';
+}
+// Antes de guardar: si no es para hoy, confirmar el día. Devuelve false si cancelan.
+async function confirmTurnoDate(dateStr, time) {
+  const info = turnoDateInfo(dateStr);
+  if (!info || info.days === 0) return true;
+  if (info.days < 0) {
+    return confirmModal('Ese día ya pasó', `El turno quedaría para el <b>${escHtml(info.long)}</b>${time ? ' a las ' + escHtml(time) : ''}, que ya pasó. Si es para hoy, cambiá la fecha.`,
+      { danger: true, confirmText: 'Cargarlo igual', cancelText: 'Cambiar fecha' });
+  }
+  const cuando = info.days === 1 ? `mañana, ${info.long}` : info.long;
+  return confirmModal('¿El turno no es para hoy?', `Este turno es para <b>${escHtml(cuando)}</b>${time ? ' a las ' + escHtml(time) : ''}. ¿Confirmás?`,
+    { confirmText: 'Sí, para ese día', cancelText: 'Cambiar fecha' });
+}
+
 let _creatingAppt = false;
 async function createAppointment() {
   if (_creatingAppt) return;   // ya se está guardando: ignorar el segundo clic
@@ -8417,6 +8453,7 @@ async function _createAppointment() {
   }
 
   if (!time) return showToast('⚠️', 'La hora es obligatoria', '');
+  if (!(await confirmTurnoDate(date, time))) { document.getElementById('t-date')?.focus(); return; }
 
   try {
     // Cliente nuevo con un número que ya está en otras fichas (ej: Pablo Lescano y su hijo Santino
@@ -10028,6 +10065,7 @@ function openModal(id) {
       loadClients();
     }
     document.getElementById('t-date').value = agendaDate;
+    updateTurnoDateTag();
     // Cargar barberos (siempre visible si hay barberos cargados)
     const barberField = document.getElementById('t-barber-field');
     const barberSel   = document.getElementById('t-barber-select');
