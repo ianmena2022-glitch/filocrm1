@@ -573,14 +573,24 @@ router.post('/accounts', adminAuth, async (req, res) => {
 
 // PUT /api/admin/accounts/:id — editar plan/estado
 router.put('/accounts/:id', adminAuth, async (req, res) => {
-  const { name, filo_plan, subscription_status, exclude_from_kpis, archived, active_until } = req.body;
+  const { name, filo_plan, subscription_status, exclude_from_kpis, archived, active_until, new_password } = req.body;
   const validPlans   = ['starter','staff','enterprise'];
   const validStatus  = ['trial','active','expired','cancelled'];
+  if (new_password !== undefined && new_password !== '' && String(new_password).length < 6) {
+    return res.status(400).json({ error: 'La contraseña nueva debe tener al menos 6 caracteres' });
+  }
 
   try {
     const updates = [];
     const params  = [];
     let i = 1;
+
+    // Contraseña nueva (por ejemplo, cuando el dueño se la olvidó): se guarda cifrada y las
+    // sesiones abiertas con la anterior quedan registradas como previas al cambio.
+    if (new_password) {
+      updates.push(`password=$${i++}`); params.push(await bcrypt.hash(String(new_password), 12));
+      updates.push('password_changed_at=NOW()');
+    }
 
     if (typeof exclude_from_kpis === 'boolean') {
       await ensureKpiColumn();
