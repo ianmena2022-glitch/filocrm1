@@ -67,7 +67,7 @@ footer a:hover{color:var(--w)}
 <header>
   <h1>Términos, privacidad y seguridad</h1>
   <p>Acá está todo lo que necesitás saber sobre cómo funciona FILO, qué hacemos con los datos de tu barbería y de tus clientes, cómo los protegemos y de quién es cada cosa. Lo escribimos para que se entienda: si algo no queda claro, escribinos a <a href="mailto:serviciosfilocrm@gmail.com">serviciosfilocrm@gmail.com</a>.</p>
-  <span class="updated">Última actualización: 27 de octubre de 2026</span>
+  <span class="updated">Última actualización: 6 de noviembre de 2026</span>
 </header>
 
 <div class="wrap">
@@ -78,6 +78,7 @@ footer a:hover{color:var(--w)}
     <a href="#cumplimiento">4. Cumplimiento</a>
     <a href="#propiedad-intelectual">5. Propiedad intelectual</a>
     <a href="#contacto">6. Contacto</a>
+    <a href="#english">English</a>
   </aside>
 
   <main>
@@ -116,8 +117,13 @@ footer a:hover{color:var(--w)}
     </ul>
 
     <h3>1.5 WhatsApp</h3>
+    <p>FILO puede conectarse al WhatsApp de tu barbería de dos formas:</p>
+    <ul>
+      <li><strong>Conexión oficial (WhatsApp Business Platform):</strong> conectás tu número con tu cuenta de Facebook a través de la ventana oficial de Meta, y los mensajes viajan por la API oficial de WhatsApp Business. Se rige por las <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank" rel="noopener">políticas de WhatsApp Business</a>: para escribirle primero a un cliente (por ejemplo, un recordatorio de turno) se usan plantillas aprobadas por Meta, y Meta cobra esos mensajes según sus tarifas vigentes a la cuenta de WhatsApp de la barbería.</li>
+      <li><strong>Vinculación por código QR:</strong> el número se vincula como un dispositivo más, igual que WhatsApp Web.</li>
+    </ul>
     <div class="box warn">
-      <p><strong>Importante:</strong> FILO se conecta al WhatsApp de tu barbería vinculándolo como un dispositivo más (igual que WhatsApp Web), escaneando un código QR. <strong>No es una integración oficial de WhatsApp ni de Meta</strong>, y no tenemos relación con ellas.</p>
+      <p><strong>Importante sobre la vinculación por QR:</strong> no es una integración oficial de WhatsApp ni de Meta.</p>
       <p style="margin:0">WhatsApp puede limitar, suspender o bloquear números por sus propios criterios. FILO aplica límites de envío, ritmo “humano”, modo cuidado y bajas automáticas para reducir ese riesgo, pero <strong>no puede garantizar que tu número no sea bloqueado</strong> y no se responsabiliza por esos bloqueos ni por sus consecuencias. Usá un número que puedas recuperar y no lo uses para mensajes masivos a personas que no te dieron su contacto.</p>
     </div>
     <ul>
@@ -172,6 +178,7 @@ footer a:hover{color:var(--w)}
       <tr><th>De quién</th><th>Qué datos</th><th>Para qué</th></tr>
       <tr><td>Dueños, sucursales y barberos</td><td>Nombre, email, teléfono, contraseña (guardada cifrada), foto de perfil, horarios, comisiones, dirección del local, historial de pagos del plan.</td><td>Crear y administrar la cuenta, cobrar el plan, dar soporte, avisos del servicio.</td></tr>
       <tr><td>Clientes de la barbería</td><td>Nombre, teléfono, fecha de cumpleaños (si se carga), turnos, servicios, montos, pagos y deudas, puntos y canjes, membresías, notas, mensajes de WhatsApp con la barbería, comprobantes de pago enviados.</td><td>Agenda, recordatorios y confirmaciones, fila virtual, fidelización, caja y reportes de la barbería.</td></tr>
+      <tr><td>Personas que le escriben a la barbería por WhatsApp</td><td>Número de teléfono, nombre de perfil de WhatsApp, contenido de los mensajes (texto, y archivos como comprobantes de pago), fecha y estado de entrega de cada mensaje. Con la conexión oficial, Meta nos envía estos datos por webhook firmado.</td><td>Mostrar la conversación a la barbería, responder consultas y reservas (incluido el asistente automático si la barbería lo activa) y enviar los avisos que el cliente espera, como recordatorios de turno.</td></tr>
       <tr><td>Visitantes del sitio</td><td>Datos técnicos (dirección IP, navegador, dispositivo) y, si instalan la app, suscripción a notificaciones.</td><td>Seguridad, prevenir abusos, enviar notificaciones que el usuario activó.</td></tr>
     </table></div>
     <p>No pedimos datos sensibles y te pedimos que no los cargues. No vendemos ni alquilamos datos personales, y no los usamos para publicidad de terceros.</p>
@@ -182,7 +189,7 @@ footer a:hover{color:var(--w)}
       <tr><th>Proveedor</th><th>Para qué</th><th>Dónde</th></tr>
       <tr><td>Railway</td><td>Servidores y base de datos donde vive FILO.</td><td>Estados Unidos</td></tr>
       <tr><td>Mercado Pago</td><td>Cobro de los planes y, si lo usás, de señas y membresías. FILO no ve ni guarda datos de tarjetas.</td><td>Argentina</td></tr>
-      <tr><td>WhatsApp (Meta)</td><td>Envío y recepción de mensajes con tus clientes, a través de tu propio número.</td><td>Según Meta</td></tr>
+      <tr><td>WhatsApp (Meta Platforms)</td><td>Envío y recepción de mensajes con tus clientes, a través de tu propio número: por la API oficial de WhatsApp Business o por la vinculación por QR, según cómo lo conectes.</td><td>Según Meta</td></tr>
       <tr><td>Groq</td><td>Modelos de inteligencia artificial: respuestas del asistente, lectura de comprobantes y textos automáticos.</td><td>Estados Unidos</td></tr>
       <tr><td>Resend</td><td>Envío de emails (códigos de verificación y de recuperación de contraseña).</td><td>Estados Unidos</td></tr>
       <tr><td>Cloudinary</td><td>Almacenamiento de fotos y logos que subís.</td><td>Estados Unidos</td></tr>
@@ -219,6 +226,13 @@ footer a:hover{color:var(--w)}
 
     <h3>2.9 Menores</h3>
     <p>FILO está pensado para negocios y no está dirigido a menores de 18 años. Si una barbería atiende a menores, es responsable de cargar solo los datos necesarios y de contar con la autorización de sus padres o responsables para contactarlos.</p>
+
+    <h3 id="eliminar-datos">2.10 Cómo pedir que eliminemos tus datos</h3>
+    <ul>
+      <li><strong>Si sos una barbería:</strong> escribinos a <a href="mailto:serviciosfilocrm@gmail.com">serviciosfilocrm@gmail.com</a> desde el email de tu cuenta con el asunto “Eliminar mi cuenta”. Eliminamos la cuenta, sus clientes, turnos, caja y mensajes dentro de los 30 días (salvo lo que debamos conservar por ley, ver 2.7) y te confirmamos por email.</li>
+      <li><strong>Si sos cliente de una barbería o le escribiste por WhatsApp:</strong> podés pedírselo a la barbería, o escribirnos a <a href="mailto:serviciosfilocrm@gmail.com">serviciosfilocrm@gmail.com</a> con el asunto “Eliminar mis datos”, indicando tu nombre, tu número de teléfono y la barbería. Eliminamos tus datos y tus mensajes dentro de los 30 días y te confirmamos por email.</li>
+      <li><strong>Si conectaste FILO con Facebook o WhatsApp:</strong> podés quitarle el acceso desde tu cuenta de Facebook (Configuración → Integraciones comerciales) y pedirnos la eliminación por el mismo email.</li>
+    </ul>
   </section>
 
   <!-- ═══════════════════════ 3. SEGURIDAD ═══════════════════════ -->
@@ -236,7 +250,7 @@ footer a:hover{color:var(--w)}
       <li><strong>PIN de facturación:</strong> opcional, para ocultar los montos mensuales en dispositivos compartidos.</li>
       <li><strong>Límites contra abusos:</strong> topes de intentos de inicio de sesión y de pedidos a las páginas públicas.</li>
       <li><strong>Pagos:</strong> los datos de tarjetas los maneja Mercado Pago; FILO nunca los recibe ni los guarda.</li>
-      <li><strong>WhatsApp:</strong> la sesión vinculada se guarda en nuestra base de datos y corre en un servicio separado del resto del sistema; las claves de cifrado no se registran en los logs.</li>
+      <li><strong>WhatsApp:</strong> con la conexión oficial, verificamos la firma de Meta en cada evento que recibimos y descartamos los que no la tienen. Con la vinculación por QR, la sesión se guarda en nuestra base de datos y corre en un servicio separado del resto del sistema; las claves de cifrado no se registran en los logs.</li>
       <li><strong>Correcciones de cobros:</strong> solo el dueño puede corregir un cobro ya hecho, y los cierres de caja se recalculan para que no queden diferencias.</li>
     </ul>
 
@@ -303,6 +317,17 @@ footer a:hover{color:var(--w)}
     </ul>
   </section>
 
+  <!-- ═══════════════════════ ENGLISH SUMMARY ═══════════════════════ -->
+  <section id="english" lang="en">
+    <div class="kicker">Summary</div>
+    <h2>English summary</h2>
+    <p><strong>FILO CRM</strong> is a cloud management software for barbershops in Argentina, operated by <strong>Ian Mena</strong> (CUIT 20-94702025-1), Ruta Provincial 58 km 14, San Vicente, Buenos Aires, Argentina. Contact: <a href="mailto:serviciosfilocrm@gmail.com">serviciosfilocrm@gmail.com</a>.</p>
+    <p><strong>Data we process:</strong> account data of barbershops and their staff; data of the barbershop's customers (name, phone, appointments, payments, loyalty points, notes); and, when a barbershop connects its WhatsApp number, the phone number, WhatsApp profile name, message content (including files such as payment receipts), and delivery status of the messages exchanged with that barbershop. With the official WhatsApp Business Platform connection, Meta sends us this data through signed webhooks.</p>
+    <p><strong>Use:</strong> only to provide the service to the barbershop — appointments and online booking, answering its customers' inquiries (including an automated assistant if the barbershop enables it), and sending notifications the customer expects, such as appointment reminders, on behalf of that barbershop. We do not sell personal data or use it for third-party advertising.</p>
+    <p><strong>Sharing:</strong> Meta Platforms (WhatsApp), hosting and database (Railway), payments (Mercado Pago), AI models (Groq), email (Resend), image storage (Cloudinary) and push notifications (Apple, Google), or when required by law.</p>
+    <p><strong>Data deletion:</strong> email <a href="mailto:serviciosfilocrm@gmail.com">serviciosfilocrm@gmail.com</a> with the subject “Delete my data”, including your name, phone number and the barbershop. We delete the data and messages within 30 days and confirm by email. You can also remove FILO's access from your Facebook settings (Business Integrations).</p>
+  </section>
+
   </main>
 </div>
 
@@ -313,12 +338,17 @@ footer a:hover{color:var(--w)}
     <a href="/funciones">Funciones</a>
     <a href="/legal#terminos">Términos</a>
     <a href="/legal#privacidad">Privacidad</a>
+    <a href="/eliminar-datos">Eliminar mis datos</a>
     <a href="/arrepentimiento">Botón de arrepentimiento</a>
     <a href="/app">Ingresar</a>
   </div>
 </footer>
 
 <script>
+// /eliminar-datos sirve esta misma página y abre directo en la sección (es la URL que se carga en Meta)
+if (location.pathname === '/eliminar-datos' && !location.hash) {
+  window.addEventListener('load', () => document.getElementById('eliminar-datos').scrollIntoView());
+}
 // Marca en el índice la sección que se está leyendo
 (function () {
   const links = [...document.querySelectorAll('#toc a')];

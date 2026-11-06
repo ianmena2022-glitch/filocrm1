@@ -38,6 +38,7 @@ const OPTIONAL_FEATURES = {
   CLOUDINARY_API_SECRET: 'uploads de fotos (branding + portfolio)',
   GROQ_API_KEY:          'bot de WhatsApp con IA',
   MP_WEBHOOK_SECRET:     'firma de webhooks de Mercado Pago',
+  META_APP_SECRET:       'webhook de WhatsApp oficial (Meta)',
 };
 for (const [k, feat] of Object.entries(OPTIONAL_FEATURES)) {
   if (!process.env[k]) console.warn(`⚠️  ${k} no seteada — feature deshabilitada: ${feat}`);
@@ -84,7 +85,8 @@ app.use(rateLimit({
   message: { error: 'Demasiadas solicitudes. Intentá en un momento.' },
 }));
 
-app.use(express.json({ limit: '2mb' }));
+// rawBody: el webhook oficial de WhatsApp necesita el cuerpo crudo para verificar la firma de Meta
+app.use(express.json({ limit: '2mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/whatsapp/')) req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // ── Sanea errores 500 que leakean internals de DB/sistema ──
@@ -135,6 +137,7 @@ app.use('/api/events',        require('./routes/events'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/push',          require('./routes/push'));
 app.use('/api/legal',         require('./routes/legal'));
+app.use('/api/whatsapp',      require('./routes/whatsappOfficial')); // webhook de la API oficial de Meta
 app.use('/api/payments/webhook',     require('./routes/payments'));
 app.use('/api/payments/webhook-filo', require('./routes/payments'));
 app.use('/api/payments/webhook-qr',   require('./routes/payments'));
@@ -491,6 +494,8 @@ app.get('/legal', (req, res) => {
 });
 app.get(['/terminos', '/terminos-y-condiciones'], (req, res) => res.redirect(301, '/legal#terminos'));
 app.get(['/privacidad', '/politica-de-privacidad'], (req, res) => res.redirect(301, '/legal#privacidad'));
+// Instrucciones para eliminar datos: URL propia que se carga en Meta (la página abre en esa sección)
+app.get('/eliminar-datos', (req, res) => res.sendFile(path.join(publicDir, 'legal.html')));
 app.get('/seguridad', (req, res) => res.redirect(301, '/legal#seguridad'));
 app.get(['/arrepentimiento', '/boton-de-arrepentimiento'], (req, res) => {
   res.sendFile(path.join(publicDir, 'arrepentimiento.html'));
