@@ -76,7 +76,7 @@ async function createQueueAppointment(shopId, entry, barberId) {
     `INSERT INTO appointments
        (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end,
         barber_id, barber_name, commission_pct, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'confirmed')
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE((SELECT name FROM shops WHERE id = $11::int), $12),$13,'confirmed')
      RETURNING id`,
     [shopId, entry.client_id || null, entry.client_name, svc ? svc.id : null, entry.service_name || 'Fila virtual',
      parseFloat(entry.price) || 0, svc ? (parseFloat(svc.cost) || 0) : 0, localDate, localTime, timeEnd,
@@ -806,7 +806,7 @@ router.post('/complete/:id', auth, async (req, res) => {
         `INSERT INTO appointments
            (shop_id, client_id, client_name, service_name, price, cost, date, time_start,
             barber_id, barber_name, commission_pct, payment_method, tip, status)
-         VALUES ($1,$13,$2,$3,$4,$5,$11,$12,$6,$7,$8,$9,$10,'completed')
+         VALUES ($1,$13,$2,$3,$4,$5,$11,$12,$6,COALESCE((SELECT name FROM shops WHERE id = $6::int), $7),$8,$9,$10,'completed')
          RETURNING id`,
         [shopId, finalClientName, service_name || 'Walk-in', p, c,
          finalBarberId, barberName, pct, payment_method || 'cash', t, localDate, localTime, finalClientId]

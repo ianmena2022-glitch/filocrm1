@@ -85,8 +85,9 @@ async function generateAppointments(client, rule, dates) {
     await client.query(
       `INSERT INTO appointments
          (shop_id, client_id, client_name, service_id, service_name,
-          price, barber_id, date, time_start, time_end, status, recurring_id, commission_pct)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12)`,
+          price, barber_id, date, time_start, time_end, status, recurring_id, commission_pct, barber_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,
+               (SELECT name FROM shops WHERE id = $7::int))`,   // nombre del barbero asignado (antes quedaba vacío)
       [rule.shop_id, rule.client_id, rule.client_name,
        rule.service_id, rule.service_name, rule.service_price,
        rule.barber_id, date, rule.time_start, timeEnd, rule.id, commissionPct]

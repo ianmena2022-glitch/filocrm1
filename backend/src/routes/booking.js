@@ -895,8 +895,9 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
       // Crear turno (con redeemInfo ya calculado)
       const apptResult = await pgClient.query(
         `INSERT INTO appointments
-           (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+           (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at, barber_name)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+                 (SELECT name FROM shops WHERE id = $13::int))   -- nombre del barbero asignado (antes quedaba vacío)
          RETURNING *`,
         [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
          svcPrice, svcCost, date, time_start, time_end, apptStatus, redeemInfo,

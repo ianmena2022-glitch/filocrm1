@@ -74,7 +74,7 @@ router.get('/', auth, async (req, res) => {
       // Barbero solo ve SUS turnos
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
-                b.name AS assigned_barber_name,
+                b.name AS assigned_barber_name, COALESCE(b.name, a.barber_name) AS barber_name,  -- el barbero real (el nombre guardado puede estar vacío o viejo)
                 EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
@@ -87,7 +87,7 @@ router.get('/', auth, async (req, res) => {
       // Enterprise owner ve sus turnos + los de todas sus sucursales
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
-                b.name AS assigned_barber_name,
+                b.name AS assigned_barber_name, COALESCE(b.name, a.barber_name) AS barber_name,  -- el barbero real (el nombre guardado puede estar vacío o viejo)
                 EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue,
                 s.name AS branch_name
          FROM appointments a
@@ -105,7 +105,7 @@ router.get('/', auth, async (req, res) => {
       // Dueño/sucursal ve todos sus turnos
       result = await pool.query(
         `SELECT a.*, COALESCE(c.name, a.client_name) AS client_name, c.phone AS client_phone, c.address AS client_address,
-                b.name AS assigned_barber_name,
+                b.name AS assigned_barber_name, COALESCE(b.name, a.barber_name) AS barber_name,  -- el barbero real (el nombre guardado puede estar vacío o viejo)
                 EXISTS (SELECT 1 FROM queue_entries q WHERE q.appointment_id = a.id) AS from_queue
          FROM appointments a
          LEFT JOIN clients c ON c.id = a.client_id
@@ -265,7 +265,10 @@ router.post('/', auth, async (req, res) => {
         `INSERT INTO appointments
            (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
             time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                 -- El nombre siempre el del barbero asignado (auto-asignado incluido), no el que mande la pantalla
+                 COALESCE((SELECT name FROM shops WHERE id = $11::int), $12),
+                 $13,$14,$15)
          RETURNING *`,
         [
           shopId,
@@ -857,6 +860,8 @@ router.put('/:id', auth, async (req, res) => {
          price          = COALESCE($4, price),
          status         = COALESCE($5, status),
          barber_id      = CASE WHEN $8::boolean THEN $9::int ELSE barber_id END,
+         -- Al cambiar el barbero, cambia también el nombre (antes quedaba el del barbero anterior)
+         barber_name    = CASE WHEN $8::boolean THEN (SELECT name FROM shops WHERE id = $9::int) ELSE barber_name END,
          commission_pct = CASE WHEN $8::boolean THEN $10::int ELSE commission_pct END
        WHERE id=$6 AND shop_id=$7${barberCondition} RETURNING *`,
       [client_name||null, time_start||null, time_end||null,
