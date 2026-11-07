@@ -1912,21 +1912,20 @@ function animateStat(el, finalValue, opts) {
 
 // ─── FOTOS DEL BARBERO (self-upload) ─────────────────────
 async function uploadToCloudinary(file, scope, barberId) {
-  if (!file) throw new Error('Sin archivo');
-  const MAX_BYTES = 8 * 1024 * 1024;
-  if (file.size > MAX_BYTES) throw new Error('Imagen muy grande (máx 8MB)');
-  if (!/^image\//.test(file.type)) throw new Error('Solo imágenes');
+  // Achica la foto (máx 2000 px) y valida con mensajes claros (public/image-prep.js)
+  const ready = await window.filoPrepareImage(file);
   const sign = await api('POST', '/media/sign-upload', { scope, barberId });
-  if (!sign || !sign.signature) throw new Error('No se pudo firmar el upload');
+  if (!sign || !sign.signature) throw new Error('No se pudo preparar la subida. Probá de nuevo.');
   const fd = new FormData();
-  fd.append('file', file);
+  fd.append('file', ready);
   fd.append('api_key',   sign.apiKey);
   fd.append('timestamp', sign.timestamp);
   fd.append('signature', sign.signature);
   if (sign.folder) fd.append('folder', sign.folder);
-  const r = await fetch(sign.uploadUrl, { method: 'POST', body: fd });
-  const data = await r.json();
-  if (!r.ok || !data.secure_url) throw new Error(data.error?.message || 'Falló el upload');
+  let r, data;
+  try { r = await fetch(sign.uploadUrl, { method: 'POST', body: fd }); data = await r.json(); }
+  catch (_) { throw new Error('No se pudo conectar para subir la foto. Revisá internet y probá de nuevo.'); }
+  if (!r.ok || !data.secure_url) throw new Error(window.filoUploadError(data, r.status));
   return data.secure_url;
 }
 function renderMyPhotos() {
@@ -2152,6 +2151,7 @@ if (token && me?.is_barber) {
   </div>
 </div>
 <script src="/pwa-install.js?v=4" defer></script><script src="/filo-select.js?v=2" defer></script>
+<script src="/image-prep.js?v=1"></script>
 <script src="/forgot-password.js"></script>
 </body>
 </html>
