@@ -21,7 +21,7 @@ if (!SECRET) console.error('❌ [WPP worker] falta WPP_WORKER_SECRET: el servici
 const ALLOWED = new Set([
   'sendText', 'startSession', 'getStatus', 'closeSession', 'clearSession', 'requestPairingCode',
   'resolveWppShopId', 'hasWhatsApp', 'isOptedOut', 'addOptOut', 'autoEnabled', 'getAutoPrefs',
-  'setAutoPrefs', 'setCareful', 'ensureWppSafetyCols', 'wppStats', 'sweepIdle',
+  'setAutoPrefs', 'setCareful', 'ensureWppSafetyCols', 'wppStats', 'sweepIdle', 'banHold', 'liftBanHold',
 ]);
 
 // Lo que se devuelve tiene que poder viajar como JSON (los mensajes de Baileys traen Buffers)

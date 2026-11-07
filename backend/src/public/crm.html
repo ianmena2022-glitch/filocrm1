@@ -3819,7 +3819,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
           <!-- WhatsApp bloqueó el número / modo cuidado -->
           <div id="wpp-banned-info" style="display:none;padding:14px 16px;background:rgba(255,67,67,0.08);border:1px solid rgba(255,67,67,0.3);border-radius:12px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:700;color:#ff6b6b;margin-bottom:6px">⛔ WhatsApp bloqueó este número</div>
-            <div style="font-size:12px;color:var(--gray);line-height:1.6">FILO dejó de usarlo para no empeorar el bloqueo. Recuperalo desde la app de WhatsApp en el celular y <strong style="color:rgba(255,255,255,.8)">usalo unos días a mano</strong> antes de volver a conectarlo. Al reconectarlo, FILO arranca en modo cuidado (pocos mensajes y solo a clientes que ya vinieron o te escribieron) durante 3 semanas.</div>
+            <div style="font-size:12px;color:var(--gray);line-height:1.6">FILO dejó de usarlo para no empeorar el bloqueo. Recuperalo desde la app de WhatsApp en el celular y <strong style="color:rgba(255,255,255,.8)">usalo unos días a mano</strong> antes de volver a conectarlo. Al reconectarlo, FILO arranca en modo cuidado (pocos mensajes y solo a clientes que ya vinieron o te escribieron) durante 3 semanas (o más, si ya lo bloquearon antes).</div>
+            <div id="wpp-hold-text" style="display:none;font-size:12px;color:#ffb4b4;line-height:1.6;margin-top:8px;font-weight:600"></div>
           </div>
           <div id="wpp-careful-info" style="display:none;padding:12px 16px;background:rgba(255,209,0,0.06);border:1px solid rgba(255,209,0,0.2);border-radius:12px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:4px">🛡 Modo cuidado activo</div>
@@ -9515,13 +9516,29 @@ async function loadWppAuto() {
         <span style="flex-basis:100%;font-size:11px;color:rgba(255,255,255,.35)">Entre 20 minutos y 1 día (24 h).</span>
       </div>` : ''}
       </div>`).join('');
+    const fmtD = (x) => new Date(x).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
     const banned = document.getElementById('wpp-banned-info');
-    if (banned) banned.style.display = d.banned_at ? 'block' : 'none';
+    if (banned) banned.style.display = (d.banned_at || d.hold_until) ? 'block' : 'none';
+    // Espera obligatoria antes de reconectar un número bloqueado
+    const holdEl = document.getElementById('wpp-hold-text');
+    const btn = document.getElementById('wpp-connect-btn');
+    if (holdEl) {
+      holdEl.style.display = d.hold_until ? 'block' : 'none';
+      if (d.hold_until) holdEl.textContent = `${d.ban_count > 1 ? `Ya es la ${d.ban_count}ª vez que WhatsApp lo bloquea. ` : ''}Vas a poder reconectarlo desde el ${fmtD(d.hold_until)}. Si se reconecta antes, WhatsApp lo vuelve a bloquear enseguida y puede perderse para siempre. Si querés conectar un número distinto, escribinos y te lo habilitamos.`;
+    }
+    const isOn = document.getElementById('wpp-dot')?.classList.contains('connected');
+    if (btn && d.hold_until && !isOn) {
+      btn.disabled = true;
+      btn.style.opacity = '.45';
+      btn.textContent = `⏳ Se puede reconectar desde el ${fmtD(d.hold_until)}`;
+    }
     const careful = document.getElementById('wpp-careful-info');
     if (careful) {
       careful.style.display = d.careful_until ? 'block' : 'none';
       const t = document.getElementById('wpp-careful-text');
-      if (t && d.careful_until) t.textContent = `Hasta el ${new Date(d.careful_until).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}: como máximo 40 mensajes por día, solo a clientes que ya vinieron o te escribieron, y sin "gracias + puntos", avisos de fila ni promociones. Así el número recupera la confianza de WhatsApp.`;
+      if (t && d.careful_until) t.textContent = d.careful_strict
+        ? `Hasta el ${fmtD(d.careful_until)}: como WhatsApp ya bloqueó este número más de una vez, FILO solo manda recordatorios de turno (como máximo ${d.careful_cap} por día) y los mensajes que mandes vos a clientes que ya te escribieron. Así el número recupera la confianza de WhatsApp.`
+        : `Hasta el ${fmtD(d.careful_until)}: como máximo ${d.careful_cap || 40} mensajes por día, solo a clientes que ya vinieron o te escribieron, y sin "gracias + puntos", avisos de fila ni promociones. Así el número recupera la confianza de WhatsApp.`;
     }
   } catch (_) { el.innerHTML = '<div style="font-size:12px;color:var(--gray)">No se pudo cargar</div>'; }
 }

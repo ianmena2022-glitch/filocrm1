@@ -15,7 +15,12 @@ router.get('/wpp-auto', auth, ownerOnly, async (req, res) => {
     const prefs = await wpp.getAutoPrefs(req.shopId);
     const r = await pool.query(`SELECT to_jsonb(s)->>'wpp_banned_at' AS banned_at, to_jsonb(s)->>'wpp_careful_until' AS careful_until, to_jsonb(s)->>'reminder_minutes' AS reminder_minutes FROM shops s WHERE id=$1`, [req.shopId]);
     const careful = r.rows[0]?.careful_until && new Date(r.rows[0].careful_until) > new Date() ? r.rows[0].careful_until : null;
-    res.json({ prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful, reminder_minutes: parseInt(r.rows[0]?.reminder_minutes) || 120 });
+    // Historial de bloqueos y espera antes de poder reconectar (si el servicio aún no lo tiene, sin datos)
+    const hold = await wpp.banHold(req.shopId).catch(() => null);
+    res.json({
+      prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful, reminder_minutes: parseInt(r.rows[0]?.reminder_minutes) || 120,
+      ban_count: hold?.count || 0, hold_until: hold?.until || null, careful_cap: hold?.carefulCap || 40, careful_strict: !!hold?.strict,
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/wpp-auto', auth, ownerOnly, async (req, res) => {

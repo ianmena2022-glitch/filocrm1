@@ -92,6 +92,13 @@ router.post('/accounts/:id/wpp-careful', adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/admin/accounts/:id/wpp-lift-hold — deja reconectar antes de que pase la espera tras un
+// bloqueo (usar solo si van a conectar un número distinto al bloqueado)
+router.post('/accounts/:id/wpp-lift-hold', adminAuth, async (req, res) => {
+  try { res.json({ ok: true, hold: await require('../services/whatsapp').liftBanHold(parseInt(req.params.id)) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/admin/logout-all — invalida todas las sesiones admin (p.ej. si perdiste el celular)
 router.post('/logout-all', adminAuth, async (req, res) => {
   try {
@@ -198,6 +205,8 @@ router.get('/accounts', adminAuth, async (req, res) => {
         -- WhatsApp: bloqueado por WhatsApp / modo cuidado (to_jsonb: sirve aunque la columna no exista)
         to_jsonb(s)->>'wpp_banned_at'     AS wpp_banned_at,
         to_jsonb(s)->>'wpp_careful_until' AS wpp_careful_until,
+        GREATEST(COALESCE((to_jsonb(s)->>'wpp_ban_count')::int, 0),
+                 (SELECT COUNT(*)::int FROM notifications nb WHERE nb.recipient_shop_id = s.id AND nb.type = 'wpp.banned')) AS wpp_ban_count,
         COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
         COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s

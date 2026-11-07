@@ -65,6 +65,8 @@ if (!REMOTE) {
     ensureWppSafetyCols: remote('ensureWppSafetyCols', 10000),
     wppStats:           remote('wppStats', 10000),
     sweepIdle:          remote('sweepIdle', 60000),
+    banHold:            remote('banHold', 10000),
+    liftBanHold:        remote('liftBanHold', 10000),
     // La app principal no conecta sesiones: lo hace el servicio de WhatsApp al arrancar
     reconnectAllShops:  async () => { console.log('📱 WhatsApp corre en un servicio aparte (WPP_WORKER_URL): este servidor no conecta sesiones'); },
     shutdownAll:        async () => {},

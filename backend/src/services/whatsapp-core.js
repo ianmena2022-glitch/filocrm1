@@ -257,7 +257,7 @@ function startHealthCheck(shopId) {
         try { sock.end?.(new Error('zombie detected')); } catch(_){}
         delete sockets[shopId];
         stopHealthCheck(shopId);
-        scheduleReconnect(shopId, 2000);
+        reconnectAfterDrop(shopId);
       }
     }
   }, 2 * 60 * 1000);
@@ -333,6 +333,37 @@ wppGuard.setOnRecord((shopId, day) => {
   if (typeof _wppFlushTimers[key].unref === 'function') _wppFlushTimers[key].unref();
 });
 if (process.env.NODE_ENV !== 'test') setTimeout(() => { _ensureWppCounters(); }, 5000).unref?.();
+
+// Reconexiones automáticas: un servidor que se reconecta a los 5 segundos cada vez que se corta
+// (varias veces por hora) parece un bot. Se cuentan los cortes de la última hora y cuantos más
+// hubo, más se espera antes de volver a conectar (con algo de azar, como haría una persona).
+const DROP_WINDOW_MS = 60 * 60 * 1000;
+const _recentDrops = Object.create(null);   // shopId → [timestamps de cortes de la última hora]
+function recordDrop(shopId, now = Date.now()) {
+  const list = (_recentDrops[shopId] || []).filter(t => now - t < DROP_WINDOW_MS);
+  list.push(now);
+  _recentDrops[shopId] = list;
+  return list.length;
+}
+function recentDrops(shopId, now = Date.now()) {
+  return (_recentDrops[shopId] || []).filter(t => now - t < DROP_WINDOW_MS).length;
+}
+// drops: cortes en la última hora (incluido este) · attempt: intentos seguidos sin lograr conectar
+function reconnectDelayMs(drops, attempt = 1, rand = Math.random) {
+  // 1 corte: ~20 s · 2: ~2 min · 3: ~5 min · 4: ~15 min · 5 o más: ~30 min
+  const byDrops = [20000, 2 * 60000, 5 * 60000, 15 * 60000, 30 * 60000][Math.min(Math.max(drops, 1), 5) - 1];
+  const byAttempt = Math.min(20000 * 2 ** Math.max(0, attempt - 1), 30 * 60000);
+  const base = Math.max(byDrops, byAttempt);
+  return Math.round(base * (0.8 + rand() * 0.4));  // ±20 %
+}
+// Programa la reconexión después de un corte y devuelve cuánto se espera
+function reconnectAfterDrop(shopId, attempt = 1) {
+  const drops = recordDrop(shopId);
+  const delay = reconnectDelayMs(drops, attempt);
+  console.log(`[WPP] Shop ${shopId}: ${drops} corte(s) en la última hora — reconectando en ${Math.round(delay / 1000)}s`);
+  scheduleReconnect(shopId, delay);
+  return delay;
+}
 
 // Handles de setTimeout de reconexión por shop (para cancelar en clearSession)
 const reconnectTimers = {};
@@ -926,13 +957,15 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       delete qrCooldownUntil[shopId];
       delete statuses[`${shopId}_reconnect`];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
-      // Si este número había sido bloqueado, arranca en modo cuidado (21 días)
+      // Si este número había sido bloqueado, arranca en modo cuidado: 21 días, o 45 si ya lo
+      // bloquearon 2 veces o más
       try {
         await ensureWppSafetyCols();
+        const days = carefulDaysFor((await banHold(shopId)).count);
         await pool.query(
-          `UPDATE shops SET wpp_careful_until = GREATEST(COALESCE(wpp_careful_until, NOW()), NOW() + INTERVAL '21 days'),
+          `UPDATE shops SET wpp_careful_until = GREATEST(COALESCE(wpp_careful_until, NOW()), NOW() + ($2::int || ' days')::interval),
                             wpp_banned_at = NULL
-            WHERE id=$1 AND wpp_banned_at IS NOT NULL`, [shopId]);
+            WHERE id=$1 AND wpp_banned_at IS NOT NULL`, [shopId, days]);
         _safetyCache.delete(String(shopId));
       } catch (_) {}
       await saveSessionToDB(shopId);
@@ -988,14 +1021,16 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
           console.log(`[WPP] Shop ${shopId}: desconexión 440 ${count440}/3 — reintentando en ${delay/1000}s (si sigue, el cliente tiene otro dispositivo con esta sesión)`);
           scheduleReconnect(shopId, delay);
         }
+      } else if (code === DisconnectReason.restartRequired || code === 515) {
+        // 515 = WhatsApp pide reiniciar la conexión justo después de escanear el QR: es parte de
+        // la vinculación, se reconecta enseguida y no cuenta como corte.
+        scheduleReconnect(shopId, 2000);
       } else {
-        // Otros errores: reconectar con backoff exponencial
+        // Otros cortes (428, 503, 408…): esperar más cuantos más cortes hubo en la última hora
         const attempt = (statuses[`${shopId}_reconnect`] || 0) + 1;
         statuses[`${shopId}_reconnect`] = attempt;
         if (attempt <= 10) {
-          const delay = Math.min(5000 * attempt, 60000);
-          console.log(`[WPP] Shop ${shopId}: reconectando en ${delay/1000}s (intento ${attempt}/10)...`);
-          scheduleReconnect(shopId, delay);
+          reconnectAfterDrop(shopId, attempt);
         } else {
           console.log(`[WPP] Shop ${shopId}: demasiados intentos de reconexión, abortando`);
           await pool.query('UPDATE shops SET wpp_connected=FALSE WHERE id=$1', [shopId]);
@@ -1217,6 +1252,9 @@ async function startSession(shopId) {
     const minutesLeft = Math.ceil((cooldownUntil - Date.now()) / 60000);
     throw new Error(`Demasiados intentos fallidos. Esperá ${minutesLeft} minuto${minutesLeft !== 1 ? 's' : ''} antes de volver a vincular WhatsApp.`);
   }
+  // Número bloqueado hace poco: no dejar vincularlo hasta que pase la espera
+  const hold = await banHold(shopId);
+  if (hold.until) throw banHoldError(hold);
 
   // Reset contador al iniciar sesión nueva manualmente
   delete qrAttempts[shopId];
@@ -1316,6 +1354,11 @@ function ensureWppSafetyCols() {
       await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_banned_at TIMESTAMPTZ');
       await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_careful_until TIMESTAMPTZ');
       await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_auto_prefs JSONB');
+      // Historial de bloqueos: wpp_banned_at se borra al reconectar; estos quedan
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_ban_count INTEGER NOT NULL DEFAULT 0');
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_last_ban_at TIMESTAMPTZ');
+      // Si soporte FILO libera la espera (ej. van a conectar otro número)
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_hold_lifted_at TIMESTAMPTZ');
     })().catch(e => { _safetyCols = null; console.warn('[WPP] columnas de seguridad:', e.message); });
   }
   return _safetyCols;
@@ -1338,7 +1381,9 @@ async function _safety(shopId) {
   await ensureWppSafetyCols();
   let row = {};
   try { row = (await pool.query('SELECT wpp_auto_prefs, wpp_careful_until FROM shops WHERE id=$1', [shopId])).rows[0] || {}; } catch (_) {}
-  const v = { at: Date.now(), prefs: { ...AUTO_DEFAULTS, ...(row.wpp_auto_prefs || {}) }, carefulUntil: row.wpp_careful_until ? new Date(row.wpp_careful_until) : null };
+  let bans = 0;
+  if (row.wpp_careful_until) { try { bans = (await banHold(shopId)).count; } catch (_) {} }
+  const v = { at: Date.now(), prefs: { ...AUTO_DEFAULTS, ...(row.wpp_auto_prefs || {}) }, carefulUntil: row.wpp_careful_until ? new Date(row.wpp_careful_until) : null, strict: bans >= 2 };
   _safetyCache.set(k, v);
   return v;
 }
@@ -1363,6 +1408,57 @@ async function setCareful(shopId, days) {
 // En modo cuidado solo sale lo que el cliente espera, a quien ya habló con el número, y poco
 const CAREFUL_DAILY_CAP = 40;
 const CAREFUL_BLOCKED = new Set(['thanks', 'queue_call', 'owner_notice']);
+// Número bloqueado 2 veces o más: modo cuidado estricto (solo recordatorios de turno y
+// mensajes que manda el local a mano, pocos por día, por más tiempo)
+const STRICT_DAILY_CAP = 15;
+const STRICT_ALLOWED = new Set(['reminders']);
+const carefulDaysFor = (bans) => (bans >= 2 ? 45 : 21);
+// Espera obligatoria antes de volver a conectar un número bloqueado
+const holdDaysFor = (bans) => (bans <= 0 ? 0 : bans === 1 ? 7 : bans === 2 ? 14 : 30);
+
+// Cuántas veces bloquearon el número de este local y hasta cuándo no se puede reconectar.
+// Los bloqueos anteriores a wpp_ban_count se cuentan por las notificaciones "wpp.banned".
+async function banHold(shopId, now = new Date()) {
+  await ensureWppSafetyCols();
+  const r = await pool.query(
+    `SELECT s.wpp_ban_count, s.wpp_last_ban_at, s.wpp_banned_at, s.wpp_hold_lifted_at,
+            n.cnt AS notif_count, n.last AS notif_last
+       FROM shops s
+       LEFT JOIN LATERAL (SELECT COUNT(*)::int AS cnt, MAX(created_at) AS last
+                            FROM notifications WHERE recipient_shop_id = s.id AND type = 'wpp.banned') n ON TRUE
+      WHERE s.id = $1`, [shopId]);
+  const x = r.rows[0] || {};
+  const count = Math.max(parseInt(x.wpp_ban_count) || 0, parseInt(x.notif_count) || 0);
+  const dates = [x.wpp_last_ban_at, x.wpp_banned_at, x.notif_last].filter(Boolean).map(d => new Date(d));
+  const lastBanAt = dates.length ? new Date(Math.max(...dates)) : null;
+  const holdDays = holdDaysFor(count);
+  let until = lastBanAt && holdDays ? new Date(lastBanAt.getTime() + holdDays * 86400000) : null;
+  const lifted = x.wpp_hold_lifted_at ? new Date(x.wpp_hold_lifted_at) : null;
+  if (until && (until <= now || (lifted && lastBanAt && lifted > lastBanAt))) until = null;
+  return {
+    count, lastBanAt, until, holdDays,
+    strict: count >= 2,
+    carefulCap: count >= 2 ? STRICT_DAILY_CAP : CAREFUL_DAILY_CAP,
+    carefulDays: carefulDaysFor(count),
+  };
+}
+// Soporte FILO libera la espera (solo si van a conectar un número distinto al bloqueado)
+async function liftBanHold(shopId) {
+  await ensureWppSafetyCols();
+  await pool.query('UPDATE shops SET wpp_hold_lifted_at = NOW() WHERE id=$1', [shopId]);
+  return banHold(shopId);
+}
+const fmtDay = (d) => new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' });
+function banHoldError(h) {
+  const veces = h.count === 1 ? 'bloqueó este número' : `bloqueó este número ${h.count} veces`;
+  const e = new Error(
+    `WhatsApp ${veces} (el último bloqueo fue el ${fmtDay(h.lastBanAt)}). Si se reconecta tan rápido, ` +
+    `WhatsApp lo vuelve a bloquear y puede ser para siempre. Vas a poder reconectarlo desde el ${fmtDay(h.until)}. ` +
+    `Mientras tanto recuperalo desde la app de WhatsApp del celular. Si querés conectar un número distinto, escribinos y te lo habilitamos.`);
+  e.code = 'WPP_BAN_HOLD';
+  e.until = h.until;
+  return e;
+}
 
 // WhatsApp bloqueó el número: frenar todo y avisar (sin reintentos ni restauraciones)
 async function markBanned(shopId) {
@@ -1376,7 +1472,11 @@ async function markBanned(shopId) {
   try { if (reconnectTimers[shopId]) { clearTimeout(reconnectTimers[shopId]); delete reconnectTimers[shopId]; } } catch (_) {}
   try { fs.rmSync(authDir(shopId), { recursive: true, force: true }); } catch (_) {}
   await ensureWppSafetyCols();
-  await pool.query('UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL, wpp_banned_at=NOW() WHERE id=$1', [shopId]).catch(() => {});
+  await pool.query(
+    `UPDATE shops SET wpp_connected=FALSE, wpp_session=NULL, wpp_banned_at=NOW(),
+                      wpp_ban_count = COALESCE(wpp_ban_count, 0) + 1, wpp_last_ban_at = NOW()
+      WHERE id=$1`, [shopId]).catch(() => {});
+  delete _recentDrops[shopId];
   await notifyBanned(shopId).catch(() => {});
 }
 
@@ -1531,7 +1631,7 @@ async function _deliver(wppShopId, sock, jid, phone, text, kind, opts = {}) {
       statuses[wppShopId] = 'disconnected';
       try { sock.end?.(new Error('sendText timeout')); } catch(_){}
       delete sockets[wppShopId];
-      scheduleReconnect(wppShopId, 1000);
+      reconnectAfterDrop(wppShopId);
     }
     wppGuard.failed(wppShopId);
     throw err;
@@ -1564,6 +1664,13 @@ async function sendText(shopId, phone, message, opts = {}) {
   let sock = sockets[wppShopId];
 
   if (!sock || statuses[wppShopId] !== 'connected') {
+    // Si la conexión se viene cortando seguido, no forzar otra reconexión por cada mensaje:
+    // se espera la reconexión ya programada.
+    if (reconnectTimers[wppShopId] && recentDrops(wppShopId) >= 3) {
+      const e = new Error('WhatsApp se cortó varias veces en la última hora y se está reconectando despacio. Probá de nuevo en unos minutos.');
+      e.code = 'WPP_RECONNECTING'; throw e;
+    }
+    cancelReconnect(wppShopId); // evita que después se abra una segunda conexión (440)
     console.log(`Baileys: no hay socket activo para shop ${wppShopId}, intentando restaurar...`);
     const restored = await restoreSessionFromDB(wppShopId);
     if (!restored) throw new Error('WhatsApp no está conectado. Conectalo desde Configuración.');
@@ -1594,10 +1701,12 @@ async function sendText(shopId, phone, message, opts = {}) {
   // clientes que ya hablaron con el número, como máximo CAREFUL_DAILY_CAP por día.
   const safety = await _safety(wppShopId).catch(() => null);
   if (safety?.carefulUntil && safety.carefulUntil > new Date() && kind !== 'reply') {
+    const cap = safety.strict ? STRICT_DAILY_CAP : CAREFUL_DAILY_CAP;
     const why = (kind === 'marketing' || kind === 'cold') ? 'promociones'
       : CAREFUL_BLOCKED.has(opts.category) ? `"${opts.category}"`
+      : (safety.strict && opts.category && !STRICT_ALLOWED.has(opts.category)) ? `"${opts.category}" (número bloqueado más de una vez: solo recordatorios)`
       : firstContact ? 'contactos nuevos'
-      : wppGuard.countToday(wppShopId) >= CAREFUL_DAILY_CAP ? `más de ${CAREFUL_DAILY_CAP} por día` : null;
+      : wppGuard.countToday(wppShopId) >= cap ? `más de ${cap} por día` : null;
     if (why) { const e = new Error(`WhatsApp en modo cuidado: no se envían ${why}`); e.code = 'CAREFUL_MODE'; throw e; }
   }
   if (kind === 'marketing' && await _marketingCooldownHit(wppShopId, phoneClean)) {
@@ -1769,4 +1878,4 @@ function wppStats() {
   };
 }
 
-module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned, saveSessionToDB, restoreSessionFromDB }, shutdownAll, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned, saveSessionToDB, restoreSessionFromDB, reconnectDelayMs, holdDaysFor, carefulDaysFor }, shutdownAll, banHold, liftBanHold, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };

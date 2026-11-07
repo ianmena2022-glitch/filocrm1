@@ -1618,14 +1618,24 @@ function appInfoHtml(a) {
   const notif = pushN
     ? `<div style="color:#fbbf24">🔔 Notificaciones · ${pushN} disp.</div>`
     : `<div style="color:var(--g)">🔕 Sin notificaciones</div>`;
+  const bans = parseInt(a.wpp_ban_count) || 0;
   const banned = a.wpp_banned_at
-    ? `<div style="color:#f87171;font-weight:700">⛔ Bloqueado por WhatsApp · ${new Date(a.wpp_banned_at).toLocaleDateString('es-AR')}</div>` : '';
+    ? `<div style="color:#f87171;font-weight:700">⛔ Bloqueado por WhatsApp · ${new Date(a.wpp_banned_at).toLocaleDateString('es-AR')}${bans > 1 ? ` · ${bans}ª vez` : ''}
+         <a onclick="liftWppHold(${a.id})" style="cursor:pointer;color:#fca5a5;font-weight:500;text-decoration:underline;margin-left:4px" title="Dejar que vuelvan a conectar ya (solo si conectan otro número)">liberar espera</a></div>`
+    : bans ? `<div style="color:var(--g)">⛔ ${bans} bloqueo${bans > 1 ? 's' : ''} de WhatsApp antes</div>` : '';
   const careful = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date()
     ? `<div style="color:#fbbf24">🛡 Modo cuidado hasta ${new Date(a.wpp_careful_until).toLocaleDateString('es-AR')}</div>` : '';
   return banned + careful + app + notif;
 }
 
 // Modo cuidado de WhatsApp: pocos mensajes, solo a clientes conocidos (para números que fueron bloqueados)
+async function liftWppHold(id) {
+  if (!confirm('¿Dejar que esta cuenta vuelva a conectar WhatsApp ya?
+
+Solo si van a conectar un número DISTINTO al bloqueado: reconectar el mismo número tan rápido hace que WhatsApp lo vuelva a bloquear.')) return;
+  try { await adminFetch('POST', `/accounts/${id}/wpp-lift-hold`); alert('Listo: ya pueden volver a conectar WhatsApp.'); loadAll(); }
+  catch (e) { alert(e.message); }
+}
 async function toggleWppCareful(id, active) {
   const days = active ? 0 : 21;
   if (!confirm(active ? '¿Apagar el modo cuidado de WhatsApp de esta cuenta?' : '¿Activar el modo cuidado por 21 días? (máx. 40 mensajes por día, solo a clientes conocidos, sin "gracias + puntos" ni avisos de fila)')) return;
