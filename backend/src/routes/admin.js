@@ -216,12 +216,50 @@ router.get('/accounts', adminAuth, async (req, res) => {
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `);
+    await attachWppHealth(result.rows);
     res.json({ accounts: result.rows });
   } catch(e) {
     console.error('Admin GET accounts:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
+
+// Salud del WhatsApp de cada cuenta (últimos 7 días): para ver venir un bloqueo.
+// Aparte de la consulta principal: si alguna tabla todavía no existe, el panel igual carga.
+async function attachWppHealth(rows) {
+  try {
+    const ids = rows.filter(a => a.wpp_connected || a.wpp_banned_at || parseInt(a.wpp_ban_count) > 0).map(a => a.id);
+    if (!ids.length) return;
+    const today = `(NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date`;
+    const c = await pool.query(
+      `SELECT shop_id,
+              COALESCE(SUM(n) FILTER (WHERE bucket='total' AND day = ${today}), 0)::int AS today,
+              COALESCE(SUM(n) FILTER (WHERE bucket='total'), 0)::int     AS total,
+              COALESCE(SUM(n) FILTER (WHERE bucket='proactive'), 0)::int AS proactive,
+              COALESCE(SUM(n) FILTER (WHERE bucket='first'), 0)::int     AS first,
+              COALESCE(SUM(n) FILTER (WHERE bucket='marketing'), 0)::int AS marketing,
+              COALESCE(SUM(n) FILTER (WHERE bucket='drops'), 0)::int     AS drops
+         FROM wpp_daily_counters
+        WHERE shop_id = ANY($1::int[]) AND day >= ${today} - 6
+        GROUP BY shop_id`, [ids]).catch(() => ({ rows: [] }));
+    const o = await pool.query(
+      `SELECT shop_id, COUNT(*)::int AS optouts FROM wpp_optouts
+        WHERE shop_id = ANY($1::int[]) AND created_at > NOW() - INTERVAL '7 days' GROUP BY shop_id`, [ids]).catch(() => ({ rows: [] }));
+    const l = await pool.query(
+      `SELECT id, to_jsonb(s)->>'wpp_linked_at' AS linked_at FROM shops s WHERE id = ANY($1::int[])`, [ids]).catch(() => ({ rows: [] }));
+    const by = (list, k = 'shop_id') => Object.fromEntries(list.rows.map(r => [r[k], r]));
+    const C = by(c), O = by(o), L = by(l, 'id');
+    for (const a of rows) {
+      if (!ids.includes(a.id)) continue;
+      const x = C[a.id] || {};
+      a.wpp_health = {
+        today: x.today || 0, total: x.total || 0, proactive: x.proactive || 0, first: x.first || 0,
+        marketing: x.marketing || 0, drops: x.drops || 0, optouts: O[a.id]?.optouts || 0,
+        linked_at: L[a.id]?.linked_at || null,
+      };
+    }
+  } catch (e) { console.warn('Admin salud WhatsApp:', e.message); }
+}
 
 // GET /api/admin/billing-forecast — cuánto cobra FILO a cada cuenta activa (con descuentos aplicados)
 router.get('/billing-forecast', adminAuth, async (req, res) => {

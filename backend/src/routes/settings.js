@@ -20,6 +20,7 @@ router.get('/wpp-auto', auth, ownerOnly, async (req, res) => {
     res.json({
       prefs, banned_at: r.rows[0]?.banned_at || null, careful_until: careful, reminder_minutes: parseInt(r.rows[0]?.reminder_minutes) || 120,
       ban_count: hold?.count || 0, hold_until: hold?.until || null, careful_cap: hold?.carefulCap || 40, careful_strict: !!hold?.strict,
+      warmup: hold?.warmup || null, warmup_days: hold?.warmupDays || 14,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

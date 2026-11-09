@@ -102,3 +102,38 @@ test('reconexiones: el azar queda en ±20 %', () => {
   assert.equal(reconnectDelayMs(1, 1, () => 0), 16000);
   assert.equal(reconnectDelayMs(1, 1, () => 1), 24000);
 });
+
+// ─── Arranque gradual ─────────────────────────────────────────────────────
+const { warmupFor, warmupBlock } = core.__test;
+
+test('arranque gradual: 20 por día la 1ª semana, 60 la 2ª, después nada', () => {
+  const t0 = Date.parse('2026-11-01T12:00:00Z');
+  assert.equal(warmupFor(null, t0), null, 'vinculados antes de esto no tienen arranque gradual');
+  assert.deepEqual(warmupFor(new Date(t0), t0 + 1 * DAY), { day: 2, cap: 20, firstCap: 8 });
+  assert.deepEqual(warmupFor(new Date(t0), t0 + 7 * DAY), { day: 8, cap: 60, firstCap: 20 });
+  assert.equal(warmupFor(new Date(t0), t0 + 14 * DAY), null);
+});
+
+test('arranque gradual: frena promociones y el tope, nunca las respuestas', () => {
+  const w = { day: 3, cap: 20, firstCap: 8 };
+  assert.match(warmupBlock(w, 'marketing'), /promociones/);
+  assert.match(warmupBlock(w, 'cold'), /promociones/);
+  assert.equal(warmupBlock(w, 'notify', { proactiveToday: 19 }), null);
+  assert.match(warmupBlock(w, 'notify', { proactiveToday: 20 }), /20 mensajes/);
+  assert.match(warmupBlock(w, 'notify', { proactiveToday: 3, firstToday: 8, firstContact: true }), /contactos nuevos/);
+  assert.equal(warmupBlock(w, 'notify', { proactiveToday: 3, firstToday: 8, firstContact: false }), null);
+  assert.equal(warmupBlock(w, 'reply', { proactiveToday: 999 }), null);
+  assert.equal(warmupBlock(null, 'marketing'), null);
+});
+
+test('contadores: lo proactivo y los cortes se guardan por día', () => {
+  const g = core.__test.guard;
+  g.__reset();
+  g.record(77, '1122334455', 'reply');
+  g.record(77, '1122334455', 'notify');
+  g.note(77, 'drops');
+  const snap = g.snapshot(77, g.dayKey());
+  assert.equal(snap.total, 2);
+  assert.equal(snap.proactive, 1);
+  assert.equal(snap.drops, 1);
+});

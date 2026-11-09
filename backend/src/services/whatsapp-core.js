@@ -90,6 +90,7 @@ const wppGuard = (() => {
     const day = dayKey(now);
     const inc = (b) => { const k = `${shopId}:${day}:${b}`; counters[k] = (counters[k] || 0) + 1; };
     inc('total');
+    if (kind !== 'reply') inc('proactive');   // lo que sale sin que el cliente haya escrito recién
     if (kind === 'marketing') inc('marketing');
     if (kind === 'cold') inc('cold');
     if (kind !== 'reply' && firstContact) inc('first');
@@ -106,6 +107,13 @@ const wppGuard = (() => {
   }
 
   const countToday = (shopId, bucket = 'total', now = Date.now()) => counters[`${shopId}:${dayKey(now)}:${bucket}`] || 0;
+  // Suma 1 a un contador del día que no es un envío (ej. 'drops' = cortes de conexión)
+  function note(shopId, bucket, now = Date.now()) {
+    const day = dayKey(now);
+    const k = `${shopId}:${day}:${bucket}`;
+    counters[k] = (counters[k] || 0) + 1;
+    if (onRecord) { try { onRecord(shopId, day); } catch (_) {} }
+  }
 
   // Reserva el próximo "turno" de envío del número y devuelve cuántos ms hay que esperar.
   // Chat y promociones van por carriles separados: una tanda de promociones no demora la
@@ -142,7 +150,7 @@ const wppGuard = (() => {
   const setOnRecord = (fn) => { onRecord = fn; };
   const snapshot = (shopId, day) => {
     const out = {};
-    for (const b of ['total', 'marketing', 'cold', 'first']) out[b] = counters[`${shopId}:${day}:${b}`] || 0;
+    for (const b of ['total', 'proactive', 'marketing', 'cold', 'first', 'drops']) out[b] = counters[`${shopId}:${day}:${b}`] || 0;
     return out;
   };
   // Carga un contador guardado (nunca baja lo que ya se contó en memoria)
@@ -158,7 +166,7 @@ const wppGuard = (() => {
     recipient.clear();
   }
   return { KINDS, config, check, record, reserve, countToday, isOptOutIntent, lastDigits, dayKey, __reset,
-           failed, succeeded, pausedUntil, setOnRecord, snapshot, seed };
+           failed, succeeded, pausedUntil, setOnRecord, snapshot, seed, note };
 })();
 const fs   = require('fs');
 const os   = require('os');
@@ -343,6 +351,7 @@ function recordDrop(shopId, now = Date.now()) {
   const list = (_recentDrops[shopId] || []).filter(t => now - t < DROP_WINDOW_MS);
   list.push(now);
   _recentDrops[shopId] = list;
+  wppGuard.note(shopId, 'drops', now);  // para la salud del número en el admin
   return list.length;
 }
 function recentDrops(shopId, now = Date.now()) {
@@ -957,6 +966,15 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       delete qrCooldownUntil[shopId];
       delete statuses[`${shopId}_reconnect`];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
+      if (statuses[`${shopId}_fresh`]) {
+        delete statuses[`${shopId}_fresh`];
+        try {
+          await ensureWppSafetyCols();
+          await pool.query('UPDATE shops SET wpp_linked_at = NOW() WHERE id=$1', [shopId]);
+          _safetyCache.delete(String(shopId));
+          console.log(`[WPP] Shop ${shopId}: número recién vinculado — arranque gradual por ${WARMUP_DAYS} días`);
+        } catch (_) {}
+      }
       // Si este número había sido bloqueado, arranca en modo cuidado: 21 días, o 45 si ya lo
       // bloquearon 2 veces o más
       try {
@@ -1258,6 +1276,8 @@ async function startSession(shopId) {
 
   // Reset contador al iniciar sesión nueva manualmente
   delete qrAttempts[shopId];
+  // Vinculación nueva: al conectar se guarda la fecha para el arranque gradual
+  statuses[`${shopId}_fresh`] = true;
 
   await clearSession(shopId);
   if (sockets[shopId]) {
@@ -1359,6 +1379,8 @@ function ensureWppSafetyCols() {
       await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_last_ban_at TIMESTAMPTZ');
       // Si soporte FILO libera la espera (ej. van a conectar otro número)
       await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_hold_lifted_at TIMESTAMPTZ');
+      // Cuándo se vinculó el número por última vez con QR (arranque gradual)
+      await pool.query('ALTER TABLE shops ADD COLUMN IF NOT EXISTS wpp_linked_at TIMESTAMPTZ');
     })().catch(e => { _safetyCols = null; console.warn('[WPP] columnas de seguridad:', e.message); });
   }
   return _safetyCols;
@@ -1380,10 +1402,11 @@ async function _safety(shopId) {
   if (c && Date.now() - c.at < 60000) return c;
   await ensureWppSafetyCols();
   let row = {};
-  try { row = (await pool.query('SELECT wpp_auto_prefs, wpp_careful_until FROM shops WHERE id=$1', [shopId])).rows[0] || {}; } catch (_) {}
+  try { row = (await pool.query(`SELECT wpp_auto_prefs, wpp_careful_until, to_jsonb(shops)->>'wpp_linked_at' AS linked_at FROM shops WHERE id=$1`, [shopId])).rows[0] || {}; } catch (_) {}
   let bans = 0;
   if (row.wpp_careful_until) { try { bans = (await banHold(shopId)).count; } catch (_) {} }
-  const v = { at: Date.now(), prefs: { ...AUTO_DEFAULTS, ...(row.wpp_auto_prefs || {}) }, carefulUntil: row.wpp_careful_until ? new Date(row.wpp_careful_until) : null, strict: bans >= 2 };
+  const v = { at: Date.now(), prefs: { ...AUTO_DEFAULTS, ...(row.wpp_auto_prefs || {}) }, carefulUntil: row.wpp_careful_until ? new Date(row.wpp_careful_until) : null, strict: bans >= 2,
+             linkedAt: row.linked_at ? new Date(row.linked_at) : null };
   _safetyCache.set(k, v);
   return v;
 }
@@ -1413,6 +1436,26 @@ const CAREFUL_BLOCKED = new Set(['thanks', 'queue_call', 'owner_notice']);
 const STRICT_DAILY_CAP = 15;
 const STRICT_ALLOWED = new Set(['reminders']);
 const carefulDaysFor = (bans) => (bans >= 2 ? 45 : 21);
+// Arranque gradual: un número recién vinculado que sale mandando de golpe es de lo que más
+// dispara el primer bloqueo. Las primeras 2 semanas el tope sube de a poco y no salen promociones.
+// (Las respuestas a quien escribe no cuentan.)
+const WARMUP_DAYS = 14;
+function warmupFor(linkedAt, now = Date.now()) {
+  if (!linkedAt) return null;              // vinculados antes de esto: sin arranque gradual
+  const days = Math.floor((now - new Date(linkedAt).getTime()) / 86400000);
+  if (days < 0 || days >= WARMUP_DAYS) return null;
+  return days < 7
+    ? { day: days + 1, cap: 20, firstCap: 8 }
+    : { day: days + 1, cap: 60, firstCap: 20 };
+}
+function warmupBlock(w, kind, { proactiveToday = 0, firstToday = 0, firstContact = false } = {}) {
+  if (!w || kind === 'reply') return null;
+  if (kind === 'marketing' || kind === 'cold') return 'promociones (número recién conectado)';
+  if (proactiveToday >= w.cap) return `más de ${w.cap} mensajes por día (día ${w.day} de ${WARMUP_DAYS} del arranque gradual)`;
+  if (firstContact && firstToday >= w.firstCap) return `más de ${w.firstCap} contactos nuevos por día (día ${w.day} de ${WARMUP_DAYS} del arranque gradual)`;
+  return null;
+}
+
 // Espera obligatoria antes de volver a conectar un número bloqueado
 const holdDaysFor = (bans) => (bans <= 0 ? 0 : bans === 1 ? 7 : bans === 2 ? 14 : 30);
 
@@ -1421,7 +1464,7 @@ const holdDaysFor = (bans) => (bans <= 0 ? 0 : bans === 1 ? 7 : bans === 2 ? 14 
 async function banHold(shopId, now = new Date()) {
   await ensureWppSafetyCols();
   const r = await pool.query(
-    `SELECT s.wpp_ban_count, s.wpp_last_ban_at, s.wpp_banned_at, s.wpp_hold_lifted_at,
+    `SELECT s.wpp_ban_count, s.wpp_last_ban_at, s.wpp_banned_at, s.wpp_hold_lifted_at, s.wpp_linked_at,
             n.cnt AS notif_count, n.last AS notif_last
        FROM shops s
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS cnt, MAX(created_at) AS last
@@ -1440,6 +1483,8 @@ async function banHold(shopId, now = new Date()) {
     strict: count >= 2,
     carefulCap: count >= 2 ? STRICT_DAILY_CAP : CAREFUL_DAILY_CAP,
     carefulDays: carefulDaysFor(count),
+    warmup: warmupFor(x.wpp_linked_at, now.getTime()),
+    warmupDays: WARMUP_DAYS,
   };
 }
 // Soporte FILO libera la espera (solo si van a conectar un número distinto al bloqueado)
@@ -1709,6 +1754,12 @@ async function sendText(shopId, phone, message, opts = {}) {
       : wppGuard.countToday(wppShopId) >= cap ? `más de ${cap} por día` : null;
     if (why) { const e = new Error(`WhatsApp en modo cuidado: no se envían ${why}`); e.code = 'CAREFUL_MODE'; throw e; }
   }
+  const warmWhy = warmupBlock(warmupFor(safety?.linkedAt), kind, {
+    proactiveToday: wppGuard.countToday(wppShopId, 'proactive'),
+    firstToday: wppGuard.countToday(wppShopId, 'first'),
+    firstContact,
+  });
+  if (warmWhy) { const e = new Error(`WhatsApp recién conectado: todavía no se envían ${warmWhy}`); e.code = 'WARMUP'; throw e; }
   if (kind === 'marketing' && await _marketingCooldownHit(wppShopId, phoneClean)) {
     const e = new Error('Ya se le envió una promoción hace poco'); e.code = 'MARKETING_COOLDOWN'; throw e;
   }
@@ -1878,4 +1929,4 @@ function wppStats() {
   };
 }
 
-module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned, saveSessionToDB, restoreSessionFromDB, reconnectDelayMs, holdDaysFor, carefulDaysFor }, shutdownAll, banHold, liftBanHold, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };
+module.exports = { __test: { sockets, statuses, guard: wppGuard, markBanned, saveSessionToDB, restoreSessionFromDB, reconnectDelayMs, holdDaysFor, carefulDaysFor, warmupFor, warmupBlock }, shutdownAll, banHold, liftBanHold, AUTO_DEFAULTS, autoEnabled, getAutoPrefs, setAutoPrefs, setCareful, ensureWppSafetyCols, resolveWppShopId, hasWhatsApp, startSession, getStatus, sendText, isOptedOut, addOptOut, closeSession, clearSession, reconnectAllShops, qrCodes, renderTemplate, normalizePhoneAR, wppStats, sweepIdle };

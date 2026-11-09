@@ -1625,14 +1625,33 @@ function appInfoHtml(a) {
     : bans ? `<div style="color:var(--g)">⛔ ${bans} bloqueo${bans > 1 ? 's' : ''} de WhatsApp antes</div>` : '';
   const careful = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date()
     ? `<div style="color:#fbbf24">🛡 Modo cuidado hasta ${new Date(a.wpp_careful_until).toLocaleDateString('es-AR')}</div>` : '';
-  return banned + careful + app + notif;
+  return banned + careful + wppHealthLine(a) + app + notif;
 }
 
 // Modo cuidado de WhatsApp: pocos mensajes, solo a clientes conocidos (para números que fueron bloqueados)
+// Salud del WhatsApp (últimos 7 días). En amarillo lo que suele venir antes de un bloqueo.
+function wppHealthLine(a) {
+  const h = a.wpp_health;
+  if (!h) return '';
+  const pct = h.proactive ? Math.round(100 * h.first / h.proactive) : 0;
+  const warn = (on, txt, why) => on ? `<span style="color:#fbbf24" title="${why}">${txt}</span>` : `<span>${txt}</span>`;
+  const parts = [
+    `hoy ${h.today}`,
+    `7d ${h.total}`,
+    warn(pct >= 30 && h.first >= 10, `${pct}% a nuevos`, 'Muchos mensajes a números que nunca escribieron: es lo que más denuncias trae'),
+    warn(h.marketing >= 100, `${h.marketing} promos`, 'Muchas promociones en la semana'),
+    warn(h.drops >= 10, `${h.drops} cortes`, 'La conexión se corta seguido'),
+    warn(h.optouts >= 3, `${h.optouts} baja${h.optouts === 1 ? '' : 's'}`, 'Clientes que pidieron no recibir más: suele venir antes de las denuncias'),
+  ];
+  let warm = '';
+  if (h.linked_at) {
+    const d = Math.floor((Date.now() - new Date(h.linked_at)) / 86400000);
+    if (d < 14) warm = ` · <span style="color:#93c5fd" title="Arranque gradual: tope bajo y sin promociones">🌱 día ${d + 1}/14</span>`;
+  }
+  return `<div style="color:var(--g)" title="WhatsApp, últimos 7 días">📶 ${parts.join(' · ')}${warm}</div>`;
+}
 async function liftWppHold(id) {
-  if (!confirm('¿Dejar que esta cuenta vuelva a conectar WhatsApp ya?
-
-Solo si van a conectar un número DISTINTO al bloqueado: reconectar el mismo número tan rápido hace que WhatsApp lo vuelva a bloquear.')) return;
+  if (!confirm('¿Dejar que esta cuenta vuelva a conectar WhatsApp ya?\n\nSolo si van a conectar un número DISTINTO al bloqueado: reconectar el mismo número tan rápido hace que WhatsApp lo vuelva a bloquear.')) return;
   try { await adminFetch('POST', `/accounts/${id}/wpp-lift-hold`); alert('Listo: ya pueden volver a conectar WhatsApp.'); loadAll(); }
   catch (e) { alert(e.message); }
 }
