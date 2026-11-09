@@ -3541,6 +3541,19 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
                 <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">🌐 Sitio web</div><input type="url" id="cfg-social-website" placeholder="https://..." autocomplete="off"></div>
                 <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">📍 Google Maps</div><input type="url" id="cfg-social-maps" placeholder="https://maps.app.goo.gl/..." autocomplete="off"></div>
                 <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">𝕏 Twitter / X</div><input type="url" id="cfg-social-x" placeholder="https://x.com/..." autocomplete="off"></div>
+                <div style="grid-column:1/-1">
+                  <div style="font-size:11px;color:var(--gray);margin-bottom:4px">⭐ Link para dejar reseña en Google</div>
+                  <input type="url" id="cfg-social-review" placeholder="https://g.page/r/.../review" autocomplete="off">
+                  <details style="margin-top:6px">
+                    <summary style="cursor:pointer;font-size:11px;color:var(--yellow);list-style:none">¿De dónde lo saco?</summary>
+                    <div style="font-size:11px;color:var(--gray);line-height:1.6;margin-top:6px">
+                      1. Buscá tu barbería en Google (o abrí el <strong>Perfil de Negocio de Google</strong>) con la cuenta que la administra.<br>
+                      2. Tocá <strong>"Pedir reseñas"</strong> (o "Obtener más reseñas").<br>
+                      3. Copiá el link que te muestra (empieza con <em>g.page/r/</em>) y pegalo acá.<br>
+                      Con este link, el botón <strong>"Dejanos tu reseña"</strong> de tu página de reservas abre directo la ventana para calificar. Si lo dejás vacío, el botón abre tu link de Google Maps.
+                    </div>
+                  </details>
+                </div>
               </div>
             </div>
             <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
@@ -9214,7 +9227,7 @@ async function loadSettings() {
     document.getElementById('cfg-churn').value = settings.churn_days || 20;
     document.getElementById('cfg-timezone').value = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Argentina/Buenos_Aires';
     const sl = settings.social_links || {};
-    ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x'].forEach(k => {
+    ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x','review'].forEach(k => {
       const el = document.getElementById('cfg-social-' + k);
       if (el) el.value = sl[k] || '';
     });
@@ -9463,7 +9476,7 @@ async function saveSettings(silent = false) {
     sena_alias:            document.getElementById('cfg-sena-alias')?.value.trim() || null,
     sena_payment_method:   document.getElementById('cfg-sena-payment-method')?.value || 'transfer',
     slot_interval_minutes: Math.min(200, Math.max(5, parseInt(document.getElementById('cfg-slot-interval')?.value) || 30)),
-    social_links: ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x'].reduce((acc,k) => {
+    social_links: ['instagram','facebook','tiktok','youtube','whatsapp','website','maps','x','review'].reduce((acc,k) => {
       const v = (document.getElementById('cfg-social-' + k)?.value || '').trim();
       if (v) acc[k] = v;
       return acc;

@@ -106,7 +106,7 @@ router.put('/', auth, async (req, res) => {
   // Sanitizar social_links: solo claves conocidas, values string trim
   let socialJson = null;
   if (social_links && typeof social_links === 'object') {
-    const allowed = ['instagram','facebook','tiktok','website','youtube','whatsapp','x','maps'];
+    const allowed = ['instagram','facebook','tiktok','website','youtube','whatsapp','x','maps','review'];
     const clean = {};
     for (const k of allowed) {
       const v = social_links[k];

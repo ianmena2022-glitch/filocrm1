@@ -92,6 +92,10 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
 .social-links a{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.85);transition:transform .15s ease,background .15s ease,color .15s ease;text-decoration:none}
 .social-links a:hover{background:rgba(255,255,255,.14);transform:translateY(-1px);color:#fff}
 .social-links svg{width:17px;height:17px;display:block}
+.review-btn{display:inline-flex;align-items:center;gap:8px;margin:12px auto 0;padding:9px 16px;border-radius:999px;background:rgba(255,209,0,.1);border:1px solid rgba(255,209,0,.35);color:#FFD100;font-size:13px;font-weight:700;text-decoration:none;position:relative;z-index:2;transition:background .15s ease,transform .15s ease}
+.review-btn:hover{background:rgba(255,209,0,.18);transform:translateY(-1px)}
+.review-btn .stars{letter-spacing:1px;font-size:12px}
+.review-wrap{display:flex;justify-content:center}
 .team-teaser{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;margin-bottom:14px;cursor:pointer;background:transparent;border:1px dashed rgba(255,209,0,.2);border-radius:10px;width:100%;transition:all .2s;font-size:13px;color:rgba(255,255,255,.45)}
 .team-teaser:hover{background:rgba(255,209,0,.04);border-color:rgba(255,209,0,.4);color:rgba(255,255,255,.7)}
 .team-teaser b{color:var(--y)}
@@ -295,6 +299,7 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
     <div class="header-name" id="shop-name">Barbería</div>
     <div class="header-meta" id="shop-meta"></div>
     <div class="social-links" id="shop-social"></div>
+    <div class="review-wrap" id="shop-review"></div>
     <a href="https://filocrm.com.ar" target="_blank" rel="noopener" class="powered-badge">
       <div class="powered-badge-dot"><img src="/logo_f.png" style="width:16px;height:16px;object-fit:cover;display:block"></div>
       <span class="powered-badge-txt">Powered by FILO</span>
@@ -681,6 +686,7 @@ function loadShopData(data) {
 
   // Links sociales: íconos clickeables bajo el meta
   renderSocialLinks(shopData.social_links || {});
+  renderReviewButton(shopData.social_links || {});
 
   // SEO dinámico: actualizar og:title + JSON-LD con datos reales del local
   const ogTitle = document.querySelector('meta[property="og:title"]');
@@ -712,6 +718,19 @@ function loadShopData(data) {
   let ldEl = document.getElementById('ld-shop');
   if (!ldEl) { ldEl = document.createElement('script'); ldEl.id = 'ld-shop'; ldEl.type = 'application/ld+json'; document.head.appendChild(ldEl); }
   ldEl.textContent = JSON.stringify(ld);
+}
+
+// "Dejanos tu reseña": el link de reseñas de Google si lo cargaron; si no, su link de Maps
+function reviewUrl(links) {
+  return _sanitizeUrl((links || {}).review) || _sanitizeUrl((links || {}).maps);
+}
+function renderReviewButton(links) {
+  const el = document.getElementById('shop-review');
+  if (!el) return;
+  const url = reviewUrl(links);
+  el.innerHTML = url
+    ? `<a class="review-btn" href="${url}" target="_blank" rel="noopener noreferrer"><span class="stars">★★★★★</span> Dejanos tu reseña</a>`
+    : '';
 }
 
 function _sanitizeUrl(u) {
@@ -1194,6 +1213,7 @@ function bookingExtras(data, appt) {
     <div class="done-actions">
       <a class="done-btn" href="${escapeHtmlT(calUrl)}" target="_blank" rel="noopener">📅 Agregar al calendario</a>
       ${mapsUrl ? `<a class="done-btn" href="${escapeHtmlT(mapsUrl)}" target="_blank" rel="noopener">📍 Cómo llegar</a>` : ''}
+      ${reviewUrl(shopData.social_links) ? `<a class="done-btn" href="${reviewUrl(shopData.social_links)}" target="_blank" rel="noopener noreferrer">⭐ Dejanos tu reseña</a>` : ''}
     </div>
     ${manageUrl ? `<div class="done-cancel">¿No podés venir? <a href="${escapeHtmlT(manageUrl)}">Cancelá tu turno acá</a>. Te lo mandamos también por WhatsApp.</div>` : ''}`;
 }
