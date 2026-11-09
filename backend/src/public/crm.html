@@ -1111,6 +1111,40 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
 
+.wpp-risk-card { background: rgba(96,165,250,0.05); border: 1px solid rgba(96,165,250,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+.wpp-risk-head { display: flex; gap: 12px; align-items: flex-start; }
+.wpp-risk-icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: rgba(96,165,250,0.18); color: #93c5fd; border: 1px solid rgba(96,165,250,0.4); font-weight: 800; font-size: 12px; font-style: italic; font-family: Georgia, serif; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+.wpp-risk-title { font-size: 13px; font-weight: 700; color: #bfdbfe; margin-bottom: 4px; }
+.wpp-risk-sub { font-size: 12px; color: var(--gray); line-height: 1.6; }
+.wpp-risk-details { margin-top: 10px; padding-left: 34px; }
+.wpp-risk-details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #93c5fd; list-style: none; }
+.wpp-risk-details summary::-webkit-details-marker { display: none; }
+.wpp-risk-details summary::before { content: '▸ '; }
+.wpp-risk-details[open] summary::before { content: '▾ '; }
+.wpp-risk-body { margin-top: 10px; max-height: 260px; overflow-y: auto; padding-right: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); line-height: 1.65; }
+.wpp-risk-body h4 { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: rgba(255,255,255,.8); margin: 14px 0 4px; }
+.wpp-risk-body h4:first-child { margin-top: 0; }
+.wpp-risk-body p { margin: 0 0 6px; }
+.wpp-risk-body ul { margin: 4px 0 6px 16px; padding: 0; }
+.wpp-risk-body table { width: 100%; border-collapse: collapse; margin: 6px 0 8px; font-size: 11.5px; }
+.wpp-risk-body td, .wpp-risk-body th { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.06); vertical-align: top; }
+.wpp-risk-body th { color: rgba(255,255,255,.7); font-weight: 700; }
+.wpp-risk-lvl { font-weight: 700; white-space: nowrap; }
+.meta-soon-card { margin-top: 16px; position: relative; overflow: hidden; border-color: rgba(96,165,250,0.22); background: linear-gradient(160deg, rgba(37,99,235,0.10) 0%, rgba(255,255,255,0.02) 55%), var(--navy-mid); }
+.meta-soon-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.meta-soon-badge { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #93c5fd; background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); padding: 4px 10px; border-radius: 999px; }
+.meta-soon-shield { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #93c5fd; background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.22); }
+.meta-soon-title { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+.meta-soon-desc { font-size: 13px; color: var(--gray); line-height: 1.6; margin-bottom: 16px; max-width: 560px; }
+.meta-soon-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.meta-soon-feat { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+.meta-soon-feat > span { color: #93c5fd; font-weight: 800; font-size: 13px; line-height: 1.3; }
+.meta-soon-feat strong { display: block; font-size: 12.5px; color: rgba(255,255,255,.88); font-weight: 700; }
+.meta-soon-feat small { display: block; font-size: 11.5px; color: var(--gray); line-height: 1.45; margin-top: 2px; }
+.meta-soon-btn { width: 100%; padding: 11px; border-radius: 10px; border: 1px dashed rgba(96,165,250,0.35); background: transparent; color: #93c5fd; font-weight: 700; font-size: 13px; font-family: Barlow, sans-serif; cursor: not-allowed; opacity: .85; }
+.meta-soon-note { margin-top: 10px; font-size: 11px; color: rgba(255,255,255,.35); line-height: 1.5; }
+@media (max-width: 600px) { .meta-soon-grid { grid-template-columns: 1fr; } }
+
 .settings-section {
   background: var(--navy-mid);
   border: 1px solid var(--navy-border);
@@ -3830,6 +3864,20 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:4px">🛡 Modo cuidado activo</div>
             <div style="font-size:12px;color:var(--gray);line-height:1.6" id="wpp-careful-text"></div>
           </div>
+          <!-- Cómo funciona la conexión por QR (aviso de riesgo) -->
+          <div class="wpp-risk-card">
+            <div class="wpp-risk-head">
+              <span class="wpp-risk-icon">i</span>
+              <div>
+                <div class="wpp-risk-title">Cómo funciona esta conexión</div>
+                <div class="wpp-risk-sub">FILO se vincula a tu WhatsApp como un dispositivo más, igual que WhatsApp Web. No es la conexión oficial de Meta, así que existe una posibilidad de que WhatsApp restrinja el número. Depende sobre todo de cuántos mensajes se mandan: con el volumen normal de una barbería (recordatorios y confirmaciones) el riesgo es bajo.</div>
+              </div>
+            </div>
+            <details class="wpp-risk-details">
+              <summary>Leer los términos completos</summary>
+              <div class="wpp-risk-body" id="wpp-risk-inline"></div>
+            </details>
+          </div>
           <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
           <!-- Mensajes automáticos -->
           <div style="margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
@@ -3865,6 +3913,26 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             <button onclick="resetWhatsapp()" style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.35);color:#FF9100;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif;width:100%">🔄 Reconexión limpia</button>
           </div>
         </div><!-- /settings-section de WhatsApp -->
+
+        <!-- Próximamente: conexión oficial de Meta -->
+        <div class="settings-section meta-soon-card">
+          <div class="meta-soon-top">
+            <div class="meta-soon-badge">Próximamente</div>
+            <div class="meta-soon-shield" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+          </div>
+          <div class="meta-soon-title">Conexión oficial verificada por Meta</div>
+          <div class="meta-soon-desc">Estamos integrando la API oficial de WhatsApp Business. Vas a poder conectar tu número directo con Meta, sin códigos QR y sin el riesgo de restricciones de las conexiones no oficiales.</div>
+          <div class="meta-soon-grid">
+            <div class="meta-soon-feat"><span>✓</span><div><strong>Sin riesgo de bloqueo</strong><small>por usar una conexión no oficial</small></div></div>
+            <div class="meta-soon-feat"><span>✓</span><div><strong>Perfil de empresa</strong><small>con nombre, logo y datos de tu barbería</small></div></div>
+            <div class="meta-soon-feat"><span>✓</span><div><strong>Siempre conectado</strong><small>no depende de tu celular ni de vincular dispositivos</small></div></div>
+            <div class="meta-soon-feat"><span>✓</span><div><strong>Plantillas aprobadas</strong><small>recordatorios y confirmaciones validados por Meta</small></div></div>
+          </div>
+          <button class="meta-soon-btn" disabled>Disponible muy pronto</button>
+          <div class="meta-soon-note">Meta cobra los mensajes que inicia el negocio (como los recordatorios). Te vamos a contar los costos antes de que lo actives.</div>
+        </div>
         </div><!-- /cfg-item whatsapp -->
 
         <!-- CFG-ITEM: Plantillas de mensajes -->
@@ -9921,7 +9989,88 @@ function onWppConnected() {
   sessionStorage.removeItem('wpp_banner_dismissed'); // permitir que reaparezca si se cae de nuevo
 }
 
-async function connectWhatsapp() {
+// ── Términos de la conexión por QR ────────────────────────────────────────────
+const WPP_RISK_TERMS = `
+  <h4>1. Cómo funciona</h4>
+  <p>FILO se conecta a tu WhatsApp como un "dispositivo vinculado", de la misma forma que WhatsApp Web. Así puede mandar recordatorios y confirmaciones y responder a tus clientes sin costo por mensaje. Esta conexión <strong>no es la API oficial de WhatsApp Business de Meta</strong>: es una integración no oficial.</p>
+  <h4>2. ¿Puede WhatsApp restringir el número?</h4>
+  <p>Sí, existe esa posibilidad. Según sus Condiciones del servicio, WhatsApp puede limitar, suspender o bloquear de forma temporal o permanente un número que considere que hace un uso automatizado o masivo. FILO no controla esas decisiones ni puede revertirlas.</p>
+  <h4>3. El riesgo depende sobre todo del volumen</h4>
+  <p>Lo que más pesa es cuántos mensajes salen por día y a quién. Como referencia, cada turno genera más o menos 2 mensajes (la confirmación y el recordatorio):</p>
+  <table>
+    <tr><th>Mensajes por día</th><th>Equivale a</th><th>Riesgo</th></tr>
+    <tr><td>Hasta 60</td><td>Hasta ~30 turnos por día</td><td class="wpp-risk-lvl" style="color:#86efac">Bajo</td></tr>
+    <tr><td>60 a 150</td><td>~30 a 75 turnos por día, o varias sucursales en un número</td><td class="wpp-risk-lvl" style="color:#fde68a">Moderado</td></tr>
+    <tr><td>Más de 150, o promociones masivas</td><td>Difusiones a muchos clientes a la vez</td><td class="wpp-risk-lvl" style="color:#fca5a5">Alto</td></tr>
+  </table>
+  <p>Hoy, las barberías que usan FILO mandan en promedio entre 20 y 35 mensajes por día (con picos de unos 60). FILO además nunca manda más de 300 por día ni más de 40 a personas que todavía no le escribieron al número.</p>
+  <h4>4. Otras cosas que suman riesgo</h4>
+  <ul>
+    <li>Usar un número nuevo o recién activado.</li>
+    <li>Escribirle a gente que nunca le escribió al número.</li>
+    <li>Que los clientes marquen los mensajes como spam o bloqueen el número.</li>
+    <li>Tener el mismo número abierto en WhatsApp Web o Desktop en otra computadora.</li>
+    <li>Volver a conectar el número poco después de que WhatsApp lo haya restringido.</li>
+  </ul>
+  <h4>5. Qué hace FILO para cuidarte</h4>
+  <p>Pone topes diarios, deja pausas entre mensajes, arranca de a poco con los números recién conectados, entra en modo cuidado si hubo una restricción, respeta los pedidos de baja de tus clientes, no manda mensajes de noche y deja de usar el número apenas detecta un bloqueo. Esto <strong>baja mucho el riesgo, aunque no lo elimina del todo</strong>.</p>
+  <h4>6. Recomendaciones</h4>
+  <ul>
+    <li>Usá un número del negocio y no tu número personal.</li>
+    <li>Hacé copias de seguridad de tus chats desde la app de WhatsApp.</li>
+    <li>Activá solo los mensajes automáticos que necesites.</li>
+    <li>No uses el número para difusiones masivas.</li>
+  </ul>
+  <h4>7. Responsabilidad</h4>
+  <p>Al conectar tu número aceptás que lo usás con FILO bajo tu responsabilidad. FILO no se hace responsable por restricciones, suspensiones o pérdida del número, de chats, contactos o archivos, por mensajes que no se entreguen o lleguen tarde, ni por los perjuicios que estas situaciones puedan causar. El envío automático se ofrece "tal cual está" y puede interrumpirse por cambios de WhatsApp, cortes de conexión o mantenimiento.</p>
+  <h4>8. Tu sesión y tus datos</h4>
+  <p>FILO guarda la sesión de vinculación para mantener la conexión activa y procesa los mensajes que recibe el número para que el bot pueda responder y registrar turnos. Podés desconectar FILO cuando quieras desde el celular, en WhatsApp → Dispositivos vinculados, o con la reconexión limpia de esta pantalla.</p>
+  <h4>9. Cambios</h4>
+  <p>WhatsApp puede cambiar sus reglas en cualquier momento, y FILO puede actualizar sus límites y estos términos para adaptarse. Cuando esté disponible la conexión oficial verificada por Meta, vas a poder pasarte a ella.</p>`;
+(function fillInlineRisk() {
+  const el = document.getElementById('wpp-risk-inline');
+  if (el) el.innerHTML = WPP_RISK_TERMS;
+})();
+
+// Pop-up antes de conectar: hay que tildar que se leyeron los términos. true = aceptó.
+function wppRiskModal() {
+  return new Promise(resolve => {
+    document.getElementById('wpp-risk-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'wpp-risk-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Barlow,sans-serif;animation:fadeIn .15s ease-out';
+    ov.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-labelledby="wpp-risk-h" style="background:#0d1f38;border:1px solid rgba(255,255,255,.1);border-radius:16px;width:100%;max-width:540px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;animation:modalIn .18s ease-out">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid rgba(255,255,255,.07)">
+          <div id="wpp-risk-h" style="font-size:16px;font-weight:700;color:#fff;display:flex;gap:10px;align-items:center"><span class="wpp-risk-icon">i</span>Antes de conectar WhatsApp</div>
+          <div style="font-size:12.5px;color:var(--gray);margin-top:6px;line-height:1.5">Estos son los términos de la conexión por código QR. Con el uso normal de una barbería el riesgo es bajo, pero es importante que los conozcas.</div>
+        </div>
+        <div class="wpp-risk-body" style="max-height:none;flex:1;padding:14px 22px;margin:0">${WPP_RISK_TERMS}</div>
+        <div style="padding:14px 22px 20px;border-top:1px solid rgba(255,255,255,.07)">
+          <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:14px">
+            <input type="checkbox" id="wpp-risk-check" style="width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:#FFD100">
+            <span>Leí y acepto los términos de la conexión por QR.</span>
+          </label>
+          <div style="display:flex;gap:8px">
+            <button id="wpp-risk-cancel" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.75);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-family:Barlow,sans-serif;font-size:13px">Cancelar</button>
+            <button id="wpp-risk-ok" disabled style="flex:1;background:var(--yellow,#FFD100);border:none;color:#000;padding:11px;border-radius:10px;font-weight:700;font-family:Barlow,sans-serif;font-size:13px;opacity:.4;cursor:not-allowed">Aceptar y conectar</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const chk = ov.querySelector('#wpp-risk-check'), ok = ov.querySelector('#wpp-risk-ok');
+    const onKey = (e) => { if (e.key === 'Escape') close(false); };
+    const close = (v) => { document.removeEventListener('keydown', onKey); ov.remove(); resolve(v); };
+    document.addEventListener('keydown', onKey);
+    chk.onchange = () => { ok.disabled = !chk.checked; ok.style.opacity = chk.checked ? '1' : '.4'; ok.style.cursor = chk.checked ? 'pointer' : 'not-allowed'; };
+    ok.onclick = () => { if (chk.checked) close(true); };
+    ov.querySelector('#wpp-risk-cancel').onclick = () => close(false);
+    ov.onclick = (e) => { if (e.target === ov) close(false); };
+  });
+}
+
+async function connectWhatsapp(opts) {
+  if (!(opts && opts.riskOk) && !(await wppRiskModal())) return;
   const btn = document.getElementById('wpp-connect-btn');
   btn.disabled = true; btn.textContent = 'Conectando...';
   try {
@@ -9965,6 +10114,7 @@ async function connectWhatsapp() {
 }
 
 async function resetWhatsapp() {
+  if (!(await wppRiskModal())) return;
   if (!(await confirmModal('¿Hacer una reconexión limpia? Se va a cerrar la sesión actual y necesitás escanear el QR de nuevo.'))) return;
   try {
     showToast('🔄', 'Limpiando sesión...', 'Esperá un momento');
@@ -9972,7 +10122,7 @@ async function resetWhatsapp() {
     // Esperar 2 segundos y luego abrir el QR
     await new Promise(r => setTimeout(r, 2000));
     showToast('✅', 'Sesión limpiada', 'Escaneá el QR para reconectar');
-    connectWhatsapp();
+    connectWhatsapp({ riskOk: true });
   } catch(e) {
     showToast('❌', 'Error', e.message);
   }
@@ -10024,7 +10174,8 @@ async function renderEntQR(qrData) {
   }
 }
 
-async function connectEntWpp() {
+async function connectEntWpp(opts) {
+  if (!(opts && opts.riskOk) && !(await wppRiskModal())) return;
   const btn = document.getElementById('ent-wpp-connect-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
   try {
@@ -10067,13 +10218,14 @@ async function connectEntWpp() {
 }
 
 async function resetEntWpp() {
+  if (!(await wppRiskModal())) return;
   if (!(await confirmModal('¿Reconexión limpia? Se borra la sesión y tenés que escanear el QR de nuevo.'))) return;
   try {
     showToast('🔄', 'Limpiando sesión...', '');
     await api('POST', '/settings/whatsapp/reset');
     await new Promise(r => setTimeout(r, 2000));
     showToast('✅', 'Sesión limpiada', 'Escaneá el QR para reconectar');
-    connectEntWpp();
+    connectEntWpp({ riskOk: true });
   } catch(e) { showToast('❌', 'Error', e.message); }
 }
 
