@@ -1111,6 +1111,18 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
 
+.wpp-fold { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; }
+.wpp-fold > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; user-select: none; }
+.wpp-fold > summary::-webkit-details-marker { display: none; }
+.wpp-fold > summary::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; margin-left: 4px; border-right: 2px solid rgba(255,255,255,.4); border-bottom: 2px solid rgba(255,255,255,.4); transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
+.wpp-fold[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+.wpp-fold-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; }
+.wpp-fold-meta { font-size: 11px; color: var(--gray); white-space: nowrap; }
+.wpp-fold-body { padding: 0 14px 14px; }
+.wpp-fold-red { background: rgba(255,67,67,0.05); border-color: rgba(255,67,67,0.18); }
+.wpp-fold-red .wpp-fold-title { color: #ff7a7a; font-size: 12.5px; }
+.wpp-fold-orange { background: rgba(255,152,0,0.05); border-color: rgba(255,152,0,0.18); }
+.wpp-fold-orange .wpp-fold-title { color: #FF9100; font-size: 12.5px; }
 .wpp-risk-card { background: rgba(96,165,250,0.05); border: 1px solid rgba(96,165,250,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .wpp-risk-head { display: flex; gap: 12px; align-items: flex-start; }
 .wpp-risk-icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: rgba(96,165,250,0.18); color: #93c5fd; border: 1px solid rgba(96,165,250,0.4); font-weight: 800; font-size: 12px; font-style: italic; font-family: Georgia, serif; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
@@ -3879,21 +3891,29 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             </details>
           </div>
           <button class="btn-motor" id="wpp-connect-btn" onclick="connectWhatsapp()">📱 Conectar WhatsApp</button>
-          <!-- Mensajes automáticos -->
-          <div style="margin-top:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px">
-            <div style="font-size:13px;font-weight:700;margin-bottom:4px">✉️ Mensajes automáticos</div>
-            <div style="font-size:11px;color:var(--gray);margin-bottom:10px;line-height:1.5">Elegí qué manda FILO solo. Menos mensajes = menos riesgo de que WhatsApp bloquee el número. Las respuestas del bot a quien te escribe siempre funcionan.</div>
-            <div id="wpp-auto-list" style="display:flex;flex-direction:column;gap:8px"></div>
-          </div>
+          <!-- Mensajes automáticos (desplegable) -->
+          <details class="wpp-fold" style="margin-top:16px">
+            <summary>
+              <span class="wpp-fold-title">✉️ Mensajes automáticos</span>
+              <span class="wpp-fold-meta" id="wpp-auto-count"></span>
+            </summary>
+            <div class="wpp-fold-body">
+              <div style="font-size:11px;color:var(--gray);margin-bottom:10px;line-height:1.5">Elegí qué manda FILO solo. Menos mensajes = menos riesgo de que WhatsApp bloquee el número. Las respuestas del bot a quien te escribe siempre funcionan.</div>
+              <div id="wpp-auto-list" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+          </details>
           <div id="wpp-qr-container" style="margin-top:16px;display:none">
             <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Escaneá este código QR con tu WhatsApp → Dispositivos vinculados:</div>
             <canvas id="wpp-qr-canvas" style="border-radius:8px;background:#fff;padding:8px;display:block"></canvas>
             <img id="wpp-qr-img" style="width:200px;border-radius:8px;display:none" alt="QR WhatsApp">
           </div>
 
-          <!-- Aviso WhatsApp Desktop -->
-          <div style="margin-top:16px;background:rgba(255,67,67,0.07);border:1px solid rgba(255,67,67,0.2);border-radius:12px;padding:14px 16px">
-            <div style="font-size:12px;font-weight:700;color:#FF4343;margin-bottom:8px;letter-spacing:.5px">🖥️ No uses WhatsApp Desktop al mismo tiempo que el bot</div>
+          <!-- Aviso WhatsApp Desktop (desplegable) -->
+          <details class="wpp-fold wpp-fold-red" style="margin-top:8px">
+            <summary>
+              <span class="wpp-fold-title">🖥️ No uses WhatsApp Desktop al mismo tiempo que el bot</span>
+            </summary>
+            <div class="wpp-fold-body">
             <div style="font-size:12px;color:var(--gray);line-height:1.7">Tener la <strong style="color:rgba(255,255,255,.8)">app de escritorio de WhatsApp</strong> abierta en tu PC al mismo tiempo que FILO genera conflictos de sesión. Esto puede causar:</div>
             <ul style="margin:8px 0 0 16px;font-size:12px;color:var(--gray);line-height:1.9">
               <li>❌ El bot <strong style="color:rgba(255,255,255,.7)">deja de recibir mensajes</strong> de los clientes</li>
@@ -3902,16 +3922,19 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <li>❌ Mensajes que llegan pero <strong style="color:rgba(255,255,255,.7)">no generan respuesta</strong></li>
             </ul>
             <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.5)">✅ Podés usar WhatsApp normalmente desde el <strong style="color:rgba(255,255,255,.7)">celular</strong> sin ningún problema.</div>
-          </div>
+            </div>
+          </details>
 
-
-
-          <!-- Reconexión limpia -->
-          <div style="margin-top:16px;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.2);border-radius:12px;padding:14px 16px">
-            <div style="font-size:12px;font-weight:700;color:#FF9100;margin-bottom:6px;letter-spacing:.5px">⚠️ ¿El bot no responde o hay problemas de conexión?</div>
+          <!-- Reconexión limpia (desplegable) -->
+          <details class="wpp-fold wpp-fold-orange" style="margin-top:8px">
+            <summary>
+              <span class="wpp-fold-title">⚠️ ¿El bot no responde o hay problemas de conexión?</span>
+            </summary>
+            <div class="wpp-fold-body">
             <div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:12px">Puede pasar si el servidor se reinició, si hay muchos mensajes pendientes acumulados, o si WhatsApp perdió la sincronización. Usá este botón para hacer una reconexión limpia — borra la sesión guardada y genera un QR nuevo.</div>
             <button onclick="resetWhatsapp()" style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.35);color:#FF9100;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif;width:100%">🔄 Reconexión limpia</button>
-          </div>
+            </div>
+          </details>
         </div><!-- /settings-section de WhatsApp -->
 
         <!-- Próximamente: conexión oficial de Meta -->
@@ -9565,6 +9588,11 @@ const WPP_AUTO_ITEMS = [
   ['queue_call',      '📣 "Es tu turno" en la fila virtual',       'Al llamar a un cliente de la fila'],
   ['owner_notice',    '🔔 Aviso de nueva reserva a tu teléfono',   'Ya te llega como notificación en FILO'],
 ];
+function updateWppAutoCount() {
+  const boxes = document.querySelectorAll('#wpp-auto-list input[type=checkbox]');
+  const out = document.getElementById('wpp-auto-count');
+  if (out) out.textContent = boxes.length ? `${[...boxes].filter(b => b.checked).length} de ${boxes.length} activos` : '';
+}
 async function loadWppAuto() {
   const el = document.getElementById('wpp-auto-list');
   if (!el) return;
@@ -9576,7 +9604,7 @@ async function loadWppAuto() {
       <div>
       <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
         <span><span style="font-size:13px;font-weight:600">${label}</span><br><span style="font-size:11px;color:var(--gray)">${sub}</span></span>
-        <input type="checkbox" ${d.prefs[k] ? 'checked' : ''} onchange="saveWppAuto('${k}', this.checked)" style="width:20px;height:20px;flex-shrink:0;accent-color:#FFD100">
+        <input type="checkbox" ${d.prefs[k] ? 'checked' : ''} onchange="saveWppAuto('${k}', this.checked); updateWppAutoCount()" style="width:20px;height:20px;flex-shrink:0;accent-color:#FFD100">
       </label>
       ${k === 'reminders' ? `
       <div id="wpp-reminder-hours-row" style="display:${d.prefs[k] ? 'flex' : 'none'};align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--gray)">
@@ -9588,6 +9616,7 @@ async function loadWppAuto() {
         <span style="flex-basis:100%;font-size:11px;color:rgba(255,255,255,.35)">Entre 20 minutos y 1 día (24 h).</span>
       </div>` : ''}
       </div>`).join('');
+    updateWppAutoCount();
     const fmtD = (x) => new Date(x).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
     const banned = document.getElementById('wpp-banned-info');
     if (banned) banned.style.display = (d.banned_at || d.hold_until) ? 'block' : 'none';
