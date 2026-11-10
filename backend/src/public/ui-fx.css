@@ -1,0 +1,78 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   FILO · efectos de interfaz (ui-fx)
+   Animaciones cortas, sin librerías. Todo se apaga con "reducir movimiento".
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Íconos SVG que reemplazan a los emojis */
+.fx-ico { width: 1.05em; height: 1.05em; display: inline-block; vertical-align: -0.17em; flex-shrink: 0;
+  stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-right: .38em; }
+.fx-ico-only { margin-right: 0; }
+#toast-icon .fx-ico { width: 22px; height: 22px; margin: 0; color: var(--yellow, #FFD100); }
+#toast-icon.fx-err .fx-ico { color: #ff6b6b; }
+.step-dot .fx-ico { margin: 0; width: 14px; height: 14px; }
+
+/* Aparición escalonada de listas */
+@keyframes fxIn { from { opacity: 0; transform: translateY(8px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.fx-in { animation: fxIn .34s cubic-bezier(.2,.7,.2,1) both; }
+
+/* Tarjetas con luz que sigue al puntero (solo mouse) */
+/* El brillo va detrás del contenido (z-index -1 dentro de su propio contexto): no se toca
+   la posición de ningún elemento de la tarjeta */
+.fx-spot { isolation: isolate; }
+.fx-spot-glow { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255,209,0,.09), transparent 62%); z-index: -1; }
+.fx-spot:hover > .fx-spot-glow { opacity: 1; }
+
+/* Brillo que recorre el botón principal */
+@keyframes fxShine { 0% { background-position: 160% 0; } 55%, 100% { background-position: -60% 0; } }
+.fx-shine:not(:disabled) {
+  background-image: linear-gradient(110deg, transparent 38%, rgba(255,255,255,.55) 50%, transparent 62%);
+  background-size: 250% 100%; background-repeat: no-repeat; animation: fxShine 3.6s ease-in-out infinite; }
+
+/* Odómetro: cada dígito es una columna que rueda */
+.fx-odo { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.fx-odo-d { display: inline-block; height: 1.15em; overflow: hidden; line-height: 1.15em; vertical-align: top; }
+.fx-odo-col { display: flex; flex-direction: column; transition: transform .7s cubic-bezier(.2,.8,.2,1); }
+.fx-odo-col > span { height: 1.15em; line-height: 1.15em; text-align: center; }
+
+/* Esqueletos de carga */
+@keyframes fxSkel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.fx-skel { display: block; height: .8em; margin: .35em 0; border-radius: 6px; max-width: 100%;
+  background: linear-gradient(90deg, rgba(255,255,255,.06) 25%, rgba(255,255,255,.14) 37%, rgba(255,255,255,.06) 63%);
+  background-size: 400% 100%; animation: fxSkel 1.3s ease infinite; }
+.fx-skel.inline { display: inline-block; width: 7em; margin: 0; vertical-align: middle; }
+
+/* Navegación: transición suave y marca del ítem activo */
+.nav-item { transition: background .25s ease, color .25s ease, transform .2s ease !important; }
+.nav-item:active { transform: scale(.92); }
+@keyframes fxPop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
+.nav-item.active:not(.nav-item-dashboard) svg { animation: fxPop .32s ease both; }
+
+/* Desenfoque gradual sobre la barra de abajo (celular) */
+.fx-blur-edge { position: fixed; left: 0; right: 0; height: 28px; pointer-events: none; z-index: 99;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to top, #000, transparent); mask-image: linear-gradient(to top, #000, transparent); }
+
+/* Pasos de la reserva: la línea se llena y el paso actual late */
+.step:not(:last-child)::after {
+  background: linear-gradient(var(--y, #FFD100), var(--y, #FFD100)) no-repeat 0 0 / 0% 100%, rgba(255,255,255,.1) !important;
+  transition: background-size .55s cubic-bezier(.2,.8,.2,1); }
+.step.done:not(:last-child)::after { background-size: 100% 100%, auto !important; }
+@keyframes fxRing { 0% { box-shadow: 0 0 0 0 rgba(255,209,0,.45); } 100% { box-shadow: 0 0 0 9px rgba(255,209,0,0); } }
+.step.active .step-dot { animation: fxRing 1.8s ease-out infinite; }
+
+/* Confeti */
+.fx-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 200000; }
+
+/* Reducir movimiento: sin animaciones ni brillos */
+@media (prefers-reduced-motion: reduce) {
+  .fx-in, .fx-shine, .fx-skel, .step.active .step-dot, .nav-item.active svg { animation: none !important; }
+  .fx-odo-col, .step:not(:last-child)::after { transition: none !important; }
+  .fx-spot-glow { display: none; }
+}
+
+/* Ícono grande de la pantalla de "turno reservado" */
+.success-icon .fx-ico { color: var(--y, #FFD100); }
+
+/* Ícono + etiqueta corta en el mismo renglón */
+.fx-nowrap { white-space: nowrap; }

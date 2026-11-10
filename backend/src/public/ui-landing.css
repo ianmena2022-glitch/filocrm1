@@ -1,0 +1,48 @@
+/* FILO · efectos de la landing (por encima del bundle; si no carga, la landing queda igual) */
+
+/* Aurora suave detrás del hero (CSS puro, sin WebGL) */
+.fx-aurora { position: absolute; inset: -10% -5% auto -5%; height: 110%; pointer-events: none; z-index: 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+.fx-aurora i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .16; mix-blend-mode: screen; }
+.fx-aurora i:nth-child(1) { width: 46vw; height: 46vw; left: -6vw; top: -8vw; background: #FFD100; animation: fxDrift1 18s ease-in-out infinite alternate; }
+.fx-aurora i:nth-child(2) { width: 38vw; height: 38vw; right: -4vw; top: 4vw; background: #2563eb; opacity: .2; animation: fxDrift2 22s ease-in-out infinite alternate; }
+.fx-aurora i:nth-child(3) { width: 30vw; height: 30vw; left: 30vw; top: 18vw; background: #a3e635; opacity: .08; animation: fxDrift3 26s ease-in-out infinite alternate; }
+@keyframes fxDrift1 { to { transform: translate(8vw, 6vw) scale(1.15); } }
+@keyframes fxDrift2 { to { transform: translate(-10vw, 8vw) scale(.9); } }
+@keyframes fxDrift3 { to { transform: translate(-6vw, -6vw) scale(1.2); } }
+.fx-hero-host { position: relative; isolation: isolate; }
+.fx-hero-host > *:not(.fx-aurora) { position: relative; z-index: 1; }
+
+/* Palabra que rota en el título */
+.fx-rotate { display: inline-block; position: relative; }
+.fx-rotate-word { display: inline-block; transition: opacity .38s ease, transform .38s ease, filter .38s ease; }
+.fx-rotate-word.out { opacity: 0; transform: translateY(-.25em); filter: blur(6px); }
+.fx-rotate-word.in-start { opacity: 0; transform: translateY(.25em); filter: blur(6px); transition: none; }
+
+/* Cinta de funciones que se desplaza */
+.fx-marquee { overflow: hidden; border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.015); padding: 14px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+.fx-marquee-track { display: flex; gap: 14px; width: max-content; animation: fxMarq 38s linear infinite; }
+.fx-marquee:hover .fx-marquee-track { animation-play-state: paused; }
+.fx-marquee span { font-family: 'Barlow', sans-serif; font-weight: 600; font-size: 14px; color: rgba(240,246,255,.75); white-space: nowrap;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+.fx-marquee span b { color: #FFD100; font-weight: 700; margin-right: 6px; }
+@keyframes fxMarq { to { transform: translateX(-50%); } }
+
+/* Funciones en formato bento: luz que sigue al mouse y borde que brilla */
+.fx-bento > * { position: relative; overflow: hidden; transition: transform .25s ease, border-color .25s ease; }
+.fx-bento > *:hover { transform: translateY(-3px); border-color: rgba(255,209,0,.35) !important; }
+.fx-bento > * .fx-spot-glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 50%), rgba(255,209,0,.12), transparent 60%); }
+.fx-bento > *:hover .fx-spot-glow { opacity: 1; }
+@media (min-width: 960px) {
+  .fx-bento { grid-auto-flow: dense; }
+  .fx-bento > .fx-wide { grid-column: span 2; }
+  .fx-bento > .fx-wide { background-image: linear-gradient(135deg, rgba(255,209,0,.06), transparent 55%) !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-aurora i, .fx-marquee-track { animation: none !important; }
+  .fx-rotate-word { transition: none !important; }
+}
