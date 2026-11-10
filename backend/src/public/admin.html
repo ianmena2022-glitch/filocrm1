@@ -1532,7 +1532,7 @@ function renderTreeRow(a, depth, parentId) {
     </td>
     <td data-label="Plan">${planBadge}</td>
     <td data-label="Estado">${statusBadge}</td>
-    <td data-label="Trial">${dateInfo}</td>
+    <td data-label="Trial">${dateInfo}${lastSeenHtml(a)}</td>
     <td data-label="Barberos">${barberCount}</td>
     <td data-label="Meses">${freeMonthsCell}</td>
     <td data-label="WPP" style="font-size:12px">${wppDot}</td>
@@ -1601,6 +1601,36 @@ function isArchivedAccount(a) {
   const ref = a.expired_at || a.trial_ends_at;
   if (!ref) return false;
   return daysSince(ref) > ARCHIVE_AFTER_DAYS;
+}
+
+// Última vez en línea: la última vez que la cuenta usó FILO (o abrió la app instalada).
+// Verde: hoy · amarillo: esta semana · rojo: hace más de 7 días o nunca.
+function lastSeenHtml(a) {
+  const ts = [a.last_seen_at, a.pwa_last_seen].filter(Boolean).map(x => new Date(x).getTime());
+  const own = ts.length ? Math.max(...ts) : null;
+  const team = a.team_last_seen_at ? new Date(a.team_last_seen_at).getTime() : null;
+  const rel = (ms) => {
+    const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
+    if (m < 5) return 'ahora';
+    if (m < 60) return `hace ${m} min`;
+    if (m < 1440) return `hace ${Math.round(m / 60)} h`;
+    const d = Math.round(m / 1440);
+    return d === 1 ? 'hace 1 día' : `hace ${d} días`;
+  };
+  const color = (ms) => {
+    if (!ms) return '#f87171';
+    const h = (Date.now() - ms) / 3600000;
+    return h < 24 ? '#4ade80' : h < 24 * 7 ? '#fbbf24' : '#f87171';
+  };
+  const when = (ms) => ms ? new Date(ms).toLocaleString('es-AR') : '';
+  let html = own
+    ? `<div style="margin-top:4px;font-size:11px;color:${color(own)}" title="Última vez en línea: ${when(own)}">🕒 En línea ${rel(own)}</div>`
+    : `<div style="margin-top:4px;font-size:11px;color:var(--g)" title="Se registra desde el 10/11/2026">🕒 Sin registro</div>`;
+  // Si alguien del equipo (barbero o sucursal) entró después que la cuenta
+  if (team && (!own || team > own + 5 * 60000)) {
+    html += `<div style="font-size:11px;color:${color(team)}" title="Barberos o sucursales: ${when(team)}">👥 Equipo ${rel(team)}</div>`;
+  }
+  return html;
 }
 
 // App instalada (PWA) y notificaciones: se registra cuando abren FILO desde la app instalada

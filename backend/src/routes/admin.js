@@ -200,6 +200,10 @@ router.get('/accounts', adminAuth, async (req, res) => {
         -- App instalada (PWA) y notificaciones activadas
         (SELECT COUNT(*) FROM pwa_devices p WHERE p.shop_id = s.id)                    AS pwa_count,
         (SELECT MAX(p.last_seen) FROM pwa_devices p WHERE p.shop_id = s.id)            AS pwa_last_seen,
+        -- Última vez en línea: la cuenta misma, y la más reciente de su equipo (barberos y sucursales)
+        to_jsonb(s)->>'last_seen_at' AS last_seen_at,
+        (SELECT MAX((to_jsonb(t)->>'last_seen_at')::timestamptz) FROM shops t
+          WHERE t.parent_shop_id = s.id OR t.parent_enterprise_id = s.id)               AS team_last_seen_at,
         (SELECT string_agg(DISTINCT p.platform, ',') FROM pwa_devices p WHERE p.shop_id = s.id) AS pwa_platforms,
         (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.shop_id = s.id)           AS push_count,
         -- WhatsApp: bloqueado por WhatsApp / modo cuidado (to_jsonb: sirve aunque la columna no exista)

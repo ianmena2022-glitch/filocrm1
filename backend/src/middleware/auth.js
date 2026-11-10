@@ -1,6 +1,18 @@
 const jwt  = require('jsonwebtoken');
 const pool = require('../db/pool');
 
+// Última vez en línea: se guarda como mucho una vez cada 5 minutos por cuenta, sin frenar el pedido
+const LAST_SEEN_EVERY_MS = 5 * 60 * 1000;
+const _lastSeenWrite = new Map();   // shopId → ms de la última escritura
+function touchLastSeen(shopId) {
+  if (!shopId) return;
+  const now = Date.now();
+  if (now - (_lastSeenWrite.get(shopId) || 0) < LAST_SEEN_EVERY_MS) return;
+  _lastSeenWrite.set(shopId, now);
+  pool.query('UPDATE shops SET last_seen_at = NOW() WHERE id = $1', [shopId])
+    .catch(() => _lastSeenWrite.delete(shopId));   // ej. la columna todavía no existe
+}
+
 module.exports = async function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -67,6 +79,7 @@ module.exports = async function auth(req, res, next) {
   req.isEnterpriseOwner  = payload.isEnterpriseOwner  || false;
   req.isBranch           = payload.isBranch           || false;
   req.parentEnterpriseId = payload.parentEnterpriseId || null;
+  touchLastSeen(payload.shopId);
 
   // Run the rest of the request inside the RLS shop context.
   // pool.query() will automatically set app.shop_id = shopId
