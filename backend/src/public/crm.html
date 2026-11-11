@@ -2052,6 +2052,16 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   /* Crumb ligeramente más chico en mobile ya que hay back arriba */
   .cfg-crumb { font-size: 10px; }
 }
+/* Servicios: arrastrar para ordenar */
+.svc-sort-hint { font-size: 12px; color: var(--gray); margin: 2px 0 6px; }
+.svc-grip-mini { color: var(--yellow); }
+.svc-grip { background: none; border: 0; color: var(--gray); font-size: 20px; line-height: 1; padding: 6px 10px 6px 0; margin-right: 4px;
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.svc-grip:hover { color: var(--yellow); }
+.svc-row.svc-dragging { background: #1a1f2b; border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.45); outline: 1px solid rgba(255,209,0,.35);
+  padding-left: 8px !important; padding-right: 8px !important; }
+.svc-row.svc-dragging .svc-grip { cursor: grabbing; color: var(--yellow); }
+.svc-ph { border: 1px dashed rgba(255,209,0,.35); border-radius: 10px; background: rgba(255,209,0,.04); margin: 2px 0; box-sizing: border-box; }
 </style>
 <link rel="stylesheet" href="/ui-fx.css?v=6">
 </head>
@@ -8290,9 +8300,12 @@ function renderServicesList() {
   const el = document.getElementById('services-list');
   if (!el) return;
   if (!services.length) { el.innerHTML = '<p style="color:var(--gray);font-size:13px">Sin servicios cargados aún</p>'; return; }
-  el.innerHTML = services.map(s => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-      <div>
+  const canSort = services.length > 1;
+  el.innerHTML = (canSort ? '<div class="svc-sort-hint">Arrastrá desde <span class="svc-grip-mini">⠿</span> para cambiar el orden. Así aparecen en la página de reservas.</div>' : '') +
+  services.map(s => `
+    <div class="svc-row" data-svc-id="${s.id}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+      ${canSort ? '<button type="button" class="svc-grip" aria-label="Arrastrar para ordenar" title="Arrastrar para ordenar">⠿</button>' : ''}
+      <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600">${escHtml(s.name)}</div>
         <div style="font-size:12px;color:var(--gray)">$${parseFloat(s.price).toLocaleString('es-AR')} · ${s.duration_minutes} min</div>
       </div>
@@ -8302,6 +8315,68 @@ function renderServicesList() {
       </div>
     </div>
   `).join('');
+  if (canSort) initServiceSort(el);
+}
+
+// Arrastrar servicios para ordenarlos (mouse y dedo). Se agarra desde el ⠿ de la izquierda.
+function initServiceSort(list) {
+  if (list._sortReady) return;
+  list._sortReady = true;
+  let drag = null;
+  list.addEventListener('pointerdown', e => {
+    const grip = e.target.closest('.svc-grip');
+    if (!grip || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const row = grip.closest('.svc-row');
+    e.preventDefault();
+    const r = row.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'svc-ph';
+    ph.style.height = r.height + 'px';
+    row.after(ph);
+    row.classList.add('svc-dragging');
+    Object.assign(row.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 9999 });
+    const before = [...list.querySelectorAll('.svc-row')].map(x => x.dataset.svcId).join(',');
+    drag = { row, ph, id: e.pointerId, dy: e.clientY - r.top, before };
+    try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  list.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    e.preventDefault();
+    drag.row.style.top = (e.clientY - drag.dy) + 'px';
+    // El hueco se mueve al lugar donde quedaría la fila según la mitad de cada vecina
+    const others = [...list.querySelectorAll('.svc-row')].filter(x => x !== drag.row);
+    const next = others.find(x => { const b = x.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+    if (next) { if (next.previousElementSibling !== drag.ph) next.before(drag.ph); }
+    else if (others.length && others[others.length - 1].nextElementSibling !== drag.ph) others[others.length - 1].after(drag.ph);
+    // Cerca de los bordes de la pantalla, se desplaza sola
+    if (e.clientY < 70) window.scrollBy(0, -12); else if (e.clientY > innerHeight - 70) window.scrollBy(0, 12);
+  });
+  const end = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { row, ph, before } = drag;
+    drag = null;
+    ph.replaceWith(row);
+    row.classList.remove('svc-dragging');
+    Object.assign(row.style, { position: '', left: '', top: '', width: '', zIndex: '' });
+    const ids = [...list.querySelectorAll('.svc-row')].map(x => x.dataset.svcId);
+    if (ids.join(',') !== before) saveServiceOrder(ids.map(Number));
+  };
+  list.addEventListener('pointerup', end);
+  list.addEventListener('pointercancel', end);
+}
+
+async function saveServiceOrder(ids) {
+  const byId = new Map(services.map(s => [s.id, s]));
+  services = ids.map(id => byId.get(id)).filter(Boolean);
+  services.forEach((s, i) => { s.sort_order = i + 1; });
+  fillServiceSelect();
+  try {
+    await api('PUT', '/settings/services/order', { ids });
+    showToast('✅', 'Orden guardado', 'Así se ven en reservas');
+  } catch (e) {
+    showToast('❌', 'No se pudo guardar el orden', e.message);
+    loadServices();
+  }
 }
 
 async function createService() {
@@ -8318,7 +8393,7 @@ async function createService() {
   const el = document.getElementById('services-list');
   if (el) {
     const tempId = 'temp-' + Date.now();
-    el.insertAdjacentHTML('afterbegin', `
+    el.insertAdjacentHTML('beforeend', `
       <div id="${tempId}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
         <div>
           <div style="font-size:14px;font-weight:600">${name}</div>

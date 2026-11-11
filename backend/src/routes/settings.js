@@ -220,10 +220,29 @@ router.get('/services', auth, async (req, res) => {
     const effectiveShopId = req.parentShopId || req.shopId;
 
     const result = await pool.query(
-      'SELECT * FROM services WHERE shop_id=$1 AND active=TRUE ORDER BY name',
+      'SELECT * FROM services WHERE shop_id=$1 AND active=TRUE ORDER BY sort_order NULLS LAST, name',
       [effectiveShopId]
     );
     res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/settings/services/order — guarda el orden en que la barbería arrastró sus servicios
+router.put('/services/order', auth, ownerOnly, async (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(n => parseInt(n)).filter(n => n > 0) : [];
+  if (!ids.length || ids.length > 500 || new Set(ids).size !== ids.length) {
+    return res.status(400).json({ error: 'Orden inválido' });
+  }
+  try {
+    await pool.query(
+      `UPDATE services s SET sort_order = o.ord
+       FROM unnest($1::int[]) WITH ORDINALITY AS o(id, ord)
+       WHERE s.id = o.id AND s.shop_id = $2`,
+      [ids, req.shopId]
+    );
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -242,8 +261,11 @@ router.post('/services', auth, ownerOnly, async (req, res) => {
   if (!name || !price) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
   try {
     const result = await pool.query(
-      `INSERT INTO services (shop_id, name, price, cost, duration_minutes, commission_pct)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      // Si la barbería ya ordenó sus servicios, el nuevo va al final; si no, queda por nombre
+      `INSERT INTO services (shop_id, name, price, cost, duration_minutes, commission_pct, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,
+         (SELECT MAX(sort_order) + 1 FROM services WHERE shop_id=$1 AND active=TRUE))
+       RETURNING *`,
       [req.shopId, name.trim(), parseFloat(price), parseFloat(cost||0), parseInt(duration_minutes||30), parseSvcCommission(commission_pct)]
     );
     res.status(201).json(result.rows[0]);

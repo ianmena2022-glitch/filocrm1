@@ -460,7 +460,7 @@ router.get('/:slug/services', async (req, res) => {
     );
     if (!shopRes.rows.length) return res.json([]);
     const svcRes = await pool.query(
-      'SELECT id, name, price, duration_minutes FROM services WHERE shop_id=$1 AND active=true ORDER BY name ASC',
+      'SELECT id, name, price, duration_minutes FROM services WHERE shop_id=$1 AND active=true ORDER BY sort_order NULLS LAST, name ASC',
       [shopRes.rows[0].id]
     );
     res.json(svcRes.rows);

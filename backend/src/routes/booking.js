@@ -102,7 +102,7 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
 
     const services = await pool.query(
       `SELECT id, name, price, duration_minutes
-       FROM services WHERE shop_id = $1 AND active = TRUE ORDER BY name`,
+       FROM services WHERE shop_id = $1 AND active = TRUE ORDER BY sort_order NULLS LAST, name`,
       [shopData.id]
     );
 
