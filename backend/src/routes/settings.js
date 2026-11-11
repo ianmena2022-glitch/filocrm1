@@ -575,4 +575,167 @@ router.post('/revenue-pin/verify', auth, ownerOnly, pinRateLimit, async (req, re
   res.json({ ok: true });
 });
 
+// ── EXPORTAR DATOS A EXCEL ────────────────────────────
+// POST /api/settings/export { pin } o { password }
+// Pide el PIN de dueño; si la cuenta no tiene PIN activado, la contraseña de la cuenta.
+// Devuelve un .xlsx con una hoja por tipo de dato (clientes primero).
+const { buildXlsx } = require('../services/xlsx');
+
+const EXPORT_STATUS = {
+  pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', cancelled: 'Cancelado',
+  no_show: 'No vino', waiting_sena: 'Esperando seña', waiting: 'Esperando', called: 'Llamado',
+  served: 'Atendido', left: 'Se fue',
+};
+const exportStatus = s => EXPORT_STATUS[s] || s || '';
+
+async function buildShopExport(shopId) {
+  const shopQ = await pool.query(
+    `SELECT name, COALESCE(NULLIF(timezone, ''), 'America/Argentina/Buenos_Aires') AS tz FROM shops WHERE id=$1`, [shopId]);
+  if (!shopQ.rows.length) throw new Error('Barbería no encontrada');
+  const { name: shopName, tz } = shopQ.rows[0];
+  // Las hojas secundarias, si fallan, salen vacías (se avisa en el log); clientes y turnos no
+  const q = (sql, params = [], required = false) => pool.query(sql, [shopId, ...params]).then(r => r.rows).catch(e => {
+    if (required) throw e;
+    console.warn('[export]', e.message); return [];
+  });
+  // Fechas y horas en el horario de la barbería, como texto que Excel convierte a fecha
+  const ts = col => `to_char((${col}) AT TIME ZONE $2, 'YYYY-MM-DD HH24:MI:SS')`;
+  const d = col => `to_char(${col}, 'YYYY-MM-DD')`;
+
+  const methods = await q('SELECT key, label FROM payment_methods WHERE shop_id=$1');
+  const methodLabel = new Map(methods.map(m => [m.key, m.label]));
+  const pay = k => (k ? methodLabel.get(k) || k : '');
+
+  const [clients, appts, services, team, members, debts, cash, products, sales, queue, recurring] = await Promise.all([
+    q(`SELECT c.name, c.phone, c.address, ${d('c.birthday')} AS birthday, c.notes, c.total_visits, c.total_spent,
+              ${d('c.last_visit')} AS last_visit, c.points, ${ts('c.created_at')} AS created_at,
+              (SELECT COALESCE(SUM(amount), 0) FROM client_debts x WHERE x.client_id=c.id AND x.shop_id=c.shop_id AND NOT COALESCE(x.paid, FALSE)) AS debt,
+              (SELECT plan FROM memberships m WHERE m.client_id=c.id AND m.shop_id=c.shop_id AND m.active ORDER BY m.id DESC LIMIT 1) AS plan
+         FROM clients c WHERE c.shop_id=$1 ORDER BY lower(c.name)`, [tz], true),
+    q(`SELECT ${d('a.date')} AS date, to_char(a.time_start, 'HH24:MI') AS t1, to_char(a.time_end, 'HH24:MI') AS t2,
+              COALESCE(c.name, a.client_name) AS client, c.phone, a.service_name, a.barber_name, a.price, a.status,
+              a.payment_method, a.tip, a.sena_amount, a.notes, ${ts('a.created_at')} AS created_at
+         FROM appointments a LEFT JOIN clients c ON c.id=a.client_id AND c.shop_id=a.shop_id
+        WHERE a.shop_id=$1 ORDER BY a.date DESC, a.time_start DESC`, [tz], true),
+    q(`SELECT name, price, cost, duration_minutes, commission_pct FROM services
+        WHERE shop_id=$1 AND active=TRUE ORDER BY sort_order NULLS LAST, name`),
+    q(`SELECT name, email, phone, barber_commission_pct, ${ts('created_at')} AS created_at FROM shops
+        WHERE parent_shop_id=$1 AND is_barber=TRUE ORDER BY lower(name)`, [tz]),
+    q(`SELECT COALESCE(c.name, '') AS client, c.phone, m.plan, m.price_monthly, m.credits_used, m.credits_total, m.active,
+              ${d('m.started_at')} AS started_at, ${d('m.renews_at')} AS renews_at, ${ts('m.cancelled_at')} AS cancelled_at
+         FROM memberships m LEFT JOIN clients c ON c.id=m.client_id
+        WHERE m.shop_id=$1 ORDER BY m.active DESC, m.id DESC`, [tz]),
+    q(`SELECT COALESCE(c.name, x.client_name) AS client, c.phone, x.amount, x.description, x.paid,
+              ${ts('x.paid_at')} AS paid_at, ${ts('x.created_at')} AS created_at
+         FROM client_debts x LEFT JOIN clients c ON c.id=x.client_id
+        WHERE x.shop_id=$1 ORDER BY x.paid, x.created_at DESC`, [tz]),
+    q(`SELECT ${d('date')} AS date, is_income, category, description, amount, payment_method FROM expenses
+        WHERE shop_id=$1 ORDER BY date DESC, id DESC`),
+    q(`SELECT nombre, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion FROM products
+        WHERE shop_id=$1 AND active=TRUE ORDER BY lower(nombre)`),
+    q(`SELECT ${ts('sold_at')} AS sold_at, product_name, quantity, unit_price, total_price, payment_method, client_name
+         FROM product_sales WHERE shop_id=$1 ORDER BY sold_at DESC`, [tz]),
+    q(`SELECT ${ts('created_at')} AS created_at, client_name, client_phone, service_name, status, price, payment_method
+         FROM queue_entries WHERE shop_id=$1 ORDER BY created_at DESC`, [tz]),
+    q(`SELECT client_name, client_phone, service_name, service_price, day_of_week, time_start AS t,
+              every_weeks, notes FROM recurring_appointments WHERE shop_id=$1 AND active=TRUE ORDER BY day_of_week, time_start`),
+  ]);
+
+  const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const sheets = [
+    { name: 'Clientes', columns: [
+      { header: 'Nombre', width: 28 }, { header: 'Teléfono', width: 18 }, { header: 'Dirección', width: 26 },
+      { header: 'Cumpleaños', width: 13, type: 'date' }, { header: 'Notas', width: 34 },
+      { header: 'Visitas', width: 9, type: 'number' }, { header: 'Total gastado', width: 15, type: 'money' },
+      { header: 'Última visita', width: 14, type: 'date' }, { header: 'Puntos', width: 9, type: 'number' },
+      { header: 'Deuda pendiente', width: 16, type: 'money' }, { header: 'Membresía activa', width: 18 },
+      { header: 'Cliente desde', width: 17, type: 'datetime' }],
+      rows: clients.map(c => [c.name, c.phone, c.address, c.birthday, c.notes, c.total_visits, c.total_spent,
+        c.last_visit, c.points, Number(c.debt) || null, c.plan, c.created_at]) },
+    { name: 'Turnos', columns: [
+      { header: 'Fecha', width: 12, type: 'date' }, { header: 'Hora', width: 8 }, { header: 'Hasta', width: 8 },
+      { header: 'Cliente', width: 26 }, { header: 'Teléfono', width: 17 }, { header: 'Servicio', width: 22 },
+      { header: 'Barbero', width: 18 }, { header: 'Precio', width: 12, type: 'money' }, { header: 'Estado', width: 14 },
+      { header: 'Método de pago', width: 16 }, { header: 'Propina', width: 11, type: 'money' },
+      { header: 'Seña', width: 11, type: 'money' }, { header: 'Notas', width: 30 }, { header: 'Creado', width: 17, type: 'datetime' }],
+      rows: appts.map(a => [a.date, a.t1, a.t2, a.client, a.phone, a.service_name, a.barber_name, a.price,
+        exportStatus(a.status), pay(a.payment_method), Number(a.tip) || null, Number(a.sena_amount) || null, a.notes, a.created_at]) },
+    { name: 'Servicios', columns: [
+      { header: 'Servicio', width: 26 }, { header: 'Precio', width: 12, type: 'money' }, { header: 'Costo', width: 12, type: 'money' },
+      { header: 'Duración (min)', width: 14, type: 'number' }, { header: 'Comisión %', width: 12, type: 'number' }],
+      rows: services.map(s => [s.name, s.price, s.cost, s.duration_minutes, s.commission_pct]) },
+    { name: 'Equipo', columns: [
+      { header: 'Nombre', width: 24 }, { header: 'Email', width: 28 }, { header: 'Teléfono', width: 17 },
+      { header: 'Comisión %', width: 12, type: 'number' }, { header: 'Alta', width: 17, type: 'datetime' }],
+      rows: team.map(b => [b.name, b.email, b.phone, b.barber_commission_pct, b.created_at]) },
+    { name: 'Membresías', columns: [
+      { header: 'Cliente', width: 26 }, { header: 'Teléfono', width: 17 }, { header: 'Plan', width: 16 },
+      { header: 'Precio mensual', width: 15, type: 'money' }, { header: 'Créditos usados', width: 15, type: 'number' },
+      { header: 'Créditos totales', width: 15, type: 'number' }, { header: 'Activa', width: 8 },
+      { header: 'Inicio', width: 12, type: 'date' }, { header: 'Renueva', width: 12, type: 'date' },
+      { header: 'Cancelada', width: 17, type: 'datetime' }],
+      rows: members.map(m => [m.client, m.phone, m.plan, m.price_monthly, m.credits_used, m.credits_total, !!m.active,
+        m.started_at, m.renews_at, m.cancelled_at]) },
+    { name: 'Deudas', columns: [
+      { header: 'Cliente', width: 26 }, { header: 'Teléfono', width: 17 }, { header: 'Monto', width: 12, type: 'money' },
+      { header: 'Detalle', width: 30 }, { header: 'Pagada', width: 8 }, { header: 'Fecha de pago', width: 17, type: 'datetime' },
+      { header: 'Fecha', width: 17, type: 'datetime' }],
+      rows: debts.map(x => [x.client, x.phone, x.amount, x.description, !!x.paid, x.paid_at, x.created_at]) },
+    { name: 'Caja (gastos e ingresos)', columns: [
+      { header: 'Fecha', width: 12, type: 'date' }, { header: 'Tipo', width: 10 }, { header: 'Categoría', width: 18 },
+      { header: 'Detalle', width: 32 }, { header: 'Monto', width: 13, type: 'money' }, { header: 'Método de pago', width: 16 }],
+      rows: cash.map(e => [e.date, e.is_income ? 'Ingreso' : 'Gasto', e.category, e.description, e.amount, pay(e.payment_method)]) },
+    { name: 'Productos', columns: [
+      { header: 'Producto', width: 26 }, { header: 'Categoría', width: 16 }, { header: 'Unidad', width: 10 },
+      { header: 'Costo', width: 12, type: 'money' }, { header: 'Precio de venta', width: 15, type: 'money' },
+      { header: 'Stock', width: 9, type: 'number' }, { header: 'Stock mínimo', width: 13, type: 'number' }, { header: 'Descripción', width: 30 }],
+      rows: products.map(p => [p.nombre, p.categoria, p.unidad, p.precio_costo, p.precio_venta, p.stock, p.stock_min, p.descripcion]) },
+    { name: 'Ventas de productos', columns: [
+      { header: 'Fecha', width: 17, type: 'datetime' }, { header: 'Producto', width: 24 }, { header: 'Cantidad', width: 10, type: 'number' },
+      { header: 'Precio unitario', width: 15, type: 'money' }, { header: 'Total', width: 13, type: 'money' },
+      { header: 'Método de pago', width: 16 }, { header: 'Cliente', width: 24 }],
+      rows: sales.map(s => [s.sold_at, s.product_name, s.quantity, s.unit_price, s.total_price, pay(s.payment_method), s.client_name]) },
+    { name: 'Fila virtual', columns: [
+      { header: 'Fecha', width: 17, type: 'datetime' }, { header: 'Cliente', width: 24 }, { header: 'Teléfono', width: 17 },
+      { header: 'Servicio', width: 22 }, { header: 'Estado', width: 12 }, { header: 'Precio', width: 12, type: 'money' },
+      { header: 'Método de pago', width: 16 }],
+      rows: queue.map(x => [x.created_at, x.client_name, x.client_phone, x.service_name, exportStatus(x.status), x.price, pay(x.payment_method)]) },
+    { name: 'Turnos fijos', columns: [
+      { header: 'Cliente', width: 24 }, { header: 'Teléfono', width: 17 }, { header: 'Servicio', width: 22 },
+      { header: 'Precio', width: 12, type: 'money' }, { header: 'Día', width: 11 }, { header: 'Hora', width: 8 },
+      { header: 'Cada (semanas)', width: 14, type: 'number' }, { header: 'Notas', width: 28 }],
+      rows: recurring.map(r => [r.client_name, r.client_phone, r.service_name, r.service_price, DAYS[r.day_of_week] || '',
+        r.t, r.every_weeks, r.notes]) },
+  ];
+  return { shopName, tz, buffer: buildXlsx(sheets), counts: { clientes: clients.length, turnos: appts.length } };
+}
+
+router.post('/export', auth, ownerOnly, pinRateLimit, async (req, res) => {
+  const { pin, password } = req.body || {};
+  try {
+    const s = await pool.query('SELECT revenue_pin_enabled FROM shops WHERE id=$1', [req.shopId]);
+    const pinOn = !!(s.rows[0] && s.rows[0].revenue_pin_enabled);
+    const ok = pinOn ? await verifyStoredPin(req.shopId, pin) : await verifyAccountPassword(req.shopId, password);
+    if (!ok) {
+      return res.status(401).json({ error: pinOn ? 'PIN incorrecto' : 'Contraseña incorrecta', needs: pinOn ? 'pin' : 'password' });
+    }
+    pinAttempts.delete(String(req.shopId));
+    const { shopName, tz, buffer, counts } = await buildShopExport(req.shopId);
+    const slug = String(shopName || 'barberia').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'barberia';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+    console.log(`[export] shop ${req.shopId}: ${counts.clientes} clientes, ${counts.turnos} turnos`);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="FILO_${slug}_${today}.xlsx"`,
+      'Cache-Control': 'no-store',
+    });
+    res.send(buffer);
+  } catch (e) {
+    console.error('[export]', e.message);
+    res.status(500).json({ error: 'No se pudo armar el archivo. Probá de nuevo.' });
+  }
+});
+
 module.exports = router;
+module.exports.__test = { buildShopExport };

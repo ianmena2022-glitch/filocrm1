@@ -2052,6 +2052,19 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   /* Crumb ligeramente más chico en mobile ya que hay back arriba */
   .cfg-crumb { font-size: 10px; }
 }
+/* Exportar datos */
+.export-card { padding: 22px; }
+.export-head { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
+.export-ico { width: 46px; height: 46px; border-radius: 12px; background: rgba(255,209,0,.1); border: 1px solid rgba(255,209,0,.25);
+  display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--yellow); flex-shrink: 0; }
+.export-title { font-size: 15px; font-weight: 700; color: var(--w); }
+.export-sub { font-size: 12px; color: var(--gray); margin-top: 3px; line-height: 1.4; }
+.export-sheets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.export-chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
+.export-chip.is-main { background: rgba(255,209,0,.1); border-color: rgba(255,209,0,.3); color: var(--yellow); font-weight: 600; }
+.export-note { font-size: 12px; color: rgba(255,255,255,.55); margin-bottom: 12px; }
+.export-btn { width: 100%; max-width: 320px; }
+.export-warn { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 12px; line-height: 1.5; }
 /* Servicios: arrastrar para ordenar */
 .svc-sort-hint { font-size: 12px; color: var(--gray); margin: 2px 0 6px; }
 .svc-grip-mini { color: var(--yellow); }
@@ -3814,6 +3827,37 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         </style>
 
         </div><!-- /cfg-item pin -->
+
+        <!-- CFG-ITEM: Exportar datos a Excel -->
+        <div class="cfg-item" data-cfg-item="export">
+          <div class="cfg-crumb">Seguridad / Exportar datos</div>
+          <h2 class="cfg-item-title">Descargar mis datos en Excel</h2>
+          <p class="cfg-item-desc">Un archivo de Excel con todo lo cargado en FILO. Para descargarlo se pide el PIN de dueño.</p>
+          <div class="settings-section export-card">
+            <div class="export-head">
+              <div class="export-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></svg></div>
+              <div>
+                <div class="export-title">Todos tus datos, en un archivo</div>
+                <div class="export-sub">Ideal para tener un respaldo o pasar la información a otro sistema.</div>
+              </div>
+            </div>
+            <div class="export-sheets">
+              <span class="export-chip is-main">Clientes y sus datos</span>
+              <span class="export-chip">Turnos</span>
+              <span class="export-chip">Servicios</span>
+              <span class="export-chip">Equipo</span>
+              <span class="export-chip">Membresías</span>
+              <span class="export-chip">Deudas</span>
+              <span class="export-chip">Caja</span>
+              <span class="export-chip">Productos y ventas</span>
+              <span class="export-chip">Fila virtual</span>
+              <span class="export-chip">Turnos fijos</span>
+            </div>
+            <div class="export-note" id="export-auth-note">Se pide el PIN de dueño. Si no tenés PIN activado, se pide la contraseña de la cuenta.</div>
+            <button type="button" class="btn-primary export-btn" id="export-btn" onclick="exportShopData()">Descargar Excel</button>
+            <div class="export-warn">El archivo tiene datos personales de tus clientes (nombres y teléfonos). Guardalo en un lugar seguro y no lo compartas.</div>
+          </div>
+        </div><!-- /cfg-item export -->
 
         <!-- CFG-ITEM: Horarios -->
         <div class="cfg-item" data-cfg-item="schedule">
@@ -9838,6 +9882,7 @@ const CFG_MENU = [
   ]},
   { label: 'Cuenta y seguridad', items: [
     { id: 'pin',     label: 'PIN de facturación', icon: '🔒' },
+    { id: 'export',  label: 'Exportar datos',     icon: '📥' },
     { id: 'account', label: 'Cuenta y plan',      icon: '⚙️' },
   ]},
 ];
@@ -16235,6 +16280,49 @@ function refreshRevenuePinUI() {
   t.checked = on;
   if (s) s.textContent = on ? 'Activado · Se pide PIN para ver los mensuales' : 'Desactivado';
   if (a) a.style.display = on ? 'flex' : 'none';
+}
+
+// ─── Exportar todos los datos a Excel (pide el PIN de dueño, o la contraseña si no hay PIN) ───
+// (El anti doble-click global deshabilita el botón al tocarlo, por eso se usa una marca propia)
+let _exportBusy = false;
+async function exportShopData() {
+  const btn = document.getElementById('export-btn');
+  if (_exportBusy) return;
+  const pinOn = isRevenuePinEnabled();
+  const secret = pinOn
+    ? await openSecurePrompt({ title: '🔒 PIN de dueño', label: 'Ingresá tu PIN de 4 dígitos para descargar los datos', type: 'pin', placeholder: '••••' })
+    : await openSecurePrompt({ title: '🔒 Confirmá que sos el dueño', label: 'No tenés PIN activado: ingresá la contraseña de la cuenta', type: 'password', placeholder: '••••••••' });
+  if (!secret) return;
+  _exportBusy = true;
+  const label = 'Descargar Excel';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando el archivo…'; }
+  try {
+    const res = await fetch(API + '/settings/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(pinOn ? { pin: secret } : { password: secret }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // El servidor dice qué pide en realidad (por si el PIN se activó o desactivó en otro dispositivo)
+      if (data.needs && (data.needs === 'pin') !== pinOn && currentShop) currentShop.revenue_pin_enabled = data.needs === 'pin';
+      return showToast('❌', data.error || 'No se pudo descargar', res.status === 401 ? 'Probá de nuevo' : '');
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const name = (/filename="([^"]+)"/.exec(cd) || [])[1] || 'FILO_datos.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    showToast('✅', 'Excel descargado', name);
+  } catch (e) {
+    showToast('❌', 'No se pudo descargar', e.message);
+  } finally {
+    _exportBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 }
 
 // ─── Modal custom para prompts de PIN / password ──────────────────────────
