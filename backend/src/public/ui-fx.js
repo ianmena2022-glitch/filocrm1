@@ -40,7 +40,11 @@
   const ICON_TARGETS = 'button, a.done-btn, .btn, .action-btn, .btn-motor, summary, label, th, h1, h2, h3, h4, ' +
     '.settings-section-title, .cfg-item-title, .wpp-fold-title, .kicker, .step-dot, #toast-icon, ' +
     '[class*="title"], [class*="-label"], [class*="tab"], [class*="pill"], [class*="chip"], [class*="icon"], ' +
-    '[onclick], [role="button"]';
+    '[onclick], [role="button"], ' +
+    // títulos en negrita de ventanas emergentes ("💳 ¿Cómo pagó el cliente?")
+    'div[style*="font-weight:700"], div[style*="font-weight: 700"], strong, b';
+  // Bloques con varias líneas que empiezan con emoji (ficha del turno: "📅 martes…<br>✂️ Con…")
+  const ICON_LINES = '.success-detail, .fx-icon-lines';
   const SKIP_ICONS = '.wpp-preview, [contenteditable], textarea, .no-fx-icons, .chat-bubble, .msg-bubble, pre, code';
   const EMOJI_RE = /^(\s*)(\p{Extended_Pictographic}|[✓✗✕])(️)?\s*/u;
   const svg = (name, extra) => `<svg class="fx-ico${extra ? ' ' + extra : ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -65,12 +69,32 @@
     if (!onlyIcon && rest.trim().length <= 16 && !el.querySelector('br, div, p')) el.classList.add('fx-nowrap');
     el.__fxIco = el.textContent;
   }
+  // Cada línea (texto al principio o después de un <br>) que empieza con emoji
+  function iconizeLines(el) {
+    if (el.__fxLines === el.textContent || el.closest(SKIP_ICONS)) return;
+    [...el.childNodes].forEach(n => {
+      if (n.nodeType !== 3) return;
+      const prev = n.previousSibling;
+      if (prev && !(prev.nodeType === 1 && prev.tagName === 'BR')) return;
+      const m = n.nodeValue.match(EMOJI_RE);
+      const name = m && EMOJI[m[2]];
+      if (!name || !ICONS[name]) return;
+      const wrap = document.createElement('span');
+      wrap.innerHTML = svg(name);
+      el.insertBefore(wrap.firstChild, n);
+      n.nodeValue = m[1] + n.nodeValue.slice(m[0].length);
+    });
+    el.__fxLines = el.textContent;
+  }
   function iconizeIn(root) {
     if (!Object.keys(ICONS).length) return;
     if (root.nodeType !== 1) root = root.parentElement;
     if (!root) return;
     if (root.matches && root.matches(ICON_TARGETS)) iconize(root);
     root.querySelectorAll && root.querySelectorAll(ICON_TARGETS).forEach(iconize);
+    if (root.matches && root.matches(ICON_LINES)) iconizeLines(root);
+    if (root.closest) { const up = root.closest(ICON_LINES); if (up && up !== root) iconizeLines(up); }
+    root.querySelectorAll && root.querySelectorAll(ICON_LINES).forEach(iconizeLines);
   }
 
   // ── 2. Números que suben ───────────────────────────────────────────────────
@@ -256,6 +280,16 @@
       };
       window.showSuccessPop.__fx = true;
     }
+    // Panel del barbero: el cobro termina con el aviso "✅ Turno completado"
+    if (PAGE === 'barber' && typeof window.showToast === 'function' && !window.showToast.__fx) {
+      const orig = window.showToast;
+      window.showToast = function (msg) {
+        const r = orig.apply(this, arguments);
+        if (typeof msg === 'string' && /turno completado/i.test(msg) && !/deuda/i.test(msg)) setTimeout(() => confetti({ count: 70 }), 120);
+        return r;
+      };
+      window.showToast.__fx = true;
+    }
   }
 
   // ── 8. Desenfoque sobre la barra de abajo en el celular ────────────────────
@@ -291,7 +325,15 @@
     safe(scanStatic);
     safe(hookCelebrations);
   }
-  function schedule(node) { queue.add(node); if (!scheduled) { scheduled = true; requestAnimationFrame(flush); } }
+  // requestAnimationFrame no corre con la pestaña en segundo plano: un temporizador de respaldo
+  // asegura que los íconos y esqueletos se apliquen igual (flush es idempotente)
+  function schedule(node) {
+    queue.add(node);
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => scheduled && flush());
+    setTimeout(() => scheduled && flush(), 120);
+  }
 
   function start() {
     document.documentElement.classList.add('fx-on');
