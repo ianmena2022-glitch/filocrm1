@@ -144,6 +144,9 @@ router.get('/:slug', publicGetLimiter, async (req, res) => {
       const cfg = await require('../services/anyBarberBonus').getBonusConfig(shopData.id);
       shopData.any_barber_bonus_pct = (cfg.enabled && shopData.allow_barber_choice && barbers && barbers.length > 1) ? cfg.pct : 0;
     } catch (_) { shopData.any_barber_bonus_pct = 0; }
+    // Botón "Ver mis puntos": solo si la barbería tiene premios cargados en su tienda
+    const pts = await pool.query('SELECT EXISTS (SELECT 1 FROM points_store WHERE shop_id=$1 AND active=TRUE) AS on', [shopData.id]).catch(() => ({ rows: [{}] }));
+    shopData.points_enabled = !!pts.rows[0].on;
     res.json({ shop: shopData, services: services.rows, barbers });
   } catch (e) {
     res.status(500).json({ error: e.message });
