@@ -134,7 +134,7 @@
           deferredPrompt.prompt();
           const choice = await deferredPrompt.userChoice;
           deferredPrompt = null;
-          if (choice?.outcome === 'accepted') dismiss();
+          if (choice?.outcome === 'accepted') { dismiss(); showInstalledModal(); }
           else document.getElementById('pwa-install-banner')?.remove();
         } catch(_) { dismiss(); }
       } else if (isIOS) {
@@ -181,7 +181,21 @@
     m.addEventListener('click', (e) => { if (e.target === m) dismiss(); });
   }
 
+  // Después de aceptar, Chrome instala en segundo plano y no avisa nada: le decimos dónde buscar el ícono.
+  let installedShown = false;
+  function showInstalledModal() {
+    if (installedShown) return;
+    installedShown = true;
+    showInfoModal('¡Listo! FILO se está instalando 🎉',
+      isAndroid
+        ? 'En unos segundos vas a ver el ícono de <strong>FILO</strong> en tu pantalla de inicio. Si no aparece ahí, buscalo en el <strong>cajón de aplicaciones</strong> (donde están todas tus apps) y abrila desde ese ícono.'
+        : 'En unos segundos se abre FILO como app. También vas a encontrar el ícono de <strong>FILO</strong> en tu escritorio o en el menú de aplicaciones.');
+  }
+
   window.addEventListener('appinstalled', () => {
-    dismiss();
+    // No usamos dismiss(): borraría el aviso de "¡Listo!" que se acaba de mostrar
+    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch(_) {}
+    document.getElementById('pwa-install-banner')?.remove();
+    showInstalledModal();
   });
 })();
