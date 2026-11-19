@@ -3,6 +3,8 @@ const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
 
+const normKind = (k) => (k === 'insumo' ? 'insumo' : 'producto');
+
 // ── GET /api/products — listar productos activos ───────────────────────────
 router.get('/', auth, async (req, res) => {
   // Los barberos ven los productos del shop padre
@@ -65,18 +67,107 @@ router.get('/ventas', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Consumo de insumos por turno ───────────────────────────────────────────
+// Interruptor del local: al completar un turno, preguntar qué insumos se usaron.
+// Los barberos leen el del local al que pertenecen.
+router.get('/supplies-setting', auth, async (req, res) => {
+  const shopId = req.isBarber && req.parentShopId ? req.parentShopId : req.shopId;
+  try {
+    const r = await pool.query('SELECT supplies_per_appt FROM shops WHERE id=$1', [shopId]);
+    res.json({ enabled: !!r.rows[0]?.supplies_per_appt });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/supplies-setting', auth, async (req, res) => {
+  if (req.isBarber) return res.status(403).json({ error: 'Solo el dueño puede hacer esto' });
+  const enabled = req.body?.enabled === true;
+  try {
+    await pool.query('UPDATE shops SET supplies_per_appt=$1 WHERE id=$2', [enabled, req.shopId]);
+    res.json({ ok: true, enabled });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/products/consume — { appointment_id, items: [{ product_id, cantidad }] }
+// Descuenta del stock los insumos usados en un turno ya completado. No toca la caja:
+// el gasto se registra cuando se carga el stock (entrada con precio de costo).
+router.post('/consume', auth, async (req, res) => {
+  const isBarber = req.isBarber && req.parentShopId;
+  const shopId   = isBarber ? req.parentShopId : req.shopId;
+  const apptId   = parseInt(req.body?.appointment_id);
+  const raw      = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (!(apptId > 0)) return res.status(400).json({ error: 'Falta el turno' });
+
+  // Juntar repetidos y descartar cantidades vacías
+  const qtyById = new Map();
+  for (const it of raw.slice(0, 100)) {
+    const id = parseInt(it?.product_id), qty = parseInt(it?.cantidad);
+    if (!(id > 0) || !(qty > 0)) continue;
+    qtyById.set(id, (qtyById.get(id) || 0) + qty);
+  }
+  if (!qtyById.size) return res.status(400).json({ error: 'Cargá al menos un insumo con cantidad' });
+
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    // El turno tiene que ser de este local (y del barbero, si lo carga un barbero) y estar completado
+    const appt = await db.query(
+      'SELECT id, status, barber_id, client_name FROM appointments WHERE id=$1 AND shop_id=$2',
+      [apptId, shopId]
+    );
+    const a = appt.rows[0];
+    let fail = null;
+    if (!a) fail = [404, 'Turno no encontrado'];
+    else if (isBarber && a.barber_id && a.barber_id !== req.shopId) fail = [403, 'Ese turno es de otro barbero'];
+    else if (a.status !== 'completed') fail = [400, 'El turno todavía no está completado'];
+    if (fail) { await db.query('ROLLBACK'); return res.status(fail[0]).json({ error: fail[1] }); }
+
+    const used = [];
+    for (const [id, qty] of qtyById) {
+      // Atómico: WHERE stock>=qty evita stock negativo si dos turnos descuentan a la vez
+      const dec = await db.query(
+        `UPDATE products SET stock=stock-$1
+          WHERE id=$2 AND shop_id=$3 AND active=TRUE AND kind='insumo' AND stock>=$1
+          RETURNING nombre, stock, unidad`,
+        [qty, id, shopId]
+      );
+      if (!dec.rows.length) {
+        const cur = await db.query('SELECT nombre, stock, kind, active FROM products WHERE id=$1 AND shop_id=$2', [id, shopId]);
+        await db.query('ROLLBACK');
+        const c = cur.rows[0];
+        if (!c || !c.active || c.kind !== 'insumo') return res.status(404).json({ error: 'Insumo no encontrado' });
+        return res.status(400).json({ error: `No alcanza el stock de ${c.nombre}. Disponible: ${c.stock}` });
+      }
+      const after = parseInt(dec.rows[0].stock);
+      await db.query(
+        `INSERT INTO product_stock_movements
+           (shop_id, product_id, tipo, cantidad, stock_antes, stock_despues, nota, appointment_id)
+         VALUES ($1,$2,'salida',$3,$4,$5,$6,$7)`,
+        [shopId, id, qty, after + qty, after,
+         ('Usado en turno' + (a.client_name ? ' de ' + a.client_name : '')).slice(0, 250), apptId]
+      );
+      used.push({ product_id: id, nombre: dec.rows[0].nombre, unidad: dec.rows[0].unidad, cantidad: qty, stock_restante: after });
+    }
+    await db.query('COMMIT');
+    res.json({ ok: true, used });
+  } catch(e) {
+    await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { db.release(); }
+});
+
 // ── POST /api/products — crear producto ────────────────────────────────────
 router.post('/', auth, async (req, res) => {
   const { nombre, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
+  const kind = normKind(req.body.kind);
   try {
     const result = await pool.query(
       `INSERT INTO products
-         (shop_id, nombre, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (shop_id, nombre, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion, kind)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
       [req.shopId, nombre, categoria||'otros', unidad||'unidad',
-       precio_costo||0, precio_venta||0, stock||0, stock_min||3, descripcion||null]
+       precio_costo||0, kind === 'insumo' ? 0 : (precio_venta||0), stock||0, stock_min||3, descripcion||null, kind]
     );
     // Registrar movimiento inicial si hay stock
     if (parseInt(stock) > 0) {
@@ -97,10 +188,11 @@ router.put('/:id', auth, async (req, res) => {
   try {
     // Si cambia el stock, registrar movimiento
     const prev = await pool.query(
-      'SELECT stock FROM products WHERE id=$1 AND shop_id=$2',
+      'SELECT stock, kind FROM products WHERE id=$1 AND shop_id=$2',
       [req.params.id, req.shopId]
     );
     if (!prev.rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
+    const isInsumo = prev.rows[0].kind === 'insumo';
 
     const result = await pool.query(
       `UPDATE products SET
@@ -116,7 +208,7 @@ router.put('/:id', auth, async (req, res) => {
        RETURNING *`,
       [nombre||null, categoria||null, unidad||null,
        precio_costo!=null?precio_costo:null,
-       precio_venta!=null?precio_venta:null,
+       isInsumo ? 0 : (precio_venta!=null?precio_venta:null),
        stock!=null?parseInt(stock):null,
        stock_min!=null?parseInt(stock_min):null,
        descripcion!=null?descripcion:null,
@@ -175,11 +267,12 @@ router.post('/:id/sell', auth, async (req, res) => {
   try {
     // Verificar stock
     const prod = await pool.query(
-      'SELECT nombre, stock, precio_venta, precio_costo FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
+      'SELECT nombre, stock, precio_venta, precio_costo, kind FROM products WHERE id=$1 AND shop_id=$2 AND active=TRUE',
       [req.params.id, shopId]
     );
     if (!prod.rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
     const p = prod.rows[0];
+    if (p.kind === 'insumo') return res.status(400).json({ error: 'Los insumos no se venden: se descuentan al completar un turno' });
     if (qty > parseInt(p.stock)) {
       return res.status(400).json({ error: `Stock insuficiente. Disponible: ${p.stock}` });
     }

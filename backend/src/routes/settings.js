@@ -631,7 +631,7 @@ async function buildShopExport(shopId) {
         WHERE x.shop_id=$1 ORDER BY x.paid, x.created_at DESC`, [tz]),
     q(`SELECT ${d('date')} AS date, is_income, category, description, amount, payment_method FROM expenses
         WHERE shop_id=$1 ORDER BY date DESC, id DESC`),
-    q(`SELECT nombre, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion FROM products
+    q(`SELECT nombre, kind, categoria, unidad, precio_costo, precio_venta, stock, stock_min, descripcion FROM products
         WHERE shop_id=$1 AND active=TRUE ORDER BY lower(nombre)`),
     q(`SELECT ${ts('sold_at')} AS sold_at, product_name, quantity, unit_price, total_price, payment_method, client_name
          FROM product_sales WHERE shop_id=$1 ORDER BY sold_at DESC`, [tz]),
@@ -686,10 +686,10 @@ async function buildShopExport(shopId) {
       { header: 'Detalle', width: 32 }, { header: 'Monto', width: 13, type: 'money' }, { header: 'Método de pago', width: 16 }],
       rows: cash.map(e => [e.date, e.is_income ? 'Ingreso' : 'Gasto', e.category, e.description, e.amount, pay(e.payment_method)]) },
     { name: 'Productos', columns: [
-      { header: 'Producto', width: 26 }, { header: 'Categoría', width: 16 }, { header: 'Unidad', width: 10 },
+      { header: 'Producto', width: 26 }, { header: 'Tipo', width: 10 }, { header: 'Categoría', width: 16 }, { header: 'Unidad', width: 10 },
       { header: 'Costo', width: 12, type: 'money' }, { header: 'Precio de venta', width: 15, type: 'money' },
       { header: 'Stock', width: 9, type: 'number' }, { header: 'Stock mínimo', width: 13, type: 'number' }, { header: 'Descripción', width: 30 }],
-      rows: products.map(p => [p.nombre, p.categoria, p.unidad, p.precio_costo, p.precio_venta, p.stock, p.stock_min, p.descripcion]) },
+      rows: products.map(p => [p.nombre, p.kind === 'insumo' ? 'Insumo' : 'Producto', p.categoria, p.unidad, p.precio_costo, p.precio_venta, p.stock, p.stock_min, p.descripcion]) },
     { name: 'Ventas de productos', columns: [
       { header: 'Fecha', width: 17, type: 'datetime' }, { header: 'Producto', width: 24 }, { header: 'Cantidad', width: 10, type: 'number' },
       { header: 'Precio unitario', width: 15, type: 'money' }, { header: 'Total', width: 13, type: 'money' },

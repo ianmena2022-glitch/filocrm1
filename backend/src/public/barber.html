@@ -1166,6 +1166,7 @@ async function confirmPayment(apptId) {
     await api('PUT', `/appointments/${apptId}/status`, { status: 'completed', payment_method: method, tip });
     document.getElementById('payment-popup')?.remove();
     showToast('✅ Turno completado' + (method === 'debt' ? ' · Deuda registrada' : ''));
+    askSuppliesForAppt(apptId);
     loadDashboard();
     if (document.getElementById('tab-agenda').classList.contains('active')) loadAgenda();
   } catch(e) {
@@ -1179,6 +1180,21 @@ async function confirmPayment(apptId) {
   }
 }
 
+
+// ── Consumo de insumos por turno (si el local lo activó) ─────
+async function askSuppliesForAppt(apptId) {
+  try {
+    const { enabled } = await api('GET', '/products/supplies-setting');
+    if (!enabled) return;
+    const all = await api('GET', '/products');
+    _barberInsumos = all.filter(p => p.kind === 'insumo');
+    if (!_barberInsumos.length) return;
+    setTimeout(() => window.FiloSupplies?.open({
+      apptId, insumos: _barberInsumos, api,
+      onSaved: (r) => showToast('🧴 Insumos descontados: ' + (r?.used || []).map(u => `${u.nombre} −${u.cantidad}`).join(' · ')),
+    }), 700);
+  } catch (e) { console.warn('[insumos]', e); }
+}
 
 // ── WEEK CALENDAR ─────────────────────────────────────────
 let weekOffset = 0;
@@ -1612,10 +1628,13 @@ async function confirmBarberWipPayment() {
 
 // ── VENTAS DE PRODUCTOS ───────────────────────────────────
 let _barberProductos = [];
+let _barberInsumos = []; // insumos del local: no se venden, se descuentan al completar un turno
 
 async function loadBarberProductos() {
   try {
-    _barberProductos = await api('GET', '/products');
+    const all = await api('GET', '/products');
+    _barberProductos = all.filter(p => p.kind !== 'insumo');
+    _barberInsumos = all.filter(p => p.kind === 'insumo');
     renderBarberProductos();
     // Mis ventas de hoy — pedir solo las de hoy sin límite artificial
     const today = todayStr();
@@ -2151,7 +2170,7 @@ if (token && me?.is_barber) {
     </div>
   </div>
 </div>
-<script src="/pwa-install.js?v=5" defer></script><script src="/filo-select.js?v=2" defer></script>
+<script src="/pwa-install.js?v=5" defer></script><script src="/supplies-popup.js?v=1" defer></script><script src="/filo-select.js?v=2" defer></script>
 <script src="/image-prep.js?v=1"></script>
 <script src="/forgot-password.js"></script>
 <script src="/ui-icons.js?v=3" defer></script>
