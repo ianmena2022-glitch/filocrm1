@@ -204,6 +204,14 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .avatar:hover { border-color: var(--yellow); }
 
 .main { margin-left: var(--sidebar-w); padding: 28px 32px; min-height: 100vh; }
+/* Nada del contenido puede ensanchar la página en el celular (scroll lateral).
+   clip no crea un contenedor de scroll, así que no rompe los position:sticky. */
+.main { overflow-x: clip; }
+@media (max-width: 600px) {
+  .dash-tabs { padding: 0 !important; gap: 6px !important; }
+  .dash-tabs > button { padding: 8px 11px !important; flex-shrink: 0; }
+  .dash-tabs .dash-ref-label { display: none; }
+}
 .section { display: none; }
 .section.active { display: block; animation: sectionFadeIn 0.22s ease forwards; }
 
@@ -2351,13 +2359,13 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       </div>
 
       <!-- Tabs Dashboard / Caja / Productos -->
-      <div style="display:flex;gap:4px;padding:0 20px 0;margin-bottom:4px;align-items:center">
+      <div class="dash-tabs" style="display:flex;gap:4px;padding:0 20px 0;margin-bottom:4px;align-items:center">
         <button id="dash-tab-dash"      onclick="switchDashTab('dashboard')" style="background:var(--yellow);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">📊 Dashboard</button>
         <button id="dash-tab-caja"      onclick="switchDashTab('caja')"      style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">💰 Caja</button>
         <button id="dash-tab-productos" onclick="switchDashTab('productos')"  style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🛒 Productos</button>
         <div style="flex:1"></div>
         <button onclick="showSection('referidos')" style="display:flex;align-items:center;gap:6px;background:rgba(170,255,0,.12);color:#aaff00;border:1px solid rgba(170,255,0,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s;white-space:nowrap" onmouseover="this.style.background='rgba(170,255,0,.22)'" onmouseout="this.style.background='rgba(170,255,0,.12)'">
-          🎁 REFERIDOS <span id="dash-ref-bonus-pill" style="display:none;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700"></span>
+          🎁 <span class="dash-ref-label">REFERIDOS</span> <span id="dash-ref-bonus-pill" style="display:none;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700"></span>
         </button>
       </div>
 
@@ -3564,7 +3572,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <input type="text" id="cfg-address" placeholder="Av. Corrientes 1234">
             </div>
             <div class="form-field" style="margin-bottom:0;grid-column:1/-1">
-              <label style="display:flex;align-items:center;gap:8px;font-weight:700">🔗 Links sociales <span style="font-size:11px;color:var(--gray);font-weight:500">(se muestran en tu página de reserva)</span></label>
+              <label style="display:flex;align-items:center;gap:8px;font-weight:700;flex-wrap:wrap">🔗 Links sociales <span style="font-size:11px;color:var(--gray);font-weight:500">(se muestran en tu página de reserva)</span></label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
                 <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">📷 Instagram</div><input type="url" id="cfg-social-instagram" placeholder="https://instagram.com/..." autocomplete="off"></div>
                 <div><div style="font-size:11px;color:var(--gray);margin-bottom:4px">👍 Facebook</div><input type="url" id="cfg-social-facebook" placeholder="https://facebook.com/..." autocomplete="off"></div>
