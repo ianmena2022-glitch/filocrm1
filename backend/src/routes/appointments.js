@@ -2,7 +2,6 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { parseServiceIds, resolveServices, apptCommission } = require('../services/serviceCombo');
 const { normalizeDebtMethod } = require('../services/cashMath');
 
 // Retorna el shopId real (dueño), sea barbero o dueño
@@ -137,16 +136,21 @@ router.post('/', auth, async (req, res) => {
   const shopId = realShopId(req);
 
   try {
-    // Resolver servicio(s): con varios se suman nombre, costo y duración.
-    // El precio lo manda la pantalla (ya sumado y editable).
+    // Resolver servicio
     let svcName = service_name || null;
     let svcCost = cost || 0;
     let duration = 30;
-    const combo = await resolveServices(pool, shopId, parseServiceIds(req.body));
-    if (combo) {
-      svcName = combo.name;
-      svcCost = combo.cost;
-      duration = combo.duration;
+    let svcCommissionPct = null; // comisión custom del servicio (null = usar la del barbero)
+    if (service_id) {
+      const svc = await pool.query('SELECT * FROM services WHERE id=$1 AND shop_id=$2', [service_id, shopId]);
+      if (svc.rows.length) {
+        svcName = svc.rows[0].name;
+        svcCost = svc.rows[0].cost;
+        duration = svc.rows[0].duration_minutes || 30;
+        if (svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+          svcCommissionPct = parseInt(svc.rows[0].commission_pct);
+        }
+      }
     }
 
     // Calcular time_end
@@ -215,16 +219,19 @@ router.post('/', auth, async (req, res) => {
     // Prioridad: comisión custom del servicio > comisión del barbero > 50% default
     let realCommissionPct = 0;
     if (assignedBarberId) {
-      realCommissionPct = 50; // default si hay barbero pero sin % configurado
-      const barberData = await pool.query(
-        'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
-      );
-      if (barberData.rows.length && barberData.rows[0].barber_commission_pct != null) {
-        realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
+      if (svcCommissionPct !== null) {
+        realCommissionPct = svcCommissionPct;
+        console.log(`[APPT] usando commission_pct custom del servicio: ${svcCommissionPct}%`);
+      } else {
+        realCommissionPct = 50; // default si hay barbero pero sin % configurado
+        const barberData = await pool.query(
+          'SELECT barber_commission_pct FROM shops WHERE id=$1', [assignedBarberId]
+        );
+        if (barberData.rows.length && barberData.rows[0].barber_commission_pct != null) {
+          realCommissionPct = parseInt(barberData.rows[0].barber_commission_pct);
+        }
+        console.log(`[APPT] commission_pct del barbero ${assignedBarberId}: ${realCommissionPct}%`);
       }
-      // Comisión propia del servicio (con varios servicios, ponderada por precio)
-      if (combo && combo.hasCustom) realCommissionPct = combo.commissionFor(realCommissionPct);
-      console.log(`[APPT] commission_pct para barbero ${assignedBarberId}: ${realCommissionPct}%`);
     }
 
     // En alta MANUAL del dueño/barbero se permite overlap: solo rechazamos si
@@ -257,24 +264,23 @@ router.post('/', auth, async (req, res) => {
       result = await lockClient.query(
         `INSERT INTO appointments
            (shop_id, client_id, client_name, service_id, service_name, price, cost, date,
-            time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info, service_ids)
+            time_start, time_end, barber_id, barber_name, commission_pct, notes, redeem_info)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
                  -- El nombre siempre el del barbero asignado (auto-asignado incluido), no el que mande la pantalla
                  COALESCE((SELECT name FROM shops WHERE id = $11::int), $12),
-                 $13,$14,$15,$16::int[])
+                 $13,$14,$15)
          RETURNING *`,
         [
           shopId,
           client_id || null, cName,
-          combo ? combo.firstId : (service_id || null), svcName,
+          service_id || null, svcName,
           parseFloat(price)||0, parseFloat(svcCost)||0,
           date, time_start, time_end,
           assignedBarberId,
           barber_name || null,
           realCommissionPct,
           notes || null,
-          redeemInfo,
-          combo ? combo.ids : null
+          redeemInfo
         ]
       );
       await lockClient.query('COMMIT');
@@ -472,9 +478,12 @@ router.put('/:id/status', auth, async (req, res) => {
         [bId, apptShopId]
       );
       if (bQ.rows.length) {
-        const aQ = await pool.query('SELECT service_id, service_ids FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, apptShopId]);
-        const barberPct = bQ.rows[0].barber_commission_pct != null ? parseInt(bQ.rows[0].barber_commission_pct) : 50;
-        const pct = aQ.rows.length ? await apptCommission(pool, apptShopId, aQ.rows[0], barberPct) : barberPct;
+        const svcQ = await pool.query(
+          `SELECT s.commission_pct FROM appointments a JOIN services s ON s.id=a.service_id WHERE a.id=$1`, [req.params.id]
+        );
+        const svcPct = svcQ.rows[0]?.commission_pct;
+        const pct = (svcPct !== null && svcPct !== undefined) ? parseInt(svcPct)
+          : (bQ.rows[0].barber_commission_pct != null ? parseInt(bQ.rows[0].barber_commission_pct) : 50);
         await pool.query(
           'UPDATE appointments SET barber_id=$1, barber_name=$2, commission_pct=$3 WHERE id=$4 AND shop_id=$5 AND barber_id IS NULL',
           [bId, bQ.rows[0].name, pct, req.params.id, apptShopId]
@@ -806,15 +815,22 @@ router.put('/:id', auth, async (req, res) => {
     // Recalcular commission_pct si cambia el barbero (respeta comisión custom del servicio)
     let newCommissionPct = null;
     if (hasBarberField) {
-      const curr = await pool.query('SELECT service_id, service_ids FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
+      const curr = await pool.query('SELECT service_id FROM appointments WHERE id=$1 AND shop_id=$2', [req.params.id, shopId]);
       if (curr.rows.length) {
+        let svcPct = null;
+        if (curr.rows[0].service_id) {
+          const svc = await pool.query('SELECT commission_pct FROM services WHERE id=$1 AND shop_id=$2', [curr.rows[0].service_id, shopId]);
+          if (svc.rows.length && svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
+            svcPct = parseInt(svc.rows[0].commission_pct);
+          }
+        }
         if (newBarberId === null) {
           newCommissionPct = 0;
+        } else if (svcPct !== null) {
+          newCommissionPct = svcPct;
         } else {
           const b = await pool.query('SELECT barber_commission_pct FROM shops WHERE id=$1', [newBarberId]);
-          const barberPct = (b.rows.length && b.rows[0].barber_commission_pct != null) ? parseInt(b.rows[0].barber_commission_pct) : 50;
-          // Comisión propia del servicio (con varios servicios, ponderada por precio)
-          newCommissionPct = await apptCommission(pool, shopId, curr.rows[0], barberPct);
+          newCommissionPct = (b.rows.length && b.rows[0].barber_commission_pct != null) ? parseInt(b.rows[0].barber_commission_pct) : 50;
         }
       }
     }
