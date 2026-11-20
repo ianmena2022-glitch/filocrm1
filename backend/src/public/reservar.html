@@ -173,6 +173,12 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
 .service-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 12px;cursor:pointer;transition:all .2s;text-align:left}
 .service-btn:hover{border-color:rgba(255,209,0,.3);background:rgba(255,209,0,.05)}
 .service-btn.selected{border-color:var(--y);background:rgba(255,209,0,.1)}
+.service-btn{position:relative}
+.service-btn.selected::after{content:'✓';position:absolute;top:8px;right:9px;width:20px;height:20px;border-radius:50%;background:var(--y);color:#000;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.service-btn.selected .svc-name{padding-right:22px}
+.svc-hint{font-size:12px;color:var(--g);margin:-6px 0 12px}
+.svc-total{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(255,209,0,.07);border:1px solid rgba(255,209,0,.25);display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
+.svc-total strong{color:var(--y);font-size:15px}
 .svc-name{font-size:14px;font-weight:700;margin-bottom:6px}
 .svc-meta{display:flex;gap:8px;flex-wrap:wrap}
 .svc-price{font-family:'Oswald',sans-serif;font-size:16px;color:var(--y)}
@@ -352,7 +358,9 @@ button,.btn,[role="button"],[onclick]{touch-action:manipulation}
       </div>
       <div class="card">
         <div class="card-title">✂️ ¿Qué servicio querés?</div>
+        <div class="svc-hint" id="svc-hint">Podés elegir más de uno.</div>
         <div class="service-grid" id="service-grid"></div>
+        <div class="svc-total" id="svc-total" hidden></div>
       </div>
       <button class="btn-primary" id="btn-next-service" onclick="goToDate()" disabled>Elegir fecha →</button>
       <button class="btn-back" id="btn-back-to-branch" onclick="goBackToBranch()" style="display:none">← Cambiar sucursal</button>
@@ -573,7 +581,8 @@ let currentBranchSlug = null; // slug de la sucursal elegida (solo modo enterpri
 
 let shopData = null;
 let services = [];
-let selectedService = null;
+let selectedService = null;   // los servicios elegidos, juntos: { id, ids, name, price, duration_minutes }
+let selectedServiceIds = [];   // en el orden en que se eligieron
 let selectedDate = null;
 let selectedTime = null;
 let selectedBarber = null;
@@ -842,6 +851,42 @@ function goBackToBranch() {
 }
 
 // ── SERVICES ──
+// Se puede elegir más de un servicio: se suman duración y precio (con membresía, uno solo).
+function buildSelectedService() {
+  const list = selectedServiceIds.map(id => services.find(s => s.id === id)).filter(Boolean);
+  selectedServiceIds = list.map(s => s.id);
+  if (!list.length) { selectedService = null; return; }
+  selectedService = {
+    id: list[0].id,
+    ids: list.map(s => s.id),
+    name: list.map(s => s.name).join(' + '),
+    price: list.reduce((n, s) => n + (parseFloat(s.price) || 0), 0),
+    duration_minutes: list.reduce((n, s) => n + (parseInt(s.duration_minutes) || 30), 0),
+  };
+}
+
+function syncServiceSelection() {
+  buildSelectedService();
+  document.querySelectorAll('#service-grid .service-btn').forEach(b => {
+    const id = parseInt(b.id.replace('svc-', ''));
+    const on = selectedServiceIds.includes(id);
+    b.classList.toggle('selected', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const btn = document.getElementById('btn-next-service');
+  if (btn) btn.disabled = !selectedService;
+  const hint = document.getElementById('svc-hint');
+  if (hint) hint.textContent = isMemberFlow ? 'Con la membresía se reserva un servicio por turno.' : 'Podés elegir más de uno.';
+  const tot = document.getElementById('svc-total');
+  if (!tot) return;
+  if (selectedServiceIds.length > 1) {
+    const d = selectedService.duration_minutes;
+    const dur = d >= 60 ? `${Math.floor(d / 60)} h${d % 60 ? ' ' + (d % 60) + ' min' : ''}` : `${d} min`;
+    tot.innerHTML = `<span>${selectedServiceIds.length} servicios · ${dur}</span><strong>$${selectedService.price.toLocaleString('es-AR')}</strong>`;
+    tot.hidden = false;
+  } else tot.hidden = true;
+}
+
 function renderServices() {
   const grid = document.getElementById('service-grid');
   if (!services.length) {
@@ -849,7 +894,7 @@ function renderServices() {
     return;
   }
   grid.innerHTML = services.map(s => `
-    <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}">
+    <div class="service-btn" onclick="selectService(${s.id})" id="svc-${s.id}" role="button" tabindex="0" aria-pressed="false" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectService(${s.id})}">
       <div class="svc-name">${escapeHtmlT(s.name)}</div>
       <div class="svc-meta">
         ${isMemberFlow
@@ -859,6 +904,7 @@ function renderServices() {
       </div>
     </div>
   `).join('');
+  syncServiceSelection();
 }
 
 // ── MEMBER FLOW ──
@@ -900,6 +946,7 @@ async function verifyMember() {
 
     // Deseleccionar servicio previo
     selectedService = null;
+    selectedServiceIds = [];
     document.getElementById('btn-next-service').disabled = true;
     renderServices();
     showScreen('service');
@@ -915,6 +962,7 @@ function cancelMemberFlow() {
   isMemberFlow = false;
   memberData = null;
   selectedService = null;
+  selectedServiceIds = [];
   document.getElementById('btn-next-service').disabled = true;
   document.getElementById('member-teaser').style.display = 'flex';
   document.getElementById('member-active-banner').style.display = 'none';
@@ -922,11 +970,15 @@ function cancelMemberFlow() {
 }
 
 function selectService(id) {
-  selectedService = services.find(s => s.id === id);
-  document.querySelectorAll('.service-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('svc-' + id).classList.add('selected');
-  document.getElementById('btn-next-service').disabled = false;
-  revealNext('btn-next-service');
+  if (isMemberFlow) {
+    selectedServiceIds = [id]; // membresía: un servicio
+  } else if (selectedServiceIds.includes(id)) {
+    selectedServiceIds = selectedServiceIds.filter(x => x !== id);
+  } else {
+    selectedServiceIds = [...selectedServiceIds, id].slice(0, 10);
+  }
+  syncServiceSelection();
+  if (selectedService && selectedServiceIds.length === 1) revealNext('btn-next-service');
 }
 
 // En el celular el botón para seguir queda abajo de todo: llevarlo a la vista al elegir
@@ -1025,7 +1077,7 @@ async function loadSlots() {
 
   try {
     const params = new URLSearchParams({ date: selectedDate });
-    if (selectedService) params.set('service_id', selectedService.id);
+    if (selectedService) params.set('service_ids', selectedService.ids.join(','));
     if (selectedBarber) params.set('barber_id', selectedBarber.id);
     const res = await fetch(`${API}/available?${params}`);
     const data = await res.json();
@@ -1145,6 +1197,7 @@ async function doReserve({ name, phone, address, clientChoice }) {
         chosen_barber_id: selectedBarber?.id || null,
         any_barber: anyBarberPicked,
         service_id: selectedService?.id || null,
+        service_ids: selectedService?.ids || [],
         date: selectedDate,
         time_start: selectedTime,
         redeem_item_id: selectedPrize?.id || null,
@@ -1308,7 +1361,7 @@ function goBack(toStep) {
   if (!barberFirst() && toStep <= 3) resetBarber();
   if (barberFirst() && document.getElementById('screen-barber')?.style.display === 'block') resetBarber();
   if (toStep <= 2) selectedTime = null;
-  if (toStep <= 1) { selectedDate = null; if (!barberFirst()) selectedService = null; }
+  if (toStep <= 1) { selectedDate = null; if (!barberFirst()) { selectedServiceIds = []; syncServiceSelection(); } }
 
   // Con elección de barbero el flujo es: service(1) > barber(4) > date(2) > time(3) > form(5).
   // Volver desde la fecha lleva al barbero; desde el barbero, al servicio.

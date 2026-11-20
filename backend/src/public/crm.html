@@ -2083,6 +2083,17 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   padding-left: 8px !important; padding-right: 8px !important; }
 .svc-row.svc-dragging .svc-grip { cursor: grabbing; color: var(--yellow); }
 .svc-ph { border: 1px dashed rgba(255,209,0,.35); border-radius: 10px; background: rgba(255,209,0,.04); margin: 2px 0; box-sizing: border-box; }
+/* Turno manual: varios servicios */
+.t-svc-list{display:flex;flex-wrap:wrap;gap:7px;max-height:220px;overflow-y:auto;padding:2px}
+.t-svc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 11px;color:#fff;cursor:pointer;font-family:inherit;max-width:100%;min-height:44px;transition:border-color .15s,background .15s}
+.t-svc:hover{border-color:rgba(255,209,0,.35)}
+.t-svc.on{border-color:var(--yellow);background:rgba(255,209,0,.12)}
+.t-svc.on .t-svc-name::before{content:'✓ ';color:var(--yellow);font-weight:800}
+.t-svc:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.t-svc-name{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.t-svc-meta{font-size:11px;color:var(--gray)}
+.t-svc-total{margin-top:8px;font-size:12px;color:var(--gray)}
+.t-svc-total strong{color:var(--yellow)}
 /* Insumos */
 .insumo-tag{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(255,209,0,.14);color:var(--yellow);letter-spacing:.4px}
 .supplies-toggle{display:flex;align-items:center;gap:14px;padding:13px 15px;margin-bottom:16px;background:rgba(255,209,0,.05);border:1px solid rgba(255,209,0,.18);border-radius:12px;cursor:pointer;position:relative}
@@ -4456,11 +4467,10 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
         <label>🎂 Cumpleaños (opcional)</label>
         <input type="date" id="t-client-birthday">
       </div>
-      <div class="form-field">
-        <label>Servicio</label>
-        <select id="t-service" onchange="fillServicePrice()">
-          <option value="">-- Elegí un servicio --</option>
-        </select>
+      <div class="form-field" style="grid-column:1/-1">
+        <label>Servicios <span style="font-weight:500;color:var(--gray);text-transform:none;letter-spacing:0">· podés elegir más de uno</span></label>
+        <div id="t-services" class="t-svc-list" role="group" aria-label="Servicios del turno"></div>
+        <div id="t-svc-total" class="t-svc-total" hidden></div>
       </div>
       <div class="form-field">
         <label>Precio ($)</label>
@@ -8364,15 +8374,52 @@ async function loadServices() {
   } catch (e) { console.error(e); }
 }
 
+// Turno manual: se pueden marcar varios servicios. El precio se completa con la suma
+// (se puede corregir a mano) y la duración del turno es la suma de todos.
+let _turnoSvcIds = [];
+
 function fillServiceSelect() {
-  const opts = '<option value="">-- Elegí un servicio --</option>' + services.map(s => `<option value="${s.id}" data-price="${s.price}" data-cost="${s.cost}">${escHtml(s.name)} — $${parseFloat(s.price).toLocaleString('es-AR')}</option>`).join('');
-  document.getElementById('t-service').innerHTML = opts;
+  const box = document.getElementById('t-services');
+  if (!box) return;
+  _turnoSvcIds = _turnoSvcIds.filter(id => services.some(s => s.id === id));
+  if (!services.length) {
+    box.innerHTML = '<div style="font-size:12px;color:var(--gray);padding:6px 0">Sin servicios cargados. Agregalos en Configuración → Servicios y precios.</div>';
+  } else {
+    box.innerHTML = services.map(s => `
+      <button type="button" class="t-svc" data-id="${s.id}" aria-pressed="false" onclick="toggleTurnoService(${s.id})">
+        <span class="t-svc-name">${escHtml(s.name)}</span>
+        <span class="t-svc-meta">$${parseFloat(s.price).toLocaleString('es-AR')} · ${parseInt(s.duration_minutes) || 30} min</span>
+      </button>`).join('');
+  }
+  syncTurnoServices(false);
 }
 
-function fillServicePrice() {
-  const sel = document.getElementById('t-service');
-  const opt = sel.options[sel.selectedIndex];
-  if (opt.dataset.price) document.getElementById('t-price').value = opt.dataset.price;
+function toggleTurnoService(id) {
+  _turnoSvcIds = _turnoSvcIds.includes(id) ? _turnoSvcIds.filter(x => x !== id) : [..._turnoSvcIds, id].slice(0, 10);
+  syncTurnoServices(true);
+}
+
+function turnoServicesSelected() {
+  return _turnoSvcIds.map(id => services.find(s => s.id === id)).filter(Boolean);
+}
+
+function syncTurnoServices(updatePrice) {
+  const list = turnoServicesSelected();
+  document.querySelectorAll('#t-services .t-svc').forEach(b => {
+    const on = _turnoSvcIds.includes(parseInt(b.dataset.id));
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const price = list.reduce((n, s) => n + (parseFloat(s.price) || 0), 0);
+  const dur = list.reduce((n, s) => n + (parseInt(s.duration_minutes) || 30), 0);
+  if (updatePrice) document.getElementById('t-price').value = list.length ? price : '';
+  const tot = document.getElementById('t-svc-total');
+  if (!tot) return;
+  if (list.length > 1) {
+    const d = dur >= 60 ? `${Math.floor(dur / 60)} h${dur % 60 ? ' ' + (dur % 60) + ' min' : ''}` : `${dur} min`;
+    tot.innerHTML = `${list.length} servicios · <strong>${d}</strong> · <strong>$${price.toLocaleString('es-AR')}</strong>`;
+    tot.hidden = false;
+  } else tot.hidden = true;
 }
 
 function renderServicesList() {
@@ -8693,7 +8740,7 @@ async function _createAppointment() {
   const clientName = document.getElementById('t-client-name').value.trim();
   const clientPhone = document.getElementById('t-client-phone').value.trim();
   const clientBirthday = document.getElementById('t-client-birthday').value || null;
-  const serviceId = document.getElementById('t-service').value;
+  const serviceIds = turnoServicesSelected().map(s => s.id);
   const price = document.getElementById('t-price').value;
   const date = document.getElementById('t-date').value || agendaDate;
   const time = document.getElementById('t-time').value;
@@ -8757,7 +8804,8 @@ async function _createAppointment() {
     await api('POST', '/appointments', {
       client_id: clientId || null,
       client_name: !clientId ? (clientName || null) : null,
-      service_id: serviceId || null,
+      service_id: serviceIds[0] || null,
+      service_ids: serviceIds,
       price: parseFloat(price) || 0,
       date, time_start: time,
       barber_id: barberId ? parseInt(barberId) : null,
@@ -10487,6 +10535,9 @@ function closeModal(id) {
     modalEl.classList.remove('open', 'closing');
   }, 140);
   if (id === 'modal-turno') {
+    _turnoSvcIds = [];
+    syncTurnoServices(false);
+    document.getElementById('t-price').value = '';
     document.getElementById('t-redeem-section').style.display = 'none';
     document.getElementById('t-redeem-item').value = '';
     document.getElementById('t-redeem-warning').style.display = 'none';

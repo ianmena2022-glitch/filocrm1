@@ -6,6 +6,7 @@ const { phoneKey, phoneMatchSql, clientsByPhone, whoIsResponse, readChoice } = r
 const { shopHasAccess, INACTIVE_MSG } = require('../services/shopAccess');
 const crypto    = require('crypto');
 const { getShopTz, shopDate, shopTime } = require('../db/shopTz');
+const { parseServiceIds, resolveServices } = require('../services/serviceCombo');
 
 const toMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); };
 // Ningún cliente puede tener más de estos turnos por venir en un mismo local (evita que alguien llene la agenda)
@@ -219,7 +220,8 @@ router.get('/:slug/member-verify', publicGetLimiter, async (req, res) => {
 // GET /api/booking/:slug/available?date=YYYY-MM-DD&service_id=X
 // Devuelve los slots disponibles para una fecha y servicio
 router.get('/:slug/available', publicGetLimiter, async (req, res) => {
-  const { date, service_id } = req.query;
+  const { date } = req.query;
+  const serviceIds = parseServiceIds(req.query); // ?service_ids=1,2 (o ?service_id=1)
   // Si el cliente ya eligió con quién atenderse, solo los horarios de ese barbero
   const onlyBarberId = parseInt(req.query.barber_id) || null;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha requerida' });
@@ -236,14 +238,11 @@ router.get('/:slug/available', publicGetLimiter, async (req, res) => {
     const todayLocal = shopDate(tz);
     if (date < todayLocal) return res.json({ slots: [], duration: 30, past: true });
 
-    // Duración del servicio
+    // Duración: la suma de los servicios elegidos
     let duration = 30;
-    if (service_id) {
-      const svc = await pool.query(
-        'SELECT duration_minutes FROM services WHERE id=$1 AND shop_id=$2',
-        [service_id, shopId]
-      );
-      if (svc.rows.length) duration = svc.rows[0].duration_minutes || 30;
+    if (serviceIds.length) {
+      const combo = await resolveServices(pool, shopId, serviceIds);
+      if (combo) duration = combo.duration;
     }
 
     // Generar slots según horario configurado
@@ -518,7 +517,8 @@ function reserveRateLimit(req, res, next) {
 
 // POST /api/booking/:slug/reserve — crear reserva
 router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
-  const { service_id, date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
+  const { date, time_start, redeem_item_id, chosen_barber_id, is_member_booking, membership_id } = req.body;
+  const serviceIds = parseServiceIds(req.body); // uno o varios servicios
   // El cliente eligió "cualquier profesional": lo asigna el sistema (al menos cargado) y puede sumar bonus
   const anyBarber = req.body.any_barber === true;
   // Datos públicos: sin < > (evita HTML inyectado en el CRM del dueño) y con largo acotado
@@ -658,22 +658,20 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
     }
 
     // Resolver servicio
+    // Uno o varios servicios: se suman nombre, precio, costo y duración
     let svcName = null, svcPrice = 0, svcCost = 0, duration = 30;
-    let svcCommissionPct = null; // comisión custom del servicio (null = usar la del barbero)
-    if (service_id) {
-      const svc = await pool.query(
-        'SELECT * FROM services WHERE id=$1 AND shop_id=$2',
-        [service_id, shopData.id]
-      );
-      if (svc.rows.length) {
-        svcName     = svc.rows[0].name;
-        svcPrice    = is_member_booking ? 0 : svc.rows[0].price; // membresía = sin cargo
-        svcCost     = svc.rows[0].cost;
-        duration    = svc.rows[0].duration_minutes || 30;
-        if (svc.rows[0].commission_pct !== null && svc.rows[0].commission_pct !== undefined) {
-          svcCommissionPct = parseInt(svc.rows[0].commission_pct);
-        }
-      }
+    const combo = await resolveServices(pool, shopData.id, serviceIds);
+    if (serviceIds.length && (!combo || combo.ids.length !== serviceIds.length)) {
+      return res.status(400).json({ error: 'Alguno de los servicios ya no está disponible. Volvé a elegir.' });
+    }
+    if (is_member_booking && serviceIds.length > 1) {
+      return res.status(400).json({ error: 'Con la membresía se reserva un servicio por turno.' });
+    }
+    if (combo) {
+      svcName  = combo.name;
+      svcPrice = is_member_booking ? 0 : combo.price; // membresía = sin cargo
+      svcCost  = combo.cost;
+      duration = combo.duration;
     }
 
     // Calcular time_end
@@ -890,25 +888,27 @@ router.post('/:slug/reserve', reserveRateLimit, async (req, res) => {
         return res.status(409).json({ error: 'Ningún profesional está libre en ese horario. Elegí otro.' });
       }
 
-      // Prioridad comisión: servicio custom > barbero > 0 (sin barbero asignado)
-      if (assignedBarberId && svcCommissionPct !== null) {
-        assignedBarberCommission = svcCommissionPct;
+      // Prioridad comisión: servicio custom > barbero > 0 (sin barbero asignado).
+      // Con varios servicios se pondera por precio.
+      if (assignedBarberId && combo && combo.hasCustom) {
+        assignedBarberCommission = combo.commissionFor(assignedBarberCommission);
       }
 
       // Crear turno (con redeemInfo ya calculado)
       const apptResult = await pgClient.query(
         `INSERT INTO appointments
-           (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at, barber_name)
+           (shop_id, client_id, client_name, service_id, service_name, price, cost, date, time_start, time_end, status, redeem_info, barber_id, commission_pct, member_booking, membership_id, payment_method, sena_amount, sena_status, sena_expires_at, barber_name, service_ids)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                 (SELECT name FROM shops WHERE id = $13::int))   -- nombre del barbero asignado (antes quedaba vacío)
+                 (SELECT name FROM shops WHERE id = $13::int), $21::int[])   -- nombre del barbero asignado (antes quedaba vacío)
          RETURNING *`,
-        [shopData.id, clientId, client_name.trim(), service_id||null, svcName,
+        [shopData.id, clientId, client_name.trim(), combo ? combo.firstId : null, svcName,
          svcPrice, svcCost, date, time_start, time_end, apptStatus, redeemInfo,
          assignedBarberId, assignedBarberCommission,
          is_member_booking ? true : false,
          (is_member_booking && membership_id) ? parseInt(membership_id) : null,
          is_member_booking ? 'membership' : null,
-         senaAmount, requiresSena ? 'pending' : null, senaExpiresAt]
+         senaAmount, requiresSena ? 'pending' : null, senaExpiresAt,
+         combo ? combo.ids : null]
       );
       appt = apptResult;
       // Marcar el turno pedido con "cualquier profesional" (suma el bonus de puntos al cobrarlo)
