@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
+const { computeDayClose, saveDayClose } = require('../services/cashMath');
 
 const normKind = (k) => (k === 'insumo' ? 'insumo' : 'producto');
 
@@ -65,6 +66,69 @@ router.get('/ventas', auth, async (req, res) => {
     }
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/products/ventas/:id — anular una venta cargada por error ───
+// Borra la venta y su ingreso en caja, y devuelve las unidades al stock (queda el
+// movimiento registrado). Solo el dueño. Si la comisión ya se liquidó al barbero, no se puede.
+router.delete('/ventas/:id', auth, async (req, res) => {
+  if (req.isBarber) return res.status(403).json({ error: 'Solo el dueño puede anular ventas' });
+  const saleId = parseInt(req.params.id);
+  if (!(saleId > 0)) return res.status(400).json({ error: 'Venta inválida' });
+  const shopId = req.shopId;
+  const db = await pool.connect();
+  let began = false;
+  try {
+    await db.query('BEGIN'); began = true;
+    const q = await db.query(
+      'SELECT * FROM product_sales WHERE id=$1 AND shop_id=$2 FOR UPDATE', [saleId, shopId]
+    );
+    const v = q.rows[0];
+    if (!v) { await db.query('ROLLBACK'); began = false; return res.status(404).json({ error: 'Venta no encontrada' }); }
+    if (v.commission_settled) {
+      await db.query('ROLLBACK'); began = false;
+      return res.status(409).json({ error: 'La comisión de esta venta ya se liquidó al barbero. No se puede anular.' });
+    }
+    // Ingreso en caja de la venta (para saber qué día recalcular)
+    const exp = await db.query(
+      `DELETE FROM expenses WHERE shop_id=$1 AND source_type='product_sale' AND source_id=$2
+        RETURNING date::text AS date`,
+      [shopId, saleId]
+    );
+    const qty = parseInt(v.quantity) || 0;
+    let stockRestante = null;
+    if (v.product_id && qty > 0) {
+      const inc = await db.query(
+        'UPDATE products SET stock=stock+$1 WHERE id=$2 AND shop_id=$3 RETURNING stock',
+        [qty, v.product_id, shopId]
+      );
+      if (inc.rows.length) {
+        stockRestante = parseInt(inc.rows[0].stock);
+        await db.query(
+          `INSERT INTO product_stock_movements
+             (shop_id, product_id, tipo, cantidad, stock_antes, stock_despues, nota)
+           VALUES ($1,$2,'entrada',$3,$4,$5,$6)`,
+          [shopId, v.product_id, qty, stockRestante - qty, stockRestante,
+           ('Venta anulada' + (v.client_name ? ' (' + v.client_name + ')' : '')).slice(0, 250)]
+        );
+      }
+    }
+    await db.query('DELETE FROM product_sales WHERE id=$1 AND shop_id=$2', [saleId, shopId]);
+    await db.query('COMMIT'); began = false;
+
+    // Si ese día ya tenía cierre de caja, se rehace con la venta fuera
+    const days = new Set(exp.rows.map(r => r.date));
+    for (const day of days) {
+      try {
+        const has = await pool.query('SELECT 1 FROM cash_registers WHERE shop_id=$1 AND date=$2', [shopId, day]);
+        if (has.rows.length) await saveDayClose(shopId, day, await computeDayClose(shopId, day));
+      } catch (e) { console.warn('[VENTA] recalcular cierre tras anular:', e.message); }
+    }
+    res.json({ ok: true, stock_restante: stockRestante });
+  } catch(e) {
+    if (began) await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { db.release(); }
 });
 
 // ── Consumo de insumos por turno ───────────────────────────────────────────

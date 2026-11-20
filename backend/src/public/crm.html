@@ -13625,7 +13625,10 @@ function renderCashSummary(c) {
                 <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px">Auto · ${srcLabel[e.source_type]||e.source_type}</div>
                 ${expenseAccountHtml(e, !!currentShop?.is_barber, true)}
               </div>
-              <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
+                ${e.source_type==='product_sale'&&e.source_id&&!currentShop?.is_barber?`<button onclick="voidProductSale(${e.source_id})" title="Anular venta" aria-label="Anular venta" style="background:transparent;border:none;color:var(--gray);cursor:pointer;font-size:14px;min-width:32px;min-height:32px">🗑</button>`:''}
+              </div>
             </div>`;}).join('')}
         </div>`;
     }
@@ -14607,7 +14610,10 @@ function renderBranchCajaSummary(c) {
                 <div style="font-size:13px;font-weight:600">${iLabel}</div>
                 ${e.description?`<div style="font-size:11px;color:var(--gray)">${escHtml(e.description)}</div>`:''}
               </div>
-              <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:14px;font-weight:700;color:#4CAF50">+${fmt(e.amount)}</span>
+                ${e.source_type==='product_sale'&&e.source_id&&!currentShop?.is_barber?`<button onclick="voidProductSale(${e.source_id})" title="Anular venta" aria-label="Anular venta" style="background:transparent;border:none;color:var(--gray);cursor:pointer;font-size:14px;min-width:32px;min-height:32px">🗑</button>`:''}
+              </div>
             </div>`;}).join('')}
         </div>`;
     }
@@ -15157,7 +15163,23 @@ function renderVentasCfg() {
         <div style="font-size:10px;color:var(--gray)">${escHtml(v.client_name||'Sin nombre')} · ${v.quantity} u. · ${new Date(v.sold_at).toLocaleDateString('es-AR')}</div>
       </div>
       <div style="font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;color:var(--yellow)">${fmt(v.total_price)}</div>
+      ${!currentShop?.is_barber?`<button onclick="voidProductSale(${v.id})" title="Anular venta" aria-label="Anular venta" style="background:transparent;border:none;color:var(--gray);cursor:pointer;font-size:14px;min-width:32px;min-height:32px">🗑</button>`:''}
     </div>`).join('');
+}
+
+// Anular una venta cargada por error: saca el ingreso de la caja y devuelve el stock
+async function voidProductSale(saleId) {
+  const v = (_ventasProductos || []).find(x => x.id === saleId);
+  const what = v ? escHtml(`${v.product_name} x${v.quantity} ($${parseFloat(v.total_price||0).toLocaleString('es-AR')})`) + '<br>' : '';
+  if (!(await confirmModal('¿Anular esta venta?', `${what}Se saca el ingreso de la caja y las unidades vuelven al stock.`, { danger: true, confirmText: 'Anular venta' }))) return;
+  try {
+    await api('DELETE', `/products/ventas/${saleId}`);
+    showToast('🗑', 'Venta anulada', 'Se sacó de la caja y volvió al stock');
+    loadProductos();
+    if (typeof loadCashSummary === 'function') loadCashSummary();
+  } catch(e) {
+    showToast('⚠️', 'No se pudo anular', e.message || '');
+  }
 }
 
 // Insumos: se cargan como productos pero no se venden (sin precio de venta)

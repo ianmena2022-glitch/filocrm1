@@ -433,7 +433,7 @@ router.get('/cash', auth, async (req, res) => {
            'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method
          ) ORDER BY created_at DESC) FILTER (WHERE is_income IS NULL OR is_income=FALSE) AS items,
          json_agg(json_build_object(
-           'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method
+           'id',id,'amount',amount,'category',category,'description',description,'source_type',source_type,'payment_method',payment_method,'source_id',source_id
          ) ORDER BY created_at DESC) FILTER (WHERE is_income=TRUE AND source_type IS DISTINCT FROM 'debt_payment') AS income_items
        FROM expenses WHERE shop_id=$1 AND date=$2`,
       [shopId, date]
