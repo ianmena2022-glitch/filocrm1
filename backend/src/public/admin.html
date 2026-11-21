@@ -1566,8 +1566,11 @@ function filterAccounts() {
   };
   // Las cuentas vencidas hace más de 30 días salen de la lista principal y van a "Archivadas"
   const archivedAll = tree.filter(isArchivedAccount);
-  const filtered    = tree.filter(a => !isArchivedAccount(a) && matches(a, true));
-  const archived    = archivedAll.filter(a => matches(a, false));
+  // Orden: la última conexión más reciente primero (de la cuenta o de su equipo); sin registro, al final
+  const byLastSeen = (x, y) => (lastActivityMs(y) || 0) - (lastActivityMs(x) || 0)
+    || new Date(y.created_at) - new Date(x.created_at);
+  const filtered    = tree.filter(a => !isArchivedAccount(a) && matches(a, true)).sort(byLastSeen);
+  const archived    = archivedAll.filter(a => matches(a, false)).sort(byLastSeen);
 
   renderAccountsTable(filtered);
   renderAccountsTable(archived, 'archived-tbody', 'No hay cuentas archivadas');
@@ -1601,6 +1604,13 @@ function isArchivedAccount(a) {
   const ref = a.expired_at || a.trial_ends_at;
   if (!ref) return false;
   return daysSince(ref) > ARCHIVE_AFTER_DAYS;
+}
+
+// Última conexión de la cuenta o de alguien de su equipo (barberos, sucursales), en ms; null si nunca
+function lastActivityMs(a) {
+  const ts = [a.last_seen_at, a.pwa_last_seen, a.team_last_seen_at].filter(Boolean)
+    .map(x => new Date(x).getTime()).filter(n => !isNaN(n));
+  return ts.length ? Math.max(...ts) : null;
 }
 
 // Última vez en línea: la última vez que la cuenta usó FILO (o abrió la app instalada).
