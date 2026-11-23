@@ -62,6 +62,40 @@ router.put('/any-barber-bonus', auth, ownerOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/settings/onboarding — checklist de primeros pasos de una cuenta nueva.
+// Cada paso se marca solo, mirando los datos reales de la cuenta.
+router.get('/onboarding', auth, async (req, res) => {
+  if (req.isBarber) return res.json({ applies: false });
+  try {
+    const r = await pool.query(
+      `SELECT s.created_at, s.city, s.address, s.schedule, s.wpp_connected, s.booking_slug,
+              COALESCE(s.is_enterprise_owner, FALSE) AS is_enterprise_owner,
+              -- Servicios propios: alguno distinto de los 4 que se crean de ejemplo al registrarse
+              (SELECT COUNT(*)::int FROM services sv WHERE sv.shop_id = s.id AND sv.active = TRUE
+                 AND (sv.name, sv.price) NOT IN (('Corte de cabello',12000),('Corte + barba',16000),('Barba',8000),('Corte + lavado',14000))
+              ) AS own_services,
+              EXISTS (SELECT 1 FROM notifications n WHERE n.recipient_shop_id = s.id AND n.type = 'appointment.created') AS online_booking
+         FROM shops s WHERE s.id = $1`,
+      [req.shopId]
+    );
+    const s = r.rows[0];
+    if (!s || s.is_enterprise_owner) return res.json({ applies: false });
+    const days = Math.floor((Date.now() - new Date(s.created_at).getTime()) / 86400000);
+    res.json({
+      applies: true,
+      account_days: days,
+      slug: s.booking_slug || null,
+      steps: {
+        local:    !!(String(s.city || '').trim() && String(s.address || '').trim()),
+        schedule: !!s.schedule,
+        services: s.own_services > 0,
+        whatsapp: !!s.wpp_connected,
+        online:   !!s.online_booking,
+      },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
   async function doSelect(includeNotifPrefs) {
