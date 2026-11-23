@@ -500,6 +500,47 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         <button onclick="saveAppSettings()" style="background:var(--y);color:var(--nk);border:none;padding:10px 24px;border-radius:6px;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">Guardar</button>
         <span id="cfg-save-msg" style="margin-left:14px;font-size:13px"></span>
       </div>
+
+      <!-- ── AVISOS A CUENTAS EN PRUEBA ── -->
+      <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:24px;max-width:760px;margin-top:20px">
+        <div style="font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--y);margin-bottom:10px">🔔 Avisos a cuentas en prueba que no arrancan</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:18px;line-height:1.5">Se revisa cada hora. Cada aviso sale <strong>una sola vez</strong> por cuenta, como máximo uno por día, entre las 10 y las 20, desde el WhatsApp de arriba. Si la cuenta ya hizo ese paso, no se manda.</div>
+
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="cfg-nudges-enabled" style="width:18px;height:18px;cursor:pointer">
+          <span style="font-size:14px;font-weight:600">Mandar avisos por WhatsApp a las cuentas</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:18px;cursor:pointer">
+          <input type="checkbox" id="cfg-alerts-enabled" style="width:18px;height:18px;cursor:pointer">
+          <span style="font-size:14px;font-weight:600">Avisarme a mí (notificación) cuando una cuenta lleva 3 días sin turnos online o le quedan 2 días de prueba</span>
+        </label>
+
+        <div style="margin-bottom:16px">
+          <label for="cfg-nudge-setup" style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:4px">Día 1 · sin servicios u horarios</label>
+          <div style="font-size:12px;color:var(--g);margin-bottom:6px;line-height:1.4">Pasó 1 día y todavía no cargó sus servicios o sus horarios.</div>
+          <textarea id="cfg-nudge-setup" rows="6" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+        </div>
+        <div style="margin-bottom:16px">
+          <label for="cfg-nudge-no_bookings" style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:4px">Día 3 · sin turnos online</label>
+          <div style="font-size:12px;color:var(--g);margin-bottom:6px;line-height:1.4">Pasaron 3 días y no le entró ninguna reserva online.</div>
+          <textarea id="cfg-nudge-no_bookings" rows="6" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+        </div>
+        <div style="margin-bottom:16px">
+          <label for="cfg-nudge-ending" style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:4px">Faltan 2 días de prueba</label>
+          <div style="font-size:12px;color:var(--g);margin-bottom:6px;line-height:1.4">Le quedan 2 días o menos de prueba.</div>
+          <textarea id="cfg-nudge-ending" rows="6" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+        </div>
+        <div style="margin-bottom:16px">
+          <label for="cfg-nudge-expired" style="display:block;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--g);margin-bottom:4px">Prueba vencida</label>
+          <div style="font-size:12px;color:var(--g);margin-bottom:6px;line-height:1.4">Se le venció la prueba en los últimos 3 días y nunca pagó.</div>
+          <textarea id="cfg-nudge-expired" rows="6" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--w);font-size:13px;font-family:Barlow,sans-serif;resize:vertical;line-height:1.5"></textarea>
+        </div>
+
+        <div style="font-size:11px;color:var(--g);margin:-4px 0 16px">Variables: <code style="color:var(--y)">{nombre}</code> · <code style="color:var(--y)">{link}</code> (entrar a FILO) · <code style="color:var(--y)">{link_reservas}</code> · <code style="color:var(--y)">{turnos}</code> (turnos cargados) · <code style="color:var(--y)">{cuando}</code> (hoy / mañana / en 2 días). Dejá un texto vacío para no mandar ese aviso.</div>
+
+        <button onclick="saveTrialNudges()" style="background:var(--y);color:var(--nk);border:none;padding:10px 24px;border-radius:6px;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">Guardar avisos</button>
+        <span id="cfg-nudges-msg" role="status" style="margin-left:14px;font-size:13px"></span>
+      </div>
     </div>
 
     <!-- ── PROMOCIONES ── -->
@@ -1988,6 +2029,9 @@ async function loadAppSettings() {
 
     document.getElementById('cfg-welcome-enabled').checked = s.welcome_wpp_enabled === 'true';
     document.getElementById('cfg-welcome-msg').value = s.welcome_wpp_message || '';
+    document.getElementById('cfg-nudges-enabled').checked = s.trial_nudges_enabled === 'true';
+    document.getElementById('cfg-alerts-enabled').checked = s.trial_alerts_enabled === 'true';
+    for (const k of NUDGE_KINDS) document.getElementById('cfg-nudge-' + k).value = s['trial_nudge_' + k] || '';
 
     await refreshAdminWppStatus();
   } catch(e) {
@@ -2127,6 +2171,31 @@ async function sendWelcomeFromAdmin() {
   } finally {
     btn.disabled = false;
     btn.textContent = '📤 Enviar desde el bot';
+  }
+}
+
+// Avisos automáticos a cuentas en prueba (services/trialNudges.js)
+const NUDGE_KINDS = ['setup', 'no_bookings', 'ending', 'expired'];
+async function saveTrialNudges() {
+  const msgEl = document.getElementById('cfg-nudges-msg');
+  const settings = {
+    trial_nudges_enabled: document.getElementById('cfg-nudges-enabled').checked ? 'true' : 'false',
+    trial_alerts_enabled: document.getElementById('cfg-alerts-enabled').checked ? 'true' : 'false',
+  };
+  for (const k of NUDGE_KINDS) settings['trial_nudge_' + k] = document.getElementById('cfg-nudge-' + k).value;
+  try {
+    const res = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings })
+    });
+    if (!res.ok) throw new Error('Error al guardar');
+    msgEl.textContent = '✅ Guardado';
+    msgEl.style.color = '#4ade80';
+    setTimeout(() => msgEl.textContent = '', 3000);
+  } catch(e) {
+    msgEl.textContent = '❌ ' + e.message;
+    msgEl.style.color = 'var(--r)';
   }
 }
 

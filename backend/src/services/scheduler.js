@@ -477,6 +477,11 @@ function startScheduler() {
 
   _addTimeout(runSenaExpiration, 45_000);
   _addInterval(runSenaExpiration, 5 * 60 * 1000);
+
+  // Avisos a cuentas en prueba que no arrancan + alertas al admin (cada hora)
+  const { runTrialNudges } = require('./trialNudges');
+  _addTimeout(() => runTrialNudges(), 180_000);
+  _addInterval(() => runTrialNudges(), 60 * 60 * 1000);
 }
 
 function stopScheduler() {
