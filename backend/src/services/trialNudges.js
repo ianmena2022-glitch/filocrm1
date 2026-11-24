@@ -52,7 +52,7 @@ function render(template, row, now = Date.now()) {
   const n = parseInt(row.appts_count) || 0;
   const resumen = n > 0
     ? `Hasta ahora cargaste ${n} ${n === 1 ? 'turno' : 'turnos'}.`
-    : 'Si todavía no llegaste a probarlo, lo configuramos juntos en 10 minutos antes de que termine.';
+    : 'Vi que todavía no llegaste a usarlo. Si querés, lo configuramos juntos en 10 minutos y te regalo unos días más de prueba para que lo uses ya andando.';
   return String(template || '')
     .replace(/\{nombre\}/g, row.name || '')
     .replace(/\{link\}/g, base + '/app')

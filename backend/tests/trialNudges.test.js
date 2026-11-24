@@ -66,6 +66,7 @@ test('{resumen} cambia si no cargó ningún turno', () => {
   const cero = render('{resumen}', base({ appts_count: 0 }), NOW);
   assert.doesNotMatch(cero, /0 turnos/);
   assert.match(cero, /configuramos juntos/);
+  assert.match(cero, /días más de prueba/);
 });
 
 test('render reemplaza las variables', () => {
