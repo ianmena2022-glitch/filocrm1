@@ -662,7 +662,15 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
       updates.push(`archived_manual=$${i++}`); params.push(archived);
     }
     if (name)                              { updates.push(`name=$${i++}`);                  params.push(name.trim()); }
-    if (validPlans.includes(filo_plan))    {
+    // El formulario manda siempre el plan. Solo se toca el plan (y con él si es dueño enterprise)
+    // cuando de verdad cambia, y nunca en una sucursal: las sucursales tienen plan 'enterprise'
+    // y antes, al guardar cualquier cosa (p.ej. la contraseña), quedaban como cuenta principal
+    // y perdían el vínculo con su dueño.
+    const curPlan = (await pool.query(
+      'SELECT filo_plan, COALESCE(is_branch, FALSE) AS is_branch FROM shops WHERE id=$1', [req.params.id]
+    )).rows[0];
+    const planChanged = curPlan && !curPlan.is_branch && validPlans.includes(filo_plan) && filo_plan !== curPlan.filo_plan;
+    if (planChanged)                       {
       updates.push(`filo_plan=$${i++}`);               params.push(filo_plan);
       // Sincronizar flag is_enterprise_owner con el plan — sino el CRM sigue mostrando
       // el dashboard viejo. starter/staff ⇒ FALSE, enterprise ⇒ TRUE.
