@@ -48,12 +48,18 @@ function render(template, row, now = Date.now()) {
   const ends = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
   const left = ends ? Math.ceil((ends - now) / DAY) : null;
   const cuando = left == null ? 'pronto' : left <= 0 ? 'hoy' : left === 1 ? 'mañana' : `en ${left} días`;
+  // {resumen}: cambia según si la cuenta ya usó FILO o no
+  const n = parseInt(row.appts_count) || 0;
+  const resumen = n > 0
+    ? `Hasta ahora cargaste ${n} ${n === 1 ? 'turno' : 'turnos'}.`
+    : 'Si todavía no llegaste a probarlo, lo configuramos juntos en 10 minutos antes de que termine.';
   return String(template || '')
     .replace(/\{nombre\}/g, row.name || '')
     .replace(/\{link\}/g, base + '/app')
     .replace(/\{link_reservas\}/g, row.booking_slug ? `${base}/reservar/${row.booking_slug}` : base + '/app')
     .replace(/\{turnos\}/g, String(row.appts_count || 0))
     .replace(/\{cuando\}/g, cuando)
+    .replace(/\{resumen\}/g, resumen)
     .trim();
 }
 

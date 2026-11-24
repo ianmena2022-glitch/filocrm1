@@ -60,6 +60,14 @@ test('cuenta activa (pagando): nada', () => {
   assert.equal(pickNudge(base({ subscription_status: 'active' }), NOW), null);
 });
 
+test('{resumen} cambia si no cargó ningún turno', () => {
+  assert.equal(render('{resumen}', base({ appts_count: 7 }), NOW), 'Hasta ahora cargaste 7 turnos.');
+  assert.equal(render('{resumen}', base({ appts_count: 1 }), NOW), 'Hasta ahora cargaste 1 turno.');
+  const cero = render('{resumen}', base({ appts_count: 0 }), NOW);
+  assert.doesNotMatch(cero, /0 turnos/);
+  assert.match(cero, /configuramos juntos/);
+});
+
 test('render reemplaza las variables', () => {
   const r = base({ appts_count: 7, trial_ends_at: new Date(NOW + 1.2 * DAY).toISOString() });
   const t = render('Hola {nombre}: {turnos} turnos, termina {cuando}. {link_reservas} · {link}', r, NOW);
