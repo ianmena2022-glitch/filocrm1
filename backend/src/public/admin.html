@@ -1110,6 +1110,11 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
         </select>
         <div style="font-size:11px;color:var(--g);margin-top:4px">Sin esto la cuenta vuelve a expirar sola porque su fecha de vencimiento ya pasó.</div>
       </div>
+      <div class="form-group" id="edit-extend-wrap">
+        <label for="edit-extend-days">Extender prueba (días)</label>
+        <input class="input" id="edit-extend-days" type="number" inputmode="numeric" min="1" max="60" placeholder="Ej: 7 · dejá vacío para no cambiar" oninput="updateExtendHint()">
+        <div id="edit-extend-hint" style="font-size:11px;color:var(--g);margin-top:4px"></div>
+      </div>
       <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;cursor:pointer;margin-top:4px">
         <input type="checkbox" id="edit-exclude-kpis" style="margin-top:3px;width:auto">
         <span><strong style="font-size:13px">No contar en los KPIs</strong><br><span style="font-size:11px;color:var(--g)">Para barberías de prueba o de socios: no suma en MRR, cuentas, métricas ni en "Falta cobrar este mes". La cuenta sigue funcionando normal.</span></span>
@@ -1929,6 +1934,7 @@ function openEditModal(id) {
   document.getElementById('edit-new-password').value = '';
   document.getElementById('edit-err').style.display = 'none';
   document.getElementById('edit-active-until').value = 'forever';
+  document.getElementById('edit-extend-days').value = '';
   updateActiveUntil();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1939,6 +1945,23 @@ function updateActiveUntil() {
   const status = document.getElementById('edit-status').value;
   const stale = !!a && (a.subscription_status !== 'active' || !a.trial_ends_at || new Date(a.trial_ends_at) < new Date());
   document.getElementById('edit-active-until-wrap').style.display = (status === 'active' && stale) ? 'block' : 'none';
+  // Extender prueba: para cuentas que no están pagando (trial, vencida o cancelada)
+  document.getElementById('edit-extend-wrap').style.display = status === 'active' ? 'none' : 'block';
+  updateExtendHint();
+}
+
+// Muestra hasta cuándo queda la prueba con los días que se están sumando
+function updateExtendHint() {
+  const a = allAccounts.find(x => x.id === parseInt(document.getElementById('edit-id').value));
+  const hint = document.getElementById('edit-extend-hint');
+  const days = parseInt(document.getElementById('edit-extend-days').value);
+  const cur = a && a.trial_ends_at ? new Date(a.trial_ends_at) : null;
+  const curTxt = cur ? (cur < new Date() ? `Venció el ${cur.toLocaleDateString('es-AR')}` : `Hoy termina el ${cur.toLocaleDateString('es-AR')}`) : 'Sin fecha de fin';
+  if (!(days >= 1 && days <= 60)) { hint.textContent = curTxt + '.'; hint.style.color = 'var(--g)'; return; }
+  const from = cur && cur > new Date() ? cur : new Date();
+  const until = new Date(from.getTime() + days * 86400000);
+  hint.textContent = `${curTxt}. Con ${days} día${days === 1 ? '' : 's'} más, la prueba queda hasta el ${until.toLocaleDateString('es-AR')} y la cuenta vuelve a Trial.`;
+  hint.style.color = '#4ade80';
 }
 
 async function saveEdit() {
@@ -1960,6 +1983,7 @@ async function saveEdit() {
         name, filo_plan: plan, subscription_status: status,
         exclude_from_kpis: document.getElementById('edit-exclude-kpis').checked,
         active_until: document.getElementById('edit-active-until-wrap').style.display === 'block' ? document.getElementById('edit-active-until').value : undefined,
+        extend_trial_days: (status !== 'active' && document.getElementById('edit-extend-days').value) ? parseInt(document.getElementById('edit-extend-days').value) : undefined,
         new_password: newPassword || undefined
       })
     });

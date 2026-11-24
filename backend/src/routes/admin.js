@@ -624,7 +624,16 @@ router.post('/accounts', adminAuth, async (req, res) => {
 
 // PUT /api/admin/accounts/:id — editar plan/estado
 router.put('/accounts/:id', adminAuth, async (req, res) => {
-  const { name, filo_plan, subscription_status, exclude_from_kpis, archived, active_until, new_password } = req.body;
+  const { name, filo_plan, exclude_from_kpis, archived, active_until, new_password } = req.body;
+  let { subscription_status } = req.body;
+  // Extender la prueba N días (1 a 60): vuelve a 'trial' y suma los días desde hoy o desde el fin actual, lo que sea más tarde
+  const extendDays = req.body.extend_trial_days == null || req.body.extend_trial_days === '' ? null : parseInt(req.body.extend_trial_days);
+  if (extendDays !== null && !(extendDays >= 1 && extendDays <= 60)) {
+    return res.status(400).json({ error: 'Los días de prueba extra tienen que ser entre 1 y 60' });
+  }
+  if (extendDays && subscription_status === 'active') {
+    return res.status(400).json({ error: 'Para extender la prueba, dejá el estado en Trial (no Activo)' });
+  }
   const validPlans   = ['starter','staff','enterprise'];
   const validStatus  = ['trial','active','expired','cancelled'];
   if (new_password !== undefined && new_password !== '' && String(new_password).length < 6) {
@@ -663,6 +672,13 @@ router.put('/accounts/:id', adminAuth, async (req, res) => {
         updates.push(`is_branch=FALSE`);
         updates.push(`parent_enterprise_id=NULL`);
       }
+    }
+    if (extendDays) {
+      subscription_status = undefined;   // lo define la extensión
+      updates.push(`subscription_status='trial'`);
+      updates.push(`trial_ends_at=GREATEST(COALESCE(trial_ends_at, NOW()), NOW()) + ($${i++}::int || ' days')::interval`);
+      params.push(extendDays);
+      updates.push('expired_at=NULL');
     }
     if (validStatus.includes(subscription_status)) {
       updates.push(`subscription_status=$${i++}`);
