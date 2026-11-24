@@ -102,8 +102,8 @@
       '.onb-head{display:flex;align-items:center;gap:10px}',
       '.onb-title{font-family:Oswald,sans-serif;font-size:15px;font-weight:700;letter-spacing:.3px;white-space:nowrap}',
       '.onb-sub{font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap}',
-      '.onb-x{background:transparent;border:none;color:rgba(255,255,255,.55);font-size:20px;line-height:1;cursor:pointer;min-width:36px;min-height:36px;border-radius:8px;margin-left:auto}',
-      '.onb-x:hover{color:#fff;background:rgba(255,255,255,.06)}',
+      '.onb-x{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.8);font-size:26px;line-height:1;cursor:pointer;width:44px;height:44px;border-radius:12px;margin-left:auto;flex:0 0 auto;padding:0 0 3px}',
+      '.onb-x:hover{color:#fff;background:rgba(255,255,255,.12)}',
       '.onb-x:focus-visible{outline:2px solid var(--yellow,#FFD100)}',
       // Barra de progreso en segmentos (uno por paso)
       '.onb-seg{display:flex;gap:4px;margin:6px 0 10px}',
@@ -135,8 +135,6 @@
       '@media (prefers-reduced-motion: reduce){.onb-cur.out,.onb-cur.in,.onb-cur.done .onb-num{animation:none}.onb-seg i::after{transition:none}}',
       '.onb-done{display:flex;align-items:center;gap:12px;font-size:13px;line-height:1.45}',
       '.onb-done .onb-num{background:#22c55e;border-color:#22c55e;color:#0a1628}',
-      '.onb-hide{background:transparent;border:none;color:rgba(255,255,255,.45);font:600 11px Barlow,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0;margin-top:6px}',
-      '.onb-hide:hover{color:#fff}',
       '#onb-card .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
       '@media (max-width:768px){',
       '  #onb-card{margin:0 12px 12px;padding:10px 12px}',
@@ -217,8 +215,7 @@
         '<button class="onb-x" type="button" aria-label="Cerrar primeros pasos" onclick="FiloOnboarding.collapse()">×</button></div>' +
         '<div class="onb-seg" role="progressbar" aria-label="Progreso de primeros pasos" aria-valuemin="0" aria-valuemax="' + total + '">' +
         STEPS.map(function () { return '<i></i>'; }).join('') + '</div>' +
-        '<div class="onb-stage" aria-live="polite"></div>' +
-        '<button class="onb-hide" type="button" onclick="FiloOnboarding.hide()"></button>';
+        '<div class="onb-stage" aria-live="polite"></div>';
       stage = card.querySelector('.onb-stage');
     }
     // Encabezado y barra (los segmentos se llenan con transición)
@@ -229,7 +226,7 @@
       el.classList.toggle('on', isDone(STEPS[i].id));
       el.classList.toggle('cur', !!cur && STEPS[i].id === cur.id);
     });
-    card.querySelector('.onb-hide').textContent = all ? 'Listo, ocultar' : 'No mostrar más';
+    card.querySelector('.onb-x').setAttribute('aria-label', all ? 'Cerrar primeros pasos' : 'Minimizar primeros pasos');
 
     var nextId = cur ? cur.id : '__all';
     if (_animating || nextId === _shownStep) { syncView(); return; }
@@ -297,6 +294,7 @@
 
   // Cerrar la tarjeta: queda la píldora
   function collapse() {
+    if (state && doneCount() === STEPS.length) { hide(); return; }
     lsSet('collapsed', '1');
     syncView();
     var pill = document.getElementById('onb-pill');
