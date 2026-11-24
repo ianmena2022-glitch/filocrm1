@@ -561,6 +561,11 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .cj-kpi-lbl { font-size: 11px; color: var(--gray); }
 .cj-kpi-val { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cj-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Fila chica con el resto de los datos del día (cortes, propinas, servicios, extras, egresos) */
+.cj-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: -4px 0 12px; }
+.cj-more:empty { display: none; }
+.cj-more-it { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); font-size: 12px; color: rgba(255,255,255,.65); white-space: nowrap; }
+.cj-more-it b { color: #fff; font-weight: 700; }
 .cj-btn { min-height: 42px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #fff; font: 700 13px Barlow, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .cj-btn:hover { background: rgba(255,255,255,.1); }
 .cj-btn-pri { background: var(--yellow); border-color: var(--yellow); color: #000; }
@@ -2605,6 +2610,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             <div class="caja-neto-sub" id="caja-neto-sub" hidden></div>
           </div>
           <div class="cj-kpis" id="caja-kpis"></div>
+          <div class="cj-more" id="caja-more"></div>
           <div class="cj-actions">
             <button type="button" class="cj-btn cj-btn-pri" onclick="openExpenseModal()">+ Gasto</button>
             <button type="button" class="cj-btn" onclick="openExportModal()">📥 Exportar mes</button>
@@ -13725,12 +13731,14 @@ function renderCajaMovements() {
   const label = (k) => k == null ? 'Sin cuenta' : (_cajaMethodLabels[k] || (k === 'debt' ? 'Fiado' : k === 'mixed' ? 'Mixto' : k));
   if (chips) {
     const ch = (k, t) => `<button type="button" class="cj-chip${_cajaKind === k ? ' on' : ''}" aria-pressed="${_cajaKind === k}" onclick="cajaFilterKind('${k}')">${t}</button>`;
-    chips.innerHTML = ch('all', 'Todo') + ch('in', 'Cobros') + ch('out', 'Gastos') +
+    chips.innerHTML = ch('all', 'Todo') + ch('in', 'Cobros') + ch('sale', '🛒 Ventas') + ch('tip', '🎁 Propinas') + ch('out', 'Gastos') +
       (_cajaMethod ? `<button type="button" class="cj-chip on" onclick="cajaFilterMethod(${jsArg(_cajaMethod)})" aria-label="Quitar filtro de cuenta">${escHtml(label(_cajaMethod))} ✕</button>` : '');
   }
   let list = _cajaMovs.filter(m => (!_cajaMethod || m.method === _cajaMethod));
   if (_cajaKind === 'in')  list = list.filter(m => m.sign > 0);
   if (_cajaKind === 'out') list = list.filter(m => m.sign < 0);
+  if (_cajaKind === 'sale') list = list.filter(m => m.kind === 'product_sale');
+  if (_cajaKind === 'tip')  list = list.filter(m => m.kind === 'tip');
   if (!list.length) {
     box.innerHTML = `<div class="cj-empty">${_cajaMovs.length ? 'No hay movimientos con este filtro.' : 'Todavía no hay movimientos este día.'}</div>`;
     return;
@@ -13813,6 +13821,21 @@ function renderCashSummary(c) {
       <div class="cj-kpi"><div class="cj-kpi-lbl">Entró</div><div class="cj-kpi-val" style="color:var(--green)">${fmt(entro)}</div></div>
       <div class="cj-kpi"><div class="cj-kpi-lbl">Gastos</div><div class="cj-kpi-val" style="color:#FF4343">${fmt(gastos)}</div></div>
       <div class="cj-kpi"><div class="cj-kpi-lbl">Comisiones</div><div class="cj-kpi-val">${fmt(comis)}</div></div>`;
+  }
+  // Fila chica: el resto de los datos que antes estaban en las tarjetas de compu
+  const more = document.getElementById('caja-more');
+  if (more) {
+    const it = (ico, txt, title) => `<span class="cj-more-it"${title ? ` title="${title}"` : ''}><span aria-hidden="true">${ico}</span>${txt}</span>`;
+    const cortes = parseInt(c.cuts_count || 0);
+    const extra = parseFloat(c.extra_income || 0);
+    const ventas = (c.income_items || []).filter(e => e.source_type === 'product_sale').reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+    more.innerHTML =
+      it('✂️', `<b>${cortes}</b> ${cortes === 1 ? 'corte' : 'cortes'}`) +
+      it('💵', `Servicios <b>${fmt(c.revenue_total)}</b>`) +
+      it('🛒', `Ventas <b>${fmt(ventas)}</b>`, 'Ventas de productos del día') +
+      (extra - ventas > 0.009 ? it('➕', `Otros ingresos <b>${fmt(extra - ventas)}</b>`, 'Cobros de fiado e ingresos cargados a mano') : '') +
+      it('🎁', `Propinas <b>${fmt(c.tips_total)}</b>`) +
+      it('📋', `Egresos totales <b>${fmt(c.expenses_total)}</b>`, 'Todo lo que salió de la caja: gastos, compras y liquidaciones a barberos');
   }
   if (netoSub) {
     const extraStr = parseFloat(c.extra_income||0) > 0 ? ` + ${fmt(c.extra_income)} extras` : '';
