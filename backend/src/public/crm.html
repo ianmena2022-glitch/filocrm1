@@ -1075,13 +1075,13 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 14px; font-weight: 700; text-transform: uppercase; cursor: pointer;
 }
-.btn-modal-secondary {
+.btn-modal-secondary, .btn-modal-cancel {
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--navy-border);
   color: var(--gray); padding: 13px 18px;
   border-radius: 9px; font-size: 13px; cursor: pointer;
 }
-.btn-modal-secondary:hover { border-color: rgba(255,255,255,0.15); color: var(--white); }
+.btn-modal-secondary:hover, .btn-modal-cancel:hover { border-color: rgba(255,255,255,0.15); color: var(--white); }
 
 /* ─── FILA DIGITAL ─── */
 .fila-btn-next {
@@ -15902,7 +15902,7 @@ async function bcmSave(id) {
 
       <div class="modal-actions" style="margin-top:18px">
         <button class="btn-modal-primary" id="xp-download-btn" onclick="exportMonthReport()">📥 Descargar PDF</button>
-        <button class="btn-modal-cancel" onclick="closeModal('modal-export')">Cancelar</button>
+        <button class="btn-modal-secondary" onclick="closeModal('modal-export')">Cancelar</button>
       </div>
     </div>
   </div>
