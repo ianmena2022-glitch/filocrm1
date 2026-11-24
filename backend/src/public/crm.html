@@ -592,6 +592,9 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .cj-mov-del { flex: 0 0 34px; height: 34px; border-radius: 8px; border: none; background: transparent; color: var(--gray); cursor: pointer; font-size: 14px; }
 .cj-mov-del:hover { background: rgba(255,255,255,.06); color: #fff; }
 .cj-empty { color: var(--gray); font-size: 13px; padding: 12px 0; }
+/* Mientras carga otro día: el contenido se atenúa (la fecha nueva ya se ve) */
+#dash-panel-caja.cj-loading .cj-hero, #dash-panel-caja.cj-loading .cj-kpis,
+#dash-panel-caja.cj-loading #cash-methods, #dash-panel-caja.cj-loading #caja-movs { opacity: .45; transition: opacity .15s; }
 #cash-summary-cards[hidden], .caja-neto-sub[hidden] { display: none !important; }
 @media (min-width: 769px) {
   .cj-kpis, .cj-actions { max-width: 520px; margin-left: auto; margin-right: auto; }
@@ -13620,14 +13623,59 @@ let _cajaKind = 'all';       // all | in | out
 let _cajaMovs = [];
 let _cajaMethodLabels = {};
 
+// Datos de cada día ya pedido (resumen + movimientos), por 1 minuto: ir y volver con las flechas
+// es inmediato. Cualquier recarga completa de la caja (después de guardar algo) lo vacía.
+const _cajaCache = new Map();
+const CAJA_CACHE_MS = 60 * 1000;
+let _cajaReq = 0;
+
+function cajaAddDays(date, n) {
+  const d = new Date(date + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function cajaFetchDay(date) {
+  const hit = _cajaCache.get(date);
+  if (hit && Date.now() - hit.t < CAJA_CACHE_MS) return hit.p;
+  // Resumen y movimientos a la vez
+  const p = Promise.all([
+    api('GET', `/dashboard/cash?date=${date}`),
+    api('GET', `/dashboard/cash/movements?date=${date}`).then(r => r.movements || []).catch(() => null),
+  ]);
+  _cajaCache.set(date, { t: Date.now(), p });
+  p.catch(() => _cajaCache.delete(date));
+  return p;
+}
+
+// Muestra un día. Si se tocan las flechas varias veces seguidas, solo se pinta el último.
+async function cajaShowDay(date) {
+  const id = ++_cajaReq;
+  const panel = document.getElementById('dash-panel-caja');
+  cajaUpdateDateLabel(date);
+  const cached = _cajaCache.get(date);
+  if (!cached || Date.now() - cached.t >= CAJA_CACHE_MS) panel?.classList.add('cj-loading');
+  try {
+    const [cash, movs] = await cajaFetchDay(date);
+    if (id !== _cajaReq) return;
+    renderCashSummary(cash);
+    if (movs) { _cajaMovs = movs; renderCajaMovements(); }
+    else document.getElementById('caja-movs').innerHTML = `<div class="cj-empty">No se pudieron cargar los movimientos.</div>`;
+    // Dejar listo el día anterior, que es al que más se va
+    setTimeout(() => { if (id === _cajaReq) cajaFetchDay(cajaAddDays(date, -1)).catch(() => {}); }, 300);
+  } catch (e) {
+    if (id !== _cajaReq) return;
+    showToast('❌', 'Error al cargar la caja', e.message);
+  } finally {
+    if (id === _cajaReq) panel?.classList.remove('cj-loading');
+  }
+}
+
 function cajaShiftDay(delta) {
   const inp = document.getElementById('caja-date');
-  const base = inp.value || shopToday();
-  const d = new Date(base + 'T12:00:00');
-  d.setDate(d.getDate() + delta);
-  inp.value = d.toISOString().slice(0, 10);
+  inp.value = cajaAddDays(inp.value || shopToday(), delta);
   _cajaMethod = null;
-  loadCashSummary();
+  cajaShowDay(inp.value);
 }
 
 function cajaUpdateDateLabel(date) {
@@ -13713,17 +13761,16 @@ async function loadCashSummary() {
     dateInput.value = shopToday();
   }
   const date = dateInput.value;
+  // Recarga completa (al entrar o después de guardar algo): los días guardados pueden haber cambiado
+  _cajaCache.clear();
   try {
-    const [cash, debts, history] = await Promise.all([
-      api('GET', `/dashboard/cash?date=${date}`),
+    const [, debts, history] = await Promise.all([
+      cajaShowDay(date),
       api('GET', '/dashboard/debts'),
       api('GET', '/dashboard/cash/history')
     ]);
-    renderCashSummary(cash);
     renderDebts(debts);
     renderCashHistory(history);
-    cajaUpdateDateLabel(date);
-    loadCajaMovements(date);
   } catch(e) {
     console.error('loadCashSummary error:', e.message);
     showToast('❌', 'Error al actualizar caja', e.message);

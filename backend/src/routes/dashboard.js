@@ -365,6 +365,12 @@ router.get('/cash', auth, async (req, res) => {
   try {
     // Ingresos por método de pago (precio completo — la seña se suma como income_item aparte).
     // Soporta multi-método: si appt.payment_method='mixed', se usan los payment_splits.
+    // Las consultas son independientes: se lanzan todas juntas (antes iban una detrás de otra
+    // y con la base remota cambiar de día en la caja tardaba mucho).
+    const dayCommP   = dayCommissions(shopId, date);
+    const breakdownP = methodFlowForDay(shopId, date);
+    const seriesP    = dailySeries(shopId, date, date);
+    const apptsP = (async () => {
     let appts;
     try {
       appts = await pool.query(
@@ -423,8 +429,10 @@ router.get('/cash', auth, async (req, res) => {
         );
       } else throw spErr;
     }
+    return appts;
+    })();
     // Gastos e ingresos extras del día (señas son informativas, no suman al net para evitar doble conteo)
-    const exps = await pool.query(
+    const expsP = pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN (is_income IS NULL OR is_income=FALSE) THEN amount ELSE 0 END),0) AS expenses_total,
          COALESCE(SUM(CASE WHEN is_income=TRUE AND source_type IS DISTINCT FROM 'sena' THEN amount ELSE 0 END),0) AS all_income,
@@ -439,7 +447,7 @@ router.get('/cash', auth, async (req, res) => {
       [shopId, date]
     );
     // Cobros de fiado del día agrupados por método (para sumar a los totales de método)
-    const debtCollected = await pool.query(
+    const debtCollectedP = pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN payment_method='cash'     THEN amount ELSE 0 END),0) AS cash_col,
          COALESCE(SUM(CASE WHEN payment_method='debit'    THEN amount ELSE 0 END),0) AS debit_col,
@@ -450,6 +458,8 @@ router.get('/cash', auth, async (req, res) => {
        WHERE shop_id=$1 AND date=$2 AND source_type='debt_payment'`,
       [shopId, date]
     );
+    const [appts, exps, debtCollected, dayComm, breakdownMap, series] =
+      await Promise.all([apptsP, expsP, debtCollectedP, dayCommP, breakdownP, seriesP]);
     const a = appts.rows[0];
     const e = exps.rows[0];
     const dc = debtCollected.rows[0];
@@ -459,11 +469,9 @@ router.get('/cash', auth, async (req, res) => {
     const expenses     = parseFloat(e.expenses_total);
     const tips         = parseFloat(a.tips_total);
     // Comisiones devengadas del día (accrual diario)
-    const dayComm = await dayCommissions(shopId, date);
     const commissions = dayComm.appt + dayComm.product;
 
     // Saldo de cada cuenta del día (misma cuenta que se guarda en el cierre)
-    const breakdownMap = await methodFlowForDay(shopId, date);
     const breakdownRows = Object.entries(breakdownMap)
       .map(([key, total]) => ({ key, total: String(total) }))
       .sort((a, b) => a.key.localeCompare(b.key));
@@ -483,7 +491,7 @@ router.get('/cash', auth, async (req, res) => {
       commissions_total: commissions,
       net_total:         await computeNet(shopId, date, { revenue, allIncome, expenses, apptCommissions: dayComm.appt, productCommissions: dayComm.product }),
       // Cómo se llega al neto: ingresos − comisiones − gastos del local (las liquidaciones ya son comisiones)
-      net_parts:         (await dailySeries(shopId, date, date))[0] || null,
+      net_parts:         series[0] || null,
       cuts_count:        parseInt(a.cuts_count),
       expenses_items:    e.items || [],
       income_items:      e.income_items || [],

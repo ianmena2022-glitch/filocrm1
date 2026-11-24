@@ -413,7 +413,7 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   const hhmm = (v) => String(v || '').slice(0, 5);
   {
     // ── Turnos completados con esa cuenta (netos de la seña ya cobrada; en mixtos, el monto del split) ──
-    let appts;
+    let appts, senas, debts, prodSales, outflows, tips;
     const apptSql = (withSplits) => `
       WITH
         base AS (
@@ -444,33 +444,33 @@ async function methodMovementsForDay(shopId, date, method, tz) {
         FROM merged m LEFT JOIN shops s ON s.id = m.barber_id
        WHERE m.amount > 0
        ORDER BY m.time_start ASC`;
-    try { appts = await pool.query(apptSql(true), [shopId, date, method]); }
-    catch (spErr) {
-      if (/payment_splits/i.test(spErr.message)) appts = await pool.query(apptSql(false), [shopId, date, method]);
-      else throw spErr;
-    }
+    // Todas las consultas de la cuenta salen juntas (son independientes)
+    const apptsP = pool.query(apptSql(true), [shopId, date, method]).catch(spErr => {
+      if (/payment_splits/i.test(spErr.message)) return pool.query(apptSql(false), [shopId, date, method]);
+      throw spErr;
+    });
 
     const localTime = `to_char(created_at AT TIME ZONE $4::text, 'HH24:MI')`;
     // ── Señas cobradas con esa cuenta ──
-    const senas = await pool.query(
+    const senasP = pool.query(
       `SELECT id, description, amount, ${localTime} AS time
          FROM expenses
         WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='sena' AND payment_method=$3
         ORDER BY created_at ASC`, [shopId, date, method, tz]);
     // ── Cobros de fiado ──
-    const debts = await pool.query(
+    const debtsP = pool.query(
       `SELECT id, description, amount, ${localTime} AS time
          FROM expenses
         WHERE shop_id=$1 AND date=$2 AND is_income=TRUE AND source_type='debt_payment' AND payment_method=$3
         ORDER BY created_at ASC`, [shopId, date, method, tz]);
     // ── Ventas de productos ──
-    const prodSales = await pool.query(
+    const prodSalesP = pool.query(
       `SELECT id, source_id, description, amount, ${localTime} AS time
          FROM expenses
         WHERE shop_id=$1 AND date=$2 AND source_type='product_sale' AND payment_method=$3 AND is_income=TRUE
         ORDER BY created_at ASC`, [shopId, date, method, tz]);
     // ── Egresos con esa cuenta: gastos, compras de insumos, liquidaciones, etc. ──
-    const outflows = await pool.query(
+    const outflowsP = pool.query(
       `SELECT id, category, description, amount, source_type, ${localTime} AS time
          FROM expenses
         WHERE shop_id=$1 AND date=$2 AND (is_income IS NULL OR is_income=FALSE) AND payment_method=$3
@@ -493,6 +493,7 @@ async function methodMovementsForDay(shopId, date, method, tz) {
          WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed' AND a.tip > 0 ${noTm}`);
       return `SELECT * FROM (${parts.join(' UNION ALL ')}) x ORDER BY time_start ASC`;
     };
+    const tipsP = (async () => {
     let tips = [], tmOk = true, spOk = true;
     for (let i = 0; i < 4; i++) {
       try { tips = (await pool.query(tipSql(tmOk, spOk), [shopId, date, method])).rows; break; }
@@ -502,6 +503,10 @@ async function methodMovementsForDay(shopId, date, method, tz) {
         else throw err;
       }
     }
+    return tips;
+    })();
+    [appts, senas, debts, prodSales, outflows, tips] =
+      await Promise.all([apptsP, senasP, debtsP, prodSalesP, outflowsP, tipsP]);
 
     // ── Lista unificada, en orden del día ──
     const num = (v) => parseFloat(v || 0);
@@ -564,10 +569,8 @@ async function dayMovements(shopId, date, tz) {
        ) x WHERE m IS NOT NULL`, [shopId, date])).rows.map(r => r.m);
   }
   const all = [];
-  for (const m of methods) {
-    const d = await methodMovementsForDay(shopId, date, m, tz);
-    d.movements.forEach(x => all.push({ ...x, method: m }));
-  }
+  const perMethod = await Promise.all(methods.map(m => methodMovementsForDay(shopId, date, m, tz)));
+  perMethod.forEach((d, i) => d.movements.forEach(x => all.push({ ...x, method: methods[i] })));
   // Gastos e ingresos cargados sin cuenta
   const tzv = tz || 'America/Argentina/Buenos_Aires';
   const orphan = await pool.query(
