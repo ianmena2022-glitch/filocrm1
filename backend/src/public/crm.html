@@ -5826,10 +5826,9 @@ async function checkWppStatus() {
       if (data.shared_wpp) {
         // WPP compartido del owner — verificar al owner
         if (!data.owner_connected) {
+          // Solo si se desconectó: el "conectá tu WhatsApp" de una cuenta nueva ya no se muestra
           if (data.owner_had_session) {
             messages.push(`<span>WhatsApp de enterprise desconectado.</span> <a onclick="goToWhatsAppConfig()">Reconectar →</a>`);
-          } else {
-            messages.push(`<span>Conectá el WhatsApp compartido para que el bot responda.</span> <button class="wpp-alert-btn" onclick="goToWhatsAppConfig()">📱 Conectar</button>`);
           }
         }
       } else {
@@ -5861,13 +5860,9 @@ async function checkWppStatus() {
           if (sharedRes.shared_wpp) return; // usa WPP del owner, no es problema de esta sucursal
         } catch(e) { /* continuar */ }
       }
+      // Solo si se desconectó. Conectarlo por primera vez es un paso de "Primeros pasos", sin cartel arriba.
       if (currentShop.wpp_had_session) {
         showWppBanner(`<span>WhatsApp desconectado y no pudo reconectarse.</span> <a onclick="goToWhatsAppConfig()">Reconectar →</a>`);
-      } else {
-        showWppBanner(
-          `<span>Conectá WhatsApp para que el bot responda mensajes.</span> <button class="wpp-alert-btn" onclick="goToWhatsAppConfig()">📱 Conectar</button>`,
-          { title: 'WhatsApp', icon: '📱', variant: 'info' }
-        );
       }
     }
   }
@@ -11566,11 +11561,7 @@ async function initReferralBanner() {
   setEl('dash-ref-total',  data.total  ?? 0);
   setEl('dash-ref-bonus',  data.bonuses ?? 0);
 
-  // Mostrar banner solo si no fue dismisseado
-  if (localStorage.getItem('filo_ref_banner_dismissed') === '1') return;
-  const bannerLink = document.getElementById('referral-banner-link');
-  if (bannerLink) bannerLink.textContent = data.ref_link || '';
-  document.getElementById('referral-banner').style.display = 'block';
+  // El cartel grande de "¡NUEVO — Programa de Referidos!" ya no se muestra; queda el botón REFERIDOS del dashboard.
 }
 
 // Capturar ?ref= de la URL y pre-rellenar campo oculto en registro
