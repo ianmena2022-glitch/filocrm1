@@ -207,10 +207,72 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 /* Nada del contenido puede ensanchar la página en el celular (scroll lateral).
    clip no crea un contenedor de scroll, así que no rompe los position:sticky. */
 .main { overflow-x: clip; }
+/* Productos (panel del dashboard) */
+.dprod-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 18px; border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0; }
+.dprod-filters { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dprod-new { font-size: 12px; padding: 0 14px; min-height: 36px; }
+.dprod-row { display: flex; align-items: center; gap: 11px; padding: 10px 12px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 10px; margin-bottom: 6px; }
+.dprod-acts { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.dprod-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding: 0 10px; border-radius: 8px; font: 600 12px Barlow, sans-serif; cursor: pointer; white-space: nowrap;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: rgba(255,255,255,.8); }
+.dprod-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.dprod-btn.is-sell { background: rgba(0,200,117,.12); border-color: rgba(0,200,117,.3); color: var(--green); font-weight: 700; }
 @media (max-width: 600px) {
-  .dash-tabs { padding: 0 !important; gap: 6px !important; }
-  .dash-tabs > button { padding: 8px 11px !important; flex-shrink: 0; }
-  .dash-tabs .dash-ref-label { display: none; }
+  .dprod-bar { padding: 10px 12px; }
+  .dprod-filters { flex: 1; }
+  .dprod-filters { flex: 1 1 auto; }
+  .dprod-filters input { flex: 1 1 auto; width: 100% !important; min-width: 80px; min-height: 38px; }
+  .dprod-filters select { min-height: 38px; }
+  .dprod-new { min-height: 38px; flex: 0 0 auto !important; width: auto !important; padding: 0 14px !important; }
+  .dprod-row { flex-wrap: wrap; }
+  .dprod-acts { flex-direction: row; flex-basis: 100%; }
+  .dprod-btn { flex: 1; min-height: 38px; }
+}
+/* Membresías: acciones de cada socio */
+.mem-act { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 32px; padding: 0 12px; border-radius: 8px; font: 700 12px Barlow, sans-serif; cursor: pointer; white-space: nowrap; }
+/* Tarjetas de números (Mi equipo) */
+.metric-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.metric-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gray); margin-bottom: 6px; }
+.metric-value { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: #fff; line-height: 1.1; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  #equipo-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 8px !important; margin-bottom: 16px !important; }
+  .metric-card { padding: 10px; }
+  .metric-label { font-size: 9px; letter-spacing: .6px; }
+  .metric-value { font-size: 17px; }
+}
+/* Celular: botones de íconos chicos en Configuración (métodos de pago, productos, tienda) */
+@media (max-width: 768px) {
+  button[onclick^="openEditPaymentMethod"], button[onclick^="deletePaymentMethod"] { min-width: 40px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+  .cfg-item button[onclick^="openVentaProducto"], .cfg-item button[onclick^="openAjusteStock"], .cfg-item button[onclick^="openProductoModal("] { min-height: 34px; }
+  button[onclick^="copyStoreLink"], button[onclick^="copyStorePublicLink"] { min-height: 36px; }
+}
+
+/* Pestañas del dashboard (Dashboard / Caja / Productos) y botón de Referidos */
+.dash-tabs { display: flex; gap: 6px; padding: 0 20px; margin-bottom: 8px; align-items: center; }
+.dash-tabs-spacer { flex: 1; }
+.dash-tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 40px; padding: 0 16px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05);
+  color: rgba(255,255,255,.78); font: 700 13px Barlow, sans-serif; cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.dash-tab:hover { background: rgba(255,255,255,.09); color: #fff; }
+.dash-tab.active { background: var(--yellow); border-color: var(--yellow); color: #000; }
+.dash-tab:focus-visible, .dash-ref-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.dash-ref-btn {
+  flex: 0 0 auto; width: 40px; height: 40px; padding: 0; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1;
+  background: rgba(170,255,0,.12); border: 1px solid rgba(170,255,0,.3); color: #aaff00; cursor: pointer;
+  transition: background .15s;
+}
+.dash-ref-btn:hover { background: rgba(170,255,0,.22); }
+.dash-ref-btn svg { width: 18px; height: 18px; }
+#dash-ref-bonus-pill { display: none !important; }
+@media (max-width: 600px) {
+  .dash-tabs { padding: 0; gap: 6px; }
+  .dash-tabs-spacer { display: none; }
+  .dash-tab { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 13px; }
 }
 .section { display: none; }
 .section.active { display: block; animation: sectionFadeIn 0.22s ease forwards; }
@@ -473,6 +535,7 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   transition: all 0.15s;
 }
 .dar-check:hover { background: rgba(0,200,117,0.2); border-color: var(--green); }
+@media (max-width: 600px) { .dar-check { width: 36px; height: 36px; font-size: 15px; } }
 .dash-appts-footer {
   padding: 13px 22px; flex-shrink: 0;
   border-top: 1px solid rgba(255,255,255,0.06);
@@ -534,6 +597,11 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   display: flex; align-items: center; gap: 5px;
 }
 .caja-tab.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+@media (max-width: 600px) {
+  .caja-tabs { padding: 0 6px; overflow-x: visible; }
+  .caja-tab { flex: 1 1 0; min-width: 0; height: 44px; padding: 0 2px; justify-content: center; font-size: 12px; }
+  .caja-tab svg, .caja-tab .fx-ico { display: none; }
+}
 .caja-tab:hover:not(.active) { color: rgba(255,255,255,.8); }
 .ctab-badge {
   background: #FF4343; color: white;
@@ -810,9 +878,10 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 }
 @media (max-width: 768px) {
   .cfg-btn-text { display: none; }
-  .btn-ajustes { padding: 6px 8px; }
-  .btn-ajustes.notif-bell { padding: 6px 7px; }
-  .btn-ajustes.notif-bell svg { width: 15px; height: 15px; }
+  .btn-ajustes { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 10px; }
+  .btn-ajustes.notif-bell { padding: 0; }
+  .btn-ajustes.notif-bell svg { width: 17px; height: 17px; }
+  .tb-logout-wrap { height: 38px; padding: 0 6px; border-radius: 10px; }
   .btn-ajustes.notif-bell .notif-badge { top: 1px !important; right: 1px !important; padding: 1px 4px !important; font-size: 8px !important; min-width: 13px !important; }
   .tb-uname { display: none; }
   .topbar-user-group { gap: 4px; }
@@ -2359,14 +2428,12 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       </div>
 
       <!-- Tabs Dashboard / Caja / Productos -->
-      <div class="dash-tabs" style="display:flex;gap:4px;padding:0 20px 0;margin-bottom:4px;align-items:center">
-        <button id="dash-tab-dash"      onclick="switchDashTab('dashboard')" style="background:var(--yellow);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">📊 Dashboard</button>
-        <button id="dash-tab-caja"      onclick="switchDashTab('caja')"      style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">💰 Caja</button>
-        <button id="dash-tab-productos" onclick="switchDashTab('productos')"  style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Barlow,sans-serif">🛒 Productos</button>
-        <div style="flex:1"></div>
-        <button onclick="showSection('referidos')" style="display:flex;align-items:center;gap:6px;background:rgba(170,255,0,.12);color:#aaff00;border:1px solid rgba(170,255,0,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;transition:all .2s;white-space:nowrap" onmouseover="this.style.background='rgba(170,255,0,.22)'" onmouseout="this.style.background='rgba(170,255,0,.12)'">
-          🎁 <span class="dash-ref-label">REFERIDOS</span> <span id="dash-ref-bonus-pill" style="display:none;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700"></span>
-        </button>
+      <div class="dash-tabs" role="tablist" aria-label="Secciones del dashboard">
+        <button id="dash-tab-dash"      class="dash-tab active" role="tab" aria-selected="true"  onclick="switchDashTab('dashboard')">📊 Dashboard</button>
+        <button id="dash-tab-caja"      class="dash-tab"        role="tab" aria-selected="false" onclick="switchDashTab('caja')">💰 Caja</button>
+        <button id="dash-tab-productos" class="dash-tab"        role="tab" aria-selected="false" onclick="switchDashTab('productos')">🛒 Productos</button>
+        <div class="dash-tabs-spacer"></div>
+        <button class="dash-ref-btn" onclick="showSection('referidos')" title="Referidos" aria-label="Referidos">🎁<span id="dash-ref-bonus-pill" hidden></span></button>
       </div>
 
       <!-- Panel Dashboard — Layout dos columnas (Prototipo C) -->
@@ -2545,11 +2612,11 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
       <!-- Panel Productos -->
       <div id="dash-panel-productos" style="display:none;flex-direction:column;flex:1;min-height:0">
         <!-- Barra de acciones -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
-          <div style="display:flex;align-items:center;gap:10px">
-            <input id="dash-prod-search" type="text" placeholder="Buscar..." oninput="renderDashProdPanel()"
+        <div class="dprod-bar">
+          <div class="dprod-filters">
+            <input id="dash-prod-search" type="text" placeholder="Buscar..." oninput="renderDashProdPanel()" aria-label="Buscar producto"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:7px 11px;color:#fff;font-size:13px;outline:none;width:160px">
-            <select id="dash-prod-filter" onchange="renderDashProdPanel()"
+            <select id="dash-prod-filter" onchange="renderDashProdPanel()" aria-label="Categoría"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;outline:none">
               <option value="">Todas</option>
               <option value="cuidado">💆 Cuidado</option>
@@ -2559,7 +2626,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
               <option value="otros">📦 Otros</option>
             </select>
           </div>
-          <button onclick="openProductoModal()" class="btn-add" style="font-size:12px;padding:7px 13px">+ Nuevo</button>
+          <button onclick="openProductoModal()" class="btn-add dprod-new">+ Nuevo</button>
         </div>
         <!-- Stats rápidas -->
         <div id="dash-prod-stats" style="display:flex;gap:8px;padding:10px 18px 6px;flex-shrink:0"></div>
@@ -9009,8 +9076,8 @@ async function loadMemberships() {
             ${m.active ? `<button class="appt-btn complete" onclick="checkin(${m.id})" title="Usar crédito / Check-in">✓</button>` : ''}
             ${m.active ? `<button class="appt-btn noshow" onclick="cancelMembership(${m.id})" title="Cancelar membresía">✗</button>` : ''}
           </div>
-          ${m.active && m.price_monthly > 0 ? `<button style="background:rgba(100,170,255,0.12);border:1px solid rgba(100,170,255,0.3);color:#7ab8ff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="sendPaymentReminder(${m.id})">💬 Recordatorio</button>` : ''}
-          ${m.active && payStatus !== 'paid' ? `<button style="background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:#00E676;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer" onclick="markMembershipPaid(${m.id})">✅ Pago recibido</button>` : ''}
+          ${m.active && m.price_monthly > 0 ? `<button class="mem-act" style="background:rgba(100,170,255,0.12);border:1px solid rgba(100,170,255,0.3);color:#7ab8ff" onclick="sendPaymentReminder(${m.id})">💬 Recordatorio</button>` : ''}
+          ${m.active && payStatus !== 'paid' ? `<button class="mem-act" style="background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);color:#00E676" onclick="markMembershipPaid(${m.id})">✅ Pago recibido</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -9239,8 +9306,8 @@ function _rangeRowHtml(key, r) {
       <input type="time" class="sch-start sch-time" value="${r.start}" style="${timeStyle}">
       <span style="color:var(--gray);font-size:12px">a</span>
       <input type="time" class="sch-end sch-time" value="${r.end}" style="${timeStyle}">
-      <button onclick="removeRange(this,'${key}')" title="Eliminar franja"
-        style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,67,67,.4);background:rgba(255,67,67,.08);color:#ff8080;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0">−</button>
+      <button onclick="removeRange(this,'${key}')" title="Eliminar franja" aria-label="Eliminar franja"
+        style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,67,67,.4);background:rgba(255,67,67,.08);color:#ff8080;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0">−</button>
     </div>`;
 }
 
@@ -9263,7 +9330,7 @@ function renderSchedule(schedule) {
       <div id="sch-ranges-${key}" class="sch-ranges" style="display:${day.active ? 'flex' : 'none'};flex-direction:column;gap:6px;flex:1;min-width:0">
         ${rangesHtml}
         <button onclick="addRange('${key}')"
-          style="align-self:flex-start;margin-top:2px;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.06);color:var(--yellow);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px">+ Franja</button>
+          style="align-self:flex-start;margin-top:2px;min-height:32px;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,209,0,.3);background:rgba(255,209,0,.06);color:var(--yellow);font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.5px">+ Franja</button>
       </div>
       <div id="sch-closed-${key}" style="display:${day.active ? 'none' : 'flex'};align-items:center;padding-top:4px">
         <span style="font-size:12px;color:var(--gray)">Cerrado</span>
@@ -9291,6 +9358,7 @@ function addRange(key) {
   const row = document.createElement('div');
   row.innerHTML = _rangeRowHtml(key, { start: '09:00', end: '20:00' });
   container.insertBefore(row.firstElementChild, addBtn);
+  if (typeof _cfgAutoSave === 'function') _cfgAutoSave();
 }
 
 function removeRange(btn, key) {
@@ -9298,6 +9366,7 @@ function removeRange(btn, key) {
   const rows = container.querySelectorAll('.sch-range-row');
   if (rows.length <= 1) return; // mínimo 1 franja
   btn.closest('.sch-range-row').remove();
+  if (typeof _cfgAutoSave === 'function') _cfgAutoSave();
 }
 
 function getScheduleFromUI() {
@@ -13372,7 +13441,7 @@ function switchDashTab(tab) {
     const b = document.getElementById(btns[t]);
     const active = t === tab;
     if (p) p.style.display = active ? (t === 'productos' ? 'flex' : 'block') : 'none';
-    if (b) { b.style.background = active ? 'var(--yellow)' : 'rgba(255,255,255,.07)'; b.style.color = active ? '#000' : 'rgba(255,255,255,.6)'; }
+    if (b) { b.classList.toggle('active', active); b.setAttribute('aria-selected', active ? 'true' : 'false'); }
   });
   if (tab === 'caja') { _pnlLoaded = false; switchCajaTab('pagos'); loadCashOnNavigation(); }
   if (tab === 'productos') { renderDashProdPanel(); }
@@ -13417,7 +13486,7 @@ function renderDashProdPanel() {
       const col   = sinS ? 'var(--red)' : bajo ? 'var(--orange)' : 'var(--green)';
       const borde = sinS ? 'rgba(255,67,67,.15)' : bajo ? 'rgba(255,145,0,.15)' : 'rgba(255,255,255,.06)';
       const nombre = p.nombre.replace(/'/g, "\\'");
-      return `<div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid ${borde};border-radius:10px;margin-bottom:6px">
+      return `<div class="dprod-row" style="border-color:${borde}">
         <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,209,0,.1);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${catIcon[p.categoria]||'📦'}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}
@@ -13430,13 +13499,10 @@ function renderDashProdPanel() {
           <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:${col};line-height:1">${stock}</div>
           <div style="font-size:9px;color:var(--gray)">${p.unidad||'u'}</div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
-          <button onclick="openVentaProducto(${p.id},${jsArg(p.nombre)},${p.precio_venta},${stock})"
-            style="background:rgba(0,200,117,.12);border:1px solid rgba(0,200,117,.25);color:var(--green);padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">💰 Vender</button>
-          <button onclick="openAjusteStock(${p.id},${jsArg(p.nombre)})"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'Barlow',sans-serif">📦 Stock</button>
-          <button onclick="openProductoModal(${p.id})"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--gray);padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'Barlow',sans-serif">✏️ Editar</button>
+        <div class="dprod-acts">
+          <button class="dprod-btn is-sell" onclick="openVentaProducto(${p.id},${jsArg(p.nombre)},${p.precio_venta},${stock})">💰 Vender</button>
+          <button class="dprod-btn" onclick="openAjusteStock(${p.id},${jsArg(p.nombre)})">📦 Stock</button>
+          <button class="dprod-btn" onclick="openProductoModal(${p.id})">✏️ Editar</button>
         </div>
       </div>`;
     }).join('');
@@ -16503,7 +16569,7 @@ function openSecurePrompt({ title, label, type='text', pattern, placeholder }) {
 }
 </script>
 
-<script src="/pwa-install.js?v=5" defer></script><script src="/supplies-popup.js?v=1" defer></script><script src="/onboarding.js?v=5" defer></script>
+<script src="/pwa-install.js?v=5" defer></script><script src="/supplies-popup.js?v=1" defer></script><script src="/onboarding.js?v=6" defer></script>
 <script src="/filo-select.js?v=2" defer></script>
 <script src="/image-prep.js?v=1"></script>
 <script src="/forgot-password.js"></script>

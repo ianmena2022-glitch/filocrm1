@@ -92,7 +92,7 @@
     css.id = 'onb-css';
     css.textContent = [
       // Píldora (fuera del dashboard o con la tarjeta cerrada)
-      '#onb-pill{position:fixed;right:84px;bottom:22px;z-index:900;display:none;align-items:center;gap:8px;background:#0d1f38;border:1px solid rgba(255,209,0,.45);color:#fff;border-radius:999px;padding:10px 16px;font:700 13px Barlow,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);min-height:44px}',
+      '#onb-pill{position:fixed;right:84px;bottom:22px;z-index:150;display:none;align-items:center;gap:8px;background:#0d1f38;border:1px solid rgba(255,209,0,.45);color:#fff;border-radius:999px;padding:10px 16px;font:700 13px Barlow,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);min-height:44px}',
       '#onb-pill:hover{border-color:var(--yellow,#FFD100)}',
       '#onb-pill:focus-visible{outline:2px solid var(--yellow,#FFD100);outline-offset:2px}',
       '#onb-pill .onb-pill-n{background:var(--yellow,#FFD100);color:#0a1628;border-radius:999px;padding:2px 8px;font-size:12px}',
