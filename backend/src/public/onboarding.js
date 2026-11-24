@@ -96,47 +96,55 @@
       '#onb-pill:hover{border-color:var(--yellow,#FFD100)}',
       '#onb-pill:focus-visible{outline:2px solid var(--yellow,#FFD100);outline-offset:2px}',
       '#onb-pill .onb-pill-n{background:var(--yellow,#FFD100);color:#0a1628;border-radius:999px;padding:2px 8px;font-size:12px}',
-      // Tarjeta dentro del dashboard
-      '#onb-card{display:none;margin:0 20px 14px;background:linear-gradient(180deg,rgba(255,209,0,.06),rgba(255,255,255,.02));border:1px solid rgba(255,209,0,.22);border-radius:14px;padding:14px 16px 12px;font-family:Barlow,sans-serif;color:#fff}',
+      // Tarjeta dentro del dashboard: un paso a la vez
+      '#onb-card{display:none;margin:0 20px 14px;background:linear-gradient(180deg,rgba(255,209,0,.07),rgba(255,255,255,.02));border:1px solid rgba(255,209,0,.22);border-radius:14px;padding:12px 14px;font-family:Barlow,sans-serif;color:#fff;max-width:720px;overflow:hidden}',
       '#onb-card.show{display:block}',
-      '.onb-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}',
-      '.onb-title{font-family:Oswald,sans-serif;font-size:17px;font-weight:700;letter-spacing:.3px;white-space:nowrap}',
-      '.onb-prog{flex:1;min-width:0;display:flex;align-items:center;gap:10px}',
-      '.onb-bar{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;max-width:260px}',
-      '.onb-bar>div{height:100%;background:var(--yellow,#FFD100);border-radius:99px;transition:width .3s}',
+      '.onb-head{display:flex;align-items:center;gap:10px}',
+      '.onb-title{font-family:Oswald,sans-serif;font-size:15px;font-weight:700;letter-spacing:.3px;white-space:nowrap}',
       '.onb-sub{font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap}',
       '.onb-x{background:transparent;border:none;color:rgba(255,255,255,.55);font-size:20px;line-height:1;cursor:pointer;min-width:36px;min-height:36px;border-radius:8px;margin-left:auto}',
       '.onb-x:hover{color:#fff;background:rgba(255,255,255,.06)}',
       '.onb-x:focus-visible{outline:2px solid var(--yellow,#FFD100)}',
-      '.onb-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:8px}',
-      '.onb-step{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);min-width:0}',
-      '.onb-check{flex:0 0 24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}',
-      '.onb-step.done .onb-check{background:#22c55e;border-color:#22c55e;color:#0a1628}',
+      // Barra de progreso en segmentos (uno por paso)
+      '.onb-seg{display:flex;gap:4px;margin:6px 0 10px}',
+      '.onb-seg i{flex:1;height:5px;border-radius:99px;background:rgba(255,255,255,.1);position:relative;overflow:hidden}',
+      '.onb-seg i::after{content:"";position:absolute;inset:0;background:var(--yellow,#FFD100);transform:scaleX(0);transform-origin:left;transition:transform .5s cubic-bezier(.2,.8,.2,1)}',
+      '.onb-seg i.on::after{transform:scaleX(1)}',
+      '.onb-seg i.cur{background:rgba(255,209,0,.25)}',
+      // El paso actual
+      '.onb-stage{position:relative}',
+      '.onb-cur{display:flex;align-items:center;gap:12px}',
+      '.onb-num{flex:0 0 32px;height:32px;border-radius:50%;border:2px solid rgba(255,209,0,.5);color:var(--yellow,#FFD100);display:flex;align-items:center;justify-content:center;font:800 14px "Barlow Condensed",sans-serif;transition:background .25s,border-color .25s,color .25s}',
       '.onb-txt{flex:1;min-width:0}',
-      '.onb-st{font-size:13px;font-weight:700;line-height:1.25}',
-      '.onb-step.done .onb-st{color:rgba(255,255,255,.45);text-decoration:line-through}',
-      '.onb-sd{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;line-height:1.35}',
-      '.onb-go{flex:0 0 auto;background:var(--yellow,#FFD100);color:#0a1628;border:none;border-radius:8px;padding:7px 10px;font:800 11px "Barlow Condensed",sans-serif;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;min-height:34px;white-space:nowrap}',
+      '.onb-st{font-size:15px;font-weight:700;line-height:1.25}',
+      '.onb-sd{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px;line-height:1.4}',
+      '.onb-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}',
+      '.onb-go{background:var(--yellow,#FFD100);color:#0a1628;border:none;border-radius:8px;padding:9px 14px;font:800 12px "Barlow Condensed",sans-serif;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;min-height:40px;white-space:nowrap}',
       '.onb-go:hover{filter:brightness(1.07)}',
       '.onb-go:focus-visible{outline:2px solid #fff;outline-offset:2px}',
-      '.onb-step.done .onb-go{display:none}',
-      '.onb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;font-size:11px;color:rgba(255,255,255,.45)}',
-      '.onb-hide{background:transparent;border:none;color:rgba(255,255,255,.5);font:600 12px Barlow,sans-serif;cursor:pointer;text-decoration:underline;padding:6px 0;min-height:32px}',
+      '.onb-later{background:transparent;border:none;color:rgba(255,255,255,.5);font:600 12px Barlow,sans-serif;cursor:pointer;padding:8px 6px;min-height:40px;white-space:nowrap}',
+      '.onb-later:hover{color:#fff}',
+      '.onb-later:focus-visible{outline:2px solid var(--yellow,#FFD100);border-radius:6px}',
+      // Animación: el paso hecho se tilda y sale; el siguiente entra desde la derecha
+      '.onb-cur.done .onb-num{background:#22c55e;border-color:#22c55e;color:#0a1628;animation:onbPop .35s ease-out}',
+      '.onb-cur.out{animation:onbOut .3s ease-in forwards}',
+      '.onb-cur.in{animation:onbIn .35s cubic-bezier(.2,.8,.2,1)}',
+      '@keyframes onbPop{0%{transform:scale(.6)}60%{transform:scale(1.15)}100%{transform:scale(1)}}',
+      '@keyframes onbOut{to{opacity:0;transform:translateX(-24px)}}',
+      '@keyframes onbIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}',
+      '@media (prefers-reduced-motion: reduce){.onb-cur.out,.onb-cur.in,.onb-cur.done .onb-num{animation:none}.onb-seg i::after{transition:none}}',
+      '.onb-done{display:flex;align-items:center;gap:12px;font-size:13px;line-height:1.45}',
+      '.onb-done .onb-num{background:#22c55e;border-color:#22c55e;color:#0a1628}',
+      '.onb-hide{background:transparent;border:none;color:rgba(255,255,255,.45);font:600 11px Barlow,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0;margin-top:6px}',
       '.onb-hide:hover{color:#fff}',
       '#onb-card .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
-      '.onb-done-box{padding:10px 12px;border-radius:10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);font-size:13px;line-height:1.5;margin-bottom:8px}',
       '@media (max-width:768px){',
-      '  #onb-card{margin:0 12px 12px;padding:12px}',
-      '  .onb-head{flex-wrap:wrap;gap:6px 10px}',
-      '  .onb-prog{order:3;flex-basis:100%}',
-      '  .onb-bar{max-width:none}',
-      '  .onb-grid{grid-template-columns:1fr;gap:6px}',
-      '  .onb-sd{display:none}',
-      '  .onb-step{padding:6px 8px;gap:8px}',
-      '  .onb-check{flex-basis:22px;height:22px;font-size:11px}',
-      '  .onb-go{padding:6px 9px;min-height:32px}',
-      '  .onb-head{margin-bottom:8px}',
-      '  .onb-foot{margin-top:6px}',
+      '  #onb-card{margin:0 12px 12px;padding:10px 12px}',
+      '  .onb-cur{flex-wrap:wrap;gap:8px 10px}',
+      '  .onb-num{flex-basis:28px;height:28px;font-size:13px}',
+      '  .onb-st{font-size:14px}',
+      '  .onb-acts{flex-basis:100%;padding-left:38px}',
+      '  .onb-go{flex:1}',
       '  #onb-pill{right:12px;bottom:calc(96px + env(safe-area-inset-bottom,0px));padding:8px 12px;font-size:12px}',
       '}',
     ].join('\n');
@@ -167,30 +175,85 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
+  // Paso que se muestra: el primero sin hacer (los que dejó "para más tarde" van al final)
+  function currentStep() {
+    var skipped = (lsGet('later') || '').split(',');
+    var pending = STEPS.filter(function (st) { return !isDone(st.id); });
+    var now = pending.filter(function (st) { return skipped.indexOf(st.id) === -1; });
+    return now[0] || pending[0] || null;
+  }
+
+  var _shownStep = null;   // id del paso que está en pantalla
+  var _animating = false;
+
+  function stepHtml(st, idx, cls) {
+    return '<div class="onb-cur' + (cls ? ' ' + cls : '') + '" data-step="' + st.id + '">' +
+      '<span class="onb-num" aria-hidden="true">' + (idx + 1) + '</span>' +
+      '<div class="onb-txt"><div class="onb-st">' + st.icon + ' ' + esc(st.title) + '</div>' +
+      '<div class="onb-sd">' + esc(st.desc) + '</div></div>' +
+      '<div class="onb-acts">' +
+      '<button class="onb-go" type="button" onclick="FiloOnboarding.go(\'' + st.id + '\')">' + esc(st.btn) + '</button>' +
+      '<button class="onb-later" type="button" onclick="FiloOnboarding.later(\'' + st.id + '\')" aria-label="Dejar para más tarde: ' + esc(st.title) + '">Más tarde</button>' +
+      '</div></div>';
+  }
+
+  function doneHtml() {
+    return '<div class="onb-done"><span class="onb-num" aria-hidden="true">✓</span><div>🎉 <strong>FILO ya está andando.</strong> Tus clientes pueden reservar solos y les llegan los recordatorios por WhatsApp.</div></div>';
+  }
+
   function render() {
     if (!state) return;
     ensureDom();
     var n = doneCount(), total = STEPS.length, all = n === total;
+    var cur = currentStep();
+    var idx = cur ? STEPS.indexOf(cur) : total;
     document.getElementById('onb-pill').innerHTML = '🚀 Primeros pasos <span class="onb-pill-n">' + n + '/' + total + '</span>';
-    var html = '<div class="onb-head"><div class="onb-title">🚀 Primeros pasos</div>' +
-      '<div class="onb-prog"><div class="onb-bar" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="' + total + '" aria-valuenow="' + n + '"><div style="width:' + Math.round(n / total * 100) + '%"></div></div>' +
-      '<span class="onb-sub">' + (all ? '¡Completaste todo!' : n + ' de ' + total + ' listos') + '</span></div>' +
-      '<button class="onb-x" type="button" aria-label="Cerrar primeros pasos" onclick="FiloOnboarding.collapse()">×</button></div>';
-    if (all) {
-      html += '<div class="onb-done-box">🎉 <strong>FILO ya está andando.</strong> Tus clientes pueden reservar solos y les llegan los recordatorios por WhatsApp.</div>';
+
+    var card = document.getElementById('onb-card');
+    var stage = card.querySelector('.onb-stage');
+    if (!stage) {
+      card.innerHTML =
+        '<div class="onb-head"><div class="onb-title">🚀 Primeros pasos</div><span class="onb-sub"></span>' +
+        '<button class="onb-x" type="button" aria-label="Cerrar primeros pasos" onclick="FiloOnboarding.collapse()">×</button></div>' +
+        '<div class="onb-seg" role="progressbar" aria-label="Progreso de primeros pasos" aria-valuemin="0" aria-valuemax="' + total + '">' +
+        STEPS.map(function () { return '<i></i>'; }).join('') + '</div>' +
+        '<div class="onb-stage" aria-live="polite"></div>' +
+        '<button class="onb-hide" type="button" onclick="FiloOnboarding.hide()"></button>';
+      stage = card.querySelector('.onb-stage');
     }
-    html += '<ol class="onb-grid">' + STEPS.map(function (st, i) {
-      var d = isDone(st.id);
-      return '<li class="onb-step' + (d ? ' done' : '') + '">' +
-        '<span class="onb-check" aria-hidden="true">' + (d ? '✓' : (i + 1)) + '</span>' +
-        '<div class="onb-txt"><div class="onb-st">' + st.icon + ' ' + esc(st.title) + (d ? '<span class="sr-only"> (listo)</span>' : '') + '</div>' +
-        (d ? '' : '<div class="onb-sd">' + esc(st.desc) + '</div>') + '</div>' +
-        (d ? '' : '<button class="onb-go" type="button" onclick="FiloOnboarding.go(\'' + st.id + '\')" aria-label="' + esc(st.btn + ': ' + st.title) + '">' + esc(st.btn) + '</button>') +
-        '</li>';
-    }).join('') + '</ol>' +
-      '<div class="onb-foot"><span>¿Dudas? Escribinos por WhatsApp.</span>' +
-      '<button class="onb-hide" type="button" onclick="FiloOnboarding.hide()">' + (all ? 'Listo, ocultar' : 'No mostrar más') + '</button></div>';
-    document.getElementById('onb-card').innerHTML = html;
+    // Encabezado y barra (los segmentos se llenan con transición)
+    card.querySelector('.onb-sub').textContent = all ? '¡Completaste todo!' : 'Paso ' + (idx + 1) + ' de ' + total + ' · ' + n + ' listos';
+    var seg = card.querySelector('.onb-seg');
+    seg.setAttribute('aria-valuenow', String(n));
+    seg.querySelectorAll('i').forEach(function (el, i) {
+      el.classList.toggle('on', isDone(STEPS[i].id));
+      el.classList.toggle('cur', !!cur && STEPS[i].id === cur.id);
+    });
+    card.querySelector('.onb-hide').textContent = all ? 'Listo, ocultar' : 'No mostrar más';
+
+    var nextId = cur ? cur.id : '__all';
+    if (_animating || nextId === _shownStep) { syncView(); return; }
+
+    var prevEl = stage.querySelector('.onb-cur');
+    var prevId = _shownStep;
+    var swap = function (animate) {
+      stage.innerHTML = cur ? stepHtml(cur, idx, animate ? 'in' : '') : doneHtml();
+      _shownStep = nextId;
+    };
+    // Si el paso que estaba en pantalla se completó: se tilda, sale y entra el siguiente
+    var cardVisible = card.classList.contains('show') && currentSection() === 'dashboard';
+    if (prevEl && prevId && prevId !== '__all' && isDone(prevId) && cardVisible) {
+      _animating = true;
+      prevEl.classList.remove('in');
+      prevEl.classList.add('done');
+      prevEl.querySelector('.onb-num').textContent = '✓';
+      setTimeout(function () {
+        prevEl.classList.add('out');
+        setTimeout(function () { swap(true); _animating = false; render(); }, 280);
+      }, 550);
+    } else {
+      swap(!!prevEl);
+    }
     syncView();
   }
 
@@ -306,6 +369,13 @@
     minimize: collapse, // compat
     collapse: collapse,
     hide: hide,
+    // Dejar el paso para más tarde: pasa al siguiente y vuelve cuando no queden otros
+    later: function (id) {
+      var list = (lsGet('later') || '').split(',').filter(Boolean).filter(function (x) { return x !== id; });
+      list.push(id);
+      lsSet('later', list.join(','));
+      render();
+    },
     // Lo llama el CRM al cambiar de sección (antes del cambio): se acomoda después
     refresh: function () {
       setTimeout(syncView, 0);
