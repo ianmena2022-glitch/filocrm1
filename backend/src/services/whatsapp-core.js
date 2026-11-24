@@ -296,6 +296,9 @@ async function simulateTyping(sock, jid, messageLength = 100) {
     try { await sock.sendPresenceUpdate('composing', jid); } catch(_) {}
     await new Promise(r => setTimeout(r, delayMs));
     try { await sock.sendPresenceUpdate('paused', jid); } catch(_) {}
+    // Volver a "ausente": si el servidor queda como dispositivo activo, el celular del dueño
+    // deja de mostrar las notificaciones de WhatsApp (cree que lo está usando en otro lado).
+    try { await sock.sendPresenceUpdate('unavailable'); } catch(_) {}
   } catch(e) {
     // No bloquear el envío si falla el presence update
     console.warn('[WPP] simulateTyping error (no-fatal):', e.message);
@@ -966,6 +969,9 @@ async function connect(shopId, onQR, onConnected, onDisconnected) {
       delete qrCooldownUntil[shopId];
       delete statuses[`${shopId}_reconnect`];
       await pool.query('UPDATE shops SET wpp_connected=TRUE WHERE id=$1', [shopId]);
+      // Avisarle a WhatsApp que este dispositivo vinculado está "ausente": así el celular del
+      // dueño sigue mostrando las notificaciones (como cuando WhatsApp Web queda en segundo plano).
+      try { await sock.sendPresenceUpdate('unavailable'); } catch (_) {}
       if (statuses[`${shopId}_fresh`]) {
         delete statuses[`${shopId}_fresh`];
         try {
