@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const auth   = require('../middleware/auth');
 const { getShopTz, shopDate } = require('../db/shopTz');
-const { paidPriceSql, computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay, dailySeries, monthReport } = require("../services/cashMath");
+const { paidPriceSql, computeNet, dayCommissions, computeDayClose, saveDayClose, methodMovementsForDay, methodFlowForDay, dailySeries, monthReport, dayMovements } = require("../services/cashMath");
 
 // GET /api/dashboard/today
 router.get('/today', auth, async (req, res) => {
@@ -500,6 +500,16 @@ router.get('/cash/method-detail', auth, async (req, res) => {
   if (!method) return res.status(400).json({ error: 'Se requiere method' });
   try {
     res.json(await methodMovementsForDay(req.shopId, date, method, tz));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/dashboard/cash/movements?date= — todos los movimientos del día (todas las cuentas), en orden
+router.get('/cash/movements', auth, async (req, res) => {
+  const tz = await getShopTz(req.shopId);
+  const date = req.query.date || shopDate(tz);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha inválida' });
+  try {
+    res.json({ date, movements: await dayMovements(req.shopId, date, tz) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

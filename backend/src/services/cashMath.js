@@ -465,7 +465,7 @@ async function methodMovementsForDay(shopId, date, method, tz) {
         ORDER BY created_at ASC`, [shopId, date, method, tz]);
     // ── Ventas de productos ──
     const prodSales = await pool.query(
-      `SELECT id, description, amount, ${localTime} AS time
+      `SELECT id, source_id, description, amount, ${localTime} AS time
          FROM expenses
         WHERE shop_id=$1 AND date=$2 AND source_type='product_sale' AND payment_method=$3 AND is_income=TRUE
         ORDER BY created_at ASC`, [shopId, date, method, tz]);
@@ -512,7 +512,7 @@ async function methodMovementsForDay(shopId, date, method, tz) {
       profit: num(a.profit), commission_amount: num(a.commission_amount), sena_applied: num(a.sena_applied), is_split: !!a.is_split,
     }));
     senas.rows.forEach(r => movements.push({ kind: 'sena', time: r.time, sign: 1, amount: num(r.amount), title: 'Seña cobrada', subtitle: r.description || '' }));
-    prodSales.rows.forEach(r => movements.push({ kind: 'product_sale', time: r.time, sign: 1, amount: num(r.amount), title: 'Venta producto', subtitle: r.description || '' }));
+    prodSales.rows.forEach(r => movements.push({ kind: 'product_sale', time: r.time, sign: 1, amount: num(r.amount), title: 'Venta producto', subtitle: r.description || '', sale_id: r.source_id || null }));
     debts.rows.forEach(r => movements.push({ kind: 'debt_payment', time: r.time, sign: 1, amount: num(r.amount), title: 'Cobro fiado', subtitle: r.description || '' }));
     tips.forEach(t => movements.push({ kind: 'tip', time: hhmm(t.time_start), sign: 1, amount: num(t.amt), title: 'Propina', subtitle: t.client_name || '' }));
     outflows.rows.forEach(r => movements.push({
@@ -542,4 +542,48 @@ async function methodMovementsForDay(shopId, date, method, tz) {
   }
 }
 
-module.exports = { paidPriceSql, monthReport, dailySeries, periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };
+// Todos los movimientos del día, de todas las cuentas, en orden (para la lista de la caja).
+// Junta lo de cada cuenta que tuvo movimiento ese día y suma los gastos o ingresos sin cuenta.
+async function dayMovements(shopId, date, tz) {
+  let methods;
+  try {
+    methods = (await pool.query(
+      `SELECT DISTINCT m FROM (
+         SELECT payment_method AS m FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'
+         UNION SELECT ps.method FROM payment_splits ps JOIN appointments a ON a.id=ps.appointment_id
+                WHERE a.shop_id=$1 AND a.date=$2 AND a.status='completed'
+         UNION SELECT tip_method FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed' AND tip > 0
+         UNION SELECT payment_method FROM expenses WHERE shop_id=$1 AND date=$2
+       ) x WHERE m IS NOT NULL`, [shopId, date])).rows.map(r => r.m);
+  } catch (e) {
+    // Bases viejas sin payment_splits o tip_method
+    methods = (await pool.query(
+      `SELECT DISTINCT m FROM (
+         SELECT payment_method AS m FROM appointments WHERE shop_id=$1 AND date=$2 AND status='completed'
+         UNION SELECT payment_method FROM expenses WHERE shop_id=$1 AND date=$2
+       ) x WHERE m IS NOT NULL`, [shopId, date])).rows.map(r => r.m);
+  }
+  const all = [];
+  for (const m of methods) {
+    const d = await methodMovementsForDay(shopId, date, m, tz);
+    d.movements.forEach(x => all.push({ ...x, method: m }));
+  }
+  // Gastos e ingresos cargados sin cuenta
+  const tzv = tz || 'America/Argentina/Buenos_Aires';
+  const orphan = await pool.query(
+    `SELECT id, category, description, amount, source_type, is_income,
+            to_char(created_at AT TIME ZONE $3::text, 'HH24:MI') AS time
+       FROM expenses WHERE shop_id=$1 AND date=$2 AND payment_method IS NULL
+        AND source_type IS DISTINCT FROM 'sena'
+      ORDER BY created_at ASC`, [shopId, date, tzv]);
+  orphan.rows.forEach(r => all.push({
+    kind: r.is_income ? 'income' : 'expense', time: r.time, sign: r.is_income ? 1 : -1, amount: parseFloat(r.amount || 0),
+    source_type: r.source_type || 'manual', category: r.category || null,
+    title: r.is_income ? 'Ingreso' : (r.source_type === 'barber_settlement' ? 'Liquidación barbero' : 'Gasto'),
+    subtitle: r.description || '', expense_id: r.id, method: null,
+  }));
+  all.sort((x, y) => String(x.time).localeCompare(String(y.time)));
+  return all;
+}
+
+module.exports = { dayMovements, paidPriceSql, monthReport, dailySeries, periodSummary, normalizeDebtMethod, methodTotalsForDay, methodFlowForDay, dayCommissions, computeNet, computeDayClose, saveDayClose, deleteEmptyDayClose, methodMovementsForDay };

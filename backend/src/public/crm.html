@@ -545,6 +545,58 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .dash-appts-footer span:hover { text-decoration: underline; }
 
 /* ─── PANEL CAJA REFACTOR ─── */
+/* Caja: encabezado (fecha, número grande, cuadritos, botones), cuentas y movimientos */
+.cj-datenav { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.cj-daybtn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+.cj-daybtn:hover { background: rgba(255,255,255,.1); }
+.cj-datelabel { position: relative; min-width: 170px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); font: 700 14px Barlow, sans-serif; color: #fff; cursor: pointer; }
+.cj-dateinput { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; }
+.cj-dateinput::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.cj-daybtn:focus-visible, .cj-datelabel:focus-within, .cj-btn:focus-visible, .cj-acc:focus-visible, .cj-chip:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.cj-hero { text-align: center; margin: 4px 0 12px; }
+.cj-hero-lbl { font-size: 12px; color: var(--gray); font-weight: 600; letter-spacing: .3px; }
+.cj-hero-val { font-family: 'Oswald', sans-serif; font-size: 40px !important; font-weight: 700; line-height: 1.1; }
+.cj-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.cj-kpi { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.cj-kpi-lbl { font-size: 11px; color: var(--gray); }
+.cj-kpi-val { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cj-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cj-btn { min-height: 42px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #fff; font: 700 13px Barlow, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.cj-btn:hover { background: rgba(255,255,255,.1); }
+.cj-btn-pri { background: var(--yellow); border-color: var(--yellow); color: #000; }
+.cj-btn-pri:hover { background: var(--yellow); filter: brightness(1.06); }
+.cj-sec-lbl { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gray); margin: 2px 0 8px; }
+.cj-sec-hint { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.cj-mov-head { margin-top: 18px; }
+.cj-accs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cj-acc { text-align: left; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 10px 12px; cursor: pointer; color: #fff; font-family: Barlow, sans-serif; min-width: 0; transition: border-color .15s, background .15s; }
+.cj-acc:hover { border-color: rgba(255,255,255,.2); }
+.cj-acc.on { border-color: var(--yellow); background: rgba(255,209,0,.08); }
+.cj-acc-top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,.7); }
+.cj-acc-val { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 700; margin-top: 4px; }
+.cj-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.cj-chip { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: transparent; color: rgba(255,255,255,.8); font: 600 12px Barlow, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.cj-chip.on { background: var(--yellow); border-color: var(--yellow); color: #000; }
+.cj-movs { display: flex; flex-direction: column; }
+.cj-mov { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.cj-mov:last-child { border-bottom: none; }
+.cj-mov-ic { flex: 0 0 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background: rgba(0,200,117,.12); }
+.cj-mov.out .cj-mov-ic { background: rgba(255,67,67,.12); }
+.cj-mov.neutral .cj-mov-ic { background: rgba(255,145,0,.12); }
+.cj-mov-txt { flex: 1; min-width: 0; }
+.cj-mov-t { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cj-mov-s { font-size: 11px; color: var(--gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cj-mov-amt { font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 700; white-space: nowrap; color: var(--green); }
+.cj-mov.out .cj-mov-amt { color: #FF4343; }
+.cj-mov.neutral .cj-mov-amt { color: var(--orange); }
+.cj-mov-del { flex: 0 0 34px; height: 34px; border-radius: 8px; border: none; background: transparent; color: var(--gray); cursor: pointer; font-size: 14px; }
+.cj-mov-del:hover { background: rgba(255,255,255,.06); color: #fff; }
+.cj-empty { color: var(--gray); font-size: 13px; padding: 12px 0; }
+#cash-summary-cards[hidden], .caja-neto-sub[hidden] { display: none !important; }
+@media (min-width: 769px) {
+  .cj-kpis, .cj-actions { max-width: 520px; margin-left: auto; margin-right: auto; }
+  .cj-actions { margin-bottom: 4px; }
+}
 .caja-header {
   padding: 18px 20px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -1012,6 +1064,11 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .modal-sub { font-size: 12px; color: var(--gray); margin-bottom: 22px; }
 
 .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+/* Registrar gasto: monto grande con el signo $ */
+.gasto-amount-wrap { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 0 14px; transition: border-color .15s; }
+.gasto-amount-wrap:focus-within { border-color: var(--yellow); }
+.gasto-amount-wrap span { font-family: 'Oswald', sans-serif; font-size: 22px; color: var(--gray); }
+.gasto-amount-wrap input { flex: 1; min-width: 0; background: transparent !important; border: none !important; outline: none; box-shadow: none !important; padding: 10px 0 !important; color: #fff; font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; }
 .btn-modal-primary {
   flex: 1; background: var(--yellow); color: #050d18;
   border: none; padding: 13px; border-radius: 9px;
@@ -2531,24 +2588,30 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
         <!-- Header fijo: fecha, acciones, neto del día, summary cards -->
         <div class="caja-header">
-          <div class="caja-header-top">
-            <input type="date" id="caja-date" onchange="loadCashSummary()" class="caja-date-input">
-            <div class="caja-header-actions">
-              <button class="btn-primary" onclick="openExpenseModal()" style="padding:8px 14px;font-size:13px">+ Gasto</button>
-              <button class="caja-export-btn" onclick="openExportModal()">📥 Exportar mes</button>
-            </div>
+          <div class="cj-datenav">
+            <button type="button" class="cj-daybtn" onclick="cajaShiftDay(-1)" aria-label="Día anterior">‹</button>
+            <label class="cj-datelabel">
+              <span id="caja-date-text">Hoy</span>
+              <input type="date" id="caja-date" onchange="loadCashSummary()" class="cj-dateinput" aria-label="Elegir fecha">
+            </label>
+            <button type="button" class="cj-daybtn" onclick="cajaShiftDay(1)" aria-label="Día siguiente">›</button>
           </div>
-          <div class="caja-neto-block">
-            <div class="caja-neto-val" id="caja-neto-val">$0</div>
-            <div class="caja-neto-sub" id="caja-neto-sub">Cargando...</div>
+          <div class="cj-hero">
+            <div class="cj-hero-lbl" id="caja-neto-lbl">Te queda hoy</div>
+            <div class="caja-neto-val cj-hero-val" id="caja-neto-val">$0</div>
+            <div class="caja-neto-sub" id="caja-neto-sub" hidden></div>
           </div>
-          <!-- Summary cards: visible solo en desktop -->
-          <div id="cash-summary-cards"></div>
+          <div class="cj-kpis" id="caja-kpis"></div>
+          <div class="cj-actions">
+            <button type="button" class="cj-btn cj-btn-pri" onclick="openExpenseModal()">+ Gasto</button>
+            <button type="button" class="cj-btn" onclick="openExportModal()">📥 Exportar mes</button>
+          </div>
+          <div id="cash-summary-cards" hidden></div>
         </div>
 
         <!-- Tabs horizontales -->
         <div class="caja-tabs">
-          <button class="caja-tab active" id="ctab-pagos"    onclick="switchCajaTab('pagos')">💳 Pagos</button>
+          <button class="caja-tab active" id="ctab-pagos"    onclick="switchCajaTab('pagos')">💳 Resumen</button>
           <button class="caja-tab"        id="ctab-gastos"   onclick="switchCajaTab('gastos')">📋 Gastos</button>
           <button class="caja-tab"        id="ctab-deudas"   onclick="switchCajaTab('deudas')">🤝 Deudas <span id="ctab-deudas-badge"></span></button>
           <button class="caja-tab"        id="ctab-historial" onclick="switchCajaTab('historial')">🗂 Historial</button>
@@ -2560,8 +2623,12 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
           <!-- TAB: Pagos -->
           <div id="tab-content-pagos" class="caja-tab-panel" style="display:block">
-            <div id="cash-methods"></div>
-            <div id="caja-income-extras"></div>
+            <div class="cj-sec-lbl">Cuentas <span class="cj-sec-hint">· tocá una para ver sus movimientos</span></div>
+            <div id="cash-methods" class="cj-accs"></div>
+            <div class="cj-sec-lbl cj-mov-head">Movimientos</div>
+            <div class="cj-chips" id="caja-mov-chips" role="group" aria-label="Filtrar movimientos"></div>
+            <div id="caja-movs" class="cj-movs"><div class="cj-empty">Cargando…</div></div>
+            <div id="caja-income-extras" hidden></div>
           </div>
 
           <!-- TAB: Gastos -->
@@ -13547,6 +13614,97 @@ function renderDashProdPanel() {
   }
 }
 
+// ── Caja: fecha con flechas, lista de movimientos y filtros ──
+let _cajaMethod = null;      // cuenta elegida en las tarjetas (null = todas)
+let _cajaKind = 'all';       // all | in | out
+let _cajaMovs = [];
+let _cajaMethodLabels = {};
+
+function cajaShiftDay(delta) {
+  const inp = document.getElementById('caja-date');
+  const base = inp.value || shopToday();
+  const d = new Date(base + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  inp.value = d.toISOString().slice(0, 10);
+  _cajaMethod = null;
+  loadCashSummary();
+}
+
+function cajaUpdateDateLabel(date) {
+  const el = document.getElementById('caja-date-text');
+  const lbl = document.getElementById('caja-neto-lbl');
+  const today = shopToday();
+  const yest = (() => { const d = new Date(today + 'T12:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const d = new Date(date + 'T12:00:00');
+  const dia = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+  const corto = `${dia} ${d.getDate()}/${d.getMonth() + 1}`;
+  if (el) el.textContent = date === today ? `Hoy · ${corto}` : date === yest ? `Ayer · ${corto}` : corto;
+  if (lbl) lbl.textContent = date === today ? 'Te queda hoy' : date > today ? 'Te queda ese día' : 'Te quedó ese día';
+}
+
+async function loadCajaMovements(date) {
+  const box = document.getElementById('caja-movs');
+  if (!box) return;
+  try {
+    const r = await api('GET', `/dashboard/cash/movements?date=${date}`);
+    _cajaMovs = r.movements || [];
+  } catch (e) {
+    _cajaMovs = [];
+    box.innerHTML = `<div class="cj-empty">No se pudieron cargar los movimientos.</div>`;
+    return;
+  }
+  renderCajaMovements();
+}
+
+function cajaFilterMethod(key) {
+  _cajaMethod = _cajaMethod === key ? null : key;
+  document.querySelectorAll('#cash-methods .cj-acc').forEach(b => {
+    const on = b.dataset.key === _cajaMethod;
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  renderCajaMovements();
+  if (_cajaMethod) document.querySelector('.cj-mov-head')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cajaFilterKind(kind) { _cajaKind = kind; renderCajaMovements(); }
+
+function renderCajaMovements() {
+  const box = document.getElementById('caja-movs');
+  const chips = document.getElementById('caja-mov-chips');
+  if (!box) return;
+  const fmt = v => '$' + parseFloat(v || 0).toLocaleString('es-AR');
+  const isFiado = (m) => m.method === 'debt' && m.kind === 'appointment';
+  const label = (k) => k == null ? 'Sin cuenta' : (_cajaMethodLabels[k] || (k === 'debt' ? 'Fiado' : k === 'mixed' ? 'Mixto' : k));
+  if (chips) {
+    const ch = (k, t) => `<button type="button" class="cj-chip${_cajaKind === k ? ' on' : ''}" aria-pressed="${_cajaKind === k}" onclick="cajaFilterKind('${k}')">${t}</button>`;
+    chips.innerHTML = ch('all', 'Todo') + ch('in', 'Cobros') + ch('out', 'Gastos') +
+      (_cajaMethod ? `<button type="button" class="cj-chip on" onclick="cajaFilterMethod(${jsArg(_cajaMethod)})" aria-label="Quitar filtro de cuenta">${escHtml(label(_cajaMethod))} ✕</button>` : '');
+  }
+  let list = _cajaMovs.filter(m => (!_cajaMethod || m.method === _cajaMethod));
+  if (_cajaKind === 'in')  list = list.filter(m => m.sign > 0);
+  if (_cajaKind === 'out') list = list.filter(m => m.sign < 0);
+  if (!list.length) {
+    box.innerHTML = `<div class="cj-empty">${_cajaMovs.length ? 'No hay movimientos con este filtro.' : 'Todavía no hay movimientos este día.'}</div>`;
+    return;
+  }
+  const ico = { appointment: '✂️', product_sale: '🛒', expense: '🧾', tip: '⭐', sena: '💵', debt_payment: '🤝', income: '➕' };
+  const owner = !currentShop?.is_barber;
+  box.innerHTML = list.map(m => {
+    const cls = isFiado(m) ? 'neutral' : (m.sign < 0 ? 'out' : '');
+    const title = m.kind === 'appointment' ? `${m.subtitle || 'Turno'} · ${m.title}` : (m.subtitle ? `${m.title} · ${m.subtitle}` : m.title);
+    const sub = [m.time, isFiado(m) ? 'Fiado' : label(m.method) + (m.is_split ? ' (pago dividido)' : ''), m.barber_name].filter(Boolean).join(' · ');
+    const amt = isFiado(m) ? fmt(m.amount) : (m.sign < 0 ? '−' : '+') + fmt(m.amount);
+    let del = '';
+    if (owner && m.kind === 'product_sale' && m.sale_id) del = `<button type="button" class="cj-mov-del" onclick="voidProductSale(${parseInt(m.sale_id)})" title="Anular venta" aria-label="Anular venta">🗑</button>`;
+    else if (owner && m.kind === 'expense' && m.expense_id && (!m.source_type || m.source_type === 'manual')) del = `<button type="button" class="cj-mov-del" onclick="deleteExpense(${parseInt(m.expense_id)})" title="Eliminar gasto" aria-label="Eliminar gasto">🗑</button>`;
+    return `<div class="cj-mov ${cls}">
+      <span class="cj-mov-ic" aria-hidden="true">${ico[m.kind] || '💳'}</span>
+      <div class="cj-mov-txt"><div class="cj-mov-t">${escHtml(title)}</div><div class="cj-mov-s">${escHtml(sub)}</div></div>
+      <div class="cj-mov-amt">${amt}</div>${del}
+    </div>`;
+  }).join('');
+}
+
 async function loadCashSummary() {
   const dateInput = document.getElementById('caja-date');
   if (!dateInput) return;
@@ -13564,6 +13722,8 @@ async function loadCashSummary() {
     renderCashSummary(cash);
     renderDebts(debts);
     renderCashHistory(history);
+    cajaUpdateDateLabel(date);
+    loadCajaMovements(date);
   } catch(e) {
     console.error('loadCashSummary error:', e.message);
     showToast('❌', 'Error al actualizar caja', e.message);
@@ -13595,6 +13755,18 @@ function renderCashSummary(c) {
     netoVal.textContent = fmt(c.net_total);
     netoVal.style.color = parseFloat(c.net_total||0) >= 0 ? 'var(--yellow)' : '#FF4343';
   }
+  // Cuadritos: lo que entró, los gastos y las comisiones del día
+  const kpis = document.getElementById('caja-kpis');
+  if (kpis) {
+    const np = c.net_parts;
+    const entro = np ? np.ingresos : totalIngresos;
+    const gastos = np ? np.op_expenses : c.expenses_total;
+    const comis = np ? np.commissions : c.commissions_total;
+    kpis.innerHTML = `
+      <div class="cj-kpi"><div class="cj-kpi-lbl">Entró</div><div class="cj-kpi-val" style="color:var(--green)">${fmt(entro)}</div></div>
+      <div class="cj-kpi"><div class="cj-kpi-lbl">Gastos</div><div class="cj-kpi-val" style="color:#FF4343">${fmt(gastos)}</div></div>
+      <div class="cj-kpi"><div class="cj-kpi-lbl">Comisiones</div><div class="cj-kpi-val">${fmt(comis)}</div></div>`;
+  }
   if (netoSub) {
     const extraStr = parseFloat(c.extra_income||0) > 0 ? ` + ${fmt(c.extra_income)} extras` : '';
     netoSub.textContent = c.net_parts
@@ -13623,39 +13795,26 @@ function renderCashSummary(c) {
   const defaultColors = { cash:'#4CAF50', debit:'#2196F3', credit:'#9C27B0', transfer:'#FF9800' };
 
   if (methods) {
-    // Render rows for each shop method
+    // Una tarjeta por cuenta: tocarla filtra la lista de movimientos de abajo
+    const card = (key, icon, label, val, color) => `
+      <button type="button" class="cj-acc${_cajaMethod === key ? ' on' : ''}" data-key="${escHtml(key)}" onclick="cajaFilterMethod(${jsArg(key)})" aria-pressed="${_cajaMethod === key}">
+        <div class="cj-acc-top"><span aria-hidden="true">${icon}</span><span>${escHtml(label)}</span></div>
+        <div class="cj-acc-val" style="color:${color}">${fmt(val)}</div>
+      </button>`;
     const methodRows = shopMethods.map(m => {
       const val = breakdown.length > 0
         ? (breakdownMap[m.key] || 0)
         : (legacyMap[m.key] !== undefined ? legacyMap[m.key] : 0);
-      const isDebt = m.is_debt;
-      const color = isDebt ? (val > 0 ? '#FF4343' : 'var(--gray)')
-        : (val < 0 ? '#FF4343' : (defaultColors[m.key] || '#FF9800'));
-      const canExpand = !isDebt;
-      return `
-        <div class="caja-method-row${canExpand ? ' caja-method-expandable' : ''}"
-             ${canExpand ? `onclick="toggleMethodDetail('${m.key}')"` : ''}>
-          <div class="caja-method-label">${m.icon} ${m.label}</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <div class="caja-method-val" style="color:${color}">${fmt(val)}</div>
-            ${canExpand ? `<span id="method-chevron-${m.key}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>` : ''}
-          </div>
-        </div>
-        <div id="method-detail-${m.key}" style="display:none"></div>`;
+      const color = m.is_debt ? (val > 0 ? 'var(--orange)' : 'var(--gray)')
+        : (val < 0 ? '#FF4343' : (val > 0 ? (defaultColors[m.key] || '#FF9800') : 'rgba(255,255,255,.55)'));
+      return card(m.key, m.icon || '💳', m.label || m.key, val, color);
     });
-    // Show orphan methods (have data but not in active shop list, e.g. legacy data)
+    // Cuentas con plata que ya no están en la lista del local (datos viejos)
     const knownKeys = new Set(shopMethods.map(m => m.key));
     const orphanRows = breakdown
       .filter(b => !knownKeys.has(b.key) && parseFloat(b.total) !== 0)
-      .map(b => `
-        <div class="caja-method-row caja-method-expandable" onclick="toggleMethodDetail('${escHtml(b.key)}')">
-          <div class="caja-method-label">💳 ${escHtml(b.key)}</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <div class="caja-method-val" style="color:${parseFloat(b.total) < 0 ? '#FF4343' : 'inherit'}">${fmt(b.total)}</div>
-            <span id="method-chevron-${escHtml(b.key)}" style="font-size:10px;color:var(--gray);transition:transform .2s">▼</span>
-          </div>
-        </div>
-        <div id="method-detail-${escHtml(b.key)}" style="display:none"></div>`);
+      .map(b => card(b.key, '💳', b.key, b.total, parseFloat(b.total) < 0 ? '#FF4343' : '#fff'));
+    _cajaMethodLabels = Object.fromEntries(shopMethods.map(m => [m.key, m.label || m.key]));
     methods.innerHTML = [...methodRows, ...orphanRows].join('');
   }
 
@@ -15752,14 +15911,18 @@ async function bcmSave(id) {
   <div class="modal-overlay" id="modal-gasto">
     <div class="modal">
       <div class="modal-title">📋 Registrar gasto</div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
-        <div>
-          <label class="input-label">MONTO ($)</label>
-          <input type="number" id="gasto-amount" placeholder="5000" min="0" class="modal-input" style="width:100%;box-sizing:border-box">
+      <div class="modal-sub">Se descuenta de la caja del día que estás viendo.</div>
+      <div class="form-grid">
+        <div class="form-field" style="grid-column:1/-1">
+          <label for="gasto-amount">Monto</label>
+          <div class="gasto-amount-wrap">
+            <span aria-hidden="true">$</span>
+            <input type="number" id="gasto-amount" placeholder="5000" min="0" inputmode="decimal">
+          </div>
         </div>
-        <div>
-          <label class="input-label">CATEGORÍA</label>
-          <select id="gasto-category" class="modal-input" style="width:100%;box-sizing:border-box">
+        <div class="form-field">
+          <label for="gasto-category">Categoría</label>
+          <select id="gasto-category">
             <option value="insumos">🧴 Insumos</option>
             <option value="alquiler">🏠 Alquiler</option>
             <option value="servicios">⚡ Servicios (luz, agua, etc)</option>
@@ -15767,20 +15930,20 @@ async function bcmSave(id) {
             <option value="otros">📦 Otros</option>
           </select>
         </div>
-        <div>
-          <label class="input-label">DESCRIPCIÓN (OPCIONAL)</label>
-          <input type="text" id="gasto-desc" placeholder="Ej: Gel fijador x3" class="modal-input" style="width:100%;box-sizing:border-box">
-        </div>
-        <div>
-          <label class="input-label">¿CON QUÉ SE PAGÓ?</label>
-          <select id="gasto-method" class="modal-input" style="width:100%;box-sizing:border-box">
+        <div class="form-field">
+          <label for="gasto-method">¿Con qué se pagó?</label>
+          <select id="gasto-method">
             <option value="">No descontar de ninguna cuenta</option>
           </select>
         </div>
+        <div class="form-field" style="grid-column:1/-1">
+          <label for="gasto-desc">Descripción <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--gray)">· opcional</span></label>
+          <input type="text" id="gasto-desc" placeholder="Ej: Gel fijador x3">
+        </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-modal-primary" onclick="saveExpense()">✅ Guardar gasto</button>
-        <button class="btn-modal-cancel" onclick="closeModal('modal-gasto')">Cancelar</button>
+        <button class="btn-modal-primary" onclick="saveExpense()">Guardar gasto</button>
+        <button class="btn-modal-secondary" onclick="closeModal('modal-gasto')">Cancelar</button>
       </div>
     </div>
   </div>
