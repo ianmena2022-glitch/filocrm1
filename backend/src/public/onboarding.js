@@ -39,14 +39,17 @@
     if (!state) return false;
     var s = state.steps || {};
     if (id === 'link') return !!lsGet('link') || !!s.online;
+    // Horarios: distinto del de ejemplo, o guardado con la pantalla de Horarios abierta
+    if (id === 'schedule') return !!s.schedule || (!!s.schedule_saved && !!lsGet('schedule'));
     return !!s[id];
   }
   function doneCount() { return STEPS.filter(function (st) { return isDone(st.id); }).length; }
 
   function goCfg(item) {
     minimize();
+    // En el mismo paso, así el menú de la izquierda no muestra un instante "Datos del local"
     try { showSection('configuracion'); } catch (_) {}
-    setTimeout(function () { try { cfgGoToItem(item); } catch (_) {} }, 60);
+    try { cfgGoToItem(item); } catch (_) {}
   }
 
   function bookingUrl() {
@@ -209,6 +212,7 @@
 
   // Se llama al entrar al CRM (después del login o del registro)
   function init() {
+    hookApi();
     fetchState().then(function () {
       if (!eligible()) { teardown(); return; }
       // Ya completó todo en una visita anterior: no molestar
@@ -222,6 +226,31 @@
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible' && state && eligible()) fetchState().then(render);
   });
+
+  // Después de guardar algo (configuración, servicios, WhatsApp…), actualizar el progreso enseguida.
+  // Envuelve la función global api() del CRM.
+  var _refreshTimer = null;
+  function hookApi() {
+    if (typeof window.api !== 'function' || window.api.__onb) return;
+    var orig = window.api;
+    var wrapped = function (method, path) {
+      var p = orig.apply(this, arguments);
+      if (method && method !== 'GET') {
+        // Guardó la configuración con la pantalla de Horarios abierta: el horario cuenta como revisado
+        var onSchedule = false;
+        try { onSchedule = typeof _cfgActiveItem !== 'undefined' && _cfgActiveItem === 'schedule'; } catch (_) {}
+        Promise.resolve(p).then(function () {
+          if (method === 'PUT' && path === '/settings' && onSchedule) lsSet('schedule', '1');
+          if (!state || !eligible()) return;
+          clearTimeout(_refreshTimer);
+          _refreshTimer = setTimeout(function () { fetchState().then(render); }, 300);
+        }, function () {});
+      }
+      return p;
+    };
+    wrapped.__onb = true;
+    window.api = wrapped;
+  }
 
   // Si ya había sesión abierta (recarga o volver a entrar), mostrar el progreso al cargar.
   // El login nuevo y el registro lo arrancan desde el CRM.

@@ -62,6 +62,24 @@ router.put('/any-barber-bonus', auth, ownerOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Horario de ejemplo que guarda el CRM si el dueño nunca lo tocó (DEFAULT_SCHEDULE en crm.html)
+const ONB_DEFAULT_SCHEDULE = {
+  lunes: [true, '09:00', '20:00'], martes: [true, '09:00', '20:00'], miercoles: [true, '09:00', '20:00'],
+  jueves: [true, '09:00', '20:00'], viernes: [true, '09:00', '20:00'], sabado: [true, '09:00', '14:00'],
+  domingo: [false, '09:00', '14:00'],
+};
+function isDefaultSchedule(raw) {
+  let s; try { s = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return false; }
+  if (!s || typeof s !== 'object') return false;
+  return Object.entries(ONB_DEFAULT_SCHEDULE).every(([day, [active, start, end]]) => {
+    const d = s[day]; if (!d) return false;
+    const ranges = Array.isArray(d.ranges) ? d.ranges : [{ start: d.start, end: d.end }];
+    if (!!d.active !== active) return false;
+    if (!active) return true;   // día cerrado: el rango no importa
+    return ranges.length === 1 && ranges[0].start === start && ranges[0].end === end;
+  });
+}
+
 // GET /api/settings/onboarding — checklist de primeros pasos de una cuenta nueva.
 // Cada paso se marca solo, mirando los datos reales de la cuenta.
 router.get('/onboarding', auth, async (req, res) => {
@@ -87,7 +105,9 @@ router.get('/onboarding', auth, async (req, res) => {
       slug: s.booking_slug || null,
       steps: {
         local:    !!(String(s.city || '').trim() && String(s.address || '').trim()),
-        schedule: !!s.schedule,
+        // Distinto del de ejemplo; si es igual, el CRM lo marca cuando el dueño abre Horarios y guarda
+        schedule: !!s.schedule && !isDefaultSchedule(s.schedule),
+        schedule_saved: !!s.schedule,
         services: s.own_services > 0,
         whatsapp: !!s.wpp_connected,
         online:   !!s.online_booking,
