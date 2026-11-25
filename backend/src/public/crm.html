@@ -5551,9 +5551,9 @@ function selectQRPlan(plan, el) {
   el.classList.add('selected');
 }
 
-async function openQRModal(plan) {
-  // Cuentas test: cambio de plan directo sin pago
-  if (currentShop?.is_test) {
+async function openQRModal(plan, preview) {
+  // Cuentas test: cambio de plan directo sin pago (salvo la vista previa del paywall)
+  if (currentShop?.is_test && !preview) {
     const opts = ['starter','staff','enterprise'];
     const choice = prompt(`Cambiar plan (cuenta test)\nOpciones: ${opts.join(' / ')}\nPlan actual: ${currentShop.filo_plan || 'starter'}`);
     if (!choice || !opts.includes(choice.toLowerCase().trim())) return;
@@ -6146,6 +6146,19 @@ async function startApp() {
     }
 
     if (_badgeHTML) {
+      _insertTrialBadge(_badgeHTML);
+    }
+  } else if ((currentShop?.is_test || currentShop?.plan === 'test') && !currentShop?.is_barber && !currentShop?.is_branch) {
+    // Cuentas de prueba (demo): entran siempre, así que nunca ven el aviso de prueba ni el paywall.
+    // Mostramos el mismo botón que ve una cuenta en prueba para poder abrir el paywall y mostrarlo.
+    _insertTrialBadge(`<div class="trial-badge" onclick="openQRModal('${currentShop.filo_plan||'staff'}', true)" title="Ver el paywall (cuenta de prueba)">
+        <span class="trial-dot"></span>
+        <span class="trial-label">FREE TRIAL</span>
+        <span>Trial: 7d</span>
+      </div>`);
+  }
+  function _insertTrialBadge(_badgeHTML) {
+    {
       document.querySelectorAll('.topbar-user-group').forEach(group => {
         if (group.closest('#sec-enterprise')) return; // en el panel enterprise va al lado de los botones (visible también en el celular)
         group.insertAdjacentHTML('afterbegin', _badgeHTML);
