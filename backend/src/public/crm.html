@@ -467,6 +467,18 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
   width: 100%; transition: all 0.15s;
 }
 .dkpi-caja-btn:hover { background: rgba(255,255,255,0.11); color: white; }
+/* Vender rápido desde el dashboard: buscador de productos */
+.qs-search { width: 100%; box-sizing: border-box; margin-bottom: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 11px 14px; color: #fff; font: 500 15px Barlow, sans-serif; outline: none; -webkit-appearance: none; appearance: none; }
+.qs-search:focus { border-color: var(--yellow); }
+.qs-search::placeholder { color: rgba(255,255,255,.4); }
+.qs-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.qs-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; color: #fff; font-family: Barlow, sans-serif; cursor: pointer; min-height: 48px; }
+.qs-item:hover { border-color: rgba(255,209,0,.5); background: rgba(255,209,0,.06); }
+.qs-item:disabled { opacity: .45; cursor: not-allowed; }
+.qs-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qs-stock { font-size: 11px; color: var(--gray); white-space: nowrap; }
+.qs-price { font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 700; color: var(--yellow); white-space: nowrap; }
+.qs-empty { text-align: center; color: var(--gray); font-size: 13px; padding: 24px 0; }
 
 /* ─── VENTAS STRIP ─── */
 #dash-ventas-strip {
@@ -2541,8 +2553,9 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
             </div>
             <div class="dkpi-sep"></div>
             <div class="dkpi-actions">
-              <button class="dkpi-nuevo-btn" onclick="openModal('modal-turno')">+ Nuevo turno</button>
-              <button class="dkpi-caja-btn" onclick="switchDashTab('caja')">💰 Ver caja</button>
+              <!-- Accesos del día (Nuevo turno ya está arriba y Caja en las pestañas) -->
+              <button type="button" class="dkpi-caja-btn" onclick="openExpenseModal()">🧾 + Gasto</button>
+              <button type="button" class="dkpi-caja-btn" onclick="openQuickSell()">🛒 Vender</button>
             </div>
           </div>
 
@@ -16839,5 +16852,49 @@ function openSecurePrompt({ title, label, type='text', pattern, placeholder }) {
 <script src="/forgot-password.js"></script>
 <script src="/ui-icons.js?v=3" defer></script>
 <script src="/ui-fx.js?v=8" defer></script>
+<div class="modal-overlay" id="modal-vender-rapido">
+  <div class="modal">
+    <div class="modal-title">🛒 Vender producto</div>
+    <div class="modal-sub">Elegí qué vendiste</div>
+    <input type="search" id="qs-q" class="qs-search" placeholder="Buscar producto…" autocomplete="off" oninput="renderQuickSell()">
+    <div id="qs-list" class="qs-list"><div class="qs-empty">Cargando…</div></div>
+    <div class="modal-actions">
+      <button class="btn-modal-secondary" onclick="closeModal('modal-vender-rapido')">Cancelar</button>
+    </div>
+  </div>
+</div>
+<script>
+// Vender rápido desde el dashboard: elegir el producto y abrir el cobro de siempre
+async function openQuickSell() {
+  const q = document.getElementById('qs-q'); if (q) q.value = '';
+  openModal('modal-vender-rapido');
+  const box = document.getElementById('qs-list');
+  try {
+    if (!_productos.length) _productos = await api('GET', '/products');
+  } catch (e) { box.innerHTML = '<div class="qs-empty">No se pudieron cargar los productos.</div>'; return; }
+  renderQuickSell();
+}
+function renderQuickSell() {
+  const box = document.getElementById('qs-list'); if (!box) return;
+  const all = soloVendibles(_productos);
+  if (!all.length) {
+    box.innerHTML = `<div class="qs-empty">Todavía no cargaste productos para vender.<br><button type="button" class="btn-modal-primary" style="margin-top:12px;width:auto;padding:10px 18px" onclick="closeModal('modal-vender-rapido');openProductoModal(null,'producto')">+ Cargar producto</button></div>`;
+    return;
+  }
+  const q = (document.getElementById('qs-q')?.value || '').trim().toLowerCase();
+  const list = all.filter(p => !q || (p.nombre || '').toLowerCase().includes(q))
+    .sort((a, b) => (parseInt(b.stock || 0) > 0) - (parseInt(a.stock || 0) > 0) || (a.nombre || '').localeCompare(b.nombre || ''));
+  if (!list.length) { box.innerHTML = '<div class="qs-empty">Sin resultados</div>'; return; }
+  const fmt = v => '$' + parseFloat(v || 0).toLocaleString('es-AR');
+  box.innerHTML = list.map(p => {
+    const stock = parseInt(p.stock || 0);
+    return `<button type="button" class="qs-item" ${stock <= 0 ? 'disabled' : ''} onclick="closeModal('modal-vender-rapido');openVentaProducto(${parseInt(p.id)},${jsArg(p.nombre)},${parseFloat(p.precio_venta || 0)},${stock})">
+      <span class="qs-name">${escHtml(p.nombre)}</span>
+      <span class="qs-stock">${stock > 0 ? stock + ' en stock' : 'Sin stock'}</span>
+      <span class="qs-price">${fmt(p.precio_venta)}</span>
+    </button>`;
+  }).join('');
+}
+</script>
 </body>
 </html>
