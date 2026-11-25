@@ -1262,6 +1262,106 @@ button, .btn, .nav-item, [role="button"], [onclick] { touch-action: manipulation
 .btn-qr-secondary { width:100%; background:transparent; border:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.4); padding:11px; border-radius:10px; font-size:13px; cursor:pointer; }
 .btn-qr-secondary:hover { border-color:rgba(255,255,255,.25); color:rgba(255,255,255,.7); }
 
+/* ─── PAYWALL: plan (tarjetas) + forma de pago + total, todo en una pantalla ─── */
+#modal-qr-payment { justify-content: flex-start; padding: 0; }
+#modal-qr-payment > .qr-card { margin: auto; }
+.pw2 { width: 100%; max-width: 460px; min-height: 100%; margin: 0 auto; background: #050d18; color: #fff; text-align: left; font-family: Barlow, sans-serif; display: flex; flex-direction: column; }
+.pw2-head { text-align: center; padding: 26px 18px 4px; }
+.pw2-logo { width: 42px; height: 42px; border-radius: 12px; background: var(--yellow); color: #000; font: 700 22px Oswald, sans-serif; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+.pw2-title { font: 700 26px Oswald, sans-serif; line-height: 1.15; }
+.pw2-sub { color: rgba(255,255,255,.55); font-size: 13.5px; margin-top: 4px; }
+.pw2-cards { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 16px 18px 6px; scrollbar-width: none; }
+.pw2-cards::-webkit-scrollbar { display: none; }
+.pw2-card { position: relative; flex: 0 0 78%; scroll-snap-align: center; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 0; border: 1px solid rgba(255,255,255,.09); background: #0b1a2e; border-radius: 16px; padding: 16px; color: #fff; font-family: Barlow, sans-serif; cursor: pointer; transition: border-color .15s; }
+.pw2-card:hover { border-color: rgba(255,209,0,.35); }
+.pw2-card.on { border: 2px solid var(--yellow); padding: 15px; background: linear-gradient(170deg, rgba(255,209,0,.1), #0b1a2e 55%); }
+.pw2-card:focus-visible, .pw2-acc-h:focus-visible, .pw2-cta:focus-visible, .pw2-link:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.pw2-n { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; color: rgba(255,255,255,.55); }
+.pw2-card.on .pw2-n { color: var(--yellow); }
+.pw2-price { font: 700 30px Oswald, sans-serif; margin: 2px 0 8px; line-height: 1.15; }
+.pw2-price small { font: 500 13px Barlow, sans-serif; color: rgba(255,255,255,.55); }
+.pw2-old { text-decoration: line-through; color: rgba(255,255,255,.45); font-size: .55em; margin-right: 6px; font-weight: 500; }
+.pw2-off { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 4px; background: #4ade80; color: #052e16; font: 800 10px Barlow, sans-serif; letter-spacing: .5px; vertical-align: middle; }
+.pw2-f { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; color: rgba(255,255,255,.85); margin: 5px 0; }
+.pw2-f::before { content: ""; flex: 0 0 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: rgba(0,200,117,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300C875' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/10px no-repeat; }
+.pw2-pop { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); background: var(--yellow); color: #000; font: 700 9.5px Barlow, sans-serif; letter-spacing: .8px; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
+.pw2-dots { display: flex; gap: 6px; justify-content: center; margin: 8px 0 16px; }
+.pw2-dots i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.2); transition: width .2s; }
+.pw2-dots i.on { background: var(--yellow); width: 16px; }
+.pw2-pad { padding: 0 18px 16px; }
+.pw2-lbl { font-size: 11px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: rgba(255,255,255,.55); margin: 0 0 8px; }
+.pw2-acc { border: 1px solid rgba(255,255,255,.09); border-radius: 12px; margin-bottom: 8px; }
+.pw2-acc.on { border-color: var(--yellow); }
+.pw2-acc-h { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; background: none; border: none; color: #fff; text-align: left; cursor: pointer; font-family: Barlow, sans-serif; border-radius: 12px; }
+.pw2-ic { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(255,255,255,.06); }
+.pw2-acc-t { flex: 1; min-width: 0; }
+.pw2-acc-t b { display: block; font-size: 14.5px; }
+.pw2-acc-t span { display: block; font-size: 12px; color: rgba(255,255,255,.55); }
+.pw2-r { flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); }
+.pw2-acc.on .pw2-r { border: 6px solid var(--yellow); }
+.pw2-acc-b { display: none; padding: 0 14px 14px; }
+.pw2-acc.on .pw2-acc-b { display: block; }
+.pw2-acc-b p { margin: 0; font-size: 13px; color: rgba(255,255,255,.6); line-height: 1.5; }
+.pw2-loading { padding: 10px 0; font-size: 13px; color: rgba(255,255,255,.5); }
+.pw2-copy { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; }
+.pw2-copy-t { min-width: 0; flex: 1; }
+.pw2-copy .k { font-size: 10.5px; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .5px; }
+.pw2-copy .v { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pw2-copy .v.mono { font-family: ui-monospace, monospace; font-size: 12.5px; }
+.pw2-copy button { flex: 0 0 auto; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; border-radius: 8px; padding: 7px 11px; font: 700 12px Barlow, sans-serif; cursor: pointer; min-height: 34px; }
+.pw2-cents { display: flex; gap: 8px; align-items: flex-start; background: rgba(255,209,0,.07); border: 1px solid rgba(255,209,0,.22); border-radius: 10px; padding: 9px 11px; font-size: 12px; color: rgba(255,255,255,.8); margin-top: 8px; line-height: 1.45; }
+.pw2-cents b { color: var(--yellow); }
+.pw2-link { background: none; border: none; color: rgba(255,255,255,.55); font: 600 13px Barlow, sans-serif; text-decoration: underline; cursor: pointer; padding: 8px 0; min-height: 36px; }
+.pw2-promo { margin-top: 4px; }
+.pw2-codebox { display: flex; gap: 6px; margin-top: 4px; }
+.pw2-codebox input { flex: 1; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 10px 12px; color: #fff; font: 600 14px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 1px; outline: none; }
+.pw2-codebox input:focus { border-color: var(--yellow); }
+.pw2-codebox button { border: none; border-radius: 10px; background: var(--yellow); color: #000; font: 700 13px Barlow, sans-serif; padding: 0 14px; cursor: pointer; }
+.pw2-codemsg { font-size: 12px; margin-top: 6px; min-height: 14px; }
+.pw2-redeem { width: 100%; margin-top: 10px; min-height: 46px; border: none; border-radius: 12px; background: linear-gradient(135deg,#22c55e,#16a34a); color: #fff; font: 700 15px Barlow, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.pw2-redeem span { background: rgba(255,255,255,.25); padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+.pw2-note { text-align: center; font-size: 11px; color: rgba(255,255,255,.4); margin-top: 6px; }
+.pw2-bar { position: sticky; bottom: 0; margin-top: auto; padding: 12px 18px calc(14px + env(safe-area-inset-bottom)); background: rgba(5,13,24,.97); border-top: 1px solid rgba(255,255,255,.09); }
+.pw2-total { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.pw2-total > span { color: rgba(255,255,255,.6); font-size: 13px; }
+.pw2-total > span small { display: block; font-size: 11px; color: rgba(255,255,255,.4); margin-top: 2px; }
+.pw2-total > b { font: 700 22px Oswald, sans-serif; white-space: nowrap; transition: color .2s; }
+.pw2-total.tr > b { color: var(--yellow); }
+.pw2-cta { width: 100%; min-height: 50px; border: none; border-radius: 12px; background: var(--yellow); color: #000; font: 700 15px Barlow, sans-serif; cursor: pointer; }
+.pw2-cta:disabled { opacity: .6; cursor: wait; }
+.pw2-secure { display: flex; justify-content: center; align-items: center; gap: 6px; color: rgba(255,255,255,.4); font-size: 12px; margin-top: 4px; }
+.pw2-secure .pw2-link { font-size: 12px; }
+.pw2-wait { margin-bottom: 10px; }
+.pw2-wait-row { display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 12.5px; color: rgba(255,255,255,.7); text-align: center; }
+.pw2-dot { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--yellow); animation: pulse 1.2s infinite; }
+.pw2-qr { display: none; }
+.pw2-wait .pw2-link { display: block; margin: 2px auto 0; font-size: 12.5px; }
+.pw2-wait .pw2-link[hidden] { display: none; }
+.pw2-success { max-width: 400px; }
+.pw2-ok { width: 74px; height: 74px; border-radius: 50%; background: rgba(0,200,117,.14); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.pw2-ok svg { width: 38px; height: 38px; }
+@media (min-width: 560px) {
+  .pw2 { min-height: 0; margin: 24px auto; border: 1px solid rgba(255,255,255,.09); border-radius: 20px; }
+  .pw2-bar { border-radius: 0 0 20px 20px; }
+}
+@media (min-width: 900px) {
+  .pw2 { max-width: 940px; display: grid; grid-template-columns: minmax(0,1fr) 300px; align-items: stretch; }
+  .pw2-head { grid-column: 1 / -1; text-align: left; display: flex; gap: 12px; align-items: center; padding: 26px 28px 0; }
+  .pw2-logo { margin: 0; }
+  .pw2-cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); overflow: visible; padding: 18px 10px 6px 28px; }
+  .pw2-card { padding: 14px 12px; }
+  .pw2-card.on { padding: 13px 11px; }
+  .pw2-price { font-size: 22px; }
+  .pw2-f { font-size: 12.5px; }
+  .pw2-dots { display: none; }
+  .pw2-pad { padding: 14px 10px 24px 28px; }
+  .pw2-bar { position: static; border-top: none; border-left: 1px solid rgba(255,255,255,.09); background: transparent; display: flex; flex-direction: column; justify-content: center; padding: 28px; border-radius: 0; }
+  .pw2-total { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .pw2-total > b { font-size: 30px; }
+  .pw2-qr:not([hidden]) { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 10px 0 4px; font-size: 11.5px; color: rgba(255,255,255,.5); }
+  .pw2-qr img { width: 150px; height: 150px; background: #fff; border-radius: 12px; padding: 6px; }
+}
+
 /* ─── SETTINGS ─── */
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
@@ -5544,11 +5644,120 @@ function logout() {
 // ── QR PAYMENT ─────────────────────────────────────────────────────────────
 let _qrSelectedPlan = 'staff';
 let _qrPollInterval = null;
+let _payMethod = 'mp';        // 'mp' (Mercado Pago) | 'tr' (transferencia)
+let _mpOrder = null;          // orden de Mercado Pago ya generada para el plan elegido
+let _pwPrices = {};           // { plan: { base, final } } con la promo aplicada
+const _PW_BASE = { starter: 40000, staff: 80000, enterprise: 130000 };
 
 function selectQRPlan(plan, el) {
-  _qrSelectedPlan = plan;
-  document.querySelectorAll('.qr-plan-opt').forEach(d => d.classList.remove('selected'));
-  el.classList.add('selected');
+  if (plan !== _qrSelectedPlan) {
+    _qrSelectedPlan = plan;
+    // Las órdenes ya generadas eran de otro plan: se descartan
+    _mpOrder = null; pwSetWaiting(false);
+    if (_tfOrder) { stopTransferPolling(); _tfOrder = null; }
+    if (_payMethod === 'tr') ensureTransferOrder();
+  }
+  pwRender();
+  if (el && window.matchMedia('(max-width: 899px)').matches) {
+    try { el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (_) {}
+  }
+}
+
+function pwSetMethod(m) {
+  _payMethod = m === 'tr' ? 'tr' : 'mp';
+  pwSetWaiting(false);
+  if (_payMethod === 'tr' && !_tfOrder) ensureTransferOrder();
+  pwRender();
+}
+function switchPayTab(which) { pwSetMethod(which); } // compatibilidad
+
+// Pinta selección de plan, forma de pago, total y botón
+function pwRender() {
+  const fmt  = n => '$' + Math.round(n).toLocaleString('es-AR');
+  const fmt2 = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.querySelectorAll('#modal-qr-payment .pw2-card').forEach(c => {
+    const on = c.dataset.plan === _qrSelectedPlan;
+    c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('#pw2-dots i').forEach((d, i) => d.classList.toggle('on', ['starter','staff','enterprise'][i] === _qrSelectedPlan));
+  document.querySelectorAll('#modal-qr-payment .pw2-acc').forEach(a => {
+    const on = a.dataset.m === _payMethod;
+    a.classList.toggle('on', on);
+    a.querySelector('.pw2-acc-h')?.setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+  const pr = _pwPrices[_qrSelectedPlan] || { base: _PW_BASE[_qrSelectedPlan], final: _PW_BASE[_qrSelectedPlan] };
+  const isTr = _payMethod === 'tr';
+  const totalEl = document.getElementById('pw2-total');
+  const row = document.getElementById('pw2-total-row');
+  const lbl = document.getElementById('pw2-total-lbl');
+  const cta = document.getElementById('pw2-cta');
+  if (!totalEl || !cta) return;
+  const value = isTr && _tfOrder ? fmt2(_tfOrder.amount) : fmt(pr.final);
+  totalEl.innerHTML = (pr.final < pr.base ? `<span class="pw2-old">${fmt(pr.base)}</span>` : '') + value;
+  if (row) row.classList.toggle('tr', isTr);
+  if (lbl) lbl.innerHTML = isTr ? 'Total a transferir<small>Los centavos identifican tu pago</small>' : 'Total por 30 días';
+  if (!cta.dataset.busy) cta.textContent = isTr ? 'Ya transferí' : 'Pagar con Mercado Pago';
+}
+
+// Aviso de "esperando el pago" arriba del botón (kind: 'mp' | 'tr')
+function pwSetWaiting(on, kind) {
+  const box = document.getElementById('pw2-wait');
+  if (!box) return;
+  box.hidden = !on;
+  if (!on) return;
+  const txt = document.getElementById('pw2-wait-txt');
+  const qr = document.getElementById('pw2-qr');
+  const link = document.getElementById('qr-mp-link');
+  if (kind === 'tr') {
+    txt.textContent = 'Buscando tu transferencia… se activa sola apenas llega.';
+    qr.hidden = true; link.hidden = true;
+  } else {
+    txt.textContent = 'Esperando el pago en Mercado Pago… se activa solo.';
+    qr.hidden = !_mpOrder; link.hidden = !_mpOrder;
+  }
+}
+
+// Botón principal: Mercado Pago abre el checkout; transferencia queda esperando la plata
+async function pw2Pay() {
+  const cta = document.getElementById('pw2-cta');
+  if (_payMethod === 'tr') {
+    if (!_tfOrder) { ensureTransferOrder(); return; }
+    pwSetWaiting(true, 'tr');
+    try {
+      const r = await api('GET', `/payments/transfer-status/${_tfOrder.transfer_id}`);
+      if (r.status === 'matched') window.dispatchEvent(new CustomEvent('filo:transfer.matched', { detail: { transfer_id: _tfOrder.transfer_id } }));
+    } catch (_) {}
+    return;
+  }
+  if (_mpOrder) { window.open(_mpOrder.init_point, '_blank', 'noopener'); pwSetWaiting(true, 'mp'); return; }
+  // La pestaña se abre en el mismo toque (si se abre después de esperar al servidor, el navegador la bloquea)
+  const win = window.open('', '_blank');
+  cta.dataset.busy = '1'; cta.disabled = true; cta.textContent = 'Abriendo Mercado Pago…';
+  try {
+    const plan = _qrSelectedPlan;
+    const data = await api('POST', '/payments/qr-order', { plan, code: getStoredPromoCode() });
+    if (plan !== _qrSelectedPlan) { if (win) win.close(); return; }
+    _mpOrder = data;
+    document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=${encodeURIComponent(data.init_point)}`;
+    document.getElementById('qr-mp-link').href = data.init_point;
+    if (win) { try { win.opener = null; } catch (_) {} win.location.href = data.init_point; }
+    else window.location.href = data.init_point;
+    pwSetWaiting(true, 'mp');
+    startQRPolling();
+  } catch (e) {
+    if (win) win.close();
+    showToast('❌', 'No se pudo abrir Mercado Pago', e.message);
+  } finally {
+    delete cta.dataset.busy; cta.disabled = false; pwRender();
+  }
+}
+function generateQROrder() { return pw2Pay(); } // compatibilidad
+
+function pwShowSuccess() {
+  const step = document.getElementById('qr-step-plan');
+  const ok = document.getElementById('qr-step-success');
+  if (step) step.style.display = 'none';
+  if (ok) ok.style.display = 'block';
 }
 
 async function openQRModal(plan, preview) {
@@ -5568,20 +5777,22 @@ async function openQRModal(plan, preview) {
     } catch(e) { showToast('❌', 'Error', e.message); }
     return;
   }
-  _qrSelectedPlan = plan || currentShop?.filo_plan || 'staff';
-  document.querySelectorAll('.qr-plan-opt').forEach(el => {
-    el.classList.toggle('selected', el.dataset.plan === _qrSelectedPlan);
-  });
-  const btn = document.getElementById('btn-gen-qr');
-  if (btn) { btn.disabled = false; btn.textContent = 'Generar QR de pago'; }
-  document.getElementById('qr-step-plan').style.display = 'block';
-  document.getElementById('qr-step-scan').style.display = 'none';
+  _qrSelectedPlan = ['starter','staff','enterprise'].includes(plan) ? plan : (currentShop?.filo_plan || 'staff');
+  _payMethod = 'mp'; _mpOrder = null;
+  if (_tfOrder) { stopTransferPolling(); _tfOrder = null; }
+  pwSetWaiting(false);
+  const cta = document.getElementById('pw2-cta');
+  if (cta) { delete cta.dataset.busy; cta.disabled = false; }
+  document.getElementById('qr-step-plan').style.display = '';
   document.getElementById('qr-step-success').style.display = 'none';
-  // Si está en trial, mostrar "Ahora no" en vez de "Cancelar"
+  const st = currentShop?.subscription_status;
+  const sub = document.getElementById('pw2-sub');
+  if (sub) sub.textContent = (st === 'expired' || st === 'cancelled') ? 'Tu prueba terminó. Elegí tu plan para seguir · 30 días de acceso' : 'Elegí tu plan · 30 días de acceso';
+  // Si está en prueba: "Ahora no" (sigue usando la prueba)
   const cancelBtn = document.getElementById('btn-qr-cancel-plan');
   if (cancelBtn) {
     cancelBtn.onclick = closeQRModal;
-    cancelBtn.textContent = currentShop?.subscription_status === 'trial' ? 'Ahora no, usaré el trial' : 'Cancelar';
+    cancelBtn.textContent = st === 'trial' ? 'Ahora no, sigo con la prueba' : 'Ahora no';
   }
   // En el modal de pago: mostrar si tiene meses disponibles (ya está en el flujo de renovación)
   const freeMonths = parseInt(currentShop?.free_months) || 0;
@@ -5596,6 +5807,14 @@ async function openQRModal(plan, preview) {
   if (pwWrap)  pwWrap.style.display  = hasMonths ? 'block' : 'none';
   if (pwBadge) pwBadge.textContent   = hasMonths ? `${freeMonths} disponible${freeMonths > 1 ? 's' : ''}` : '';
   document.getElementById('modal-qr-payment').classList.add('show');
+  document.getElementById('modal-qr-payment').scrollTop = 0;
+  pwRender();
+  // Celular: centrar la tarjeta del plan elegido en el carrusel
+  requestAnimationFrame(() => {
+    const cards = document.getElementById('pw2-cards');
+    const on = cards?.querySelector('.pw2-card.on');
+    if (cards && on && cards.scrollWidth > cards.clientWidth) cards.scrollLeft = on.offsetLeft - (cards.clientWidth - on.clientWidth) / 2;
+  });
   applyPromosToPaywall(); // fetch precios con descuento (si hay promo activa)
 }
 
@@ -5609,29 +5828,26 @@ async function applyPromosToPaywall() {
   ));
   // Si hay promo activa (por código o automática), mostramos el input con el badge
   renderPromoCodeInput(results.find(r => r?.discount > 0));
+  const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
   results.forEach((data, i) => {
     const plan = plans[i];
     if (!data) return;
-    const card = document.querySelector(`.qr-plan-opt[data-plan="${plan}"]`);
-    if (!card) return;
-    const priceEl = card.querySelector('.qr-plan-price');
+    _pwPrices[plan] = { base: Number(data.base), final: Number(data.discount > 0 ? data.final : data.base) };
+    const card = document.querySelector(`#modal-qr-payment .pw2-card[data-plan="${plan}"]`);
+    const priceEl = card?.querySelector('.pw2-price');
     if (!priceEl) return;
-    const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
     if (data.discount > 0) {
       const pct = data.promo?.discount_type === 'percent'
         ? Math.round(data.promo.discount_value)
         : Math.round((data.discount / data.base) * 100);
-      priceEl.innerHTML = `
-        <div style="font-size:12px;color:rgba(255,255,255,.4);text-decoration:line-through;font-weight:400;font-family:'Barlow',sans-serif;margin-bottom:2px">${fmt(data.base)}</div>
-        <div style="color:#4ade80">${fmt(data.final)}</div>
-        <div style="display:inline-block;margin-top:4px;padding:2px 7px;background:#4ade80;color:#052e16;font-size:9.5px;font-weight:800;letter-spacing:.5px;border-radius:4px;font-family:'Barlow Condensed',sans-serif">-${pct}% OFF</div>
-      `;
-      // Tooltip con nombre de la promo
+      priceEl.innerHTML = `<span class="pw2-old">${fmt(data.base)}</span>${fmt(data.final)} <small>/ mes</small><span class="pw2-off">-${pct}% OFF</span>`;
       if (data.promo?.name) card.title = `Promo: ${data.promo.name}`;
     } else {
-      priceEl.innerHTML = fmt(data.base);
+      priceEl.innerHTML = `${fmt(data.base)} <small>/ mes</small>`;
+      card.removeAttribute('title');
     }
   });
+  pwRender();
 }
 
 function togglePromoInput() {
@@ -5701,6 +5917,8 @@ async function applyPromoCode() {
       try { localStorage.setItem('filo_promo_code', code); } catch(_) {}
       msg.textContent = `✓ Código aplicado — ahorrás $${Math.round(data.discount).toLocaleString('es-AR')}`;
       msg.style.color = '#4ade80';
+      _mpOrder = null; pwSetWaiting(false);
+      if (_tfOrder) { stopTransferPolling(); _tfOrder = null; if (_payMethod === 'tr') ensureTransferOrder(); }
       await applyPromosToPaywall();
     } else {
       msg.textContent = '❌ El código no es válido o no aplica a tu cuenta.';
@@ -5760,7 +5978,7 @@ function openQRPaywall() {
 function closeQRModal() {
   stopQRPolling();
   stopTransferPolling();
-  _tfOrder = null;
+  _tfOrder = null; _mpOrder = null;
   document.getElementById('modal-qr-payment').classList.remove('show');
   // Cuenta nueva: al cerrar el modal de pago se abre el checklist de primeros pasos
   if (sessionStorage.getItem('filo_just_registered') && window.FiloOnboarding) {
@@ -5769,62 +5987,25 @@ function closeQRModal() {
   }
 }
 
-async function generateQROrder() {
-  const btn = document.getElementById('btn-gen-qr');
-  btn.disabled = true; btn.textContent = 'Generando QR...';
-  try {
-    const data = await api('POST', '/payments/qr-order', { plan: _qrSelectedPlan, code: getStoredPromoCode() });
-    // Mostrar pantalla de escaneo
-    document.getElementById('qr-step-plan').style.display = 'none';
-    document.getElementById('qr-step-scan').style.display = 'block';
-    const planLabels = { starter:'Starter', staff:'Staff', enterprise:'Enterprise' };
-    const amount = parseInt(data.amount).toLocaleString('es-AR');
-    document.getElementById('qr-scan-subtitle').textContent = `Plan ${planLabels[data.plan]} · $${amount} · 30 días de acceso`;
-    // QR que encodea el Checkout URL — se escanea con cámara del celular y abre el checkout
-    const encoded = encodeURIComponent(data.init_point);
-    document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=${encoded}`;
-    document.getElementById('qr-mp-link').href = data.init_point;
-    // Default: pestaña MP visible
-    switchPayTab('mp');
-    // Iniciar polling
-    startQRPolling();
-  } catch(e) {
-    showToast('❌', 'Error al generar QR', e.message);
-    btn.disabled = false; btn.textContent = 'Generar QR de pago';
-  }
-}
-
 let _tfOrder = null;
 let _tfPollTimer = null;
 
-function switchPayTab(which) {
-  const tabMp = document.getElementById('qr-tab-mp');
-  const tabTr = document.getElementById('qr-tab-tr');
-  const paneMp = document.getElementById('qr-pane-mp');
-  const paneTr = document.getElementById('qr-pane-tr');
-  if (!tabMp || !tabTr) return;
-  if (which === 'tr') {
-    tabTr.style.background = 'var(--yellow)'; tabTr.style.color = '#000';
-    tabMp.style.background = 'transparent'; tabMp.style.color = 'rgba(255,255,255,.6)';
-    paneMp.style.display = 'none'; paneTr.style.display = 'block';
-    if (!_tfOrder) ensureTransferOrder();
-  } else {
-    tabMp.style.background = 'var(--yellow)'; tabMp.style.color = '#000';
-    tabTr.style.background = 'transparent'; tabTr.style.color = 'rgba(255,255,255,.6)';
-    paneMp.style.display = 'block'; paneTr.style.display = 'none';
-  }
-}
-
+let _tfReq = 0;
 async function ensureTransferOrder() {
   const loading = document.getElementById('tr-loading');
   const details = document.getElementById('tr-details');
+  loading.textContent = 'Preparando los datos…';
   loading.style.display = 'block';
   details.style.display = 'none';
+  const req = ++_tfReq;
+  const plan = _qrSelectedPlan;
+  pwRender();
   try {
-    const data = await api('POST', '/payments/transfer-order', { plan: _qrSelectedPlan, code: getStoredPromoCode() });
+    const data = await api('POST', '/payments/transfer-order', { plan, code: getStoredPromoCode() });
+    if (req !== _tfReq || plan !== _qrSelectedPlan) return; // cambió el plan mientras tanto
     _tfOrder = data;
     document.getElementById('tr-amount').textContent =
-      '$ ' + (data.amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      '$' + (data.amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('tr-alias').textContent = data.alias || '(no configurado)';
     document.getElementById('tr-cbu').textContent   = data.cbu   || '(no configurado)';
     document.getElementById('tr-receiver').textContent = data.receiver_name || 'FILO CRM';
@@ -5833,8 +6014,10 @@ async function ensureTransferOrder() {
     loading.style.display = 'none';
     details.style.display = 'block';
     startTransferPolling(data.transfer_id);
+    pwRender();
   } catch(e) {
-    loading.innerHTML = `<div style="color:#f87171">⚠️ ${e.message || 'Error al generar la orden'}</div>`;
+    if (req !== _tfReq) return;
+    loading.innerHTML = `<div style="color:#f87171">⚠️ ${escHtml(e.message || 'Error al generar la orden')}</div>`;
   }
 }
 
@@ -5847,10 +6030,7 @@ function startTransferPolling(transferId) {
     if (d.transfer_id && d.transfer_id !== transferId) return;
     stopTransferPolling();
     stopQRPolling();
-    const stepScan = document.getElementById('qr-step-scan');
-    const stepOk   = document.getElementById('qr-step-success');
-    if (stepScan) stepScan.style.display = 'none';
-    if (stepOk)   stepOk.style.display   = 'block';
+    pwShowSuccess();
     setTimeout(() => { closeQRModal(); window.location.reload(); }, 2500);
   };
   window.addEventListener('filo:transfer.matched', onMatched);
@@ -5896,8 +6076,7 @@ function startQRPolling() {
         currentShop = data.shop;
         localStorage.setItem('filo_shop', JSON.stringify(currentShop));
         // Mostrar éxito
-        document.getElementById('qr-step-scan').style.display = 'none';
-        document.getElementById('qr-step-success').style.display = 'block';
+        pwShowSuccess();
         setTimeout(() => {
           closeQRModal();
           document.getElementById('paywall-screen').classList.remove('show');
@@ -6388,11 +6567,8 @@ function startSSE() {
       window.dispatchEvent(new CustomEvent('filo:plan.activated', { detail: d }));
       if (typeof showToast === 'function') showToast('🎉', 'Plan activado', d.plan_label || '');
       // Si está abierto el modal de pago, cerrarlo y mostrar success
-      const stepSuccess = document.getElementById('qr-step-success');
-      const stepScan    = document.getElementById('qr-step-scan');
-      if (stepScan && stepSuccess && stepScan.style.display !== 'none') {
-        stepScan.style.display = 'none';
-        stepSuccess.style.display = 'block';
+      if (document.getElementById('modal-qr-payment')?.classList.contains('show')) {
+        pwShowSuccess();
         setTimeout(() => window.location.reload(), 2500);
       } else {
         setTimeout(() => window.location.reload(), 2500);
@@ -15831,128 +16007,84 @@ async function bcmSave(id) {
 <!-- CARD REQUIRED SCREEN -->
 <!-- ── MODAL QR PAGO ──────────────────────────────────────────── -->
 <div id="modal-qr-payment">
-  <!-- Step 1: elegir plan -->
-  <div class="qr-card" id="qr-step-plan">
-    <div style="font-size:36px;margin-bottom:14px">✂️</div>
-    <div class="qr-title">Elegí tu plan</div>
-    <div class="qr-sub">Pagá con cualquier billetera virtual<br>escaneando el QR — sin tarjeta necesaria</div>
-    <div class="qr-plans">
-      <div class="qr-plan-opt" data-plan="starter" onclick="selectQRPlan('starter',this)">
-        <div class="qr-plan-name">Starter</div>
-        <div class="qr-plan-price">$40.000</div>
-        <div class="qr-plan-period">por mes</div>
-      </div>
-      <div class="qr-plan-opt selected" data-plan="staff" onclick="selectQRPlan('staff',this)">
-        <div class="qr-plan-name">Staff ⭐</div>
-        <div class="qr-plan-price">$80.000</div>
-        <div class="qr-plan-period">por mes</div>
-      </div>
-      <div class="qr-plan-opt" data-plan="enterprise" onclick="selectQRPlan('enterprise',this)">
-        <div class="qr-plan-name">Enterprise</div>
-        <div class="qr-plan-price">$130.000</div>
-        <div class="qr-plan-period">por mes</div>
-      </div>
+  <!-- Paso único: plan (tarjetas) + forma de pago + total -->
+  <div class="pw2" id="qr-step-plan" role="dialog" aria-modal="true" aria-labelledby="pw2-title">
+    <div class="pw2-head">
+      <div class="pw2-logo" aria-hidden="true">F</div>
+      <div><div class="pw2-title" id="pw2-title">Seguí llenando el sillón</div><div class="pw2-sub" id="pw2-sub">Elegí tu plan · 30 días de acceso</div></div>
     </div>
-
-    <!-- Promo code (collapsable) -->
-    <div id="qr-promo-wrap" style="margin:4px auto 14px;max-width:300px">
-      <button id="qr-promo-toggle" type="button" onclick="togglePromoInput()" style="background:transparent;border:none;color:rgba(255,255,255,.5);font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:'Barlow',sans-serif">¿Tenés un código de descuento?</button>
-      <div id="qr-promo-form" style="display:none;margin-top:10px">
-        <div style="display:flex;gap:6px;align-items:stretch">
-          <input id="qr-promo-input" placeholder="CÓDIGO" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:9px 12px;color:#fff;font-family:monospace;text-transform:uppercase;font-size:13px;letter-spacing:1px;outline:none" onkeydown="if(event.key==='Enter')applyPromoCode()">
-          <button type="button" onclick="applyPromoCode()" style="background:var(--yellow);color:#050d18;border:none;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;text-transform:uppercase">Aplicar</button>
+    <div class="pw2-main">
+      <div class="pw2-cards" id="pw2-cards" role="group" aria-label="Planes">
+        <button type="button" class="pw2-card" data-plan="starter" onclick="selectQRPlan('starter',this)">
+          <span class="pw2-n">STARTER</span>
+          <span class="pw2-price">$40.000 <small>/ mes</small></span>
+          <span class="pw2-f">Vos solo atendiendo</span><span class="pw2-f">Agenda online y WhatsApp con IA</span><span class="pw2-f">Caja, stock y reportes</span>
+        </button>
+        <button type="button" class="pw2-card" data-plan="staff" onclick="selectQRPlan('staff',this)">
+          <span class="pw2-pop">MÁS POPULAR</span>
+          <span class="pw2-n">STAFF</span>
+          <span class="pw2-price">$80.000 <small>/ mes</small></span>
+          <span class="pw2-f">Barberos ilimitados</span><span class="pw2-f">Comisiones por empleado</span><span class="pw2-f">Panel para cada barbero</span>
+        </button>
+        <button type="button" class="pw2-card" data-plan="enterprise" onclick="selectQRPlan('enterprise',this)">
+          <span class="pw2-n">ENTERPRISE</span>
+          <span class="pw2-price">$130.000 <small>/ mes</small></span>
+          <span class="pw2-f">Varias barberías</span><span class="pw2-f">Dashboard centralizado</span><span class="pw2-f">Soporte prioritario</span>
+        </button>
+      </div>
+      <div class="pw2-dots" id="pw2-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="pw2-pad">
+        <div class="pw2-lbl">Forma de pago</div>
+        <div class="pw2-acc" data-m="mp">
+          <button type="button" class="pw2-acc-h" onclick="pwSetMethod('mp')"><span class="pw2-ic" aria-hidden="true">💳</span><span class="pw2-acc-t"><b>Mercado Pago</b><span>Tarjeta, débito, saldo, Rapipago</span></span><span class="pw2-r" aria-hidden="true"></span></button>
+          <div class="pw2-acc-b"><p>Pagás en Mercado Pago y volvés: el plan se activa solo.</p></div>
         </div>
-        <div id="qr-promo-msg" style="font-size:11.5px;margin-top:6px;min-height:14px;text-align:left"></div>
-      </div>
-    </div>
-    <!-- Botón canjear mes gratis (visible solo si tiene tokens) -->
-    <div id="qr-redeem-wrap" style="display:none;margin-bottom:12px">
-      <button onclick="redeemFreeMonth()" style="width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(34,197,94,.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        🎁 Canjear mes gratis <span id="qr-free-months-badge" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:13px"></span>
-      </button>
-      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.35);margin-top:6px">Extiende tu acceso 30 días sin pagar</div>
-    </div>
-    <button class="btn-qr-primary" id="btn-gen-qr" onclick="generateQROrder()">Generar QR de pago</button>
-    <button class="btn-qr-secondary" onclick="closeQRModal()" id="btn-qr-cancel-plan">Cerrar sesión</button>
-  </div>
-
-  <!-- Step 2: escanear QR -->
-  <div class="qr-card" id="qr-step-scan" style="display:none">
-    <!-- Tabs -->
-    <div style="display:flex;gap:6px;margin-bottom:16px;background:rgba(255,255,255,.04);padding:4px;border-radius:10px">
-      <button type="button" id="qr-tab-mp" onclick="switchPayTab('mp')"
-        style="flex:1;background:var(--yellow);color:#000;border:none;padding:9px;border-radius:7px;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">QR / Checkout</button>
-      <button type="button" id="qr-tab-tr" onclick="switchPayTab('tr')"
-        style="flex:1;background:transparent;color:rgba(255,255,255,.6);border:none;padding:9px;border-radius:7px;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">Transferencia</button>
-    </div>
-
-    <!-- TAB: MP (QR + Checkout) -->
-    <div id="qr-pane-mp">
-      <div class="qr-title">QR de Mercado Pago</div>
-      <div class="qr-sub" id="qr-scan-subtitle">Plan Staff · $80.000 · 30 días de acceso</div>
-      <div class="qr-img-wrap">
-        <img id="qr-img" src="" alt="QR de pago" />
-      </div>
-      <div id="qr-hint" style="font-size:11.5px;color:rgba(255,255,255,.5);margin:4px 0 14px;line-height:1.55">
-        Escaneá con la cámara del celular → te abre el checkout.<br>
-        <span style="color:rgba(255,255,255,.35)">Si usás otro banco, mejor pagá por Transferencia 👆</span>
-      </div>
-      <a id="qr-mp-link" href="#" target="_blank" rel="noopener noreferrer"
-         style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--yellow);color:#000;padding:12px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:10px;transition:filter .15s"
-         onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
-        💳 Abrir checkout desde esta pantalla
-      </a>
-      <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;line-height:1.5">
-        En el checkout: tarjeta · débito · dinero en MP · Rapipago · Pago Fácil
-      </div>
-    </div>
-
-    <!-- TAB: Transferencia bancaria con auto-detección -->
-    <div id="qr-pane-tr" style="display:none">
-      <div class="qr-title">Transferencia bancaria</div>
-      <div class="qr-sub">Desde cualquier banco · se activa automáticamente al recibir</div>
-      <div id="tr-loading" style="padding:30px;text-align:center;color:rgba(255,255,255,.4)">Generando orden...</div>
-      <div id="tr-details" style="display:none;text-align:left">
-        <div style="background:rgba(255,209,0,.08);border:1px solid rgba(255,209,0,.25);border-radius:12px;padding:14px;margin-bottom:12px">
-          <div style="font-size:11px;color:rgba(255,209,0,.7);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Monto exacto a transferir</div>
-          <div id="tr-amount" style="font-size:28px;font-weight:800;color:var(--yellow);font-family:'Barlow Condensed',sans-serif;letter-spacing:-.5px">$ 0,00</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">⚠️ Transferí el monto EXACTO con los centavos para activación automática</div>
-        </div>
-        <div id="tr-alias-wrap" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-          <div style="min-width:0;flex:1">
-            <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">Alias</div>
-            <div id="tr-alias" style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis">—</div>
+        <div class="pw2-acc" data-m="tr">
+          <button type="button" class="pw2-acc-h" onclick="pwSetMethod('tr')"><span class="pw2-ic" aria-hidden="true">🏦</span><span class="pw2-acc-t"><b>Transferencia</b><span>Desde cualquier banco o billetera</span></span><span class="pw2-r" aria-hidden="true"></span></button>
+          <div class="pw2-acc-b">
+            <div id="tr-loading" class="pw2-loading">Preparando los datos…</div>
+            <div id="tr-details" style="display:none">
+              <div class="pw2-copy" id="tr-alias-wrap"><div class="pw2-copy-t"><div class="k">Alias</div><div class="v" id="tr-alias">—</div></div><button type="button" onclick="copyText(document.getElementById('tr-alias').textContent,'Alias copiado')">Copiar</button></div>
+              <div class="pw2-copy" id="tr-cbu-wrap"><div class="pw2-copy-t"><div class="k">CBU / CVU</div><div class="v mono" id="tr-cbu">—</div></div><button type="button" onclick="copyText(document.getElementById('tr-cbu').textContent,'CBU copiado')">Copiar</button></div>
+              <div class="pw2-copy"><div class="pw2-copy-t"><div class="k">Titular</div><div class="v" id="tr-receiver">FILO CRM</div></div></div>
+              <div class="pw2-cents"><span aria-hidden="true">💡</span><span>Transferí <b id="tr-amount">$0,00</b>, con los centavos: así reconocemos tu pago y el plan se activa solo en menos de 1 minuto. Estos datos valen 24 horas.</span></div>
+            </div>
           </div>
-          <button type="button" onclick="copyText(document.getElementById('tr-alias').textContent,'Alias copiado')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">Copiar</button>
         </div>
-        <div id="tr-cbu-wrap" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-          <div style="min-width:0;flex:1">
-            <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">CBU/CVU</div>
-            <div id="tr-cbu" style="font-size:12px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;font-family:monospace">—</div>
+        <div id="qr-promo-wrap" class="pw2-promo">
+          <button id="qr-promo-toggle" type="button" class="pw2-link" onclick="togglePromoInput()">¿Tenés un código de descuento?</button>
+          <div id="qr-promo-form" style="display:none">
+            <div class="pw2-codebox">
+              <input id="qr-promo-input" placeholder="CÓDIGO" aria-label="Código de descuento" autocomplete="off" onkeydown="if(event.key==='Enter')applyPromoCode()">
+              <button type="button" onclick="applyPromoCode()">Aplicar</button>
+            </div>
+            <div id="qr-promo-msg" class="pw2-codemsg"></div>
           </div>
-          <button type="button" onclick="copyText(document.getElementById('tr-cbu').textContent,'CBU copiado')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:7px;font-size:11px;cursor:pointer;font-weight:600">Copiar</button>
         </div>
-        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:11px 13px;margin-bottom:14px">
-          <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">Titular</div>
-          <div id="tr-receiver" style="font-size:14px;font-weight:600;color:#fff">FILO CRM</div>
-        </div>
-        <div style="font-size:11px;color:rgba(255,255,255,.45);line-height:1.5;margin-bottom:12px;text-align:center">
-          Después de transferir, el plan se activa en menos de 1 minuto.<br>
-          Orden válida por 24 horas.
+        <!-- Canjear mes gratis (solo si tiene meses de referidos) -->
+        <div id="qr-redeem-wrap" style="display:none">
+          <button type="button" class="pw2-redeem" onclick="redeemFreeMonth()">🎁 Canjear mes gratis <span id="qr-free-months-badge"></span></button>
+          <div class="pw2-note">Extiende tu acceso 30 días sin pagar</div>
         </div>
       </div>
     </div>
-
-    <div class="qr-pulse"><span></span><span></span><span></span></div>
-    <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:14px">Esperando confirmación de pago...</div>
-    <button class="btn-qr-secondary" onclick="closeQRModal()">Cancelar</button>
+    <div class="pw2-bar">
+      <div class="pw2-total" id="pw2-total-row"><span id="pw2-total-lbl">Total por 30 días</span><b id="pw2-total">$80.000</b></div>
+      <div class="pw2-wait" id="pw2-wait" hidden>
+        <div class="pw2-wait-row"><span class="pw2-dot" aria-hidden="true"></span><span id="pw2-wait-txt"></span></div>
+        <div class="pw2-qr" id="pw2-qr" hidden><img id="qr-img" alt="QR para pagar con Mercado Pago"><span>O escaneá con la cámara del celular</span></div>
+        <a id="qr-mp-link" class="pw2-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir Mercado Pago de nuevo</a>
+      </div>
+      <button type="button" class="pw2-cta" id="pw2-cta" onclick="pw2Pay()">Pagar con Mercado Pago</button>
+      <div class="pw2-secure"><span>🔒 Pago seguro</span><span aria-hidden="true">·</span><button type="button" class="pw2-link" id="btn-qr-cancel-plan" onclick="closeQRModal()">Ahora no</button></div>
+    </div>
   </div>
 
   <!-- Step 3: éxito -->
-  <div class="qr-card" id="qr-step-success" style="display:none">
-    <div style="font-size:52px;margin-bottom:16px">🎉</div>
-    <div class="qr-title" style="color:var(--green)">¡Pago confirmado!</div>
-    <div style="font-size:14px;color:rgba(255,255,255,.5);margin-top:8px;line-height:1.6">Tu plan fue activado.<br>En un momento abrirá el dashboard.</div>
+  <div class="qr-card pw2-success" id="qr-step-success" style="display:none">
+    <div class="pw2-ok" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#00C875" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+    <div class="qr-title">¡Listo! Tu plan está activo</div>
+    <div style="font-size:14px;color:rgba(255,255,255,.55);margin-top:8px;line-height:1.6">Pago confirmado. En un momento entrás a tu barbería.</div>
   </div>
 </div>
 
@@ -15968,7 +16100,7 @@ async function bcmSave(id) {
     </button>
     <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.35);margin-top:6px">Extiende tu acceso 30 días sin pagar</div>
   </div>
-  <button class="pw-btn" onclick="openQRPaywall()" style="margin-top:8px">Pagar con QR</button>
+  <button class="pw-btn" onclick="openQRPaywall()" style="margin-top:8px">Elegir mi plan</button>
   <div class="pw-trial-note">Cualquier billetera virtual · Pago seguro</div>
 </div>
 
