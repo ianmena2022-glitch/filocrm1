@@ -217,6 +217,100 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 @media(max-width:400px){
   .stats-grid{grid-template-columns:1fr}
 }
+
+/* ═══════════ ADMIN FINTECH: resumen de plata y perfil de cada cuenta ═══════════ */
+body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),transparent 60%),radial-gradient(900px 500px at 100% 0,rgba(77,163,255,.06),transparent 60%),var(--n)}
+.num,.fx-big,.fx-val,.pf-big{font-variant-numeric:tabular-nums}
+#crm-content > .stats-grid{display:none}
+.fx-grid{display:grid;gap:14px;margin-bottom:14px}
+.fx-g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.fx-g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fx-g21{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.fx-g11{grid-template-columns:repeat(2,minmax(0,1fr))}
+.fx-card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--border);border-radius:16px;padding:18px 20px;min-width:0;position:relative}
+.fx-card.hero{background:linear-gradient(135deg,rgba(255,209,0,.12),rgba(255,209,0,.02) 60%);border-color:rgba(255,209,0,.25)}
+.fx-lbl{font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--g);display:flex;align-items:center;gap:6px}
+.fx-lbl .fx-help{cursor:help;opacity:.7}
+.fx-big{font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;line-height:1.1;margin-top:6px}
+.fx-val{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;line-height:1.15;margin-top:6px}
+.fx-sub{font-size:12px;color:var(--g);margin-top:6px;line-height:1.4}
+.fx-delta{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.fx-delta.up{color:#4ade80;background:rgba(74,222,128,.12)}.fx-delta.down{color:#f87171;background:rgba(248,113,113,.12)}.fx-delta.flat{color:var(--g);background:rgba(255,255,255,.06)}
+.fx-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px}
+.fx-head h3{font-family:'Oswald',sans-serif;font-size:16px;font-weight:600;letter-spacing:.3px}
+.fx-head span{font-size:12px;color:var(--g)}
+.fx-chart{width:100%;height:auto;display:block;overflow:visible}
+.fx-chart .bar{fill:rgba(255,209,0,.85);transition:fill .15s}.fx-chart .bar.cur{fill:var(--y)}.fx-chart .bar.dim{fill:rgba(255,209,0,.35)}
+.fx-chart .bar:hover{fill:#ffe57a}
+.fx-chart text{fill:var(--g);font-size:10px;font-family:Barlow,sans-serif}
+.fx-chart .grid{stroke:rgba(255,255,255,.06)}
+.fx-stack{display:flex;height:12px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.05);margin:6px 0 12px}
+.fx-legend{display:flex;flex-direction:column;gap:8px}
+.fx-legend div{display:flex;align-items:center;gap:8px;font-size:13px}
+.fx-legend i{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
+.fx-legend b{margin-left:auto;font-family:'Oswald',sans-serif;font-weight:600}
+.fx-list{display:flex;flex-direction:column}
+.fx-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.fx-row:last-child{border-bottom:none}
+.fx-av{width:34px;height:34px;flex:0 0 34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;background:rgba(255,209,0,.12);color:var(--y)}
+.fx-av.blue{background:rgba(77,163,255,.14);color:#7cc0ff}.fx-av.red{background:rgba(248,113,113,.14);color:#f87171}.fx-av.green{background:rgba(74,222,128,.14);color:#4ade80}
+.fx-row-t{flex:1;min-width:0}
+.fx-row-t b{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx-row-t span{display:block;font-size:11.5px;color:var(--g);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx-amt{font-family:'Oswald',sans-serif;font-weight:600;font-size:15px;white-space:nowrap}
+.fx-amt.pos{color:#4ade80}
+.fx-link{background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-align:left;padding:0;min-width:0}
+.fx-link:hover b,.fx-link:hover .acc-name{color:var(--y)}
+.fx-empty{color:var(--g);font-size:13px;padding:14px 0}
+.fx-funnel{display:flex;flex-direction:column;gap:10px}
+.fx-fstep{display:grid;grid-template-columns:110px 1fr 64px;align-items:center;gap:10px;font-size:13px}
+.fx-fbar{height:26px;border-radius:7px;background:rgba(255,255,255,.05);overflow:hidden}
+.fx-fbar i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,var(--y),#ffb300)}
+.fx-fstep b{font-family:'Oswald',sans-serif;text-align:right;font-weight:600}
+.fx-tag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:.3px}
+.fx-tag.red{background:rgba(248,113,113,.14);color:#f87171}.fx-tag.or{background:rgba(255,145,0,.14);color:var(--or)}.fx-tag.green{background:rgba(74,222,128,.12);color:#4ade80}.fx-tag.blue{background:rgba(77,163,255,.14);color:#7cc0ff}.fx-tag.gray{background:rgba(255,255,255,.07);color:var(--g)}
+.acc-name{font-weight:600}
+.acc-meta{font-size:10.5px;color:var(--g);margin-top:2px}
+.acc-meta b{color:rgba(255,255,255,.8);font-weight:600}
+@media (max-width:1100px){.fx-g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fx-g21,.fx-g3{grid-template-columns:1fr}}
+@media (max-width:640px){.fx-g4,.fx-g11{grid-template-columns:1fr}.fx-big{font-size:32px}.fx-card{padding:16px}}
+
+/* Perfil de cuenta (panel lateral; pantalla completa en el celular) */
+.pf-ov{position:fixed;inset:0;z-index:900;background:rgba(0,6,14,.6);backdrop-filter:blur(3px);display:none}
+.pf-ov.on{display:block;animation:pfFade .15s ease}
+@keyframes pfFade{from{opacity:0}}
+.pf{position:fixed;top:0;right:0;bottom:0;z-index:901;width:min(760px,100%);background:#04101f;border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .22s ease;box-shadow:-20px 0 60px rgba(0,0,0,.5)}
+.pf.on{transform:none}
+.pf-top{position:sticky;top:0;z-index:2;background:rgba(4,16,31,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;gap:14px;align-items:center}
+.pf-av{width:48px;height:48px;flex:0 0 48px;border-radius:14px;background:var(--y);color:#000;font:700 22px Oswald,sans-serif;display:flex;align-items:center;justify-content:center}
+.pf-name{font-family:'Oswald',sans-serif;font-size:21px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-sub{font-size:12px;color:var(--g);margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pf-x{margin-left:auto;flex:0 0 40px;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:transparent;color:#fff;font-size:20px;cursor:pointer}
+.pf-body{padding:18px 20px 40px}
+.pf-sec{margin-bottom:18px}
+.pf-sec h4{font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--g);margin-bottom:10px;display:flex;justify-content:space-between}
+.pf-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.pf-tile{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-width:0}
+.pf-tile .k{font-size:11px;color:var(--g)}
+.pf-tile .v{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-tile .d{font-size:11px;color:var(--g);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-health{display:flex;gap:16px;align-items:center;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.pf-ring{flex:0 0 74px;width:74px;height:74px}
+.pf-ring text{font:700 20px Oswald,sans-serif;fill:#fff}
+.pf-reasons{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:rgba(255,255,255,.8)}
+.pf-feats{display:flex;flex-wrap:wrap;gap:6px}
+.pf-feat{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;border-radius:99px;border:1px solid var(--border);color:var(--g)}
+.pf-feat.on{border-color:rgba(74,222,128,.35);color:#d1fae5;background:rgba(74,222,128,.07)}
+.pf-feat i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)}.pf-feat.on i{background:#4ade80}
+.pf-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pf-btn{min-height:38px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:#fff;font:600 13px Barlow,sans-serif;padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.pf-btn.y{background:var(--y);color:#000;border-color:var(--y)}
+.pf-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.pf-tbl td{padding:9px 0;border-bottom:1px solid var(--border)}
+.pf-tbl td:last-child{text-align:right;font-family:'Oswald',sans-serif;font-weight:600}
+@media (max-width:640px){.pf-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.pf-body{padding:16px 16px 40px}.pf-top{padding:12px 16px}}
+/* Celular: la barra de arriba entra en el ancho (sin scroll de costado) */
+@media (max-width:640px){.topbar-right{gap:6px;min-width:0}.topbar-right .btn-ghost[onclick="adminPushTest()"]{display:none}.topbar-right .btn-ghost{padding:5px 8px}#topbar-refresh-btn{font-size:0}#topbar-refresh-btn::before{content:'↻';font-size:16px;font-family:system-ui,sans-serif}}
 </style>
 </head>
 <body>
@@ -269,7 +363,7 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     <!-- ── CRM CONTENT ── -->
     <div id="crm-content">
     <div class="page-title">Panel de Control</div>
-    <div class="page-sub">Gestión de cuentas y facturación de FILO CRM</div>
+    <div class="page-sub">Plata, cuentas y comportamiento de FILO CRM</div>
 
     <!-- STATS -->
     <div class="stats-grid">
@@ -307,7 +401,8 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
 
     <!-- TABS -->
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('accounts')">Cuentas</button>
+      <button class="tab active" onclick="switchTab('resumen')">💹 Resumen</button>
+      <button class="tab" onclick="switchTab('accounts')">Cuentas</button>
       <button class="tab" onclick="switchTab('billing')">Liquidaciones</button>
       <button class="tab" id="tab-btn-archived" onclick="switchTab('archived')">📦 Archivadas</button>
       <button class="tab" onclick="switchTab('vendors')">Vendedores</button>
@@ -329,7 +424,10 @@ td{padding:14px 16px;font-size:13px;vertical-align:middle}
     </div>
 
     <!-- TAB: CUENTAS -->
-    <div id="tab-accounts">
+    <!-- TAB: RESUMEN (finanzas) -->
+    <div id="tab-resumen"><div class="fx-empty">Cargando…</div></div>
+
+    <div id="tab-accounts" style="display:none">
       <div class="toolbar">
         <input class="search-input" id="search-input" placeholder="🔍 Buscar barbería..." oninput="filterAccounts()">
         <select class="filter" id="filter-status" onchange="filterAccounts()">
@@ -1410,6 +1508,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ── DATOS ─────────────────────────────────────────────────────────────────────
 async function loadAll() {
   try {
+    loadFinance(); // resumen de plata (no bloquea la carga de cuentas)
     const [accRes, venRes, fcRes] = await Promise.all([
       fetch('/api/admin/accounts', { headers: { 'Authorization': `Bearer ${adminToken}` } }),
       fetch('/api/admin/vendors',  { headers: { 'Authorization': `Bearer ${adminToken}` } }),
@@ -1428,6 +1527,7 @@ async function loadAll() {
     filterBilling();
     renderVendorsTable();
     renderMetrics();
+    renderResumen();
     document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
   } catch(e) {
     console.error(e);
@@ -1567,7 +1667,7 @@ function renderTreeRow(a, depth, parentId) {
     const testTag = (a.is_test ? ` <span style="font-size:9px;font-weight:700;color:var(--or);letter-spacing:.5px">TEST</span>` : '')
       + (a.exclude_from_kpis ? ` <span title="No cuenta en los KPIs" style="font-size:9px;font-weight:700;color:#60a5fa;letter-spacing:.5px">SIN KPI</span>` : '');
     const entTag  = a.is_enterprise_owner ? ` <span style="font-size:9px;color:#9f7aea">ENT</span>` : '';
-    nameHtml = `<div style="font-weight:600">${esc(a.name)}${testTag}${entTag}</div><div style="font-size:10px;color:var(--g)">#${a.id}</div>`;
+    nameHtml = `<button type="button" class="fx-link" onclick="openProfile(${a.id})" title="Ver perfil"><div class="acc-name">${esc(a.name)}${testTag}${entTag}</div></button><div class="acc-meta">#${a.id}${accMoneyMeta(a)}</div>`;
   }
 
   return `<tr data-id="${a.id}" class="row-level-${depth} ${childClass}" style="${depth > 0 ? 'display:none' : ''}">
@@ -2026,6 +2126,7 @@ async function resetWpp(id, name) {
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
+  document.getElementById('tab-resumen').style.display   = tab === 'resumen'   ? 'block' : 'none';
   document.getElementById('tab-accounts').style.display  = tab === 'accounts'  ? 'block' : 'none';
   document.getElementById('tab-archived').style.display  = tab === 'archived'  ? 'block' : 'none';
   document.getElementById('tab-billing').style.display   = tab === 'billing'   ? 'block' : 'none';
@@ -2037,6 +2138,7 @@ function switchTab(tab) {
   document.getElementById('tab-pagos').style.display     = tab === 'pagos'     ? 'block' : 'none';
   if (tab === 'pagos')     loadUnmatchedPayments();
   if (tab === 'metrics')   renderMetrics();
+  if (tab === 'resumen')   renderResumen();
   if (tab === 'referidos') loadPeerReferrals();
   if (tab === 'afiliados') loadAfiliados();
   if (tab === 'config')    loadAppSettings();
@@ -2693,6 +2795,326 @@ function renderMetrics() {
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ═══════════ RESUMEN DE PLATA Y PERFIL DE CUENTA ═══════════
+let financeData = null;
+const fxMoney = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR');
+const fxCompact = n => { n = Number(n) || 0; return n >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'k' : '$' + Math.round(n); };
+const FX_MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const fxMonthLbl = ym => { const [y, m] = ym.split('-').map(Number); return FX_MONTHS[m - 1]; };
+const fxDays = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;
+const fxRel = iso => { if (!iso) return 'nunca'; const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); if (m < 60) return `hace ${m} min`; const h = Math.round(m / 60); if (h < 24) return `hace ${h} h`; const d = Math.round(h / 24); return d === 1 ? 'ayer' : `hace ${d} días`; };
+function fxDelta(cur, prev) {
+  if (!prev && !cur) return '<span class="fx-delta flat">—</span>';
+  if (!prev) return '<span class="fx-delta up">nuevo</span>';
+  const pct = Math.round((cur - prev) / prev * 100);
+  return `<span class="fx-delta ${pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}">${pct > 0 ? '▲' : pct < 0 ? '▼' : ''} ${Math.abs(pct)}%</span>`;
+}
+
+async function loadFinance() {
+  try {
+    const r = await fetch('/api/admin/finance', { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    if (!r.ok) return;
+    financeData = await r.json();
+    renderResumen();
+  } catch (_) {}
+}
+
+// Salud de una cuenta (0-100) con los motivos, para el resumen, la tabla y el perfil
+function accountHealth(a, extra) {
+  const reasons = [];
+  let score = 0;
+  const last = lastActivityMs(a);
+  const days = last ? (Date.now() - last) / 86400000 : 999;
+  if (days < 2) { score += 35; reasons.push(['ok', 'Entró en los últimos 2 días']); }
+  else if (days < 7) { score += 22; reasons.push(['mid', `Última conexión ${fxRel(new Date(last))}`]); }
+  else { reasons.push(['bad', last ? `No entra hace ${Math.round(days)} días` : 'Nunca entró a la app']); }
+  const cur = parseInt(a.appts_30d) || 0, prev = parseInt(a.appts_prev_30d) || 0;
+  if (cur >= 40) { score += 30; reasons.push(['ok', `${cur} turnos cargados en 30 días`]); }
+  else if (cur >= 10) { score += 18; reasons.push(['mid', `${cur} turnos en 30 días (poco uso)`]); }
+  else { score += cur ? 6 : 0; reasons.push(['bad', cur ? `Solo ${cur} turnos en 30 días` : 'Sin turnos en 30 días']); }
+  if (prev >= 10 && cur < prev * 0.6) { score -= 10; reasons.push(['bad', `Uso en baja: ${prev} → ${cur} turnos`]); }
+  else if (prev && cur > prev * 1.2) { score += 5; reasons.push(['ok', `Uso en alza: ${prev} → ${cur} turnos`]); }
+  if (a.wpp_connected) { score += 15; reasons.push(['ok', 'WhatsApp conectado']); } else reasons.push(['mid', 'WhatsApp sin conectar']);
+  if (parseInt(a.pwa_count) > 0) { score += 10; reasons.push(['ok', 'Tiene la app instalada']); }
+  if (parseInt(a.push_count) > 0) score += 5;
+  if (extra && extra.adoption != null) score += Math.round(extra.adoption * 10);
+  score = Math.max(0, Math.min(100, score));
+  const level = score >= 70 ? 'green' : score >= 40 ? 'or' : 'red';
+  const label = score >= 70 ? 'Saludable' : score >= 40 ? 'Atención' : 'En riesgo';
+  return { score, level, label, reasons };
+}
+
+// Línea de plata y uso debajo del nombre en la tabla de cuentas
+function accMoneyMeta(a) {
+  const paid = Number(a.paid_total) || 0;
+  const cur = parseInt(a.appts_30d) || 0, prev = parseInt(a.appts_prev_30d) || 0;
+  const arrow = prev ? (cur > prev * 1.1 ? ' <span style="color:#4ade80">▲</span>' : cur < prev * 0.9 ? ' <span style="color:#f87171">▼</span>' : '') : '';
+  return ` · Cobrado <b>${fxMoney(paid)}</b> · <b>${cur}</b> turnos/30d${arrow}`;
+}
+
+function fxBarChart(rows, { valueKey = 'collected', height = 180 } = {}) {
+  const W = 640, H = height, pad = { t: 14, r: 6, b: 22, l: 6 };
+  const max = Math.max(1, ...rows.map(r => Number(r[valueKey]) || 0));
+  const bw = (W - pad.l - pad.r) / rows.length;
+  const y = v => pad.t + (H - pad.t - pad.b) * (1 - v / max);
+  const bars = rows.map((r, i) => {
+    const v = Number(r[valueKey]) || 0, x = pad.l + i * bw + bw * 0.18, w = bw * 0.64, top = y(v);
+    const cls = i === rows.length - 1 ? 'bar cur' : v ? 'bar' : 'bar dim';
+    return `<rect class="${cls}" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(v ? 2 : 0, H - pad.b - top).toFixed(1)}" rx="4"><title>${fxMonthLbl(r.month)} ${r.month.slice(0, 4)}: ${fxMoney(v)} · ${r.payments || 0} pagos</title></rect>
+      ${v ? `<text x="${(x + w / 2).toFixed(1)}" y="${(top - 4).toFixed(1)}" text-anchor="middle">${fxCompact(v)}</text>` : ''}
+      <text x="${(x + w / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${fxMonthLbl(r.month)}</text>`;
+  }).join('');
+  return `<svg class="fx-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cobros por mes"><line class="grid" x1="0" x2="${W}" y1="${H - pad.b}" y2="${H - pad.b}"/>${bars}</svg>`;
+}
+
+function renderResumen() {
+  const el = document.getElementById('tab-resumen');
+  if (!el || !allAccounts.length) return;
+  const roots   = allAccounts.filter(countsInKpis);
+  const active  = roots.filter(a => a.subscription_status === 'active');
+  const trial   = roots.filter(a => a.subscription_status === 'trial');
+  const mrr     = active.reduce((s, a) => s + mrrPriceOf(a), 0);
+  const arpa    = active.length ? mrr / active.length : 0;
+  const months  = financeData?.months || [];
+  const cur     = months[months.length - 1] || {}, prev = months[months.length - 2] || {};
+  const tot     = financeData?.totals || {};
+  const ltv     = tot.payers ? tot.total / tot.payers : 0;
+  const signups12 = months.reduce((s, m) => s + m.signups, 0);
+  const conv12    = months.reduce((s, m) => s + m.conversions, 0);
+  const churn3    = months.slice(-3).reduce((s, m) => s + m.churned, 0);
+  const everPaid  = roots.filter(a => a.first_payment_at).length;
+  const convPct   = roots.length ? Math.round(everPaid / roots.length * 100) : 0;
+  const churnPct  = (active.length + churn3) ? Math.round(churn3 / (active.length + churn3) * 100) : 0;
+  const trialPotential = trial.reduce((s, a) => s + (PLAN_PRICES[a.filo_plan] || 0), 0);
+
+  // MRR por plan
+  const planColors = { starter: '#7cc0ff', staff: '#FFD100', enterprise: '#c084fc' };
+  const byPlan = ['starter', 'staff', 'enterprise'].map(p => ({ p, n: active.filter(a => a.filo_plan === p).length, v: active.filter(a => a.filo_plan === p).reduce((s, a) => s + mrrPriceOf(a), 0) }));
+
+  // Próximos cobros (30 días) y cuentas en riesgo
+  const in30 = Date.now() + 30 * 86400000;
+  const upcoming = active.map(a => ({ a, d: getNextBillingDate(a) })).filter(x => x.d && new Date(x.d).getTime() < in30)
+    .sort((x, y) => new Date(x.d) - new Date(y.d));
+  const upTotal = upcoming.reduce((s, x) => s + nextChargeOf(x.a), 0);
+  const risk = [...active, ...trial].map(a => ({ a, h: accountHealth(a) })).filter(x => x.h.score < 40)
+    .sort((x, y) => (mrrPriceOf(y.a) || PLAN_PRICES[y.a.filo_plan] || 0) - (mrrPriceOf(x.a) || PLAN_PRICES[x.a.filo_plan] || 0) || x.h.score - y.h.score);
+  const trialsEnding = trial.map(a => ({ a, d: a.trial_ends_at ? new Date(a.trial_ends_at) : null })).filter(x => x.d)
+    .sort((x, y) => x.d - y.d).slice(0, 6);
+
+  const av = (a, cls = '') => `<div class="fx-av ${cls}">${esc((a.name || '?').trim().charAt(0).toUpperCase())}</div>`;
+  const dShort = d => new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+  const srcLbl = { mp: 'Mercado Pago', transfer: 'Transferencia' };
+
+  el.innerHTML = `
+  <div class="fx-grid fx-g4">
+    <div class="fx-card hero">
+      <div class="fx-lbl">MRR · ingreso mensual <span class="fx-help" title="Lo que cobran por mes todas las cuentas activas, con descuentos">ⓘ</span></div>
+      <div class="fx-big" style="color:var(--y)">${fxMoney(mrr)}</div>
+      <div class="fx-sub">${active.length} cuentas pagando · ARR ${fxCompact(mrr * 12)}</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-lbl">Cobrado este mes</div>
+      <div class="fx-val">${fxMoney(cur.collected)}</div>
+      <div class="fx-sub">${cur.payments || 0} pagos${prev.collected ? ` · ${Math.round((cur.collected || 0) / prev.collected * 100)}% de lo del mes pasado (${fxMoney(prev.collected)})` : ''}</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-lbl">Por cobrar · 30 días</div>
+      <div class="fx-val" style="color:#7cc0ff">${fxMoney(upTotal)}</div>
+      <div class="fx-sub">${upcoming.length} renovación${upcoming.length === 1 ? '' : 'es'} · ${trial.length} en prueba (${fxCompact(trialPotential)} si pagan)</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-lbl">Ticket promedio · LTV</div>
+      <div class="fx-val">${fxMoney(arpa)}</div>
+      <div class="fx-sub">Cada cuenta que pagó dejó ${fxMoney(ltv)} en total</div>
+    </div>
+  </div>
+
+  <div class="fx-grid fx-g21">
+    <div class="fx-card">
+      <div class="fx-head"><h3>Cobros por mes</h3><span>Últimos 12 meses · total ${fxMoney(months.reduce((s, m) => s + m.collected, 0))}</span></div>
+      ${months.length ? fxBarChart(months) : '<div class="fx-empty">Cargando…</div>'}
+    </div>
+    <div class="fx-card">
+      <div class="fx-head"><h3>MRR por plan</h3><span>${active.length} activas</span></div>
+      <div class="fx-stack">${byPlan.filter(x => x.v).map(x => `<span style="width:${(x.v / (mrr || 1) * 100).toFixed(1)}%;background:${planColors[x.p]}"></span>`).join('')}</div>
+      <div class="fx-legend">${byPlan.map(x => `<div><i style="background:${planColors[x.p]}"></i>${x.p[0].toUpperCase() + x.p.slice(1)} <span style="color:var(--g)">· ${x.n}</span><b>${fxMoney(x.v)}</b></div>`).join('')}</div>
+    </div>
+  </div>
+
+  <div class="fx-grid fx-g3">
+    <div class="fx-card">
+      <div class="fx-head"><h3>Embudo</h3><span>Desde siempre</span></div>
+      <div class="fx-funnel">
+        ${[['Registradas', roots.length], ['Pagaron alguna vez', everPaid], ['Pagando hoy', active.length]].map(([t, n]) => `
+          <div class="fx-fstep"><span>${t}</span><div class="fx-fbar"><i style="width:${roots.length ? Math.max(3, n / roots.length * 100) : 0}%"></i></div><b>${n}</b></div>`).join('')}
+      </div>
+      <div class="fx-sub" style="margin-top:12px">Conversión a pago <b style="color:#fff">${convPct}%</b> · últimos 12 meses: ${signups12} altas, ${conv12} primeros pagos</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-head"><h3>Bajas</h3><span>Últimos 3 meses</span></div>
+      <div class="fx-val" style="color:${churn3 ? '#f87171' : '#4ade80'}">${churn3} <span style="font-size:15px;color:var(--g)">cuenta${churn3 === 1 ? '' : 's'} · ${churnPct}%</span></div>
+      <div class="fx-sub">Cuentas que habían pagado y quedaron vencidas o canceladas.</div>
+      <div class="fx-list" style="margin-top:8px">${months.slice(-3).reverse().map(m => `<div class="fx-row"><div class="fx-row-t"><b>${fxMonthLbl(m.month)} ${m.month.slice(0, 4)}</b><span>${m.signups} altas · ${m.conversions} pagaron por primera vez</span></div><span class="fx-tag ${m.churned ? 'red' : 'gray'}">${m.churned} baja${m.churned === 1 ? '' : 's'}</span></div>`).join('')}</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-head"><h3>Pruebas por vencer</h3><span>${trial.length} en prueba</span></div>
+      <div class="fx-list">${trialsEnding.length ? trialsEnding.map(({ a, d }) => { const left = Math.ceil((d - Date.now()) / 86400000); const h = accountHealth(a); return `
+        <button type="button" class="fx-row fx-link" onclick="openProfile(${a.id})">${av(a, 'blue')}<div class="fx-row-t"><b>${esc(a.name)}</b><span>${(a.filo_plan || '').toUpperCase()} · ${left <= 0 ? 'vence hoy' : `vence en ${left} día${left === 1 ? '' : 's'}`}</span></div><span class="fx-tag ${h.level}">${h.label}</span></button>`; }).join('') : '<div class="fx-empty">No hay cuentas en prueba.</div>'}</div>
+    </div>
+  </div>
+
+  <div class="fx-grid fx-g3">
+    <div class="fx-card">
+      <div class="fx-head"><h3>Próximos cobros</h3><span>${fxMoney(upTotal)} en 30 días</span></div>
+      <div class="fx-list">${upcoming.length ? upcoming.slice(0, 8).map(({ a, d }) => { const late = new Date(d) < new Date(); return `
+        <button type="button" class="fx-row fx-link" onclick="openProfile(${a.id})">${av(a)}<div class="fx-row-t"><b>${esc(a.name)}</b><span>${late ? '<span style="color:#f87171">Vencido el ' + dShort(d) + '</span>' : dShort(d)} · ${(a.filo_plan || '').toUpperCase()}</span></div><span class="fx-amt">${fxMoney(nextChargeOf(a))}</span></button>`; }).join('') : '<div class="fx-empty">Nada por cobrar en 30 días.</div>'}</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-head"><h3>Últimos pagos</h3><span>${tot.n || 0} pagos · ${fxMoney(tot.total)} en total</span></div>
+      <div class="fx-list">${(financeData?.recent || []).length ? financeData.recent.slice(0, 8).map(p => `
+        <button type="button" class="fx-row fx-link" onclick="openProfile(${p.shop_id})"><div class="fx-av green">$</div><div class="fx-row-t"><b>${esc(p.shop_name)}</b><span>${dShort(p.at)} · ${srcLbl[p.source] || p.source} · ${(p.plan || '').toUpperCase()}</span></div><span class="fx-amt pos">+${fxMoney(p.amount)}</span></button>`).join('') : `<div class="fx-empty">${financeData ? 'Todavía no hay pagos registrados.' : 'Cargando…'}</div>`}</div>
+    </div>
+    <div class="fx-card">
+      <div class="fx-head"><h3>Cuentas en riesgo</h3><span>Pagando o en prueba</span></div>
+      <div class="fx-list">${risk.length ? risk.slice(0, 8).map(({ a, h }) => `
+        <button type="button" class="fx-row fx-link" onclick="openProfile(${a.id})">${av(a, 'red')}<div class="fx-row-t"><b>${esc(a.name)}</b><span>${esc((h.reasons.find(r => r[0] === 'bad') || h.reasons[0] || [, ''])[1])}</span></div><span class="fx-tag red">${h.score}</span></button>`).join('') : '<div class="fx-empty">Ninguna cuenta en riesgo. 🎉</div>'}</div>
+    </div>
+  </div>`;
+}
+
+// ── Perfil de cuenta ──
+async function openProfile(id) {
+  const a = allAccounts.find(x => x.id === id);
+  const pf = document.getElementById('pf'), ov = document.getElementById('pf-ov');
+  pf.innerHTML = `<div class="pf-top"><div class="pf-av">${esc((a?.name || '?').charAt(0).toUpperCase())}</div><div style="min-width:0"><div class="pf-name" id="pf-name">${esc(a?.name || 'Cuenta')}</div><div class="pf-sub">Cargando perfil…</div></div><button type="button" class="pf-x" onclick="closeProfile()" aria-label="Cerrar">×</button></div>`;
+  ov.classList.add('on'); pf.classList.add('on'); pf.setAttribute('aria-hidden', 'false'); pf.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+  try {
+    const r = await fetch(`/api/admin/accounts/${id}/profile`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    renderProfile(d, a || {});
+  } catch (e) {
+    pf.querySelector('.pf-sub').textContent = 'No se pudo cargar el perfil: ' + e.message;
+  }
+}
+function closeProfile() {
+  document.getElementById('pf').classList.remove('on');
+  document.getElementById('pf').setAttribute('aria-hidden', 'true');
+  document.getElementById('pf-ov').classList.remove('on');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('pf')?.classList.contains('on')) closeProfile(); });
+
+function renderProfile(d, a) {
+  const s = d.shop, ap = d.appts || {};
+  const acc = { ...a, ...s, appts_30d: ap.last30, appts_prev_30d: ap.prev30, pwa_count: (d.devices || []).length, push_count: d.push?.n || 0 };
+  const statusTag = { active: ['green', 'Activa'], trial: ['blue', 'En prueba'], expired: ['red', 'Vencida'], cancelled: ['red', 'Cancelada'] }[s.subscription_status] || ['gray', s.subscription_status];
+  const paid = (d.payments || []).reduce((t, p) => t + Number(p.amount || 0), 0);
+  const lifeDays = fxDays(s.created_at);
+  const nextD = s.subscription_status === 'active' ? getNextBillingDate(acc) : null;
+  const trialLeft = s.subscription_status === 'trial' && s.trial_ends_at ? Math.ceil((new Date(s.trial_ends_at) - Date.now()) / 86400000) : null;
+
+  const feats = [
+    ['Agenda', ap.total > 0], ['Link de reservas', !!s.booking_slug], ['WhatsApp', !!s.wpp_connected], ['Recordatorios', ap.reminders30 > 0],
+    ['Barberos', (d.team?.barbers || 0) > 0], ['Comisiones', !!s.commission_enabled], ['Liquidaciones', (d.settle?.n30 || 0) > 0],
+    ['Productos', (d.products?.n30 || 0) > 0], ['Membresías', (d.members?.active || 0) > 0], ['Fila sin turno', (d.queue?.n30 || 0) > 0],
+    ['Señas', !!s.sena_enabled], ['Fiados', (d.debts?.open || 0) > 0], ['Turnos fijos', ap.recurring > 0],
+    ['App instalada', (d.devices || []).length > 0], ['Notificaciones', (d.push?.n || 0) > 0],
+  ];
+  const adoption = feats.filter(f => f[1]).length / feats.length;
+  const h = accountHealth(acc, { adoption });
+  const ringC = { green: '#4ade80', or: '#FF9100', red: '#f87171' }[h.level];
+  const R = 30, C = 2 * Math.PI * R;
+  const noShowPct = (ap.done30 + ap.noshow30) ? Math.round(ap.noshow30 / (ap.done30 + ap.noshow30) * 100) : 0;
+  const weeks = (() => { // 12 semanas, con las vacías en cero
+    const map = Object.fromEntries((d.weekly || []).map(w => [w.week, w.n]));
+    const out = []; const now = new Date(); const day = (now.getDay() + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+    for (let i = 11; i >= 0; i--) { const w = new Date(monday); w.setDate(w.getDate() - i * 7); const k = w.toISOString().slice(0, 10); out.push({ month: k, label: `${w.getDate()}/${w.getMonth() + 1}`, n: map[k] || 0 }); }
+    return out;
+  })();
+  const wmax = Math.max(1, ...weeks.map(w => w.n));
+  const weekSvg = `<svg class="fx-chart" viewBox="0 0 640 120" role="img" aria-label="Turnos cargados por semana">${weeks.map((w, i) => { const bw = 640 / 12, x = i * bw + bw * .2, hgt = 88 * w.n / wmax, y = 96 - hgt; return `<rect class="${i === 11 ? 'bar cur' : w.n ? 'bar' : 'bar dim'}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * .6).toFixed(1)}" height="${Math.max(w.n ? 2 : 0, hgt).toFixed(1)}" rx="3"><title>Semana del ${w.label}: ${w.n} turnos</title></rect>${w.n ? `<text x="${(x + bw * .3).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle">${w.n}</text>` : ''}<text x="${(x + bw * .3).toFixed(1)}" y="114" text-anchor="middle">${w.label}</text>`; }).join('')}</svg>`;
+  const tile = (k, v, sub = '') => `<div class="pf-tile"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div>`;
+  const srcLbl = { mp: 'Mercado Pago', transfer: 'Transferencia' };
+  const plat = { ios: 'iPhone', android: 'Android', windows: 'PC', mac: 'Mac', linux: 'PC' };
+  const phone = (s.phone || '').replace(/\D/g, '');
+
+  document.getElementById('pf').innerHTML = `
+  <div class="pf-top">
+    <div class="pf-av">${esc((s.name || '?').charAt(0).toUpperCase())}</div>
+    <div style="min-width:0">
+      <div class="pf-name" id="pf-name">${esc(s.name)}</div>
+      <div class="pf-sub"><span class="fx-tag ${statusTag[0]}">${statusTag[1]}</span><span class="fx-tag gray">${(s.filo_plan || '').toUpperCase()}</span>${s.is_test ? '<span class="fx-tag or">TEST</span>' : ''}<span>#${s.id} · ${esc(s.city || '')}</span></div>
+    </div>
+    <button type="button" class="pf-x" onclick="closeProfile()" aria-label="Cerrar">×</button>
+  </div>
+  <div class="pf-body">
+    <div class="pf-sec">
+      <div class="pf-tiles">
+        ${tile('Paga por mes', s.subscription_status === 'active' ? fxMoney(mrrPriceOf(acc)) : '—', s.subscription_status === 'active' ? 'con descuentos' : `plan ${fxMoney(PLAN_PRICES[s.filo_plan])}`)}
+        ${tile('Total cobrado', fxMoney(paid), `${(d.payments || []).length} pago${(d.payments || []).length === 1 ? '' : 's'}`)}
+        ${tile(nextD ? 'Próximo cobro' : trialLeft != null ? 'Prueba' : 'Vencida', nextD ? new Date(nextD).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : trialLeft != null ? (trialLeft <= 0 ? 'Vence hoy' : `${trialLeft} días`) : (s.expired_at ? new Date(s.expired_at).toLocaleDateString('es-AR') : '—'), nextD ? fxMoney(nextChargeOf(acc)) : trialLeft != null ? 'para que termine' : '')}
+        ${tile('En FILO hace', `${lifeDays} días`, 'desde ' + new Date(s.created_at).toLocaleDateString('es-AR'))}
+      </div>
+      <div class="pf-actions">
+        <button type="button" class="pf-btn y" onclick="closeProfile();openEditModal(${s.id})">✏️ Editar cuenta</button>
+        ${phone ? `<a class="pf-btn" href="https://wa.me/${phone.startsWith('54') ? phone : '549' + phone}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
+        ${s.email ? `<a class="pf-btn" href="mailto:${esc(s.email)}">✉️ ${esc(s.email)}</a>` : ''}
+      </div>
+    </div>
+
+    <div class="pf-sec">
+      <h4>Salud de la cuenta</h4>
+      <div class="pf-health">
+        <svg class="pf-ring" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${R}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="7"/><circle cx="37" cy="37" r="${R}" fill="none" stroke="${ringC}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(C * h.score / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 37 37)"/><text x="37" y="44" text-anchor="middle">${h.score}</text></svg>
+        <div style="min-width:0"><div style="font-weight:700;margin-bottom:6px;color:${ringC}">${h.label}</div><div class="pf-reasons">${h.reasons.map(r => `<span>${r[0] === 'ok' ? '✅' : r[0] === 'mid' ? '🟠' : '🔴'} ${esc(r[1])}</span>`).join('')}<span>🧩 Usa ${Math.round(adoption * 100)}% de las funciones</span></div></div>
+      </div>
+    </div>
+
+    <div class="pf-sec">
+      <h4><span>Uso · últimos 30 días</span><span style="text-transform:none;letter-spacing:0">Última conexión ${fxRel(s.last_seen_at)}${d.team_seen?.at ? ` · equipo ${fxRel(d.team_seen.at)}` : ''}</span></h4>
+      <div class="pf-tiles">
+        ${tile('Turnos cargados', `${ap.last30 || 0}${fxDelta(ap.last30 || 0, ap.prev30 || 0)}`, `mes anterior ${ap.prev30 || 0}`)}
+        ${tile('Atendidos', ap.done30 || 0, `no vinieron ${noShowPct}%`)}
+        ${tile('Facturó la barbería', fxCompact(ap.gmv30), `total histórico ${fxCompact(ap.gmv_total)}`)}
+        ${tile('Clientes', d.clients?.total || 0, `+${d.clients?.new30 || 0} nuevos`)}
+        ${tile('Ventas de productos', d.products?.n30 || 0, fxMoney(d.products?.amount30))}
+        ${tile('Barberos', d.team?.barbers || 0, `${d.settle?.n30 || 0} liquidaciones`)}
+        ${tile('WhatsApp', s.wpp_connected ? 'Conectado' : 'Sin conectar', `${d.wpp?.msgs30 || 0} mensajes · ${ap.reminders30 || 0} recordatorios`)}
+        ${tile('Membresías', d.members?.active || 0, `${d.debts?.open || 0} fiados abiertos`)}
+      </div>
+    </div>
+
+    <div class="pf-sec">
+      <h4><span>Turnos cargados por semana</span><span style="text-transform:none;letter-spacing:0">${ap.total || 0} en total · último ${fxRel(ap.last_created)}</span></h4>
+      <div class="fx-card" style="padding:12px 14px">${weekSvg}</div>
+    </div>
+
+    <div class="pf-sec">
+      <h4><span>Funciones que usa</span><span>${feats.filter(f => f[1]).length}/${feats.length}</span></h4>
+      <div class="pf-feats">${feats.map(f => `<span class="pf-feat ${f[1] ? 'on' : ''}"><i></i>${f[0]}</span>`).join('')}</div>
+    </div>
+
+    <div class="pf-sec">
+      <h4><span>Pagos a FILO</span><span>${fxMoney(paid)}</span></h4>
+      ${(d.payments || []).length ? `<div class="fx-list">${d.payments.map(p => `<div class="fx-row"><div class="fx-av green">$</div><div class="fx-row-t"><b>${new Date(p.at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</b><span>${srcLbl[p.source] || p.source} · ${(p.plan || '').toUpperCase()}</span></div><span class="fx-amt pos">${fxMoney(p.amount)}</span></div>`).join('')}</div>` : '<div class="fx-empty">Todavía no pagó.</div>'}
+    </div>
+
+    <div class="pf-sec">
+      <h4>Dispositivos y origen</h4>
+      <div class="pf-reasons">
+        ${(d.devices || []).length ? d.devices.map(x => `<span>📱 ${plat[x.platform] || x.platform || 'Dispositivo'} · instalada ${new Date(x.first_seen).toLocaleDateString('es-AR')} · usada ${fxRel(x.last_seen)}</span>`).join('') : '<span>📱 No instaló la app</span>'}
+        <span>🔔 ${d.push?.n ? `${d.push.n} dispositivo${d.push.n === 1 ? '' : 's'} con notificaciones` : 'Sin notificaciones activadas'}</span>
+        ${s.vendor_name ? `<span>🧑‍💼 Vendedor: ${esc(s.vendor_name)}</span>` : ''}${s.referred_by ? `<span>🎁 Referida por ${esc(s.referred_by)}</span>` : ''}
+        ${(d.nudges || []).length ? `<span>📨 Mensajes de prueba enviados: ${d.nudges.map(n => esc(n.kind)).join(', ')}</span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // Valor para pasar como argumento en un onclick="fn(...)": string JS válido y seguro dentro del
@@ -3638,5 +4060,8 @@ async function promoSave(id) {
 }
 </script>
 <script src="/filo-select.js?v=2" defer></script>
+<!-- Perfil de cuenta -->
+<div class="pf-ov" id="pf-ov" onclick="closeProfile()"></div>
+<aside class="pf" id="pf" role="dialog" aria-modal="true" aria-labelledby="pf-name" aria-hidden="true"></aside>
 </body>
 </html>

@@ -211,6 +211,13 @@ router.get('/accounts', adminAuth, async (req, res) => {
         to_jsonb(s)->>'wpp_careful_until' AS wpp_careful_until,
         GREATEST(COALESCE((to_jsonb(s)->>'wpp_ban_count')::int, 0),
                  (SELECT COUNT(*)::int FROM notifications nb WHERE nb.recipient_shop_id = s.id AND nb.type = 'wpp.banned')) AS wpp_ban_count,
+        -- Plata cobrada a esta cuenta (Mercado Pago + transferencias acreditadas)
+        (SELECT COALESCE(SUM(mp.amount), 0) FROM mp_processed_payments mp WHERE mp.shop_id = s.id)
+          + (SELECT COALESCE(SUM(pt.amount_cents), 0) / 100.0 FROM pending_transfers pt WHERE pt.shop_id = s.id AND pt.matched) AS paid_total,
+        -- Uso: turnos cargados en los últimos 30 días y en los 30 anteriores
+        (SELECT COUNT(*) FROM appointments ap WHERE ap.shop_id = s.id AND ap.created_at > NOW() - INTERVAL '30 days')::int AS appts_30d,
+        (SELECT COUNT(*) FROM appointments ap WHERE ap.shop_id = s.id AND ap.created_at <= NOW() - INTERVAL '30 days'
+                                                AND ap.created_at > NOW() - INTERVAL '60 days')::int AS appts_prev_30d,
         COUNT(b.id)  FILTER (WHERE b.is_barber = TRUE) AS barber_count,
         COUNT(br.id) FILTER (WHERE br.is_branch = TRUE) AS branch_count
       FROM shops s
@@ -279,6 +286,119 @@ router.get('/billing-forecast', adminAuth, async (req, res) => {
   } catch (e) {
     console.error('Admin billing-forecast:', e.message);
     res.status(500).json({ error: 'Error calculando el pronóstico de cobro' });
+  }
+});
+
+// ── FINANZAS ─────────────────────────────────────────────────────────────────
+// Pagos cobrados por FILO: Mercado Pago + transferencias acreditadas. Excluye cuentas de prueba,
+// del sistema y las marcadas "sin KPI".
+const PAYMENTS_SQL = `
+  SELECT x.shop_id, x.amount::float AS amount, x.at, x.plan, x.source
+    FROM (
+      SELECT shop_id, amount, processed_at AS at, plan, 'mp' AS source FROM mp_processed_payments
+      UNION ALL
+      SELECT shop_id, amount_cents / 100.0, matched_at, plan, 'transfer' FROM pending_transfers WHERE matched AND matched_at IS NOT NULL
+    ) x
+    JOIN shops s ON s.id = x.shop_id
+   WHERE s.is_system IS DISTINCT FROM TRUE AND COALESCE(s.is_test, FALSE) = FALSE
+     AND COALESCE(s.exclude_from_kpis, FALSE) = FALSE`;
+
+// GET /api/admin/finance — cobros por mes, altas, conversiones, bajas y últimos pagos
+router.get('/finance', adminAuth, async (req, res) => {
+  try {
+    await ensureKpiColumn();
+    const tz = `'America/Argentina/Buenos_Aires'`;
+    const months = await pool.query(`
+      WITH m AS (
+        SELECT generate_series(date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '11 months',
+                               date_trunc('month', NOW() AT TIME ZONE ${tz}), INTERVAL '1 month')::date AS month
+      ), p AS (${PAYMENTS_SQL}),
+      roots AS (
+        SELECT * FROM shops s
+         WHERE s.is_system IS DISTINCT FROM TRUE AND COALESCE(s.is_test, FALSE) = FALSE
+           AND COALESCE(s.exclude_from_kpis, FALSE) = FALSE
+           AND COALESCE(s.is_barber, FALSE) = FALSE AND COALESCE(s.is_branch, FALSE) = FALSE
+      )
+      SELECT to_char(m.month, 'YYYY-MM') AS month,
+        COALESCE((SELECT SUM(amount) FROM p WHERE date_trunc('month', p.at AT TIME ZONE ${tz})::date = m.month), 0)::float AS collected,
+        (SELECT COUNT(*) FROM p WHERE date_trunc('month', p.at AT TIME ZONE ${tz})::date = m.month)::int AS payments,
+        (SELECT COUNT(*) FROM roots r WHERE date_trunc('month', r.created_at AT TIME ZONE ${tz})::date = m.month)::int AS signups,
+        (SELECT COUNT(*) FROM roots r WHERE date_trunc('month', r.first_payment_at AT TIME ZONE ${tz})::date = m.month)::int AS conversions,
+        (SELECT COUNT(*) FROM roots r WHERE r.first_payment_at IS NOT NULL AND r.subscription_status IN ('expired','cancelled')
+            AND date_trunc('month', r.expired_at AT TIME ZONE ${tz})::date = m.month)::int AS churned
+      FROM m ORDER BY m.month`);
+    const recent = await pool.query(`
+      SELECT p.*, s.name AS shop_name FROM (${PAYMENTS_SQL}) p JOIN shops s ON s.id = p.shop_id
+       ORDER BY p.at DESC LIMIT 12`);
+    const totals = await pool.query(`SELECT COALESCE(SUM(amount), 0)::float AS total, COUNT(*)::int AS n,
+        COUNT(DISTINCT shop_id)::int AS payers FROM (${PAYMENTS_SQL}) p`);
+    res.json({ months: months.rows, recent: recent.rows, totals: totals.rows[0] });
+  } catch (e) {
+    console.error('Admin finance:', e.message);
+    res.status(500).json({ error: 'No se pudieron calcular las finanzas' });
+  }
+});
+
+// GET /api/admin/accounts/:id/profile — plata y comportamiento de una cuenta dentro de la app
+router.get('/accounts/:id/profile', adminAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Cuenta inválida' });
+  // Cada bloque por separado: si una tabla no existe en algún entorno, el resto del perfil igual carga
+  const one = async (sql, params = [id]) => { try { return (await pool.query(sql, params)).rows[0] || {}; } catch (e) { console.warn('[profile]', e.message); return {}; } };
+  const many = async (sql, params = [id]) => { try { return (await pool.query(sql, params)).rows; } catch (e) { console.warn('[profile]', e.message); return []; } };
+  try {
+    const shop = await one(`
+      SELECT s.id, s.name, s.email, s.phone, s.city, s.filo_plan, s.subscription_status, s.trial_ends_at, s.expired_at,
+             s.created_at, s.first_payment_at, s.last_payment_at, COALESCE(s.free_months, 0) AS free_months,
+             s.is_test, s.is_enterprise_owner, s.wpp_connected, s.mp_shop_status, s.booking_slug,
+             s.sena_enabled, s.commission_enabled, s.home_service,
+             to_jsonb(s)->>'last_seen_at' AS last_seen_at, to_jsonb(s)->>'wpp_linked_at' AS wpp_linked_at,
+             (SELECT name FROM vendors v WHERE v.id = s.vendor_id) AS vendor_name,
+             (SELECT name FROM shops r WHERE r.id = s.referred_by_shop_id) AS referred_by
+        FROM shops s WHERE s.id = $1`);
+    if (!shop.id) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+    const [payments, appts, weekly, clients, team, services, products, queue, members, debts, settle, wpp, devices, push, nudges, team_seen] = await Promise.all([
+      many(`SELECT * FROM (
+              SELECT amount::float AS amount, processed_at AS at, plan, 'mp' AS source FROM mp_processed_payments WHERE shop_id = $1
+              UNION ALL
+              SELECT amount_cents / 100.0, matched_at, plan, 'transfer' FROM pending_transfers WHERE shop_id = $1 AND matched AND matched_at IS NOT NULL
+            ) p ORDER BY at DESC`),
+      one(`SELECT COUNT(*)::int AS total,
+                  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS last30,
+                  COUNT(*) FILTER (WHERE created_at <= NOW() - INTERVAL '30 days' AND created_at > NOW() - INTERVAL '60 days')::int AS prev30,
+                  COUNT(*) FILTER (WHERE status = 'completed' AND date >= CURRENT_DATE - 30)::int AS done30,
+                  COUNT(*) FILTER (WHERE status = 'noshow' AND date >= CURRENT_DATE - 30)::int AS noshow30,
+                  COUNT(*) FILTER (WHERE status = 'cancelled' AND date >= CURRENT_DATE - 30)::int AS cancelled30,
+                  COALESCE(SUM(price) FILTER (WHERE status = 'completed' AND date >= CURRENT_DATE - 30), 0)::float AS gmv30,
+                  COALESCE(SUM(price) FILTER (WHERE status = 'completed'), 0)::float AS gmv_total,
+                  COUNT(*) FILTER (WHERE member_booking)::int AS member_bookings,
+                  COUNT(*) FILTER (WHERE recurring_id IS NOT NULL)::int AS recurring,
+                  COUNT(*) FILTER (WHERE sena_amount > 0)::int AS with_sena,
+                  COUNT(*) FILTER (WHERE reminder_sent_at IS NOT NULL AND date >= CURRENT_DATE - 30)::int AS reminders30,
+                  MAX(created_at) AS last_created
+             FROM appointments WHERE shop_id = $1`),
+      many(`SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS week, COUNT(*)::int AS n
+              FROM appointments WHERE shop_id = $1 AND created_at > NOW() - INTERVAL '12 weeks'
+             GROUP BY 1 ORDER BY 1`),
+      one(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS new30 FROM clients WHERE shop_id = $1`),
+      one(`SELECT COUNT(*)::int AS barbers FROM shops WHERE parent_shop_id = $1 AND is_barber = TRUE`),
+      one(`SELECT COUNT(*)::int AS n FROM services WHERE shop_id = $1`),
+      one(`SELECT COUNT(*)::int AS n30, COALESCE(SUM(total_price), 0)::float AS amount30 FROM product_sales WHERE shop_id = $1 AND sold_at > NOW() - INTERVAL '30 days'`),
+      one(`SELECT COUNT(*)::int AS n30 FROM queue_entries WHERE shop_id = $1 AND created_at > NOW() - INTERVAL '30 days'`),
+      one(`SELECT COUNT(*) FILTER (WHERE active)::int AS active FROM memberships WHERE shop_id = $1`),
+      one(`SELECT COUNT(*) FILTER (WHERE NOT paid)::int AS open, COALESCE(SUM(amount) FILTER (WHERE NOT paid), 0)::float AS open_amount FROM client_debts WHERE shop_id = $1`),
+      one(`SELECT COUNT(*) FILTER (WHERE settled_at > NOW() - INTERVAL '30 days')::int AS n30 FROM barber_settlements WHERE shop_id = $1`),
+      one(`SELECT COALESCE(SUM(n) FILTER (WHERE bucket = 'total'), 0)::int AS msgs30 FROM wpp_daily_counters WHERE shop_id = $1 AND day >= CURRENT_DATE - 30`),
+      many(`SELECT platform, first_seen, last_seen FROM pwa_devices WHERE shop_id = $1 ORDER BY last_seen DESC`),
+      one(`SELECT COUNT(*)::int AS n FROM push_subscriptions WHERE shop_id = $1`),
+      many(`SELECT kind, channel, sent_at FROM trial_nudges WHERE shop_id = $1 ORDER BY sent_at DESC`),
+      one(`SELECT MAX((to_jsonb(t)->>'last_seen_at')::timestamptz) AS at FROM shops t WHERE t.parent_shop_id = $1 OR t.parent_enterprise_id = $1`),
+    ]);
+    res.json({ shop, payments, appts, weekly, clients, team, services, products, queue, members, debts, settle, wpp, devices, push, nudges, team_seen });
+  } catch (e) {
+    console.error('Admin profile:', e.message);
+    res.status(500).json({ error: 'No se pudo armar el perfil' });
   }
 });
 
