@@ -311,6 +311,67 @@ body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),tra
 @media (max-width:640px){.pf-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.pf-body{padding:16px 16px 40px}.pf-top{padding:12px 16px}}
 /* Celular: la barra de arriba entra en el ancho (sin scroll de costado) */
 @media (max-width:640px){.topbar-right{gap:6px;min-width:0}.topbar-right .btn-ghost[onclick="adminPushTest()"]{display:none}.topbar-right .btn-ghost{padding:5px 8px}#topbar-refresh-btn{font-size:0}#topbar-refresh-btn::before{content:'↻';font-size:16px;font-family:system-ui,sans-serif}}
+
+/* ═══ Estilo unificado (el del Resumen) para todas las secciones ═══ */
+.page-title{font-size:30px;letter-spacing:.2px}
+.tabs#main-tabs{display:flex;gap:6px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:5px;width:fit-content;max-width:100%;margin-bottom:12px}
+#main-tabs .tab{padding:9px 18px;border-radius:10px;font-size:13.5px;font-weight:700;color:rgba(255,255,255,.6);position:relative}
+#main-tabs .tab:hover{color:#fff;background:rgba(255,255,255,.04)}
+#main-tabs .tab.active{background:var(--y);color:#000}
+#main-tabs .tab.has-alert::after{content:"";position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:#f87171;box-shadow:0 0 0 2px #071426}
+.subtabs{display:flex;gap:4px;margin:0 0 20px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs[hidden]{display:none}
+.subtab{background:none;border:none;border-bottom:2px solid transparent;color:var(--g);font:600 13.5px Barlow,sans-serif;padding:10px 14px;cursor:pointer;white-space:nowrap;margin-bottom:-1px;display:inline-flex;align-items:center;gap:6px}
+.subtab:hover{color:#fff}
+.subtab.active{color:#fff;border-bottom-color:var(--y)}
+.sub-count{font-size:11px;font-weight:700;background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:1px 7px}
+.sub-count.red{background:rgba(248,113,113,.18);color:#f87171}
+.toolbar .fs-wrap{width:auto;min-width:210px;flex:0 0 auto}
+@media(max-width:768px){.toolbar .fs-wrap{width:100%}}
+.table-wrap{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border-radius:16px}
+thead th{background:transparent;font-size:10.5px;letter-spacing:1.2px;padding:14px 16px}
+tbody tr:hover{background:rgba(255,209,0,.025)}
+td{font-variant-numeric:tabular-nums}
+.toolbar{gap:10px}
+.search-input,select.filter{background:rgba(255,255,255,.04);border-radius:10px;min-height:40px}
+.btn-sm{border-radius:10px;min-height:40px;font-family:'Barlow',sans-serif;font-size:13px;letter-spacing:.2px;text-transform:none}
+.btn-sm.gray{background:rgba(255,255,255,.05)}
+.action-btn{border-radius:8px;padding:6px 10px}
+.badge{border-radius:99px;letter-spacing:.4px}
+.billing-amount{font-variant-numeric:tabular-nums}
+.modal{background:#071426;border-color:var(--border);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.modal-header h3{color:#fff;font-size:19px}
+.modal-overlay{background:rgba(0,6,14,.7);backdrop-filter:blur(3px)}
+.stat-card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border-radius:16px}
+.empty-state{padding:40px 20px}
+#tab-billing .table-wrap,#tab-accounts .table-wrap,#tab-archived .table-wrap{margin-top:2px}
+#tab-afiliados > div:first-child > div:last-child > div,#tab-referidos #ref-summary > div{border-radius:14px!important}
+#aff-table,#tab-referidos table{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--border);border-radius:16px;overflow:hidden}
+#tab-config > div,#tab-config section{border-radius:16px}
+@media(max-width:768px){
+  .tabs#main-tabs{width:100%;overflow-x:auto;scrollbar-width:none}
+  #main-tabs .tab{padding:8px 12px;font-size:12.5px;white-space:nowrap}
+  .subtab{padding:9px 11px;font-size:12.5px}
+  .page-title{font-size:22px}
+}
+
+/* Tabla de cuentas más liviana: contacto bajo el nombre y acciones en un menú */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.acc-contact{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.acc-badges{display:flex;flex-wrap:wrap;gap:5px}
+#tab-accounts .table-wrap,#tab-archived .table-wrap{overflow:visible}
+.acc-actions{white-space:nowrap;text-align:right}
+.acc-actions > .action-btn{margin-left:4px}
+.row-menu{display:inline-block;position:relative;margin-left:4px;vertical-align:middle}
+.row-menu > summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;min-width:32px;font-size:15px;line-height:1}
+.row-menu > summary::-webkit-details-marker{display:none}
+.row-menu[open] > summary{border-color:var(--y);color:var(--y)}
+.row-menu-list{position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:190px;background:#0b1a2e;border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px}
+.row-menu-list .action-btn{display:flex;width:100%;text-align:left;border:none;background:transparent!important;color:#fff!important;padding:9px 10px;font-size:13px;border-radius:8px}
+.row-menu-list .action-btn:hover{background:rgba(255,255,255,.06)!important}
+.row-menu-list .action-btn.danger{color:#f87171!important}
+@media(max-width:768px){.acc-actions{text-align:left}.row-menu-list{left:0;right:auto}}
 </style>
 </head>
 <body>
@@ -399,18 +460,31 @@ body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),tra
       </div>
     </div>
 
-    <!-- TABS -->
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('resumen')">💹 Resumen</button>
-      <button class="tab" onclick="switchTab('accounts')">Cuentas</button>
-      <button class="tab" onclick="switchTab('billing')">Liquidaciones</button>
-      <button class="tab" id="tab-btn-archived" onclick="switchTab('archived')">📦 Archivadas</button>
-      <button class="tab" onclick="switchTab('vendors')">Vendedores</button>
-      <button class="tab" onclick="switchTab('referidos')">🎁 Referidos</button>
-      <button class="tab" onclick="switchTab('afiliados')">🤝 Afiliados</button>
-      <button class="tab" onclick="switchTab('metrics')">📊 Métricas</button>
-      <button class="tab" id="tab-btn-pagos" onclick="switchTab('pagos')">💸 Pagos sin asignar</button>
-      <button class="tab" onclick="switchTab('config')">⚙️ Config</button>
+    <!-- NAVEGACIÓN: 5 secciones; cada una con sus sub-pestañas -->
+    <nav class="tabs" id="main-tabs" aria-label="Secciones">
+      <button class="tab active" data-main="resumen" onclick="switchMain('resumen')">💹 Resumen</button>
+      <button class="tab" data-main="cuentas" onclick="switchMain('cuentas')">🏪 Cuentas</button>
+      <button class="tab" data-main="cobros" id="main-btn-cobros" onclick="switchMain('cobros')">💳 Cobros</button>
+      <button class="tab" data-main="crecimiento" onclick="switchMain('crecimiento')">🚀 Crecimiento</button>
+      <button class="tab" data-main="config" onclick="switchMain('config')">⚙️ Ajustes</button>
+    </nav>
+    <div class="subtabs" data-group="resumen">
+      <button class="subtab active" data-sub="resumen" onclick="switchTab('resumen')">Finanzas</button>
+      <button class="subtab" data-sub="metrics" onclick="switchTab('metrics')">Métricas</button>
+    </div>
+    <div class="subtabs" data-group="cuentas" hidden>
+      <button class="subtab" data-sub="accounts" onclick="switchTab('accounts')">Activas y en prueba</button>
+      <button class="subtab" data-sub="archived" id="tab-btn-archived" onclick="switchTab('archived')">Archivadas</button>
+    </div>
+    <div class="subtabs" data-group="cobros" hidden>
+      <button class="subtab" data-sub="billing" onclick="switchTab('billing')">Liquidaciones</button>
+      <button class="subtab" data-sub="pagos" id="tab-btn-pagos" onclick="switchTab('pagos')">Pagos sin asignar</button>
+      <button class="subtab" data-sub="promos" onclick="switchTab('promos')">Promociones</button>
+    </div>
+    <div class="subtabs" data-group="crecimiento" hidden>
+      <button class="subtab" data-sub="vendors" onclick="switchTab('vendors')">Vendedores</button>
+      <button class="subtab" data-sub="referidos" onclick="switchTab('referidos')">Referidos</button>
+      <button class="subtab" data-sub="afiliados" onclick="switchTab('afiliados')">Afiliados</button>
     </div>
     <div id="system-alert" style="display:none;margin:0 0 14px;padding:12px 16px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:13px"></div>
 
@@ -451,14 +525,11 @@ body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),tra
           <thead>
             <tr>
               <th>Barbería</th>
-              <th>Email</th>
-              <th>Plan</th>
-              <th>Estado</th>
-              <th>Trial / Desde</th>
+              <th>Plan · Estado</th>
+              <th>Prueba · Actividad</th>
               <th>Barberos</th>
-              <th>🎁 Meses</th>
-              <th>WhatsApp / App</th>
-              <th>Acciones</th>
+              <th>WhatsApp · App</th>
+              <th><span class="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody id="accounts-tbody">
@@ -476,14 +547,11 @@ body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),tra
           <thead>
             <tr>
               <th>Barbería</th>
-              <th>Email</th>
-              <th>Plan</th>
-              <th>Estado</th>
-              <th>Trial / Desde</th>
+              <th>Plan · Estado</th>
+              <th>Prueba · Actividad</th>
               <th>Barberos</th>
-              <th>🎁 Meses</th>
-              <th>WhatsApp / App</th>
-              <th>Acciones</th>
+              <th>WhatsApp · App</th>
+              <th><span class="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody id="archived-tbody"></tbody>
@@ -641,11 +709,11 @@ body{background:radial-gradient(1200px 600px at 10% -10%,rgba(255,209,0,.05),tra
       </div>
     </div>
 
-    <!-- ── PROMOCIONES ── -->
-    <div style="margin-top:30px;padding:22px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px">
+    <!-- ── PROMOCIONES (Cobros › Promociones) ── -->
+    <div id="tab-promos" class="fx-card" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <div>
-          <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:#fff">📣 PROMOCIONES</div>
+          <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:600;color:#fff">Promociones</div>
           <div style="font-size:12px;color:var(--g);margin-top:2px">Descuentos para signups y renovaciones · aplicables a todos o shops específicos</div>
         </div>
         <button onclick="promoOpenNew()" style="background:var(--y);color:var(--nk);border:none;padding:9px 18px;border-radius:7px;font-weight:700;font-size:12px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;font-family:'Barlow Condensed',sans-serif">+ Nueva promo</button>
@@ -1303,7 +1371,8 @@ async function loadUnmatchedPayments() {
   try {
     const rows = await adminFetch('GET', '/unmatched-payments');
     const btn = document.getElementById('tab-btn-pagos');
-    if (btn) btn.textContent = rows.length ? `💸 Pagos sin asignar (${rows.length})` : '💸 Pagos sin asignar';
+    if (btn) btn.innerHTML = rows.length ? `Pagos sin asignar <span class="sub-count red">${rows.length}</span>` : 'Pagos sin asignar';
+    document.getElementById('main-btn-cobros')?.classList.toggle('has-alert', rows.length > 0);
     if (!el) return;
     if (!rows.length) { el.innerHTML = '<div style="color:var(--g);font-size:13px">✅ No hay pagos pendientes de asignar.</div>'; return; }
     const reason = { monto_insuficiente: 'Monto menor al del plan', sin_orden: 'No coincide con ninguna orden' };
@@ -1671,19 +1740,15 @@ function renderTreeRow(a, depth, parentId) {
   }
 
   return `<tr data-id="${a.id}" class="row-level-${depth} ${childClass}" style="${depth > 0 ? 'display:none' : ''}">
-    <td style="${indentPad}"><div class="row-indent">${connector}${toggleEl}${nameHtml}</div></td>
-    <td data-label="Email" style="color:var(--g);font-size:12px">
-      <div>${esc(a.email||'')}</div>
-      ${a.phone ? `<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">📞 ${esc(a.phone)}</div>` : ''}
-    </td>
-    <td data-label="Plan">${planBadge}</td>
-    <td data-label="Estado">${statusBadge}</td>
-    <td data-label="Trial">${dateInfo}${lastSeenHtml(a)}</td>
+    <td style="${indentPad}"><div class="row-indent">${connector}${toggleEl}<div style="min-width:0">${nameHtml}<div class="acc-contact">${esc(a.email||'')}${a.phone ? ` · ${esc(a.phone)}` : ''}</div></div></div></td>
+    <td data-label="Plan · Estado"><div class="acc-badges">${planBadge}${statusBadge}${(parseInt(a.free_months) || 0) > 0 ? `<span class="badge" style="background:rgba(74,222,128,.12);color:#4ade80">🎁 ${parseInt(a.free_months)} mes${parseInt(a.free_months) === 1 ? '' : 'es'}</span>` : ''}</div></td>
+    <td data-label="Prueba · Actividad">${dateInfo}${lastSeenHtml(a)}</td>
     <td data-label="Barberos">${barberCount}</td>
-    <td data-label="Meses">${freeMonthsCell}</td>
-    <td data-label="WPP" style="font-size:12px">${wppDot}</td>
-    <td data-label="Acciones" style="display:flex;gap:6px;flex-wrap:wrap">
+    <td data-label="WhatsApp · App" style="font-size:12px">${wppDot}</td>
+    <td data-label="Acciones" class="acc-actions">
+      ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openProfile(${a.id})">Perfil</button>` : ''}
       <button class="action-btn" onclick="openEditModal(${a.id})">Editar</button>
+      <details class="row-menu"><summary class="action-btn" aria-label="Más acciones">⋯</summary><div class="row-menu-list">
       ${a.phone ? `<button class="action-btn" onclick="openWelcomeModal(${a.id})" style="background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.3);color:#25D366" title="Enviar mensaje de bienvenida a ${esc(a.phone)}">💬 Chat</button>` : ''}
       ${!isBarber && !isBranch ? `<button class="action-btn" onclick="openGrantMonthsModal(${a.id},${jsArg(a.name)})" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80">🎁 Meses</button>` : ''}
       ${!isBarber && !isBranch ? (isArchivedAccount(a)
@@ -1692,6 +1757,7 @@ function renderTreeRow(a, depth, parentId) {
       <button class="action-btn" onclick="resetWpp(${a.id},${jsArg(a.name)})" style="background:rgba(255,209,0,.1);border-color:rgba(255,209,0,.3);color:#FFD100" title="Limpiar sesión WhatsApp">📵 WPP</button>
       ${(() => { const on = a.wpp_careful_until && new Date(a.wpp_careful_until) > new Date(); return `<button class="action-btn" onclick="toggleWppCareful(${a.id}, ${on})" style="background:rgba(251,191,36,${on ? '.18' : '.06'});border-color:rgba(251,191,36,.3);color:#fbbf24" title="Modo cuidado de WhatsApp">🛡 ${on ? 'Cuidado ON' : 'Cuidado'}</button>`; })()}
       <button class="action-btn danger" onclick="deleteAccount(${a.id},${jsArg(a.name)})">Borrar</button>
+      </div></details>
     </td>
   </tr>`;
 }
@@ -1721,7 +1787,7 @@ function filterAccounts() {
   renderAccountsTable(filtered);
   renderAccountsTable(archived, 'archived-tbody', 'No hay cuentas archivadas');
   const btn = document.getElementById('tab-btn-archived');
-  if (btn) btn.textContent = `📦 Archivadas${archivedAll.length ? ` (${archivedAll.length})` : ''}`;
+  if (btn) btn.innerHTML = `Archivadas${archivedAll.length ? ` <span class="sub-count">${archivedAll.length}</span>` : ''}`;
 }
 
 // Archivar / desarchivar una cuenta a mano (no borra nada)
@@ -2123,19 +2189,26 @@ async function resetWpp(id, name) {
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.row-menu[open]').forEach(d => { if (!d.contains(e.target) || e.target.closest('.row-menu-list button')) d.open = false; });
+});
+const NAV_GROUPS = {
+  resumen: ['resumen', 'metrics'],
+  cuentas: ['accounts', 'archived'],
+  cobros: ['billing', 'pagos', 'promos'],
+  crecimiento: ['vendors', 'referidos', 'afiliados'],
+  config: ['config'],
+};
+const ALL_TABS = Object.values(NAV_GROUPS).flat();
+let _lastSub = { resumen: 'resumen', cuentas: 'accounts', cobros: 'billing', crecimiento: 'vendors', config: 'config' };
+function switchMain(main) { switchTab(_lastSub[main] || NAV_GROUPS[main][0]); }
 function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('tab-resumen').style.display   = tab === 'resumen'   ? 'block' : 'none';
-  document.getElementById('tab-accounts').style.display  = tab === 'accounts'  ? 'block' : 'none';
-  document.getElementById('tab-archived').style.display  = tab === 'archived'  ? 'block' : 'none';
-  document.getElementById('tab-billing').style.display   = tab === 'billing'   ? 'block' : 'none';
-  document.getElementById('tab-vendors').style.display   = tab === 'vendors'   ? 'block' : 'none';
-  document.getElementById('tab-referidos').style.display = tab === 'referidos' ? 'block' : 'none';
-  document.getElementById('tab-afiliados').style.display = tab === 'afiliados' ? 'block' : 'none';
-  document.getElementById('tab-metrics').style.display   = tab === 'metrics'   ? 'block' : 'none';
-  document.getElementById('tab-config').style.display    = tab === 'config'    ? 'block' : 'none';
-  document.getElementById('tab-pagos').style.display     = tab === 'pagos'     ? 'block' : 'none';
+  const main = Object.keys(NAV_GROUPS).find(k => NAV_GROUPS[k].includes(tab)) || 'resumen';
+  _lastSub[main] = tab;
+  ALL_TABS.forEach(t => { const el = document.getElementById('tab-' + t); if (el) el.style.display = t === tab ? 'block' : 'none'; });
+  document.querySelectorAll('#main-tabs .tab').forEach(b => { const on = b.dataset.main === main; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  document.querySelectorAll('.subtabs').forEach(g => { g.hidden = g.dataset.group !== main || NAV_GROUPS[main].length < 2; });
+  document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === tab));
   if (tab === 'pagos')     loadUnmatchedPayments();
   if (tab === 'metrics')   renderMetrics();
   if (tab === 'resumen')   renderResumen();
