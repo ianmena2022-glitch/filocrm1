@@ -11957,17 +11957,17 @@ async function initReferralBanner() {
   }
   // Promo code via URL (?promo=LANZAMIENTO50) → se guarda y aplica al próximo pago
   const promo = params.get('promo');
-  if (promo) {
-    const clean = promo.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0, 60);
-    if (clean) {
-      try { localStorage.setItem('filo_promo_code', clean); } catch(_) {}
-      // Llega con un código (ej. el QR del flyer): abrir directo "Crear cuenta" con el código cargado
-      setTimeout(() => {
-        if (!localStorage.getItem('filo_token') && typeof switchAuthTab === 'function') switchAuthTab('register');
-        const el = document.getElementById('reg-promo');
-        if (el) { el.value = clean; if (typeof updateRegTrialBox === 'function') updateRegTrialBox(); }
-      }, 100);
-    }
+  const fromUrl = promo ? promo.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0, 60) : '';
+  if (fromUrl) { try { localStorage.setItem('filo_promo_code', fromUrl); } catch(_) {} }
+  // El código puede venir en el link o haber quedado guardado desde la landing (ej. QR del flyer → landing → Empezar):
+  // en los dos casos el formulario de "Crear cuenta" ya lo muestra cargado.
+  const promoCode = fromUrl || getStoredPromoCode();
+  if (promoCode) {
+    setTimeout(() => {
+      if (fromUrl && !localStorage.getItem('filo_token') && typeof switchAuthTab === 'function') switchAuthTab('register');
+      const el = document.getElementById('reg-promo');
+      if (el && !el.value) { el.value = promoCode; if (typeof updateRegTrialBox === 'function') updateRegTrialBox(); }
+    }, 100);
   }
 })();
 
