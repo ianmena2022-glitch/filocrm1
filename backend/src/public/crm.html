@@ -11961,8 +11961,9 @@ async function initReferralBanner() {
     const clean = promo.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0, 60);
     if (clean) {
       try { localStorage.setItem('filo_promo_code', clean); } catch(_) {}
-      // Pre-rellenar input de signup si está disponible
+      // Llega con un código (ej. el QR del flyer): abrir directo "Crear cuenta" con el código cargado
       setTimeout(() => {
+        if (!localStorage.getItem('filo_token') && typeof switchAuthTab === 'function') switchAuthTab('register');
         const el = document.getElementById('reg-promo');
         if (el) { el.value = clean; if (typeof updateRegTrialBox === 'function') updateRegTrialBox(); }
       }, 100);
